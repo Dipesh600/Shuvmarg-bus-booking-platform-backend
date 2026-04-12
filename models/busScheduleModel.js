@@ -60,10 +60,10 @@ const busScheduleSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Prevent duplicate schedule creation for the same bus and date
-busScheduleSchema.index({ bussNo: 1, date: 1 }, { unique: true });
-// Common query patterns
-busScheduleSchema.index({ date: 1, "route.from": 1, "route.to": 1 });
-busScheduleSchema.index({ operatorId: 1, date: -1 });
+// Prevent duplicate schedule creation for the same bus, date, and shift
+busScheduleSchema.index({ busId: 1, date: 1, shift: 1 }, { unique: true });
+// Common query patterns mapping to actual schema fields
+busScheduleSchema.index({ busRouteId: 1, date: 1 });
+busScheduleSchema.index({ isActive: 1, date: 1 });
 
 module.exports = mongoose.model("busschedules", busScheduleSchema);

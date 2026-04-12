@@ -71,6 +71,7 @@ const bookingSchema = new mongoose.Schema(
 
 // Index for better query performance
 bookingSchema.index({ userId: 1, createdAt: -1 });
+bookingSchema.index({ tripId: 1, status: 1 }); // Optimize fetching active bookings per route
 bookingSchema.index({ couponUsed: 1 });
 bookingSchema.index({ couponCode: 1 });
 bookingSchema.index({ ticketId: 1 });
