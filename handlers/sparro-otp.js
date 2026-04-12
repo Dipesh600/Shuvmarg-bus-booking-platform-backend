@@ -22,10 +22,9 @@ async function sendOTP(phone, message) {
 
     console.log("SMS Sent:", response.data);
   } catch (error) {
-    console.error(
-      "Error sending SMS:",
-      error.response ? error.response.data : error.message
-    );
+    const errorDetails = error.response ? error.response.data : error.message;
+    console.error("Error sending SMS:", errorDetails);
+    throw new Error(`Sparrow SMS Gateway Error: ${JSON.stringify(errorDetails)}`);
   }
 }
 module.exports = sendOTP;

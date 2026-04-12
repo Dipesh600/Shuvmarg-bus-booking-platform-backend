@@ -1,5 +1,10 @@
 // Suppress punycode deprecation warning
 process.removeAllListeners("warning");
+// Polyfill for Node v25 deprecated SlowBuffer (fixes jsonwebtoken/jwa crash)
+const _builtinBuffer = require("buffer");
+if (!_builtinBuffer.SlowBuffer) {
+  _builtinBuffer.SlowBuffer = _builtinBuffer.Buffer;
+}
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -61,10 +66,14 @@ app.use(indexRoute);
 
 app.use((err, req, res, next) => {
   console.error("Global error:", err);
+  
+  // Production-grade sanitization: Do not leak internal stack traces or gateway errors to public clients.
+  const isDevelopment = process.env.NODE_ENV === "development";
+  
   res.status(500).json({
     status: false,
-    message: "Something went wrong",
-    error: err.message,
+    message: "An unexpected server error occurred. Please try again later.",
+    error: isDevelopment ? err.message : undefined, // Only expose raw errors internally during active dev
   });
 });
 
