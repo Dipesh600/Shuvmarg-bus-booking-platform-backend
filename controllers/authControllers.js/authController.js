@@ -219,8 +219,8 @@ const completeRegistration = async (req, res) => {
       }
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password — cost factor 12 (minimum for production, 2024 standard)
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     // Always generate a unique referral code for the new user
     const { generateReferralCode } = require("../../handlers/referralCodeGenerator.js");
@@ -338,9 +338,7 @@ const login = async (req, res) => {
     if (!emailOrPhone || !password) {
       return res.status(400).json({
         success: false,
-        message: `${
-          !emailOrPhone ? "Email or Phone" : "Password"
-        } is required!`,
+        message: `${!emailOrPhone ? "Email or Phone" : "Password"} is required!`,
       });
     }
 
@@ -349,22 +347,66 @@ const login = async (req, res) => {
     }).select("+password");
 
     if (!user) {
-      return res.status(404).json({
+      // Vague response — don't reveal whether phone/email exists
+      return res.status(401).json({ success: false, message: "Invalid credentials!" });
+    }
+
+    // === SOFT-DELETE CHECK ===
+    if (user.deletedAt) {
+      return res.status(403).json({ success: false, message: "This account has been deactivated. Contact support." });
+    }
+
+    // === ACCOUNT LOCK CHECK ===
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const minutesLeft = Math.ceil((user.lockedUntil - Date.now()) / 60000);
+      return res.status(429).json({
         success: false,
-        message: "User not found!",
+        message: `Account temporarily locked due to too many failed attempts. Try again in ${minutesLeft} minute(s).`,
+        errorCode: "ACCOUNT_LOCKED",
       });
+    }
+
+    // === BANNED CHECK ===
+    if (user.status === "banned") {
+      return res.status(403).json({ success: false, message: "Your account has been banned. Contact support." });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
+
     if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid credentials!",
-      });
+      // Increment failed attempts
+      const MAX_ATTEMPTS = 5;
+      const LOCK_DURATION_MS = 15 * 60 * 1000;  // 15 minutes
+
+      const newFailedCount = (user.failedLoginAttempts || 0) + 1;
+      const updateData = { $inc: { failedLoginAttempts: 1 } };
+
+      if (newFailedCount >= MAX_ATTEMPTS) {
+        updateData.$set = { lockedUntil: new Date(Date.now() + LOCK_DURATION_MS) };
+      }
+
+      await User.findByIdAndUpdate(user._id, updateData);
+
+      const remaining = MAX_ATTEMPTS - newFailedCount;
+      const message = remaining > 0
+        ? `Invalid credentials! ${remaining} attempt(s) remaining.`
+        : "Too many failed attempts. Account locked for 15 minutes.";
+
+      return res.status(401).json({ success: false, message });
     }
+
+    // === SUCCESS — reset counters, record login time ===
+    await User.findByIdAndUpdate(user._id, {
+      $set: {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(),
+      },
+    });
 
     const userWithoutPassword = user.toObject();
     delete userWithoutPassword.password;
+
     const accessToken = jwt.sign(
       {
         id: user._id,
@@ -375,8 +417,9 @@ const login = async (req, res) => {
         isVerified: user.isVerified,
       },
       process.env.SECRET_KEY,
-      { expiresIn: "30d" }
+      { expiresIn: "7d" }   // Reduced from 30d — refresh tokens coming in next phase
     );
+
     return res.status(200).json({
       success: true,
       message: "Login successful",
@@ -385,10 +428,7 @@ const login = async (req, res) => {
     });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };
 // OTP Verification (Legacy - for existing users)
@@ -572,7 +612,7 @@ const resetPassword = async (req, res) => {
     // Mark OTP as used
     await otpRecord.markAsUsed();
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
     user.password = hashedPassword;
     await user.save();
 

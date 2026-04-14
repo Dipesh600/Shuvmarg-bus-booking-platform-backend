@@ -5,22 +5,29 @@ const auth = require("../../middleware/authMiddleware.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
 const userCouponController = require("../../controllers/couponController/userCouponController.js");
 const recordCouponUsageController = require("../../controllers/couponController/recordCouponUsageController.js");
+const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
+const rateLimit = require("express-rate-limit");
+
+// Strict rate limiter for login attempts (per IP — 10 per 15 min)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: "Too many login attempts. Please wait 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // New three-step registration process
-router.post("/sendPhoneOTP", authCoontroller.sendPhoneOTP);
-router.post("/verifyPhoneOTP", authCoontroller.verifyPhoneOTP);
+router.post("/sendPhoneOTP",       otpRateLimiter, authCoontroller.sendPhoneOTP);    // ← OTP rate limit
+router.post("/verifyPhoneOTP",     authCoontroller.verifyPhoneOTP);
 router.post("/completeRegistration", authCoontroller.completeRegistration);
 
-// Legacy routes (can be removed after testing)
-// router.post("/register", authCoontroller.register);
-// router.post("/registerNextStape", authCoontroller.registerNextStape);
-
-router.post("/login", authCoontroller.login);
-router.post("/verifyOtp", authCoontroller.verifyOtp);
-router.post("/requestPasswordReset", authCoontroller.requestPasswordReset);
-router.post("/verifyOtpForReset", authCoontroller.verifyOtpForReset);
-router.post("/resetPassword", authCoontroller.resetPassword);
-router.post("/resendOtp", authCoontroller.resendOtp);
+router.post("/login",              loginLimiter, authCoontroller.login);              // ← Login rate limit
+router.post("/verifyOtp",          authCoontroller.verifyOtp);
+router.post("/requestPasswordReset", otpRateLimiter, authCoontroller.requestPasswordReset); // ← OTP rate limit
+router.post("/verifyOtpForReset",  authCoontroller.verifyOtpForReset);
+router.post("/resetPassword",      authCoontroller.resetPassword);
+router.post("/resendOtp",          otpRateLimiter, authCoontroller.resendOtp);        // ← OTP rate limit
 
 // Update Profile picture
 router.put(
