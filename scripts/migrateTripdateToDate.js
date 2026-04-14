@@ -13,14 +13,14 @@
  * The script is idempotent — safe to re-run, it skips already-migrated docs.
  */
 
-require("dotenv").config({ path: "../.env" });
+require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const mongoose = require("mongoose");
 
 const BATCH_SIZE = 100;
 
 async function migrate() {
     console.log("Connecting to database...");
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGODB_URL);
     console.log("Connected.\n");
 
     const Trip = require("../models/tripModel.js");
