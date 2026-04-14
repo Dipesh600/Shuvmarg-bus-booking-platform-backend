@@ -26,6 +26,8 @@ const adminTemplateController = require("../../controllers/adminController/busOw
 const adminTripController = require("../../controllers/adminController/busOwnerController/tripController.js");
 const adminSettlementCon = require("../../controllers/busOwnerController/settlementController.js");
 const fareRuleCon = require("../../controllers/busOwnerController/fareRuleController.js");
+const commissionController = require("../../controllers/adminController/commissionController/commissionController.js");
+const financialController  = require("../../controllers/adminController/financialController/financialController.js");
 // Auth Routes
 router.post("/auth/login", authController.login);
 router.get("/auth/profile", adminMiddleware, authController.getAdminProfile);
@@ -201,5 +203,12 @@ router.delete("/trips/delete/:id", adminMiddleware, adminTripController.deleteTr
 // Settlement Management (Admin)
 router.get("/settlements/all", adminMiddleware, adminSettlementCon.getMySettlements);
 router.patch("/settlements/pay", adminMiddleware, adminSettlementCon.paySettlement);
+
+// Commission Analytics
+router.get("/commissions/summary", adminMiddleware, commissionController.getCommissionSummary);
+router.get("/commissions/history", adminMiddleware, commissionController.getCommissionHistory);
+
+// Financial Overview
+router.get("/financial/overview", adminMiddleware, financialController.getFinancialOverview);
 
 module.exports = router;
