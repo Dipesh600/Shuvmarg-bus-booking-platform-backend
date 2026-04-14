@@ -2,10 +2,23 @@ const mongoose = require("mongoose");
 
 const refundSchema = new mongoose.Schema(
   {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
     bookingId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Booking",
       required: true,
+      index: true,
+    },
+    // The original payment transaction to be reversed
+    transactionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Transaction",
+      default: null,
       index: true,
     },
     originalAmount: {
@@ -48,15 +61,38 @@ const refundSchema = new mongoose.Schema(
       default: null,
     },
     refundProof: {
-      type: String, // URL/Path to screenshot or document (png, pdf, doc etc)
+      type: String,
       default: null,
     },
 
+    // Which admin approved/processed the refund
+    processedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    // The gateway refund reference (from eSewa/Khalti reversal API)
+    refundGateway: {
+      type: String,
+      enum: ["esewa", "khalti", "bank_transfer", "cash", "other"],
+      default: null,
+    },
+    refundGatewayId: {
+      type: String,   // Reference ID returned by eSewa/Khalti refund API
+      default: null,
+    },
+    refundGatewayResponse: {
+      type: mongoose.Schema.Types.Mixed,  // Full JSON response from gateway
+      default: null,
+    },
   },
   { timestamps: true }
 );
 
 // Indexes for common queries
 refundSchema.index({ bookingId: 1 });
+refundSchema.index({ userId: 1, createdAt: -1 });
+refundSchema.index({ status: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Refund", refundSchema);

@@ -21,12 +21,17 @@ const routeSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    distance: {
-      type: String, // e.g., "350 km"
+    distanceKm: {
+      type: Number,
+      default: null,  // e.g., 350
     },
-    duration: {
-      type: String, // e.g., "8 hours"
+    durationMinutes: {
+      type: Number,
+      default: null,  // e.g., 480
     },
+    // Legacy display strings (deprecated, prefer distanceKm/durationMinutes)
+    distance: { type: String, default: null }, // "350 km"
+    duration: { type: String, default: null }, // "8 hours"
     basePrice: {
       type: Number,
       required: true,
@@ -56,6 +61,7 @@ const routeSchema = new mongoose.Schema(
 );
 
 // Index for faster searching
-routeSchema.index({ from: 1, to: 1 });
+routeSchema.index({ from: 1, to: 1, status: 1 });
+routeSchema.index({ ownerId: 1 });
 
 module.exports = mongoose.models.BusRoute || mongoose.model("BusRoute", routeSchema);

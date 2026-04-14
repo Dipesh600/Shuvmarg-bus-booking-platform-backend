@@ -1,5 +1,14 @@
 const mongoose = require("mongoose");
 
+const passengerSchema = new mongoose.Schema({
+  name:     { type: String, required: true, trim: true },
+  age:      { type: Number, required: true, min: 1, max: 120 },
+  gender:   { type: String, enum: ["male", "female", "other"], required: true },
+  idType:   { type: String, enum: ["citizenship", "passport", "driving_license", "voter_id"], default: null },
+  idNumber: { type: String, default: null },
+  seatNo:   { type: String, required: true },  // Links passenger to a specific seat
+}, { _id: false });
+
 const bookingSchema = new mongoose.Schema(
   {
     userId: {
@@ -18,6 +27,29 @@ const bookingSchema = new mongoose.Schema(
         required: true,
       },
     ],
+
+    // === PASSENGER MANIFEST (DoT Compliance) ===
+    passengerDetails: [passengerSchema],
+
+    // === BOARDING / DROPPING SELECTION ===
+    boardingPoint: {
+      name: { type: String, default: null },
+      time: { type: String, default: null },
+      lat:  { type: Number, default: null },
+      lng:  { type: Number, default: null },
+    },
+    droppingPoint: {
+      name: { type: String, default: null },
+      time: { type: String, default: null },
+      lat:  { type: Number, default: null },
+      lng:  { type: Number, default: null },
+    },
+
+    // === CONDUCTOR BOARDING CONFIRMATION ===
+    boardingConfirmed:   { type: Boolean, default: false },
+    boardingConfirmedAt: { type: Date, default: null },
+    boardingConfirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+
     originalAmount: {
       type: Number,
       required: true,
@@ -57,13 +89,29 @@ const bookingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["booked", "cancelled", "pending"],
+      enum: ["booked", "cancelled", "pending", "no_show"],
       default: "booked",
     },
     ticketId: {
       type: String,
       required: true,
       unique: true,
+    },
+
+    // === CANCELLATION ===
+    cancellationReason:      { type: String, default: null },
+    cancellationRequestedAt: { type: Date, default: null },
+    cancelledBy: {
+      type: String,
+      enum: ["user", "admin", "system"],
+      default: null,
+    },
+
+    // === REFUND LINK ===
+    refundId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Refund",
+      default: null,
     },
   },
   { timestamps: true }

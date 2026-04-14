@@ -79,6 +79,26 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // === SECURITY ===
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockedUntil: {
+      type: Date,
+      default: null,    // Non-null = account locked until this timestamp
+    },
+
+    // === SOFT DELETE ===
+    deletedAt: {
+      type: Date,
+      default: null,    // Non-null = account soft-deleted
+    },
   },
   { timestamps: true }
 );

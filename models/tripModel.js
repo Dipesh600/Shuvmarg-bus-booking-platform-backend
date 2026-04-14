@@ -28,7 +28,7 @@ const tripSchema = new mongoose.Schema(
       default: null,
     },
     tripDate: {
-      type: String,
+      type: Date,      // Always store as UTC Date — display in client timezone
       required: true,
     },
     departureTime: {
@@ -98,6 +98,9 @@ const tripSchema = new mongoose.Schema(
 
 // Indexes for performance
 tripSchema.index({ departureTime: 1 });
-tripSchema.index({ busId: 1, departureTime: 1 });
+tripSchema.index({ busId: 1, tripDate: 1 });                    // Fleet schedule view
+tripSchema.index({ routeId: 1, tripDate: 1, status: 1 });       // searchTrips core query
+tripSchema.index({ ownerId: 1, status: 1, tripDate: -1 });      // Bus owner trips list
+tripSchema.index({ status: 1, recurrence: 1, autoGenerateUntil: 1 }); // CRON query
 
 module.exports = mongoose.models.Trip || mongoose.model("Trip", tripSchema);

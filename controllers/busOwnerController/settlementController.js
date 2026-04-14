@@ -1,10 +1,11 @@
 const Settlement = require("../../models/settlementModel");
 const Trip = require("../../models/tripModel");
+const Booking = require("../../models/bookTicketModel");
 
 const raiseSettlement = async (req, res) => {
     try {
         const userId = req.userInfo?.id;
-        const role = req.userInfo?.role; // "admin" or "busOwner"
+        const role = req.userInfo?.role;
         if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
         const { tripIds, ownerId } = req.body;
@@ -18,26 +19,50 @@ const raiseSettlement = async (req, res) => {
             return res.status(400).json({ success: false, message: "ownerId is required for admin" });
         }
 
-        // Fetch trips to verify they are completed and belong to the owner
-        const trips = await Trip.find({ _id: { $in: tripIds }, ownerId: targetOwnerId });
+        // Fetch trips — only allow settlement on COMPLETED trips owned by this owner
+        const trips = await Trip.find({
+            _id: { $in: tripIds },
+            ownerId: targetOwnerId,
+            status: "completed",       // <<< GUARD: cannot settle in-progress trips
+        });
+
         if (trips.length !== tripIds.length) {
-            return res.status(400).json({ success: false, message: "Some trips are invalid or unauthorized." });
+            return res.status(400).json({
+                success: false,
+                message: "Some trips are invalid, unauthorized, or not yet completed."
+            });
         }
 
-        // Mocking financial calculation: In reality, you'd calculate from `Booking` and `Seat` collections
-        // For now, we simulate finding the bookings
+        // Check no trip is already part of another pending/paid settlement
+        const existingSettlements = await Settlement.find({
+            tripIds: { $in: tripIds },
+            status: { $in: ["pending", "processing", "paid"] }
+        });
+        if (existingSettlements.length > 0) {
+            return res.status(409).json({
+                success: false,
+                message: "One or more trips already have an active settlement."
+            });
+        }
+
+        // ============================================================
+        // REAL FINANCIAL CALCULATION — aggregation from Booking collection
+        // ============================================================
+        const bookings = await Booking.find({
+            tripId: { $in: tripIds },
+            status: "booked",   // only confirmed bookings, not cancelled
+        }).lean();
+
         let totalGross = 0;
         let totalSold = 0;
-        for (const trip of trips) {
-            // Simulated: totalTicketSold = MOCK
-            const soldCount = 20; // Needs integration with Seat/Booking queries
-            const tripGross = soldCount * (trip.tripFare || 1000); 
-            totalSold += soldCount;
-            totalGross += tripGross;
+
+        for (const booking of bookings) {
+            totalSold += booking.seats.length;
+            totalGross += booking.totalAmount;   // the amount actually paid (post-discount)
         }
 
-        const commissionRate = 10; // 10%
-        const platformCommission = (totalGross * commissionRate) / 100;
+        const commissionRate = 10;  // 10% platform fee
+        const platformCommission = Math.round((totalGross * commissionRate) / 100);
         const netPayableAmount = totalGross - platformCommission;
 
         const newSettlement = await Settlement.create({

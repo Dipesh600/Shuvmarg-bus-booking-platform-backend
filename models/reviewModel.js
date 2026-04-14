@@ -19,6 +19,12 @@ const reviewSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    tripId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Trip",
+      required: true,
+      index: true,
+    },
 
     rating: {
       type: Number,
