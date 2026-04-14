@@ -1,107 +1,143 @@
-const cron = require("node-cron");
-const Trip = require("../models/tripModel.js");
-const Seat = require("../models/seatsModel.js");
-const seatTemplateModel = require("../models/seatTemplateModel.js");
-const moment = require("moment"); // Ensure moment is available
+const cron    = require("node-cron");
+const Trip    = require("../models/tripModel.js");
+const Seat    = require("../models/seatsModel.js");
+const SeatTemplate = require("../models/seatTemplateModel.js");
+const logger  = require("../utils/logger.js");
 
-// Helper to initialize seats based on a template
+// ---------------------------------------------------------------------------
+// Helper: initialise seat document for a newly generated trip
+// ---------------------------------------------------------------------------
 const initializeSeats = async (tripId, templateId) => {
     try {
-        const template = await seatTemplateModel.findById(templateId);
+        const template = await SeatTemplate.findById(templateId);
         if (!template) {
-            console.error(`Seat template ${templateId} not found for trip ${tripId}`);
+            logger.warn("TripCRON: seat template not found", { tripId, templateId });
             return;
         }
-
         await Seat.create({
-            tripId: tripId,
+            tripId,
             seata: template.seata.map(s => ({ seatNo: s.seatNo, booked: false })),
             seatb: template.seatb.map(s => ({ seatNo: s.seatNo, booked: false })),
-            seatc: template.seatc ? template.seatc.map(s => ({ seatNo: s.seatNo, booked: false })) : []
+            seatc: (template.seatc || []).map(s => ({ seatNo: s.seatNo, booked: false })),
         });
     } catch (e) {
-        console.error(`Error initializing seats for trip ${tripId}:`, e.message);
+        logger.error("TripCRON: failed to initialise seats", { tripId, error: e.message });
     }
 };
 
+// ---------------------------------------------------------------------------
+// Trip auto-generation CRON  — runs daily at 00:00 server time
+// Generates tomorrow's Trips from recurring BusSchedule templates
+// ---------------------------------------------------------------------------
 const setupTripGeneratorCron = () => {
-    // Run exactly at midnight server time every day
     cron.schedule("0 0 * * *", async () => {
-        console.log("CRON: Running trip auto-generation task...");
+        logger.info("TripCRON: starting daily trip auto-generation");
+
         try {
             const now = new Date();
-            const tomorrowStr = moment(now).add(1, 'days').format("YYYY-MM-DD");
-            
-            // Find template trips. We consider the trips created by the user where recurrence != none as "templates"
+
+            // Build tomorrow's Date range (midnight-to-midnight UTC)
+            // FIX: store tripDate as a proper Date object, NOT a string
+            const tomorrowStart = new Date(now);
+            tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
+            tomorrowStart.setUTCHours(0, 0, 0, 0);
+
+            const tomorrowEnd = new Date(tomorrowStart);
+            tomorrowEnd.setUTCHours(23, 59, 59, 999);
+
+            const dayOfWeek = tomorrowStart.getUTCDay(); // 0 (Sun) – 6 (Sat)
+
+            // Fetch all active recurring template trips
             const templateTrips = await Trip.find({
-                recurrence: { $ne: "none" },
+                recurrence:       { $ne: "none" },
                 autoGenerateUntil: { $gte: now },
-                isActive: true
+                isActive:          true,
             });
 
-            console.log(`CRON: Found ${templateTrips.length} active recurring trips.`);
+            logger.info(`TripCRON: found ${templateTrips.length} recurring templates`);
+
+            let generated = 0;
+            let skipped   = 0;
+            let errors    = 0;
 
             for (const trip of templateTrips) {
-                // Check if tomorrow matches the rules
-                let shouldGenerate = false;
-                const nextDay = moment(now).add(1, 'days');
-                const dayOfWeek = nextDay.day(); // 0(Sun) - 6(Sat)
+                try {
+                    // Determine if tomorrow's day-of-week matches this template's schedule
+                    let shouldGenerate = false;
 
-                if (trip.recurrence === "daily") {
-                    shouldGenerate = true;
-                } else if (trip.recurrence === "weekly" || trip.recurrence === "custom") {
-                    if (trip.daysOfWeek && trip.daysOfWeek.includes(dayOfWeek)) {
+                    if (trip.recurrence === "daily") {
                         shouldGenerate = true;
+                    } else if (trip.recurrence === "weekly" || trip.recurrence === "custom") {
+                        shouldGenerate = Array.isArray(trip.daysOfWeek) && trip.daysOfWeek.includes(dayOfWeek);
                     }
-                }
 
-                if (shouldGenerate) {
-                    // Check if trip already exists for tomorrow
+                    if (!shouldGenerate) continue;
+
+                    // Idempotency check — use Date range query not string comparison
                     const exists = await Trip.findOne({
-                        busId: trip.busId,
-                        routeId: trip.routeId,
-                        tripDate: tomorrowStr,
-                        departureTime: trip.departureTime,
-                        templateId: trip._id.toString()
+                        busId:          trip.busId,
+                        routeId:        trip.routeId,
+                        tripDate:       { $gte: tomorrowStart, $lte: tomorrowEnd },
+                        departureTime:  trip.departureTime,
+                        templateId:     trip._id.toString(),
                     });
 
-                    if (!exists) {
-                        const newTripId = `TRIP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-                        
-                        const newTrip = await Trip.create({
-                            tripId: newTripId,
-                            busId: trip.busId,
-                            routeId: trip.routeId,
-                            ownerId: trip.ownerId,
-                            driverId: trip.driverId,
-                            tripDate: tomorrowStr,
-                            departureTime: trip.departureTime,
-                            arrivalTime: trip.arrivalTime,
-                            tripFare: trip.tripFare,
-                            seatTemplateId: trip.seatTemplateId,
-                            isAutoGenerated: true,
-                            templateId: trip._id.toString(), // Store parent reference
-                            status: "scheduled",
-                            recurrence: "none", // Prevent recursive generation
-                            shift: trip.shift,
-                            isActive: true
+                    if (exists) {
+                        logger.debug("TripCRON: trip already exists for tomorrow — skipping", {
+                            templateId: trip.tripId,
                         });
-                        
-                        await initializeSeats(newTrip._id, trip.seatTemplateId);
-                        console.log(`CRON: Generated new trip ${newTrip.tripId} for date ${tomorrowStr}`);
-                        
-                        // FUTURE: Send Notification to Owner
-                    } else {
-                        console.log(`CRON: Trip for ${tomorrowStr} already exists for template ${trip.tripId}`);
+                        skipped++;
+                        continue;
                     }
+
+                    // Create the new trip for tomorrow — tripDate stored as Date
+                    const newTripId = `TRIP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                    const newTrip = await Trip.create({
+                        tripId:          newTripId,
+                        busId:           trip.busId,
+                        routeId:         trip.routeId,
+                        ownerId:         trip.ownerId,
+                        driverId:        trip.driverId || null,
+                        tripDate:        tomorrowStart,      // ← Date object, not string
+                        departureTime:   trip.departureTime,
+                        arrivalTime:     trip.arrivalTime,
+                        tripFare:        trip.tripFare,
+                        seatTemplateId:  trip.seatTemplateId,
+                        isAutoGenerated: true,
+                        templateId:      trip._id.toString(),
+                        status:          "scheduled",
+                        recurrence:      "none",             // prevent recursive generation
+                        shift:           trip.shift,
+                        isActive:        true,
+                    });
+
+                    await initializeSeats(newTrip._id, trip.seatTemplateId);
+
+                    logger.info("TripCRON: generated new trip", {
+                        tripId:    newTrip.tripId,
+                        date:      tomorrowStart.toISOString().split("T")[0],
+                        busId:     trip.busId,
+                        routeId:   trip.routeId,
+                    });
+                    generated++;
+
+                } catch (innerErr) {
+                    logger.error("TripCRON: error processing template trip", {
+                        templateTripId: trip.tripId,
+                        error: innerErr.message,
+                    });
+                    errors++;
                 }
             }
+
+            logger.info("TripCRON: completed", { generated, skipped, errors });
+
         } catch (error) {
-            console.error("CRON Error: Failed to auto-generate trips:", error);
+            logger.error("TripCRON: fatal error in auto-generation job", { error: error.message });
         }
     });
 
-    console.log("CRON: Trip auto-generation scheduled (runs daily at 00:00).");
+    logger.info("TripCRON: scheduled — runs daily at 00:00 server time");
 };
 
 module.exports = setupTripGeneratorCron;

@@ -12,6 +12,7 @@ const agentRoute = require("./agentRoute/agentRoute.js")
 const busOwnerRoute = require("./busOwner/busOwner.js")
 const publicRoute = require("./publicRoutes/publicRoute.js")
 const paymentRoutes = require("./paymentRoutes/paymentRoutes.js")
+const conductorRoutes = require("./conductorRoutes/conductorRoutes.js")
 
 router.use("/api", userRoute);
 router.use("/api/ticket", ticketRoute);
@@ -25,4 +26,5 @@ router.use("/api/googlemap", googleMapRoutes)
 router.use("/api/agent", agentRoute)
 router.use("/api/public", publicRoute)
 router.use("/api/payment", paymentRoutes)
+router.use("/api/conductor", conductorRoutes)
 module.exports = router;

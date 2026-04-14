@@ -1,10 +1,12 @@
-const Ticket = require("../../models/busScheduleModel.js");
-const Seat = require("../../models/seatsModel.js");
-const Booking = require("../../models/bookTicketModel.js");
-const User = require("../../models/userModel.js");
-const UserDeviceInfo = require("../../models/userDeviceInfoModel.js");
-const CouponHelper = require("../../handlers/couponHelper.js");
-const YatraPointsHistory = require("../../models/yatraPointsHistoryModel.js");
+// busScheduleModel removed — seats are indexed by tripId in the new Trip-based model
+const Seat                   = require("../../models/seatsModel.js");
+const Booking                = require("../../models/bookTicketModel.js");
+const User                   = require("../../models/userModel.js");
+const UserDeviceInfo         = require("../../models/userDeviceInfoModel.js");
+const CouponHelper           = require("../../handlers/couponHelper.js");
+const YatraPointsHistory     = require("../../models/yatraPointsHistoryModel.js");
+const { verifyEsewaPayment } = require("../../services/esewaVerificationService.js");
+const logger                 = require("../../utils/logger.js");
 const {
   createLocalNotification,
   notificationManager,
@@ -35,7 +37,8 @@ const prepareBooking = async (req, res) => {
 
     // Check seat availability
     const normalizedSeats = seatNumbers.map((seat) => seat.toLowerCase());
-    const seatDoc = await Seat.findOne({ scheduleId });
+    // Find seats using tripId (the new Trip model is authoritative)
+    const seatDoc = await Seat.findOne({ tripId: scheduleId });
 
     if (!seatDoc) {
       return res.status(404).json({
@@ -201,6 +204,28 @@ const confirmBooking = async (req, res) => {
     }
 
     const normalizedSeats = seatNumbers.map((seat) => seat.toLowerCase());
+
+    // ================================================================
+    // 0. ESEWA SERVER-SIDE PAYMENT VERIFICATION
+    // Verify BEFORE locking any seats — reject faked paymentIds early
+    // ================================================================
+    if (gateway === "esewa") {
+      const esewaCheck = await verifyEsewaPayment(paymentId, paymentAmount);
+      if (!esewaCheck.verified) {
+        logger.warn("confirmBooking: eSewa verification failed", {
+          paymentId,
+          paymentAmount,
+          userId,
+          reason: esewaCheck.error,
+        });
+        return res.status(402).json({
+          success:   false,
+          message:   `Payment verification failed: ${esewaCheck.error}`,
+          errorCode: "ESEWA_VERIFICATION_FAILED",
+        });
+      }
+      logger.info("confirmBooking: eSewa payment verified", { paymentId, userId });
+    }
 
     // ================================================================
     // 1. VERIFY TRIP STATUS — reject booking on non-scheduled trips
@@ -482,7 +507,7 @@ const verifyBooking = async (req, res) => {
     const booking = await Booking.findOne({
       ticketId,
       userId,
-    }).populate("scheduleId");
+    }).populate("tripId");  // tripId is the correct field (not scheduleId)
 
     if (!booking) {
       return res.status(404).json({
