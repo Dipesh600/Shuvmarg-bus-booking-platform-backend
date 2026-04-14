@@ -120,10 +120,89 @@ const deleteTripByAdmin = async (req, res) => {
     }
 };
 
+// Get All Trips — Admin platform view (paginated, filterable)
+const getAllTrips = async (req, res) => {
+    try {
+        const Trip  = require("../../../models/tripModel.js");
+        const User  = require("../../../models/userModel.js");
+
+        const page   = Math.max(1, parseInt(req.query.page)  || 1);
+        const limit  = Math.min(100, parseInt(req.query.limit) || 30);
+        const skip   = (page - 1) * limit;
+        const status = req.query.status;      // optional filter
+        const date   = req.query.date;        // optional: YYYY-MM-DD
+
+        const query = {};
+        if (status && status !== "all") query.status = status;
+        if (date) {
+            const d = new Date(date);
+            const next = new Date(d);
+            next.setDate(next.getDate() + 1);
+            query.tripDate = { $gte: d, $lt: next };
+        }
+
+        const [trips, total] = await Promise.all([
+            Trip.find(query)
+                .sort({ tripDate: -1, createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .populate("routeId",   "routeName from to")
+                .populate("busId",     "busNumber busName")
+                .populate("ownerId",   "name email")
+                .lean(),
+            Trip.countDocuments(query),
+        ]);
+
+        return res.status(200).json({
+            success: true,
+            message: "All trips fetched successfully!",
+            data: {
+                trips,
+                pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
+            },
+        });
+    } catch (error) {
+        console.error("getAllTrips error:", error);
+        return res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+// Update trip status by Admin (honours state machine)
+const updateTripStatusByAdmin = async (req, res) => {
+    try {
+        const { id }     = req.params;
+        const { status } = req.body;
+
+        if (!status) {
+            return res.status(400).json({ success: false, message: "Status is required." });
+        }
+
+        const trip = await tripService.updateTripDetails(id, { status });
+
+        return res.status(200).json({
+            success: true,
+            message: `Trip status updated to '${status}' successfully!`,
+            data: trip,
+        });
+    } catch (error) {
+        console.error("updateTripStatusByAdmin error:", error);
+        const status = error.message.includes("Invalid") ? 400
+                      : error.message.includes("found")  ? 404
+                      : 500;
+        return res.status(status).json({
+            success: false,
+            message: error.message || "Internal Server Error",
+        });
+    }
+};
+
 module.exports = {
     createTripForOwner,
     getTripsByOwner,
     getTripById,
     updateTripByAdmin,
     deleteTripByAdmin,
+    getAllTrips,
+    updateTripStatusByAdmin,
 };
+

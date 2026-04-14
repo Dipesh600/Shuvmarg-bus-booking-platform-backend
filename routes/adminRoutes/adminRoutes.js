@@ -28,6 +28,7 @@ const adminSettlementCon = require("../../controllers/busOwnerController/settlem
 const fareRuleCon = require("../../controllers/busOwnerController/fareRuleController.js");
 const commissionController = require("../../controllers/adminController/commissionController/commissionController.js");
 const financialController  = require("../../controllers/adminController/financialController/financialController.js");
+const analyticsController  = require("../../controllers/adminController/analyticsController/analyticsController.js");
 // Auth Routes
 router.post("/auth/login", authController.login);
 router.get("/auth/profile", adminMiddleware, authController.getAdminProfile);
@@ -194,11 +195,14 @@ router.patch("/fleet/update/:id", adminMiddleware, adminFleetController.updateFl
 router.delete("/fleet/delete/:id", adminMiddleware, adminFleetController.deleteFleetByAdmin);
 
 // Dedicated Trip Management (Admin on behalf of Owner)
-router.post("/trips/create", adminMiddleware, adminTripController.createTripForOwner);
-router.get("/trips/owner/:ownerId", adminMiddleware, adminTripController.getTripsByOwner);
-router.get("/trips/details/:id", adminMiddleware, adminTripController.getTripById);
-router.patch("/trips/update/:id", adminMiddleware, adminTripController.updateTripByAdmin);
-router.delete("/trips/delete/:id", adminMiddleware, adminTripController.deleteTripByAdmin);
+router.post("/trips/create",               adminMiddleware, adminTripController.createTripForOwner);
+router.get("/trips/all",                   adminMiddleware, adminTripController.getAllTrips);
+router.get("/trips/owner/:ownerId",        adminMiddleware, adminTripController.getTripsByOwner);
+router.get("/trips/details/:id",           adminMiddleware, adminTripController.getTripById);
+router.patch("/trips/update/:id",          adminMiddleware, adminTripController.updateTripByAdmin);
+router.patch("/trips/status/:id",          adminMiddleware, adminTripController.updateTripStatusByAdmin);
+router.delete("/trips/delete/:id",         adminMiddleware, adminTripController.deleteTripByAdmin);
+
 
 // Settlement Management (Admin)
 router.get("/settlements/all", adminMiddleware, adminSettlementCon.getMySettlements);
@@ -211,4 +215,8 @@ router.get("/commissions/history", adminMiddleware, commissionController.getComm
 // Financial Overview
 router.get("/financial/overview", adminMiddleware, financialController.getFinancialOverview);
 
+// Analytics & Business Intelligence
+router.get("/analytics/overview", adminMiddleware, analyticsController.getAnalyticsOverview);
+
 module.exports = router;
+
