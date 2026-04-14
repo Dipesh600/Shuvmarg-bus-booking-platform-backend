@@ -18,12 +18,8 @@ const userSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      // required: [true, "Phone number is required"],
+      required: [true, "Phone number is required"],
       unique: true,
-      // match: [
-      //   /^\+\d{10,15}$/,
-      //   "Phone number must be in international format (e.g., +9779812345678)",
-      // ],
     },
     address: {
       type: String,
@@ -32,7 +28,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      // required: [true, "Password is required"],
+      required: [true, "Password is required"],
       minlength: [6, "Password must be at least 6 characters long"],
       select: false,
     },

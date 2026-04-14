@@ -1,6 +1,8 @@
+const mongoose = require("mongoose");
 const Review = require("../../models/reviewModel.js");
 const Booking = require("../../models/bookTicketModel.js");
 const Trip = require("../../models/tripModel.js");
+const Bus = require("../../models/fleetModel.js");
 
 // Parse time like "06:15 AM" into minutes since midnight
 function parseTimeToMinutes(timeStr) {
@@ -161,10 +163,34 @@ const createReview = async (req, res) => {
     // Enforce one review per booking per user via unique index; handle dup error
     try {
       const review = await Review.create(payload);
+
+      // === PRODUCTION PATTERN: Write-time rating aggregation ===
+      // Recalculate and persist aggregate onto Fleet document
+      try {
+        const stats = await Review.aggregate([
+          { $match: { fleetId: new mongoose.Types.ObjectId(fleetId) } },
+          {
+            $group: {
+              _id: "$fleetId",
+              averageRating: { $avg: "$rating" },
+              totalReviews: { $sum: 1 },
+            },
+          },
+        ]);
+        if (stats.length > 0) {
+          await Bus.findByIdAndUpdate(fleetId, {
+            averageRating: Math.round(stats[0].averageRating * 10) / 10,
+            totalReviews: stats[0].totalReviews,
+          });
+        }
+      } catch (aggErr) {
+        // Non-blocking: log but don't fail the review creation
+        console.error("Rating aggregation failed (non-blocking):", aggErr.message);
+      }
+
       return res.status(201).json({
         status: true,
         message: "Review submitted",
-        // data: review,
       });
     } catch (err) {
       if (err && err.code === 11000) {

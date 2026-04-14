@@ -300,133 +300,10 @@ const getTicketById = async (req, res) => {
 
 // search ticket
 const searchTickets = async (req, res) => {
-  try {
-    const { from, to, date, shift } = req.body;
-    const query = { isActive: true };
-
-    // Search by from/to cities using both BusRoute and Google Route
-    if (from && to) {
-      const fromRegex = new RegExp(from, "i");
-      const toRegex = new RegExp(to, "i");
-
-      // 1. Find matching BusRoutes by fromCity and toCity
-      const busRoutes = await BusRoute.find({
-        fromCity: { $regex: fromRegex },
-        toCity: { $regex: toRegex },
-        status: "ACTIVE",
-      }).select("_id");
-
-      const busRouteIds = busRoutes.map((r) => r._id);
-
-      // 2. Find matching Google Routes by polyline addresses
-      const googleRoutes = await Route.find({
-        $and: [
-          { polyline: { $elemMatch: { address: { $regex: fromRegex } } } },
-          { polyline: { $elemMatch: { address: { $regex: toRegex } } } },
-        ],
-      }).select("_id");
-
-      const googleRouteIds = googleRoutes.map((r) => r._id);
-
-      // Build OR condition for both route types
-      const orConditions = [];
-
-      if (busRouteIds.length > 0) {
-        orConditions.push({ busRouteId: { $in: busRouteIds } });
-      }
-
-      if (googleRouteIds.length > 0) {
-        orConditions.push({ routeId: { $in: googleRouteIds } });
-      }
-
-      if (orConditions.length > 0) {
-        query.$or = orConditions;
-      } else {
-        // No matching routes found in either source
-        return res.json({
-          status: true,
-          message: "No bus schedules found for this route",
-          results: 0,
-          data: [],
-        });
-      }
-    }
-
-    // Filter by date
-    const today = new Date();
-    const todayStr = today.toISOString().split("T")[0]; // "YYYY-MM-DD"
-
-    if (date) {
-      if (date.length === 4) {
-        query.date = { $regex: `^${date}` }; // Year
-      } else if (date.length === 7) {
-        query.date = { $regex: `^${date}` }; // Month
-      } else if (date.length === 10) {
-        query.date = date; // Exact date
-      }
-    } else {
-      // No date provided - filter schedules from today onward
-      query.date = { $gte: todayStr };
-    }
-
-    // Shift filter
-    if (shift) {
-      if (Array.isArray(shift) && shift.length > 0) {
-        query.shift = { $in: shift };
-      } else if (typeof shift === "string") {
-        query.shift = shift;
-      }
-    }
-
-    const tickets = await Ticket.find(query)
-      .select("-routeId -busRouteId -isActive -createdAt -updatedAt -__v")
-      .populate({
-        path: "busId",
-        select: "thumbnail amenitiesId boardingPointId vehicleType _id busName busNumber busType totalSeats seatLayout fleetImages",
-        populate: [
-          { path: "amenitiesId", select: "-userId -_id -createdAt -updatedAt -__v" },
-          { path: "boardingPointId", select: "-userId -_id -createdAt -updatedAt -__v" }
-        ]
-      })
-      .populate({
-        path: "busRouteId",
-        select: "-createdAt -updatedAt -__v -status -userId -createdById"
-      })
-      .lean();
-
-    const formattedTickets = tickets.map((ticket) => {
-      const { busId, busRouteId, ...rest } = ticket;
-      let busData = null;
-
-      if (busId) {
-        const { amenitiesId, boardingPointId, ...busRest } = busId;
-        busData = {
-          ...busRest,
-          amenities: amenitiesId?.amenities || [],
-          boardingPoints: boardingPointId?.boardingPoints || [],
-        };
-      }
-
-      return {
-        ...rest,
-        busData,
-        route: busRouteId
-      };
-    });
-
-    res.json({
-      status: true,
-      message:
-        formattedTickets.length === 0
-          ? "No bus schedules found"
-          : "Successfully fetched data",
-      results: formattedTickets.length,
-      data: formattedTickets,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ status: false, message: "Server error" });
-  }
+  return res.status(410).json({
+    status: false,
+    message: "Bus Schedule APIs are deprecated. Please use the Fleet Trip APIs (/api/public/searchTrips).",
+  });
 };
 
 
@@ -445,10 +322,8 @@ const searchTrips = async (req, res) => {
         status: "ACTIVE"
       });
 
-      console.log("Found Routes:", routes.map(r => ({ id: r._id, name: r.routeName })));
-
       if (!routes.length) {
-        return res.status(404).json({ success: false, message: "No routes found for these locations." });
+        return res.status(200).json({ success: true, message: "No routes found for these locations.", results: 0, data: [] });
       }
       routeIds = routes.map(r => r._id);
     }
@@ -468,52 +343,97 @@ const searchTrips = async (req, res) => {
       tripQuery.tripDate = date.trim();
     }
 
-    // Shift filter (day, night, or both)
+    // Shift filter
     if (shift) {
       if (Array.isArray(shift)) {
         tripQuery.shift = { $in: shift };
       } else if (shift.toLowerCase() === "both") {
-        // Do nothing, matches all shifts
+        // matches all shifts
       } else if (shift.trim() !== "") {
         tripQuery.shift = shift.trim().toLowerCase();
       }
     }
 
-    console.log("Trip Query:", tripQuery);
-
-    const trips = await Trip.find(tripQuery, "-createdAt -updatedAt -__v -isActive -daysOfWeek -autoGenerateUntil -seatTemplateId -isAutoGenerated -templateId -returnTripLinked -status -recurrence -ownerId")
+    // 3. Fetch trips with FULL populate (production-grade)
+    const trips = await Trip.find(tripQuery, "-createdAt -updatedAt -__v -isAutoGenerated -templateId -returnTripLinked -recurrence -daysOfWeek -autoGenerateUntil")
       .populate({
         path: "busId",
-        select: "busName busNumber busType vehicleType totalSeats seatLayout amenitiesId",
-        populate: {
-          path: "amenitiesId",
-          select: "amenities"
-        }
+        select: "busName busNumber busType vehicleType totalSeats seatLayout fleetImages averageRating totalReviews amenitiesId boardingPointId",
+        populate: [
+          { path: "amenitiesId", select: "amenities -_id" },
+          { path: "boardingPointId", select: "boardingPoints droppingPoints -_id" }
+        ]
       })
-      .populate("routeId", "routeName from to distance duration");
+      .populate("routeId", "routeName from to distance duration basePrice")
+      .lean();
 
-    // Transform the response to rename busId to busDetail and routeId to routeDetail
+    // 4. Batch-query seat availability (1 DB call, not N+1)
+    const tripIds = trips.map(t => t._id);
+    const seatDocs = await Seat.find({ tripId: { $in: tripIds } }).lean();
+    const seatAvailabilityMap = {};
+    for (const doc of seatDocs) {
+      const allSeats = [...(doc.seata || []), ...(doc.seatb || []), ...(doc.seatc || [])];
+      seatAvailabilityMap[doc.tripId.toString()] = allSeats.filter(s => !s.booked).length;
+    }
+
+    // 5. Transform response — flatten and enrich
     const formattedTrips = trips.map(trip => {
-      const tripObj = trip.toObject();
-
-      // Flatten amenities to just an array of names
-      let simplifiedAmenities = [];
-      if (tripObj.busId && tripObj.busId.amenitiesId && tripObj.busId.amenitiesId.amenities) {
-        simplifiedAmenities = tripObj.busId.amenitiesId.amenities.map(a => a.name);
+      // Flatten amenities
+      let amenities = [];
+      if (trip.busId && trip.busId.amenitiesId && trip.busId.amenitiesId.amenities) {
+        amenities = trip.busId.amenitiesId.amenities.map(a => a.name);
       }
 
-      const busDetail = {
-        ...tripObj.busId,
-        amenities: simplifiedAmenities,
-        amenitiesId: undefined // Remove the original reference
-      };
+      // Flatten boarding/dropping points
+      let boardingPoints = [];
+      let droppingPoints = [];
+      if (trip.busId && trip.busId.boardingPointId) {
+        boardingPoints = trip.busId.boardingPointId.boardingPoints || [];
+        droppingPoints = trip.busId.boardingPointId.droppingPoints || [];
+      }
+
+      // Determine effective price (tripFare > route basePrice)
+      const effectivePrice = trip.tripFare !== null && trip.tripFare !== undefined
+        ? trip.tripFare
+        : (trip.routeId ? trip.routeId.basePrice : 0);
+
+      const busDetail = trip.busId ? {
+        _id: trip.busId._id,
+        busName: trip.busId.busName,
+        busNumber: trip.busId.busNumber,
+        busType: trip.busId.busType,
+        vehicleType: trip.busId.vehicleType,
+        totalSeats: trip.busId.totalSeats,
+        seatLayout: trip.busId.seatLayout,
+        fleetImages: trip.busId.fleetImages || [],
+        averageRating: trip.busId.averageRating || 0,
+        totalReviews: trip.busId.totalReviews || 0,
+        amenities,
+        boardingPoints,
+        droppingPoints,
+      } : null;
+
+      const routeDetail = trip.routeId ? {
+        _id: trip.routeId._id,
+        routeName: trip.routeId.routeName,
+        from: trip.routeId.from,
+        to: trip.routeId.to,
+        distance: trip.routeId.distance,
+        duration: trip.routeId.duration,
+      } : null;
 
       return {
-        ...tripObj,
+        _id: trip._id,
+        tripId: trip.tripId,
+        tripDate: trip.tripDate,
+        departureTime: trip.departureTime,
+        arrivalTime: trip.arrivalTime,
+        tripFare: effectivePrice,
+        shift: trip.shift,
+        status: trip.status,
         busDetail,
-        routeDetail: tripObj.routeId,
-        busId: undefined, // Remove the original keys
-        routeId: undefined
+        routeDetail,
+        availableSeats: seatAvailabilityMap[trip._id.toString()] ?? trip.busId?.totalSeats ?? 0,
       };
     });
 
@@ -521,7 +441,7 @@ const searchTrips = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Trips found successfully",
+      message: formattedTrips.length === 0 ? "No trips found" : "Trips found successfully",
       results: formattedTrips.length,
       data: formattedTrips
     });
@@ -532,56 +452,10 @@ const searchTrips = async (req, res) => {
 };
 
 const createSeats = async (req, res) => {
-  try {
-    const { tripId, scheduleId, seatRangeA, seatRangeB } = req.body;
-    const effectiveTripId = tripId || scheduleId;
-
-    // ... (rest of the code remains the same)
-    if (!effectiveTripId || !seatRangeA || !seatRangeB) {
-      return res.status(400).json({
-        status: false,
-        message: "Missing tripId or seat ranges.",
-      });
-    }
-
-    // Helper to generate seat array like [{ seatNo: 'a1' }, { seatNo: 'a2' }, ...]
-    const generateSeats = (prefix, range) => {
-      const [start, end] = range.split("-").map(Number);
-      const seats = [];
-
-      for (let i = start; i <= end; i++) {
-        seats.push({
-          seatNo: `${prefix}${i}`,
-          booked: false,
-          bookedBy: null,
-          bookedAt: null,
-        });
-      }
-
-      return seats;
-    };
-
-    const seata = generateSeats("a", seatRangeA);
-    const seatb = generateSeats("b", seatRangeB);
-
-    const newSeats = await Seat.create({
-      tripId: effectiveTripId,
-      seata,
-      seatb,
-    });
-
-    return res.status(201).json({
-      status: true,
-      message: "Seats created successfully!",
-      data: newSeats,
-    });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({
-      status: false,
-      message: "Internal Server Error!",
-    });
-  }
+  return res.status(410).json({
+    status: false,
+    message: "Manual seat creation is deprecated. Seats are now automatically created from templates when a Trip is generated.",
+  });
 };
 
 // Get Seats by id

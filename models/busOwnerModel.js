@@ -56,6 +56,17 @@ const busOwnerSchema = new mongoose.Schema(
 
 
         /* =======================
+           BANK DETAILS (for settlements)
+        ======================= */
+        bankDetails: {
+            bankName: { type: String, default: null },
+            accountNumber: { type: String, default: null },
+            accountHolderName: { type: String, default: null },
+            branchName: { type: String, default: null },
+            swiftCode: { type: String, default: null },
+        },
+
+        /* =======================
            APPROVAL & STATUS
         ======================= */
 

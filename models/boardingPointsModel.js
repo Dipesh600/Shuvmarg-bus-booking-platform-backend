@@ -25,18 +25,39 @@ const boardingPointsSchema = new mongoose.Schema(
                     type: String, // e.g "4:45 PM"
                     required: true
                 },
-                // Coordinates can be useful for map integration
                 coordinates: {
                     lat: { type: Number },
                     lng: { type: Number }
                 },
                 contactNumber: {
-                    type: String // Contact person at this boarding point
+                    type: String
+                }
+            },
+        ],
+        droppingPoints: [
+            {
+                pointName: {
+                    type: String,
+                    required: true, // e.g., "Prithvi Chowk"
+                },
+                landmark: {
+                    type: String,
+                },
+                time: {
+                    type: String,
+                    required: true
+                },
+                coordinates: {
+                    lat: { type: Number },
+                    lng: { type: Number }
+                },
+                contactNumber: {
+                    type: String
                 }
             },
         ],
         description: {
-            type: String, // General description for this collection of points
+            type: String,
         },
         status: {
             type: Boolean,

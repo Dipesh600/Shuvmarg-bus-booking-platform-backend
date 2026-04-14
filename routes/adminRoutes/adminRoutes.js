@@ -24,6 +24,8 @@ const adminBusRouteController = require("../../controllers/adminController/busOw
 const adminFleetController = require("../../controllers/adminController/busOwnerController/fleetController.js");
 const adminTemplateController = require("../../controllers/adminController/busOwnerController/templateController.js");
 const adminTripController = require("../../controllers/adminController/busOwnerController/tripController.js");
+const adminSettlementCon = require("../../controllers/busOwnerController/settlementController.js");
+const fareRuleCon = require("../../controllers/busOwnerController/fareRuleController.js");
 // Auth Routes
 router.post("/auth/login", authController.login);
 router.get("/auth/profile", adminMiddleware, authController.getAdminProfile);
@@ -195,5 +197,9 @@ router.get("/trips/owner/:ownerId", adminMiddleware, adminTripController.getTrip
 router.get("/trips/details/:id", adminMiddleware, adminTripController.getTripById);
 router.patch("/trips/update/:id", adminMiddleware, adminTripController.updateTripByAdmin);
 router.delete("/trips/delete/:id", adminMiddleware, adminTripController.deleteTripByAdmin);
+
+// Settlement Management (Admin)
+router.get("/settlements/all", adminMiddleware, adminSettlementCon.getMySettlements);
+router.patch("/settlements/pay", adminMiddleware, adminSettlementCon.paySettlement);
 
 module.exports = router;

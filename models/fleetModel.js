@@ -14,6 +14,13 @@ const BusSchema = new mongoose.Schema(
             required: true
         },
 
+        // Fleet grouping — buses sharing route, layout, amenities
+        fleetGroupId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Buse",    // Self-reference for cloning config
+            default: null,
+        },
+
         busName: {
             type: String,
             required: true,
@@ -34,7 +41,7 @@ const BusSchema = new mongoose.Schema(
         },
         vehicleType: {
             type: String,
-            enum: ["bus", "hiace"],
+            enum: ["bus", "hiace", "minibus", "jeep"],
             required: true
         },
         totalSeats: {
@@ -63,6 +70,39 @@ const BusSchema = new mongoose.Schema(
         fleetImages: {
             type: [String],
             default: []
+        },
+
+        // Denormalized rating (updated on review creation via aggregation)
+        averageRating: {
+            type: Number,
+            default: 0,
+            min: 0,
+            max: 5,
+        },
+        totalReviews: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        // Per-vehicle legal documents (separate from owner-level KYC)
+        fleetDocuments: {
+            fitnessCert: {
+                url: { type: String, default: null },
+                validTill: { type: Date, default: null },
+            },
+            insurance: {
+                url: { type: String, default: null },
+                policyNumber: { type: String, default: null },
+                validTill: { type: Date, default: null },
+            },
+            bluebook: {
+                url: { type: String, default: null },
+            },
+            routePermit: {
+                url: { type: String, default: null },
+                validTill: { type: Date, default: null },
+            },
         },
 
         registrationYear: {

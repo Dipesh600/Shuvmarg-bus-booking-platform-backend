@@ -22,6 +22,11 @@ const tripSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    driverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",       // role: "driver"
+      default: null,
+    },
     tripDate: {
       type: String,
       required: true,

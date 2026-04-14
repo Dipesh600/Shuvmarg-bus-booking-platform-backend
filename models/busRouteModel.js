@@ -37,6 +37,15 @@ const routeSchema = new mongoose.Schema(
       enum: ["ACTIVE", "INACTIVE"],
       default: "ACTIVE",
     },
+    stoppages: [{
+      name: { type: String, required: true },
+      distanceFromSource: { type: Number, default: 0 },  // km
+      isIntermediate: { type: Boolean, default: false },
+      coordinates: {
+        lat: { type: Number },
+        lng: { type: Number },
+      },
+    }],
     ownerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User", // The Bus Owner who created/owns this route

@@ -5,6 +5,8 @@ const { busOwnerMiddleware } = require("../../middleware/checkRole.js");
 const busOwnerCon = require("../../controllers/busOwnerController/busOwnerController.js");
 const busOwnerRouteCon = require("../../controllers/busOwnerController/busOwnerRouteController.js");
 const tripCon = require("../../controllers/busOwnerController/busTripController.js");
+const settlementCon = require("../../controllers/busOwnerController/settlementController.js");
+const fareRuleCon = require("../../controllers/busOwnerController/fareRuleController.js");
 
 router.post("/submitBusOwnerKyc", auth, busOwnerMiddleware, busOwnerCon.submitBusOwnerKyc);
 router.get("/myBusOwnerKycStatus", auth, busOwnerMiddleware, busOwnerCon.getMyBusOwnerKycStatus);
@@ -42,5 +44,15 @@ router.post("/getTripById", auth, busOwnerMiddleware, tripCon.getTripById);
 router.patch("/updateTripStatus", auth, busOwnerMiddleware, tripCon.updateTripStatus);
 router.patch("/toggleTripStatus", auth, busOwnerMiddleware, tripCon.toggleTripStatus);
 router.delete("/deleteTrip", auth, busOwnerMiddleware, tripCon.deleteTrip);
+
+// Settlements
+router.post("/raiseSettlement", auth, busOwnerMiddleware, settlementCon.raiseSettlement);
+router.get("/getMySettlements", auth, busOwnerMiddleware, settlementCon.getMySettlements);
+router.patch("/markSettlementReceived", auth, busOwnerMiddleware, settlementCon.markSettlementReceived);
+
+// Fare Rules (Dynamic Pricing)
+router.post("/upsertFareRule", auth, busOwnerMiddleware, fareRuleCon.upsertFareRule);
+router.get("/getMyFareRules", auth, busOwnerMiddleware, fareRuleCon.getMyFareRules);
+router.delete("/deleteFareRule", auth, busOwnerMiddleware, fareRuleCon.deleteFareRule);
 
 module.exports = router;

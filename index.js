@@ -13,6 +13,7 @@ const rateLimit = require("express-rate-limit");
 const fileUpload = require("express-fileupload");
 const indexRoute = require("./routes/indexRoute.js");
 const startServer = require("./utils/server.js");
+const setupTripGeneratorCron = require("./services/tripGeneratorCron.js");
 
 const app = express();
 const PORT = process.env.PORT || 7012;
@@ -63,6 +64,9 @@ app.get("/testing", (req, res) => {
 
 // Routes
 app.use(indexRoute);
+
+// Initialize Cron Jobs
+setupTripGeneratorCron();
 
 app.use((err, req, res, next) => {
   console.error("Global error:", err);
