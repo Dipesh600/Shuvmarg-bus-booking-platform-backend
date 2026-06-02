@@ -2,26 +2,28 @@ const mongoose = require("mongoose");
 
 const busAmenitiesSchema = new mongoose.Schema(
     {
-        userId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            required: true,
+        name: {
+            type: String,
+            required: true, // e.g., "WiFi"
+            trim: true,
+            unique: true,
         },
-        amenities: [
-            {
-                name: {
-                    type: String,
-                    required: true, // e.g., "WiFi"
-                    trim: true,
-                },
-                description: {
-                    type: String, // e.g., "Free high-speed internet"
-                },
-                icon: {
-                    type: String, // Optional: URL or icon class name
-                }
-            },
-        ],
+        description: {
+            type: String, // e.g., "Free high-speed internet"
+        },
+        icon: {
+            type: String, // URL or CSS class name
+        },
+        type: {
+            type: String,
+            enum: ["GLOBAL", "CUSTOM"],
+            default: "GLOBAL",
+        },
+        ownerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User", // Null for GLOBAL
+            required: false,
+        },
         status: {
             type: Boolean,
             default: true,

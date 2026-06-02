@@ -66,4 +66,64 @@ const isAdminOrBusOwner = async (req, res, next) => {
         });
     }
 };
-module.exports = { isAdminOrBusOwner, adminMiddleware, agentMiddleware, busOwnerMiddleware };
+
+// Conductor
+const conductorMiddleware = (req, res, next) => {
+    if (!req.userInfo) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized. Please login first.",
+        });
+    }
+    if (req.userInfo.role !== "conductor") {
+        return res.status(403).json({
+            success: false,
+            message: "Access denied. Conductors only.",
+        });
+    }
+    next();
+};
+
+// Driver
+const driverMiddleware = (req, res, next) => {
+    if (!req.userInfo) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized. Please login first.",
+        });
+    }
+    if (req.userInfo.role !== "driver") {
+        return res.status(403).json({
+            success: false,
+            message: "Access denied. Drivers only.",
+        });
+    }
+    next();
+};
+
+// Bus Owner OR Conductor — for conductor routes (bus owner acting as conductor)
+const busOwnerOrConductorMiddleware = (req, res, next) => {
+    if (!req.userInfo) {
+        return res.status(401).json({
+            success: false,
+            message: "Unauthorized. Please login first.",
+        });
+    }
+    if (req.userInfo.role !== "busOwner" && req.userInfo.role !== "conductor") {
+        return res.status(403).json({
+            success: false,
+            message: "Access denied. Bus owners or conductors only.",
+        });
+    }
+    next();
+};
+
+module.exports = {
+    isAdminOrBusOwner,
+    adminMiddleware,
+    agentMiddleware,
+    busOwnerMiddleware,
+    conductorMiddleware,
+    driverMiddleware,
+    busOwnerOrConductorMiddleware,
+};

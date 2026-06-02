@@ -28,13 +28,30 @@ const busOwnerSchema = new mongoose.Schema(
             verified: { type: Boolean, default: false },
             rejectionReason: { type: String, default: null },
         },
-        taxRegistration: {
-            panNumber: { type: String, default: null },
-            vatNumber: { type: String, default: null },
+
+        /* Owner identity document (citizenship, passport, etc.) — separate from company registration */
+        ownerIdentity: {
             documentUrls: [String],
             verified: { type: Boolean, default: false },
             rejectionReason: { type: String, default: null },
         },
+
+        taxRegistration: {
+            panNumber: { type: String, default: null },
+            vatNumber: { type: String, default: null },
+            registrationNumber: { type: String, default: null },
+            documentUrls: [String],
+            verified: { type: Boolean, default: false },
+            rejectionReason: { type: String, default: null },
+        },
+
+        /*
+         * transportLicense and insuranceCertificates are intentionally
+         * NOT collected at Bus Owner registration. They belong at the
+         * Fleet (vehicle) level since each bus has its own route permit
+         * and insurance policy. They are retained here only for
+         * legacy/future use and must NOT be shown in the Bus Owner KYC UI.
+         */
         transportLicense: {
             licenseNumber: { type: String, default: null },
             validTill: { type: Date, default: null },
@@ -64,6 +81,7 @@ const busOwnerSchema = new mongoose.Schema(
             accountHolderName: { type: String, default: null },
             branchName: { type: String, default: null },
             swiftCode: { type: String, default: null },
+            documentUrls: [String],
         },
 
         /* =======================

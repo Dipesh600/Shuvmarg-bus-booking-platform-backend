@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, "Password is required"],
-      minlength: [6, "Password must be at least 6 characters long"],
+      minlength: [8, "Password must be at least 8 characters long"],
       select: false,
     },
     profilePicture: {
@@ -53,7 +53,7 @@ const userSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["active", "inactive", "banned"],
+      enum: ["active", "inactive", "banned", "pending", "invited"],
       default: "active",
     },
     phoneVerified: {
@@ -80,6 +80,26 @@ const userSchema = new mongoose.Schema(
       default: 0,
     },
 
+    // === SHUVMARG MONEY (SM Money) ===
+    smMoneyEnabled: {
+      type: Boolean,
+      default: true,    // false when account suspended — blocks SM Money spending
+    },
+    welcomeOfferUsed: {
+      type: Boolean,
+      default: false,   // true after first booking uses welcome offer
+    },
+    // Analytics only — NEVER used for balance computation (balance is always
+    // computed from sm_ledger aggregation, never from a stored field).
+    lifetimeSmEarned: {
+      type: Number,
+      default: 0,
+    },
+    lifetimeSmSpent: {
+      type: Number,
+      default: 0,
+    },
+
     // === SECURITY ===
     lastLoginAt: {
       type: Date,
@@ -98,6 +118,12 @@ const userSchema = new mongoose.Schema(
     deletedAt: {
       type: Date,
       default: null,    // Non-null = account soft-deleted
+    },
+
+    // === ADMIN-GENERATED CREDENTIALS ===
+    forcePasswordChange: {
+      type: Boolean,
+      default: false,   // true = user must change temp password on first login
     },
   },
   { timestamps: true }

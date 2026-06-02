@@ -96,15 +96,8 @@ class CouponHelper {
         };
       }
 
-      // Check user type eligibility
-      const user = await User.findById(userId);
-      if (!coupon.applicableUserTypes.includes(user.role)) {
-        return {
-          isValid: false,
-          error: "This coupon is not applicable for your account type",
-          errorCode: "USER_TYPE_NOT_ELIGIBLE",
-        };
-      }
+      // User type restriction is advisory only — not a hard block during checkout
+      // (Admins can see applicableUserTypes but it does not block users at validation)
 
       // Check route restrictions (if applicable)
       if (scheduleId && coupon.applicableRoutes.length > 0) {

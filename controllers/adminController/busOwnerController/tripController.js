@@ -146,9 +146,21 @@ const getAllTrips = async (req, res) => {
                 .sort({ tripDate: -1, createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
+                // Legacy route (Path B)
                 .populate("routeId",   "routeName from to")
-                .populate("busId",     "busNumber busName")
-                .populate("ownerId",   "name email")
+                // New registry (Path A) — shows corridor origin→destination
+                .populate({
+                    path: "variantId",
+                    select: "name direction",
+                    populate: {
+                        path: "corridorId",
+                        select: "originCity destinationCity",
+                    },
+                })
+                .populate("busId",      "busNumber busName")
+                .populate("ownerId",    "name email")
+                .populate("brandId",    "brandName")
+                .populate("scheduleId", "departureTime recurrence")
                 .lean(),
             Trip.countDocuments(query),
         ]);
@@ -196,6 +208,43 @@ const updateTripStatusByAdmin = async (req, res) => {
     }
 };
 
+// Assign a driver to a specific trip
+const assignDriverToTrip = async (req, res) => {
+    try {
+        const { id }       = req.params;
+        const { driverId } = req.body;
+
+        if (!driverId) {
+            return res.status(400).json({ success: false, message: "driverId is required." });
+        }
+
+        const trip = await tripService.assignDriver(id, driverId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Driver assigned successfully.",
+            data: trip,
+        });
+    } catch (error) {
+        console.error("assignDriverToTrip error:", error);
+        const status = error.message.includes("not found") ? 404 : 400;
+        return res.status(status).json({ success: false, message: error.message });
+    }
+};
+
+// Get eligible drivers for a brand (to populate the assign-driver dropdown)
+const getDriversForBrand = async (req, res) => {
+    try {
+        const { brandId } = req.params;
+        const drivers = await tripService.getDriversByBrand(brandId);
+        return res.status(200).json({ success: true, results: drivers.length, data: drivers });
+    } catch (error) {
+        console.error("getDriversForBrand error:", error);
+        const status = error.message.includes("not found") ? 404 : 500;
+        return res.status(status).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     createTripForOwner,
     getTripsByOwner,
@@ -204,5 +253,7 @@ module.exports = {
     deleteTripByAdmin,
     getAllTrips,
     updateTripStatusByAdmin,
+    assignDriverToTrip,
+    getDriversForBrand,
 };
 

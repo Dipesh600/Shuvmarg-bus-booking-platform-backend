@@ -130,38 +130,40 @@ const login = async (req, res) => {
         }
 
 
-        // If 2FA with Google Authenticator is enabled, verify the OTP
-        if (admin.twoFactorEnabled && admin.twoFactorType === "GOOGLE_AUTH") {
-            if (!otp) {
-                return res.status(400).json({
-                    success: false,
-                    message: "OTP is required for two-factor authentication.",
-                });
-            }
-
-
-            if (!admin.twoFactorSecret) {
-                return res.status(500).json({
-                    success: false,
-                    message: "Two-factor authentication is not properly configured for this account.",
-                });
-            }
-
-
-            const isOtpValid = speakeasy.totp.verify({
-                secret: admin.twoFactorSecret,
-                encoding: "base32",
-                token: otp,
-                window: 1,
+        // ── 2FA Enforcement — always required, no bypass ──────────────────────
+        if (!admin.twoFactorEnabled) {
+            return res.status(403).json({
+                success: false,
+                message: "Two-factor authentication must be enabled before logging in. Please contact your system administrator.",
             });
+        }
 
+        if (!admin.twoFactorSecret) {
+            return res.status(403).json({
+                success: false,
+                message: "Google Authenticator is not set up for this account. Please run the 2FA setup before logging in.",
+            });
+        }
 
-            if (!isOtpValid) {
-                return res.status(401).json({
-                    success: false,
-                    message: "Invalid OTP.",
-                });
-            }
+        if (!otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Google Authenticator OTP is required.",
+            });
+        }
+
+        const isOtpValid = speakeasy.totp.verify({
+            secret: admin.twoFactorSecret,
+            encoding: "base32",
+            token: otp,
+            window: 1,  // allow 30s drift
+        });
+
+        if (!isOtpValid) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid or expired OTP. Please check Google Authenticator and try again.",
+            });
         }
 
 
@@ -173,6 +175,7 @@ const login = async (req, res) => {
 
         const adminWithoutPassword = admin.toObject();
         delete adminWithoutPassword.password;
+        delete adminWithoutPassword.twoFactorSecret;
 
 
         const accessToken = jwt.sign(
@@ -183,7 +186,7 @@ const login = async (req, res) => {
                 role: admin.role,
             },
             process.env.SECRET_KEY,
-            { expiresIn: "30d" }
+            { expiresIn: "30m" }  // Short-lived: admin sessions expire in 30 minutes
         );
 
 

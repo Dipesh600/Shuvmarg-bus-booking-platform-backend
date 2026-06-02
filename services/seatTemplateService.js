@@ -1,37 +1,37 @@
 const SeatTemplate = require("../models/seatTemplateModel");
 
+// Helper to count seats from the config
+const countSeatsFromConfig = (seatConfig) => {
+    if (!seatConfig || !seatConfig.floors) return 0;
+    let count = 0;
+    seatConfig.floors.forEach(floor => {
+        if (!floor.rows) return;
+        floor.rows.forEach(row => {
+            if (!row.cells) return;
+            row.cells.forEach(cell => {
+                if (cell.cellType === "SEAT") {
+                    count++;
+                }
+            });
+        });
+    });
+    return count;
+};
+
 const createTemplate = async (templateData, createdById) => {
-    const { templateName, aCount, bCount, cCount, userId } = templateData;
+    const { templateName, seatConfig, userId } = templateData;
 
-    if (!templateName || aCount === undefined || bCount === undefined || cCount === undefined) {
-        throw new Error("Template name and seat counts (aCount, bCount, cCount) are required!");
+    if (!templateName || !seatConfig) {
+        throw new Error("Template name and seat config are required!");
     }
 
-    const seata = [];
-    for (let i = 1; i <= aCount; i++) {
-        seata.push({ seatNo: `a${i}` });
-    }
-
-    const seatb = [];
-    for (let i = 1; i <= bCount; i++) {
-        seatb.push({ seatNo: `b${i}` });
-    }
-
-    const seatc = [];
-    for (let i = 1; i <= cCount; i++) {
-        seatc.push({ seatNo: `c${i}` });
-    }
-
-    const totalSeats = Number(aCount) + Number(bCount) + Number(cCount);
+    const totalSeats = countSeatsFromConfig(seatConfig);
 
     return await SeatTemplate.create({
         userId,
         templateName,
         totalSeats,
-        seata,
-        seatb,
-        seatc,
-        createdBy: userId, // Match original pattern
+        seatConfig,
         createdById,
     });
 };
@@ -56,47 +56,20 @@ const getTemplateById = async (id) => {
 };
 
 const updateTemplate = async (id, data) => {
-    const { templateName, aCount, bCount, cCount, seata, seatb, seatc, isActive } = data;
+    const { templateName, seatConfig, isActive } = data;
 
     const template = await SeatTemplate.findById(id);
     if (!template) {
         throw new Error("Seat template not found!");
     }
 
-    let finalSeata = seata || template.seata;
-    let finalSeatb = seatb || template.seatb;
-    let finalSeatc = seatc || template.seatc;
-
-    // Regenerate arrays if counts are provided
-    if (aCount !== undefined) {
-        finalSeata = [];
-        for (let i = 1; i <= aCount; i++) {
-            finalSeata.push({ seatNo: `a${i}` });
-        }
+    const updateData = {};
+    if (templateName !== undefined) updateData.templateName = templateName;
+    if (seatConfig !== undefined) {
+        updateData.seatConfig = seatConfig;
+        updateData.totalSeats = countSeatsFromConfig(seatConfig);
     }
-    if (bCount !== undefined) {
-        finalSeatb = [];
-        for (let i = 1; i <= bCount; i++) {
-            finalSeatb.push({ seatNo: `b${i}` });
-        }
-    }
-    if (cCount !== undefined) {
-        finalSeatc = [];
-        for (let i = 1; i <= cCount; i++) {
-            finalSeatc.push({ seatNo: `c${i}` });
-        }
-    }
-
-    const totalSeats = finalSeata.length + finalSeatb.length + finalSeatc.length;
-
-    const updateData = {
-        ...(templateName !== undefined && { templateName }),
-        seata: finalSeata,
-        seatb: finalSeatb,
-        seatc: finalSeatc,
-        totalSeats,
-        ...(isActive !== undefined && { isActive }),
-    };
+    if (isActive !== undefined) updateData.isActive = isActive;
 
     return await SeatTemplate.findByIdAndUpdate(id, updateData, {
         new: true,

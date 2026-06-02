@@ -10,6 +10,16 @@ const settlementSchema = new mongoose.Schema(
             index: true,
         },
 
+        // Which Operator Brand this settlement is for.
+        // A single owner with multiple brands gets SEPARATE settlements per brand,
+        // each paid to THAT brand's specific bank account at THAT brand's commission rate.
+        brandId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "OperatorBrand",
+            required: true,
+            index: true,
+        },
+
         // Which trips are included in this settlement
         tripIds: [{
             type: mongoose.Schema.Types.ObjectId,
@@ -106,7 +116,9 @@ const settlementSchema = new mongoose.Schema(
 
 // Indexes for common queries
 settlementSchema.index({ ownerId: 1, status: 1 });
+settlementSchema.index({ brandId: 1, status: 1 });
 settlementSchema.index({ status: 1, raisedAt: -1 });
 settlementSchema.index({ ownerId: 1, createdAt: -1 });
+settlementSchema.index({ brandId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Settlement", settlementSchema);

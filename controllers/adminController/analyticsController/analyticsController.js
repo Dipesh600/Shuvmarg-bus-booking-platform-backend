@@ -102,7 +102,7 @@ const getAnalyticsOverview = async (req, res) => {
                 foreignField: "_id",
                 as:           "route",
             }},
-            { $unwind: { path: "$route", preserveNullAndEmpty: true } },
+            { $unwind: { path: "$route", preserveNullAndEmptyArrays: true } },
         ]);
 
         const topRoutes = topRoutesRaw.map(r => ({

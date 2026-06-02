@@ -7,6 +7,9 @@ const emailManager = require("../../emailManager/emailManager.js");
 const generateOtpEmailContent = require("../../handlers/otp-template.js");
 const cloudinary = require("../../handlers/cloudinary.js");
 const sendOTP = require("../../handlers/sparro-otp.js");
+const { isPhoneRegistered } = require("../../utils/phoneGuard.js");
+const { createAndSendOTP, verifyOTPCode } = require("../../utils/otpHelper.js");
+const { validatePassword } = require("../../utils/passwordValidator.js");
 
 // Step 1: Send OTP for phone verification
 const sendPhoneOTP = async (req, res) => {
@@ -20,40 +23,25 @@ const sendPhoneOTP = async (req, res) => {
       });
     }
 
-    // Check if phone already exists in User table
-    const existingUser = await User.findOne({ phone });
-    if (existingUser) {
-      return res.status(400).json({
+    // GLOBAL phone uniqueness check — blocks if phone exists under ANY role
+    const { registered } = await isPhoneRegistered(phone);
+    if (registered) {
+      return res.status(409).json({
         success: false,
-        message: "Phone number already registered!",
+        message: "This phone number is already registered.",
+        errorCode: "PHONE_ALREADY_REGISTERED",
       });
     }
 
-    // Generate OTP
-    const otpCode = Math.floor(1000 + Math.random() * 9000);
-    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-    // Save or update OTP in OTP table
-    const otpData = await OTP.findOneAndUpdate(
-      { phone },
-      {
-        otp: otpCode,
-        otpExpiry,
-        isUsed: false,
-        attempts: 0,
-      },
-      { upsert: true, new: true }
-    );
-
-    // Send OTP via SMS
-    await sendOTP(phone, `Your Sumarg Verification code is: ${otpCode}`);
+    // Use centralized OTP helper — 6-digit, crypto-secure, with purpose
+    const result = await createAndSendOTP(phone, "REGISTRATION");
 
     return res.status(200).json({
       status: true,
       message: "OTP sent successfully!",
       data: {
         phone,
-        expiresIn: "5 minutes",
+        expiresIn: result.expiresIn,
       },
     });
   } catch (error) {
@@ -78,73 +66,29 @@ const verifyPhoneOTP = async (req, res) => {
       });
     }
 
-    // Find OTP record
-    const otpRecord = await OTP.findOne({ phone });
-    if (!otpRecord) {
+    // Verify OTP with purpose enforcement and constant-time comparison
+    const result = await verifyOTPCode(phone, otp, "REGISTRATION");
+    if (!result.valid) {
       return res.status(400).json({
         status: false,
-        message: "OTP not found. Please request a new OTP.",
+        message: result.error,
       });
     }
 
-    // Check if OTP is valid
-    if (!otpRecord.isValid()) {
-      if (otpRecord.isExpired()) {
-        return res.status(400).json({
-          status: false,
-          message: "OTP has expired. Please request a new one.",
-        });
-      }
-      if (otpRecord.isUsed) {
-        return res.status(400).json({
-          status: false,
-          message: "OTP has already been used. Please request a new one.",
-        });
-      }
-      if (otpRecord.attempts >= otpRecord.maxAttempts) {
-        return res.status(400).json({
-          status: false,
-          message: "Maximum OTP attempts exceeded. Please request a new one.",
-        });
-      }
-    }
-
-    // Verify OTP
-    if (otpRecord.otp !== otp) {
-      await otpRecord.incrementAttempts();
-      return res.status(400).json({
+    // Double-check phone isn't registered (race condition guard)
+    const { registered } = await isPhoneRegistered(phone);
+    if (registered) {
+      return res.status(409).json({
         status: false,
-        message: "Invalid OTP.",
+        message: "This phone number is already registered.",
+        errorCode: "PHONE_ALREADY_REGISTERED",
       });
     }
-
-    // Mark OTP as used
-    await otpRecord.markAsUsed();
-
-    // Check if phone already exists in User table (only check, don't create)
-    const existingUser = await User.findOne({ phone });
-    if (existingUser) {
-      return res.status(400).json({
-        status: false,
-        message: "Phone number already registered!",
-      });
-    }
-
-    // Generate referral code for new user
-    const {
-      generateReferralCode,
-    } = require("../../handlers/referralCodeGenerator.js");
-    const referralCode = await generateReferralCode();
 
     return res.status(200).json({
       status: true,
       message:
         "Phone verified successfully! Please complete your registration.",
-      // data: {
-      //   phone,
-      //   referralCode,
-      //   verified: true,
-      // },
     });
   } catch (error) {
     console.error("Verify OTP Error:", error);
@@ -179,8 +123,8 @@ const completeRegistration = async (req, res) => {
       });
     }
 
-    // SECURITY CHECK: Verify that this phone number actually went through OTP verification
-    const otpRecord = await OTP.findOne({ phone, isUsed: true });
+    // SECURITY CHECK: Verify that this phone went through REGISTRATION OTP verification
+    const otpRecord = await OTP.findOne({ phone, purpose: "REGISTRATION", isUsed: true });
     if (!otpRecord) {
       return res.status(400).json({
         status: false,
@@ -199,12 +143,13 @@ const completeRegistration = async (req, res) => {
       });
     }
 
-    // Check if phone already exists in User table
-    const existingUser = await User.findOne({ phone });
-    if (existingUser) {
-      return res.status(400).json({
+    // Global phone uniqueness check
+    const { registered } = await isPhoneRegistered(phone);
+    if (registered) {
+      return res.status(409).json({
         status: false,
-        message: "Phone number already registered!",
+        message: "This phone number is already registered.",
+        errorCode: "PHONE_ALREADY_REGISTERED",
       });
     }
 
@@ -217,6 +162,16 @@ const completeRegistration = async (req, res) => {
           message: "Email already exists!",
         });
       }
+    }
+
+    // Validate password strength
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.valid) {
+      return res.status(400).json({
+        status: false,
+        message: passwordCheck.errors[0],
+        errors: passwordCheck.errors,
+      });
     }
 
     // Hash password — cost factor 12 (minimum for production, 2024 standard)
@@ -371,6 +326,15 @@ const login = async (req, res) => {
       return res.status(403).json({ success: false, message: "Your account has been banned. Contact support." });
     }
 
+    // === INVITED BUT NOT YET ACTIVATED ===
+    if (user.status === "invited") {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has not been activated yet. Please check your SMS for activation instructions.",
+        errorCode: "ACCOUNT_NOT_ACTIVATED",
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -395,6 +359,23 @@ const login = async (req, res) => {
       return res.status(401).json({ success: false, message });
     }
 
+    // === FORCE PASSWORD CHANGE CHECK ===
+    if (user.forcePasswordChange) {
+      // Issue a short-lived temp token for the password change flow only
+      const tempToken = jwt.sign(
+        { id: user._id, purpose: "FORCE_PASSWORD_CHANGE" },
+        process.env.SECRET_KEY,
+        { expiresIn: "15m" }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "You must change your temporary password before proceeding.",
+        forcePasswordChange: true,
+        tempToken,
+      });
+    }
+
     // === SUCCESS — reset counters, record login time ===
     await User.findByIdAndUpdate(user._id, {
       $set: {
@@ -407,25 +388,26 @@ const login = async (req, res) => {
     const userWithoutPassword = user.toObject();
     delete userWithoutPassword.password;
 
-    const accessToken = jwt.sign(
-      {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.isVerified,
-      },
-      process.env.SECRET_KEY,
-      { expiresIn: "7d" }   // Reduced from 30d — refresh tokens coming in next phase
-    );
+    // Generate access + refresh token pair via token service
+    const { generateTokenPair } = require("../../utils/tokenService.js");
+    const { accessToken, refreshToken } = await generateTokenPair(user, {
+      deviceInfo: req.get("User-Agent") || null,
+      ipAddress: req.ip || req.connection?.remoteAddress || null,
+    });
 
-    return res.status(200).json({
+    const responseData = {
       success: true,
       message: "Login successful",
       user: userWithoutPassword,
       accessToken,
-    });
+    };
+
+    // Include refresh token only if generated (admin role gets none)
+    if (refreshToken) {
+      responseData.refreshToken = refreshToken;
+    }
+
+    return res.status(200).json(responseData);
   } catch (e) {
     console.error(e);
     return res.status(500).json({ success: false, message: "Internal Server Error" });
@@ -498,43 +480,29 @@ const requestPasswordReset = async (req, res) => {
         .json({ status: false, message: "Email or Phone is required!" });
     }
 
-    const user = await User.findOne({ phone: emailOrPhone });
+    const user = await User.findOne({
+      $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+    });
 
     if (!user) {
+      // Don't reveal whether user exists — vague response
       return res
-        .status(404)
-        .json({ status: false, message: "User not found!" });
+        .status(200)
+        .json({ status: true, message: "If an account exists, OTP has been sent." });
     }
 
-    // Generate OTP for password reset
-    const otpCode = Math.floor(1000 + Math.random() * 9000);
-    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-    // Save OTP in OTP table
-    await OTP.findOneAndUpdate(
-      { phone: user.phone },
-      {
-        otp: otpCode,
-        otpExpiry,
-        isUsed: false,
-        attempts: 0,
-      },
-      { upsert: true, new: true }
-    );
-
-    if (user.phone) {
-      await sendOTP(
-        user.phone,
-        `Your Sumarg Password Reset code is: ${otpCode}`
-      );
-    }
+    // Use centralized OTP helper with PASSWORD_RESET purpose
+    await createAndSendOTP(user.phone, "PASSWORD_RESET");
 
     return res.status(200).json({
       status: true,
       message: "OTP sent to registered phone!",
     });
   } catch (err) {
-    console.error(err);
+    console.error("requestPasswordReset error:", err);
+    if (err.message && err.message.includes('Sparrow SMS')) {
+      return res.status(502).json({ status: false, message: err.message });
+    }
     res.status(500).json({ status: false, message: "Internal Server Error" });
   }
 };
@@ -546,7 +514,7 @@ const verifyOtpForReset = async (req, res) => {
     if (!emailOrPhone || !otp) {
       return res
         .status(400)
-        .json({ status: false, message: "Email and OTP are required!" });
+        .json({ status: false, message: "Phone/Email and OTP are required!" });
     }
 
     const user = await User.findOne({
@@ -559,14 +527,10 @@ const verifyOtpForReset = async (req, res) => {
         .json({ status: false, message: "User not found." });
     }
 
-    // Find OTP record from OTP table
-    const otpRecord = await OTP.findOne({ phone: user.phone });
-    if (!otpRecord || otpRecord.otp !== otp) {
-      return res.status(400).json({ status: false, message: "Invalid OTP." });
-    }
-
-    if (otpRecord.isExpired()) {
-      return res.status(400).json({ status: false, message: "OTP expired." });
+    // Verify with purpose enforcement — do NOT mark used yet (resetPassword will do that)
+    const result = await verifyOTPCode(user.phone, otp, "PASSWORD_RESET", false);
+    if (!result.valid) {
+      return res.status(400).json({ status: false, message: result.error });
     }
 
     return res.status(200).json({
@@ -599,18 +563,21 @@ const resetPassword = async (req, res) => {
         .json({ status: false, message: "User not found." });
     }
 
-    // Find and verify OTP record from OTP table
-    const otpRecord = await OTP.findOne({ phone: user.phone });
-    if (!otpRecord || otpRecord.otp !== otp) {
-      return res.status(400).json({ status: false, message: "Invalid OTP." });
+    // Verify OTP with purpose enforcement — mark as used on success
+    const result = await verifyOTPCode(user.phone, otp, "PASSWORD_RESET", true);
+    if (!result.valid) {
+      return res.status(400).json({ status: false, message: result.error });
     }
 
-    if (otpRecord.isExpired()) {
-      return res.status(400).json({ status: false, message: "OTP expired." });
+    // Validate new password strength
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.valid) {
+      return res.status(400).json({
+        status: false,
+        message: passwordCheck.errors[0],
+        errors: passwordCheck.errors,
+      });
     }
-
-    // Mark OTP as used
-    await otpRecord.markAsUsed();
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
     user.password = hashedPassword;
@@ -625,58 +592,59 @@ const resetPassword = async (req, res) => {
   }
 };
 
-// Resend OTP
+// Resend OTP — works for both registration (phone not in DB) and password reset (phone in DB)
 const resendOtp = async (req, res) => {
   try {
-    const { emailOrPhone } = req.body;
+    const { phone, purpose } = req.body;
 
-    if (!emailOrPhone) {
+    if (!phone) {
       return res.status(400).json({
         success: false,
-        message: "Email or Phone is required!",
+        message: "Phone number is required!",
       });
     }
 
-    const user = await User.findOne({
-      $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found!",
-      });
-    }
-
-    if (user.isVerified) {
+    // Validate purpose
+    const validPurposes = ["REGISTRATION", "PASSWORD_RESET", "ACCOUNT_ACTIVATION"];
+    const otpPurpose = purpose || "REGISTRATION";
+    if (!validPurposes.includes(otpPurpose)) {
       return res.status(400).json({
         success: false,
-        message: "User is already verified!",
+        message: "Invalid OTP purpose.",
       });
     }
 
-    // Generate new OTP
-    const newOtp = Math.floor(1000 + Math.random() * 9000);
-    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+    // For REGISTRATION resend, phone must NOT exist in User table
+    if (otpPurpose === "REGISTRATION") {
+      const { registered } = await isPhoneRegistered(phone);
+      if (registered) {
+        return res.status(409).json({
+          success: false,
+          message: "This phone number is already registered.",
+          errorCode: "PHONE_ALREADY_REGISTERED",
+        });
+      }
+    }
 
-    // Update OTP in OTP table
-    await OTP.findOneAndUpdate(
-      { phone: user.phone },
-      {
-        otp: newOtp,
-        otpExpiry,
-        isUsed: false,
-        attempts: 0,
-      },
-      { upsert: true, new: true }
-    );
+    // For PASSWORD_RESET resend, phone MUST exist in User table
+    if (otpPurpose === "PASSWORD_RESET") {
+      const user = await User.findOne({ phone });
+      if (!user) {
+        // Don't reveal whether user exists
+        return res.status(200).json({
+          success: true,
+          message: "If an account exists, a new OTP has been sent.",
+        });
+      }
+    }
 
-    // Send OTP via SMS
-    await sendOTP(user.phone, `Your Sumarg Verification code is: ${newOtp}`);
+    // Use centralized OTP helper
+    const result = await createAndSendOTP(phone, otpPurpose);
 
     return res.status(200).json({
       success: true,
       message: "New OTP sent successfully!",
+      data: { expiresIn: result.expiresIn },
     });
   } catch (error) {
     console.error("Resend OTP Error:", error);
@@ -939,10 +907,12 @@ const updatePassword = async (req, res) => {
     }
 
     // Validate new password strength
-    if (newPassword.length < 6) {
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.valid) {
       return res.status(400).json({
         status: false,
-        message: "New password must be at least 6 characters long",
+        message: passwordCheck.errors[0],
+        errors: passwordCheck.errors,
       });
     }
 
@@ -974,16 +944,20 @@ const updatePassword = async (req, res) => {
     }
 
     // Hash new password
-    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
 
     // Update password in database
     await User.findByIdAndUpdate(userId, {
       password: hashedNewPassword,
     });
 
+    // Revoke ALL refresh tokens — forces re-login on all devices
+    const { revokeAllUserTokens } = require("../../utils/tokenService.js");
+    await revokeAllUserTokens(userId);
+
     return res.status(200).json({
       status: true,
-      message: "Password updated successfully!",
+      message: "Password updated successfully! Please login again on all devices.",
     });
 
   } catch (error) {
@@ -1039,6 +1013,185 @@ const getUserDetail = async (req, res) => {
   }
 };
 
+// Refresh Token — issue new access token using a valid refresh token
+const refreshAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Refresh token is required.",
+      });
+    }
+
+    const { rotateRefreshToken } = require("../../utils/tokenService.js");
+
+    const result = await rotateRefreshToken(refreshToken, {
+      deviceInfo: req.get("User-Agent") || null,
+      ipAddress: req.ip || req.connection?.remoteAddress || null,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Token refreshed successfully.",
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    });
+  } catch (error) {
+    console.error("Refresh Token Error:", error.message);
+
+    const errorMap = {
+      INVALID_REFRESH_TOKEN: { status: 401, message: "Invalid or revoked refresh token. Please login again." },
+      REFRESH_TOKEN_EXPIRED: { status: 401, message: "Refresh token expired. Please login again." },
+      USER_NOT_FOUND: { status: 401, message: "User not found. Please login again." },
+      ACCOUNT_DEACTIVATED: { status: 403, message: "This account has been deactivated. Contact support." },
+      ACCOUNT_BANNED: { status: 403, message: "Your account has been banned. Contact support." },
+    };
+
+    const mapped = errorMap[error.message];
+    if (mapped) {
+      return res.status(mapped.status).json({ success: false, message: mapped.message });
+    }
+
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+// Logout — revoke the refresh token (true server-side logout)
+const logout = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      // Even without a refresh token, client should clear local tokens
+      return res.status(200).json({
+        success: true,
+        message: "Logged out successfully.",
+      });
+    }
+
+    const { revokeRefreshToken } = require("../../utils/tokenService.js");
+    await revokeRefreshToken(refreshToken);
+
+    return res.status(200).json({
+      success: true,
+      message: "Logged out successfully.",
+    });
+  } catch (error) {
+    console.error("Logout Error:", error);
+    // Don't fail logout — always return success to the client
+    return res.status(200).json({
+      success: true,
+      message: "Logged out successfully.",
+    });
+  }
+};
+
+// Change Forced Password — for admin-generated temp credentials
+const changeForcePassword = async (req, res) => {
+  try {
+    const { tempToken, newPassword, phone, otp } = req.body;
+
+    if (!tempToken || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Temp token and new password are required.",
+      });
+    }
+
+    // Verify the temp token
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, process.env.SECRET_KEY);
+    } catch (err) {
+      return res.status(401).json({
+        success: false,
+        message: "Temp token is invalid or expired. Please login again.",
+      });
+    }
+
+    if (decoded.purpose !== "FORCE_PASSWORD_CHANGE") {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid token purpose.",
+      });
+    }
+
+    // Validate new password strength
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.valid) {
+      return res.status(400).json({
+        success: false,
+        message: passwordCheck.errors[0],
+        errors: passwordCheck.errors,
+      });
+    }
+
+    // If phone + OTP provided, verify phone ownership
+    if (phone && otp) {
+      const otpResult = await verifyOTPCode(phone, otp, "ACCOUNT_ACTIVATION");
+      if (!otpResult.valid) {
+        return res.status(400).json({
+          success: false,
+          message: otpResult.error,
+        });
+      }
+    }
+
+    const user = await User.findById(decoded.id).select("+password");
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found.",
+      });
+    }
+
+    if (!user.forcePasswordChange) {
+      return res.status(400).json({
+        success: false,
+        message: "Password change is not required for this account.",
+      });
+    }
+
+    // Hash and save new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    user.password = hashedPassword;
+    user.forcePasswordChange = false;
+    user.phoneVerified = true;
+    await user.save();
+
+    // Generate full token pair now
+    const { generateTokenPair } = require("../../utils/tokenService.js");
+    const { accessToken, refreshToken } = await generateTokenPair(user, {
+      deviceInfo: req.get("User-Agent") || null,
+      ipAddress: req.ip || req.connection?.remoteAddress || null,
+    });
+
+    const userWithoutPassword = user.toObject();
+    delete userWithoutPassword.password;
+
+    const responseData = {
+      success: true,
+      message: "Password changed successfully. Welcome!",
+      user: userWithoutPassword,
+      accessToken,
+    };
+
+    if (refreshToken) {
+      responseData.refreshToken = refreshToken;
+    }
+
+    return res.status(200).json(responseData);
+  } catch (error) {
+    console.error("Change Force Password Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
 module.exports = {
   sendPhoneOTP,
   verifyPhoneOTP,
@@ -1053,4 +1206,7 @@ module.exports = {
   updateProfile,
   updatePassword,
   getUserDetail,
+  refreshAccessToken,
+  logout,
+  changeForcePassword,
 };

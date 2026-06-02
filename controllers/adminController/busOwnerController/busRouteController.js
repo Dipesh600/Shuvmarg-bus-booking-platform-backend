@@ -145,7 +145,49 @@ const getRouteById = async (req, res) => {
     }
 };
 
+// Create Global Route by Admin
+const createGlobalRoute = async (req, res) => {
+    try {
+        const newRoute = await busRouteService.createBusRoute(null, { ...req.body, type: "GLOBAL" });
+
+        return res.status(201).json({
+            success: true,
+            message: "Global Route created successfully!",
+            data: newRoute,
+        });
+    } catch (error) {
+        console.error("createGlobalRoute error:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Internal Server Error",
+        });
+    }
+};
+
+// Get All Global Routes
+const getGlobalRoutes = async (req, res) => {
+    try {
+        const routes = await busRouteService.getAllGlobalRoutes();
+
+        return res.status(200).json({
+            success: true,
+            message: "Global Routes fetched successfully!",
+            results: routes.length,
+            data: routes,
+        });
+    } catch (error) {
+        console.error("getGlobalRoutes error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal Server Error",
+            error: error.message,
+        });
+    }
+};
+
 module.exports = {
+    createGlobalRoute,
+    getGlobalRoutes,
     createRouteForOwner,
     getRoutesByOwner,
     updateRouteByAdmin,

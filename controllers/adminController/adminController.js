@@ -507,7 +507,7 @@ const getUserById = async (req, res) => {
 // Get all users
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select("-password");
+    const users = await User.find({ role: "passenger" }).select("-password");
 
     if (!users || users.length === 0) {
       return res.status(404).json({
@@ -652,27 +652,37 @@ const getUserDashboard = async (req, res) => {
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
-    const [
-      totalUsers,
-      activeUsers,
-      newUsersToday,
-      verifiedUsers,
-    ] = await Promise.all([
-      User.countDocuments({}),
-      User.countDocuments({ status: "active" }),
-      User.countDocuments({
-        createdAt: { $gte: startOfToday, $lte: endOfToday },
-      }),
-      User.countDocuments({ isVerified: true }),
+    // Execute a single, highly-optimized aggregation pass mapping over passengers
+    const stats = await User.aggregate([
+      { $match: { role: "passenger" } },
+      {
+        $facet: {
+          totalUsers: [{ $count: "count" }],
+          activeUsers: [
+            { $match: { status: "active" } },
+            { $count: "count" }
+          ],
+          newUsersToday: [
+            { $match: { createdAt: { $gte: startOfToday, $lte: endOfToday } } },
+            { $count: "count" }
+          ],
+          verifiedUsers: [
+            { $match: { isVerified: true } },
+            { $count: "count" }
+          ]
+        }
+      }
     ]);
+
+    const aggregates = stats[0];
 
     return res.status(200).json({
       success: true,
       data: {
-        totalUsers,
-        activeUsers,
-        newUsersToday,
-        verifiedUsers,
+        totalUsers: aggregates.totalUsers[0]?.count || 0,
+        activeUsers: aggregates.activeUsers[0]?.count || 0,
+        newUsersToday: aggregates.newUsersToday[0]?.count || 0,
+        verifiedUsers: aggregates.verifiedUsers[0]?.count || 0,
       },
     });
   } catch (error) {

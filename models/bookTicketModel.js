@@ -2,8 +2,8 @@ const mongoose = require("mongoose");
 
 const passengerSchema = new mongoose.Schema({
   name:     { type: String, required: true, trim: true },
-  age:      { type: Number, required: true, min: 1, max: 120 },
-  gender:   { type: String, enum: ["male", "female", "other"], required: true },
+  age:      { type: Number, default: 0, min: 0, max: 120 },
+  gender:   { type: String, enum: ["male", "female", "other"], default: "other" },
   idType:   { type: String, enum: ["citizenship", "passport", "driving_license", "voter_id"], default: null },
   idNumber: { type: String, default: null },
   seatNo:   { type: String, required: true },  // Links passenger to a specific seat
@@ -20,6 +20,23 @@ const bookingSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Trip",
       required: true,
+    },
+
+    // [DENORMALIZED CHAIN LINKS] — copied from the Trip at booking time.
+    // Avoids 3-collection joins when computing brand/fleet financials.
+    // Booking.brandId → OperatorBrand (direct)
+    // Booking.busId   → Fleet / Buse   (direct)
+    brandId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "OperatorBrand",
+      default: null,
+      index: true,
+    },
+    busId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Buse",
+      default: null,
+      index: true,
     },
     seats: [
       {
@@ -69,19 +86,53 @@ const bookingSchema = new mongoose.Schema(
       default: 0,
       min: [0, "Discount amount cannot be negative"],
     },
-    yatraPointsUsed: {
+    // === SM MONEY SPLIT PAYMENT (Phase 5) ===
+    // How much SM Money the user applied to this booking (for refund split calc)
+    smMoneyUsed: {
       type: Number,
       default: 0,
-      min: [0, "Yatra points used cannot be negative"],
+      min: [0, "SM Money used cannot be negative"],
     },
-    yatraPointsDiscount: {
+    // Amount actually sent to the external payment gateway
+    gatewayAmount: {
       type: Number,
       default: 0,
-      min: [0, "Yatra points discount cannot be negative"],
+      min: [0, "Gateway amount cannot be negative"],
+    },
+    // Gateway fee rate frozen at booking time (spec §11.4 — refund always uses original rate)
+    gatewayFeeRate: {
+      type: Number,
+      default: 0,
+    },
+    // Ledger entry ID for the SM Money debit (for reversal on failure)
+    smDebitEntryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SMLedger",
+      default: null,
     },
     totalAmount: {
       type: Number,
       required: true,
+    },
+
+    // === PAYMENT DETAILS (Nepal-specific gateway support) ===
+    // Records how the passenger paid — essential for reconciliation and refund processing.
+    paymentMethod: {
+      type: String,
+      enum: ["ESEWA", "KHALTI", "IME_PAY", "CONNECT_IPS", "CARD", "CASH", "AGENT", "SM_WALLET", "SM_WALLET_SPLIT", "OTHER"],
+      default: "OTHER",
+    },
+    // Payment gateway transaction reference (e.g. Khalti ref ID, eSewa Txn ID)
+    transactionId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    // Channel that originated this booking
+    bookedVia: {
+      type: String,
+      enum: ["APP", "WEB", "AGENT", "COUNTER"],
+      default: "APP",
     },
     bookedAt: {
       type: Date,
@@ -120,6 +171,8 @@ const bookingSchema = new mongoose.Schema(
 // Index for better query performance
 bookingSchema.index({ userId: 1, createdAt: -1 });
 bookingSchema.index({ tripId: 1, status: 1 }); // Optimize fetching active bookings per route
+bookingSchema.index({ brandId: 1, status: 1, createdAt: -1 }); // Brand financial aggregations
+bookingSchema.index({ busId: 1, status: 1, createdAt: -1 });   // Fleet financial aggregations
 bookingSchema.index({ couponUsed: 1 });
 bookingSchema.index({ couponCode: 1 });
 bookingSchema.index({ ticketId: 1 });

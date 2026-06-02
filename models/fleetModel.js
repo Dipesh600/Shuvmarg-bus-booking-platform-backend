@@ -14,6 +14,20 @@ const BusSchema = new mongoose.Schema(
             required: true
         },
 
+        // [NEW] Links this bus to its OperatorBrand (commercial identity)
+        // Required for all new fleet. Legacy fleet migrated via script.
+        brandId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "OperatorBrand",
+            default: null,
+            index: true,
+        },
+
+        setupComplete: {
+            type: Boolean,
+            default: false,
+        },
+
         // Fleet grouping — buses sharing route, layout, amenities
         fleetGroupId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -44,20 +58,78 @@ const BusSchema = new mongoose.Schema(
             enum: ["bus", "hiace", "minibus", "jeep"],
             required: true
         },
+        // Rich, booking-engine-ready seat configuration.
+        // Replaces the old flat `totalSeats` + `seatLayout` string fields.
         totalSeats: {
             type: Number,
-            required: true
+            required: true,
+            min: 1
         },
 
-        seatLayout: {
-            type: String,
-            enum: ["2x1", "2x2", "1x1"],
-            required: true
+        seatConfig: {
+            busShape: {
+                type: String,
+                enum: ["SINGLE_DECKER", "DOUBLE_DECKER", "SLEEPER_COACH", "MINI"],
+                default: "SINGLE_DECKER"
+            },
+            // Each floor is an array of rows. Double Deckers have 2 floors.
+            floors: {
+                type: [
+                    {
+                        floorIndex: { type: Number },
+                        rows: {
+                            type: [
+                                {
+                                    rowIndex: { type: Number },
+                                    // STRUCTURAL rows: DRIVER_CABIN, DOOR, SPACER
+                                    // SEAT rows: the actual passenger seats
+                                    rowType: {
+                                        type: String,
+                                        enum: ["DRIVER_CABIN", "DOOR", "DOOR_ROW", "SPACER", "SEAT_ROW", "BACK_ROW"],
+                                        default: "SEAT_ROW"
+                                    },
+                                    cells: {
+                                        type: [
+                                            {
+                                                colIndex: { type: Number },
+                                                cellType: {
+                                                    type: String,
+                                                    enum: ["SEAT", "AISLE", "EMPTY", "DRIVER", "DOOR"],
+                                                    default: "SEAT"
+                                                },
+                                                // Only populated if cellType === "SEAT"
+                                                seatId: { type: String, default: null },
+                                                seatLabel: { type: String, default: null },
+                                                seatType: {
+                                                    type: String,
+                                                    enum: ["STANDARD", "SLEEPER_LOWER", "SLEEPER_UPPER", "SEMI_SLEEPER", "SOFA", "PRIORITY"],
+                                                    default: "STANDARD"
+                                                },
+                                                // Booking engine state — not set at registration time
+                                                isActive: { type: Boolean, default: true },
+                                            }
+                                        ],
+                                        default: []
+                                    }
+                                }
+                            ],
+                            default: []
+                        }
+                    }
+                ],
+                default: []
+            }
         },
         amenitiesId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "BusAmenities",
             default: null
+        },
+
+        // Individual amenities selected from the global catalog
+        amenityIds: {
+            type: [{ type: mongoose.Schema.Types.ObjectId, ref: "BusAmenities" }],
+            default: [],
         },
 
         boardingPointId: {
@@ -66,6 +138,21 @@ const BusSchema = new mongoose.Schema(
             default: null
         },
 
+        // Platform Route Corridor (replaces isolated busRoute)
+        corridorId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "RouteCorridor",
+            default: null,
+            index: true
+        },
+
+        // If the owner requested a new route not in platform registry
+        routeRequestId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "RouteRequest",
+            default: null,
+            index: true
+        },
 
         fleetImages: {
             type: [String],
@@ -146,6 +233,18 @@ const BusSchema = new mongoose.Schema(
         rejectionReason: {
             type: String,
             default: null
+        },
+
+        // ── Per-document review results (set by admin during KYC review) ────────
+        // Each key maps to a document slot. Status: 'pending' | 'approved' | 'rejected'
+        // This is what the bus owner actually sees when their application is rejected
+        // so they know exactly which file to fix and re-upload.
+        documentReviews: {
+            fleetImages:  { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
+            fitnessCert:  { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
+            insurance:    { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
+            bluebook:     { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
+            routePermit:  { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
         },
 
         createdBy: {

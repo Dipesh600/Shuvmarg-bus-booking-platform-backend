@@ -30,5 +30,7 @@ router.get("/getMyYatraHistory", auth, ticket.getMyYatraHistory);
 router.post("/validateYatraPoints", auth, ticket.validateYatraPoints);
 // Cancel Ticket
 router.post("/cancelTicket", auth, ticket.cancelTicket);
+// Cancel Estimate (preview refund breakdown)
+router.post("/cancelEstimate", auth, ticket.cancelEstimate);
 
 module.exports = router;

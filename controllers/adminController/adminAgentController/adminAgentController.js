@@ -253,16 +253,10 @@ const getAllAgents = async (req, res) => {
             "-password -__v -otp -otpExpiry"
         );
 
-        if (!agents || agents.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "No agents found!",
-            });
-        }
-
         return res.status(200).json({
             success: true,
-            message: "Agents retrieved successfully!",
+            message: agents.length === 0 ? "No agents registered yet." : "Agents retrieved successfully!",
+            results: agents.length,
             data: agents,
         });
     } catch (error) {

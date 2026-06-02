@@ -19,6 +19,15 @@ const {
 const Trip = require("../../models/tripModel");
 const Transaction = require("../../models/transactionModel");
 const Refund = require("../../models/refundModel");
+const Stop = require("../../models/stopModel");
+const { calculateRefund } = require("../../services/refundCalculatorService");
+const RouteCorridor = require("../../models/routeCorridorModel");
+const RouteVariant = require("../../models/routeVariantModel");
+const RouteStop = require("../../models/routeStopModel");
+const SeatHold = require("../../models/seatHoldModel.js");
+const SeatTemplate = require("../../models/seatTemplateModel");
+const { getPresignedUrl } = require("../../services/s3Service.js");
+
 
 const createTicket = async (req, res) => {
   try {
@@ -317,19 +326,167 @@ const searchTrips = async (req, res) => {
 
     console.log("Search Query:", { from, to, date, shift, page, limit });
 
-    // 1. Find the route(s) if from and to are provided
-    let routeIds = [];
+    // ── 1. Resolve stop names → stop IDs ──────────────────────────────────
+    let legacyRouteIds = [];
+    let variantIds     = [];
+    let resolvedFromName = from?.trim() || "";
+    let resolvedToName   = to?.trim()   || "";
+
+    // stopTimingMap: variantId → { originMins, destMins }
+    // Used later to calculate stop-specific departure/arrival times.
+    // originMins/destMins = estimatedMinutesFromOrigin for the user's searched stops.
+    const stopTimingMap = {};
+
+    // Sets of stop ObjectId strings for the user's origin and destination.
+    // Declared here so the response transformer (.map) can access them.
+    let originStopIds = new Set();
+    let destStopIds   = new Set();
+
     if (from && to) {
-      const routes = await BusRoute.find({
-        from: new RegExp(`^${from.trim()}$`, 'i'),
-        to: new RegExp(`^${to.trim()}$`, 'i'),
-        status: "ACTIVE"
+      const fromTrimmed = from.trim();
+      const toTrimmed   = to.trim();
+
+      // ── Legacy BusRoute lookup (both directions) ───────────────────────
+      const [fwdRoutes, revRoutes] = await Promise.all([
+        BusRoute.find({ from: new RegExp(`^${_esc(fromTrimmed)}$`, 'i'), to: new RegExp(`^${_esc(toTrimmed)}$`, 'i'), status: "ACTIVE" }),
+        BusRoute.find({ from: new RegExp(`^${_esc(toTrimmed)}$`, 'i'), to: new RegExp(`^${_esc(fromTrimmed)}$`, 'i'), status: "ACTIVE" }),
+      ]);
+      legacyRouteIds = [...fwdRoutes, ...revRoutes].map(r => r._id);
+
+      // ── Registry stop resolution ───────────────────────────────────────
+      const nameOrCodeFilter = (val) => ({
+        $or: [
+          { name: new RegExp(`^${_esc(val)}$`, 'i') },
+          { code: new RegExp(`^${_esc(val)}$`, 'i') },
+        ],
+        status: "ACTIVE",
       });
 
-      if (!routes.length) {
-        return res.status(200).json({ success: true, message: "No routes found for these locations.", results: 0, data: [] });
+      const [originStops, destStops] = await Promise.all([
+        Stop.find(nameOrCodeFilter(fromTrimmed)).select("_id name").lean(),
+        Stop.find(nameOrCodeFilter(toTrimmed)).select("_id name").lean(),
+      ]);
+
+      if (originStops.length > 0) resolvedFromName = originStops[0].name;
+      if (destStops.length   > 0) resolvedToName   = destStops[0].name;
+
+      // Populate Sets used by the response transformer for timingConfig matching
+      originStopIds = new Set(originStops.map(s => s._id.toString()));
+      destStopIds   = new Set(destStops.map(s => s._id.toString()));
+
+      if (originStops.length > 0 && destStops.length > 0) {
+        const originIds = originStops.map(s => s._id);
+        const destIds   = destStops.map(s => s._id);
+
+        // ── Strategy A: Direct corridor (A→B or B→A) ──────────────────
+        const [fwdCorridors, revCorridors] = await Promise.all([
+          RouteCorridor.find({ originId: { $in: originIds }, destinationId: { $in: destIds }, status: "ACTIVE" }).lean(),
+          RouteCorridor.find({ originId: { $in: destIds },  destinationId: { $in: originIds }, status: "ACTIVE" }).lean(),
+        ]);
+
+        const [fwdVariants, revVariants] = await Promise.all([
+          fwdCorridors.length > 0
+            ? RouteVariant.find({ corridorId: { $in: fwdCorridors.map(c => c._id) }, direction: "FORWARD", status: "ACTIVE" }).lean()
+            : Promise.resolve([]),
+          revCorridors.length > 0
+            ? RouteVariant.find({ corridorId: { $in: revCorridors.map(c => c._id) }, direction: "RETURN",  status: "ACTIVE" }).lean()
+            : Promise.resolve([]),
+        ]);
+
+        variantIds = [...fwdVariants, ...revVariants].map(v => v._id);
+
+        // ── RouteStop fetch (always runs — used for timing AND journey validation) ───
+        const [originRouteStops, destRouteStops] = await Promise.all([
+          RouteStop.find({ stopId: { $in: originIds } }).select("variantId sequence estimatedMinutesFromOrigin isMajor").lean(),
+          RouteStop.find({ stopId: { $in: destIds   } }).select("variantId sequence estimatedMinutesFromOrigin isMajor").lean(),
+        ]);
+
+        // Group dest stops by variantId for O(1) lookup
+        const destByVariant = {};
+        for (const ds of destRouteStops) {
+          const vid = ds.variantId.toString();
+          if (!destByVariant[vid] || ds.sequence < destByVariant[vid].sequence) {
+            destByVariant[vid] = ds;
+          }
+        }
+
+        // ── Build stopTimingMap + validate each variant against 3 gates ─────────
+        //
+        // GATE 1 — isMajor:          Both stops must be major stops on this variant.
+        //   Minor junctions (rest stops, passing points) are not bookable.
+        //   This matches how redBus/FlixBus define "bookable stops".
+        //
+        // GATE 2 — Minimum Journey:  Travel time between stops must be ≥
+        //   operatorRouteConfig.minimumJourneyMinutes (default: 60).
+        //   Prevents 10km "seat-blocker" bookings on long-haul buses.
+        //   Source: RouteStop.estimatedMinutesFromOrigin (proxy for distance).
+        //   NOTE: once timingConfig is fully populated, we can use actual times.
+        //
+        // GATE 3 — stopBehavior:     Origin must allow BOARDING; Destination must
+        //   allow DROPPING. REST_STOP entries can never be passenger stops.
+        //   Source: OperatorRouteConfig.timingConfig[].stopBehavior.
+        //
+        // Platform default minimum: 60 mins. Operator can override per config.
+        const PLATFORM_DEFAULT_MIN_JOURNEY_MINS = 60;
+
+        const rejectedVariants = new Set(); // variants that fail any gate
+
+        for (const os of originRouteStops) {
+          const vid = os.variantId.toString();
+          const dst = destByVariant[vid];
+          if (!dst || dst.sequence <= os.sequence) continue;
+
+          // ─ GATE 1: Both stops must be major ──────────────────────────────
+          if (!os.isMajor || !dst.isMajor) {
+            rejectedVariants.add(vid);
+            continue;
+          }
+
+          // ─ GATE 2: Minimum journey time ───────────────────────────────────
+          // We use estimatedMinutesFromOrigin as the time proxy.
+          // Actual operator timing (from timingConfig) will be used at booking time.
+          const journeyMins = (dst.estimatedMinutesFromOrigin || 0) - (os.estimatedMinutesFromOrigin || 0);
+          // minimumJourneyMinutes will be read from operatorConfig in the response transform.
+          // At search time, enforce the platform default conservatively.
+          if (journeyMins > 0 && journeyMins < PLATFORM_DEFAULT_MIN_JOURNEY_MINS) {
+            rejectedVariants.add(vid);
+            continue;
+          }
+
+          // ─ Passed all platform-level gates → record timing data ───────────
+          stopTimingMap[vid] = {
+            originMins: os.estimatedMinutesFromOrigin || 0,
+            destMins:   dst.estimatedMinutesFromOrigin || 0,
+          };
+          // If Strategy A found no direct corridor variants, this is intermediate
+          if (variantIds.length === 0) variantIds.push(os.variantId);
+        }
+
+        // Remove rejected variants from the candidate set
+        variantIds = variantIds.filter(vid => !rejectedVariants.has(vid.toString()));
+
+        // Fill stopTimingMap for Strategy A direct-corridor variants that passed
+        if (variantIds.length > 0) {
+          for (const v of [...fwdVariants, ...revVariants]) {
+            const vid = v._id.toString();
+            if (!stopTimingMap[vid] && !rejectedVariants.has(vid)) {
+              const destRouteStop = destByVariant[vid];
+              stopTimingMap[vid] = {
+                originMins: 0,
+                destMins:   destRouteStop?.estimatedMinutesFromOrigin || 0,
+              };
+            }
+          }
+        }
       }
-      routeIds = routes.map(r => r._id);
+
+      if (legacyRouteIds.length === 0 && variantIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: "No routes found for the selected locations.",
+          results: 0, total: 0, page: 1, totalPages: 0, data: [],
+        });
+      }
     }
 
     // 2. Build the trip query
@@ -337,10 +494,13 @@ const searchTrips = async (req, res) => {
       isActive: true,
       status: "scheduled",
       busId: { $ne: null },  // <<< GUARD: exclude trips with no fleet
+      bookingClosesAt: { $gt: new Date() }, // <<< GUARD: Only trips that haven't closed booking
     };
 
-    if (routeIds.length > 0) {
-      tripQuery.routeId = { $in: routeIds };
+    if (legacyRouteIds.length > 0 || variantIds.length > 0) {
+      tripQuery.$or = [];
+      if (legacyRouteIds.length > 0) tripQuery.$or.push({ routeId: { $in: legacyRouteIds } });
+      if (variantIds.length > 0) tripQuery.$or.push({ variantId: { $in: variantIds } });
     }
 
     // Date filter — accepts both ISO string and Date
@@ -373,11 +533,33 @@ const searchTrips = async (req, res) => {
         path: "busId",
         select: "busName busNumber busType vehicleType totalSeats seatLayout fleetImages averageRating totalReviews amenitiesId boardingPointId",
         populate: [
-          { path: "amenitiesId", select: "amenities -_id" },
+          { path: "amenitiesId",     select: "amenities -_id" },
           { path: "boardingPointId", select: "boardingPoints droppingPoints -_id" }
         ]
       })
+      .populate({
+        path: "variantId",
+        select: "name direction",
+        populate: {
+          path: "corridorId",
+          select: "distanceKm durationMinutes",
+          populate: [
+            { path: "originId",      select: "name code" },
+            { path: "destinationId", select: "name code" }
+          ]
+        }
+      })
       .populate("routeId", "routeName from to distance duration distanceKm durationMinutes basePrice")
+      // Operator route config carries per-stop committed times.
+      // Chain: Trip.scheduleId → Schedule.operatorRouteConfigId → OperatorRouteConfig
+      .populate({
+        path: "scheduleId",
+        select: "operatorRouteConfigId",
+        populate: {
+          path: "operatorRouteConfigId",
+          select: "timingConfig returnTimingConfig",
+        }
+      })
       .lean();
 
     // 5. Batch-query seat availability (1 DB call, not N+1)
@@ -390,9 +572,10 @@ const searchTrips = async (req, res) => {
     }
 
     // 6. Transform response — flatten and enrich
-    const formattedTrips = trips
+    // We use Promise.all here because getPresignedUrl is async and we have a list of trips.
+    const formattedTrips = await Promise.all(trips
       .filter(trip => trip.busId != null)  // Extra null guard after populate
-      .map(trip => {
+      .map(async trip => {
         let amenities = [];
         if (trip.busId?.amenitiesId?.amenities) {
           amenities = trip.busId.amenitiesId.amenities.map(a => a.name);
@@ -409,6 +592,12 @@ const searchTrips = async (req, res) => {
           ? trip.tripFare
           : (trip.routeId?.basePrice ?? 0);
 
+        // Convert S3 keys to presigned URLs for the frontend
+        const rawImages = trip.busId.fleetImages || [];
+        const presignedImages = await Promise.all(
+          rawImages.map(key => getPresignedUrl(key))
+        );
+
         const busDetail = {
           _id: trip.busId._id,
           busName: trip.busId.busName,
@@ -417,7 +606,7 @@ const searchTrips = async (req, res) => {
           vehicleType: trip.busId.vehicleType,
           totalSeats: trip.busId.totalSeats,
           seatLayout: trip.busId.seatLayout,
-          fleetImages: trip.busId.fleetImages || [],
+          fleetImages: presignedImages.filter(Boolean),
           averageRating: trip.busId.averageRating || 0,
           totalReviews: trip.busId.totalReviews || 0,
           amenities,
@@ -425,26 +614,145 @@ const searchTrips = async (req, res) => {
           droppingPoints,
         };
 
-        const routeDetail = trip.routeId ? {
-          _id: trip.routeId._id,
-          routeName: trip.routeId.routeName,
-          from: trip.routeId.from,
-          to: trip.routeId.to,
-          distance: trip.routeId.distance,
-          duration: trip.routeId.duration,
-          distanceKm: trip.routeId.distanceKm,
-          durationMinutes: trip.routeId.durationMinutes,
-        } : null;
+
+        let routeDetail = null;
+        if (trip.routeId) {
+          routeDetail = {
+            _id: trip.routeId._id,
+            routeName: trip.routeId.routeName,
+            from: trip.routeId.from,
+            to: trip.routeId.to,
+            distance: trip.routeId.distance,
+            duration: trip.routeId.duration,
+            distanceKm: trip.routeId.distanceKm,
+            durationMinutes: trip.routeId.durationMinutes,
+          };
+        } else if (trip.variantId) {
+          // Use the user's resolved stop names — NOT the corridor endpoints.
+          // This means a user searching Sindhuli→Bardibas sees exactly that,
+          // not the full Kathmandu→Biratnagar corridor label.
+          const corridorOrigin = trip.variantId.corridorId?.originId?.name;
+          const corridorDest   = trip.variantId.corridorId?.destinationId?.name;
+          const isReturnVariant = trip.variantId.direction === "RETURN";
+
+          // For a RETURN variant the corridor's origin/dest are flipped relative
+          // to travel direction — swap them so the label reads correctly.
+          let displayFrom = isReturnVariant ? (corridorDest || trip.toStopName)   : (corridorOrigin || trip.fromStopName);
+          let displayTo   = isReturnVariant ? (corridorOrigin || trip.fromStopName) : (corridorDest   || trip.toStopName);
+
+          // If the user searched an intermediate stop, prefer their search terms
+          // as the display labels (more useful than the full corridor name).
+          if (resolvedFromName) displayFrom = resolvedFromName;
+          if (resolvedToName)   displayTo   = resolvedToName;
+
+          routeDetail = {
+            _id: trip.variantId._id,
+            routeName: trip.variantId.name || `${displayFrom} - ${displayTo}`,
+            from: displayFrom,
+            to:   displayTo,
+            distance: null,
+            duration: null,
+            distanceKm:      trip.variantId.corridorId?.distanceKm      || 0,
+            durationMinutes: trip.variantId.corridorId?.durationMinutes || 0,
+          };
+        }
 
         // Seats: 0 if no seat document exists (NOT totalSeats — prevents phantom booking)
         const availableSeats = seatAvailabilityMap[trip._id.toString()] ?? 0;
+
+        // ── Operator stop-time resolution ────────────────────────────────────
+        // Each operator commits to exact per-stop arrival/departure times when
+        // they configure their route service (OperatorRouteConfig.timingConfig).
+        // Chain:
+        //   Trip.scheduleId → Schedule.operatorRouteConfigId → OperatorRouteConfig
+        //     .timingConfig[]           (FORWARD direction: A→B)
+        //     .returnTimingConfig[]     (RETURN  direction: B→A)
+        //
+        // We resolve user's from-stop → estimatedDeparture at that stop
+        // We resolve user's to-stop   → estimatedArrival  at that stop
+        // dayOffset = 0 (same day), 1 (next day) for overnight services
+        const operatorConfig = trip.scheduleId?.operatorRouteConfigId;
+        const isReturnVariant = trip.variantId?.direction === "RETURN";
+        const timingArray = operatorConfig
+          ? (isReturnVariant
+              ? (operatorConfig.returnTimingConfig || operatorConfig.timingConfig)
+              : operatorConfig.timingConfig)
+          : [];
+
+        // Resolve the user's searched stop IDs against the timing array.
+        // We use string comparison because after .lean() IDs are ObjectId objects.
+        let resolvedDepartureTime = trip.departureTime; // fallback: terminal departure
+        let resolvedArrivalTime   = trip.arrivalTime;   // fallback: terminal arrival
+        let failsStopBehaviorGate = false;
+
+        if (timingArray.length > 0) {
+          const fromEntry = timingArray.find(tc => originStopIds.has(tc.stopId?.toString()));
+          const toEntry   = timingArray.find(tc => destStopIds.has(tc.stopId?.toString()));
+
+          // ── Time resolution (strict non-empty check) ──────────────────────
+          // Operators sometimes fill estimatedArrival but leave estimatedDeparture
+          // blank, or vice versa. We must check for non-empty strings explicitly —
+          // NOT just truthiness — because "" is falsy but means "not entered".
+          //
+          // Priority for departure display:
+          //   1. fromEntry.estimatedDeparture  (what time bus leaves this stop)
+          //   2. fromEntry.estimatedArrival    (when bus arrives — better than terminal time)
+          //   3. trip.departureTime            (raw terminal departure — last resort)
+          //
+          // Priority for arrival display:
+          //   1. toEntry.estimatedArrival      (what time bus arrives at dest stop)
+          //   2. toEntry.estimatedDeparture    (when bus departs — better than terminal time)
+          //   3. trip.arrivalTime              (raw terminal arrival — last resort)
+
+          if (fromEntry) {
+            const dep = (fromEntry.estimatedDeparture || "").trim();
+            const arr = (fromEntry.estimatedArrival   || "").trim();
+            if (dep) resolvedDepartureTime = dep;
+            else if (arr) resolvedDepartureTime = arr;
+            // else: stays as trip.departureTime
+          }
+
+          if (toEntry) {
+            const arr = (toEntry.estimatedArrival   || "").trim();
+            const dep = (toEntry.estimatedDeparture || "").trim();
+            if (arr) resolvedArrivalTime = arr;
+            else if (dep) resolvedArrivalTime = dep;
+            // else: stays as trip.arrivalTime
+          }
+
+          // ── GATE 3: stopBehavior ──────────────────────────────────────────
+          // Origin must allow BOARDING. Destination must allow DROPPING.
+          // REST_STOP or reversed behaviors silently reject this trip card.
+          if (fromEntry && !["BOARDING_ONLY", "BOTH"].includes(fromEntry.stopBehavior)) failsStopBehaviorGate = true;
+          if (toEntry   && !["DROPPING_ONLY", "BOTH"].includes(toEntry.stopBehavior))   failsStopBehaviorGate = true;
+
+          // ── Operator-level minimum journey enforcement ────────────────────
+          // Operator can configure a stricter min than the 60-min platform default.
+          // We use actual HH:MM times here (more accurate than estimatedMinutesFromOrigin).
+          const operatorMin = operatorConfig?.minimumJourneyMinutes ?? 60;
+          if (operatorMin > 0 && fromEntry?.estimatedDeparture && toEntry?.estimatedArrival) {
+            const depMins  = _timeToMins(fromEntry.estimatedDeparture);
+            const arrMins  = _timeToMins(toEntry.estimatedArrival);
+            const fromDay  = fromEntry.dayOffset || 0;
+            const toDay    = toEntry.dayOffset   || 0;
+            let actualMins = (arrMins + toDay * 1440) - (depMins + fromDay * 1440);
+            // Overnight route: departure 17:00, arrival 05:15 → actualMins is negative when dayOffset=0.
+            // In that case, the bus clearly crosses midnight → add 1 day so the check works correctly.
+            if (actualMins < 0) actualMins += 1440;
+            if (actualMins < operatorMin) failsStopBehaviorGate = true;
+          }
+        }
+
+        // Return null for gate-failed trips — filtered out after Promise.all
+        if (failsStopBehaviorGate) return null;
+
 
         return {
           _id: trip._id,
           tripId: trip.tripId,
           tripDate: trip.tripDate,
-          departureTime: trip.departureTime,
-          arrivalTime: trip.arrivalTime,
+          departureTime: resolvedDepartureTime,
+          arrivalTime:   resolvedArrivalTime,
           tripFare: effectivePrice,
           shift: trip.shift,
           status: trip.status,
@@ -452,17 +760,21 @@ const searchTrips = async (req, res) => {
           routeDetail,
           availableSeats,
         };
-      });
+      }));
+
+    // Remove null entries — trips rejected by Gate 3 (stopBehavior / operator minimum)
+    const validTrips = formattedTrips.filter(Boolean);
 
     return res.status(200).json({
       success: true,
-      message: formattedTrips.length === 0 ? "No trips found" : "Trips found successfully",
-      results: formattedTrips.length,
+      message: validTrips.length === 0 ? "No trips found" : "Trips found successfully",
+      results: validTrips.length,
       total,
       page,
       totalPages: Math.ceil(total / limit),
-      data: formattedTrips
+      data: validTrips
     });
+
   } catch (error) {
     console.error("searchTrips error:", error);
     return res.status(500).json({ success: false, message: "Internal Server Error", error: error.message });
@@ -488,17 +800,59 @@ const getSeatsById = async (req, res) => {
       });
     }
 
-    const seats = await Seat.findOne({ tripId: tripId });
+    const seats = await Seat.findOne({ tripId: tripId }).lean();
     if (!seats) {
       return res.status(404).json({
         status: false,
         message: "Seats Not Found!",
       });
     }
+
+    let seatConfig = null;
+    const trip = await Trip.findById(tripId).populate("seatTemplateId busId");
+    if (trip) {
+      if (trip.seatTemplateId && trip.seatTemplateId.seatConfig) {
+        seatConfig = trip.seatTemplateId.seatConfig;
+      } else if (trip.busId && trip.busId.seatConfig) {
+        seatConfig = trip.busId.seatConfig;
+      }
+    }
+
+    // [NEW] Soft Locking: Mask actively held seats as booked
+    const currentUserId = req.userInfo ? req.userInfo.id : null;
+    const activeHolds = await SeatHold.find({
+      tripId: tripId,
+      expiresAt: { $gt: new Date() },
+      ...(currentUserId ? { userId: { $ne: currentUserId } } : {}) // Don't mask holds belonging to the requesting user
+    });
+
+    if (activeHolds.length > 0) {
+      let heldSeatsSet = new Set();
+      activeHolds.forEach(hold => hold.seatNumbers.forEach(s => heldSeatsSet.add(s.toLowerCase())));
+
+      // Override booked status for held seats
+      const maskSeats = (seatArray) => {
+        if (!seatArray) return;
+        seatArray.forEach(seat => {
+          if (!seat.booked && heldSeatsSet.has(seat.seatNo.toLowerCase())) {
+            seat.booked = true; // Mask as booked for the UI
+            seat.blockedFor = "reserved"; // Optional flag so UI could style it differently if needed
+          }
+        });
+      };
+
+      maskSeats(seats.seata);
+      maskSeats(seats.seatb);
+      maskSeats(seats.seatc);
+    }
+
     return res.status(200).json({
       status: true,
       message: "Successfully fetched seats!",
-      data: seats,
+      data: {
+        ...seats,
+        seatConfig: seatConfig
+      },
     });
   } catch (e) {
     return res.status(500).json({
@@ -519,6 +873,8 @@ const bookTicket = async (req, res) => {
       seatNumbers,
       gateway,
       transactionId,
+      fromStopId,  // optional — sent by app when user searched via stop registry
+      toStopId,    // optional — sent by app when user searched via stop registry
     } = req.body;
     const effectiveTripId = tripId;
     const userId = req.userInfo.id;
@@ -537,16 +893,67 @@ const bookTicket = async (req, res) => {
 
     const normalizedSeats = seatNumbers.map((seat) => seat.toLowerCase());
 
-    // Fetch Trip details to get the price
-    const trip = await Trip.findById(effectiveTripId).populate("routeId");
+    // Fetch Trip details
+    const trip = await Trip.findById(effectiveTripId)
+      .populate("routeId")
+      .populate({
+        path: "scheduleId",
+        select: "operatorRouteConfigId",
+        populate: {
+          path: "operatorRouteConfigId",
+          select: "timingConfig returnTimingConfig minimumJourneyMinutes",
+        }
+      });
     if (!trip) {
       return res.status(404).json({ status: false, message: "Trip not found!" });
     }
 
+    // ── Defense-in-depth: Minimum Journey Validation ─────────────────────────
+    // This is the SECOND enforcement layer (search-level gates are first).
+    // Runs only when the client supplies fromStopId and toStopId.
+    // Protects against direct API calls that skip the search UI.
+    if (fromStopId && toStopId) {
+      const operatorCfg    = trip.scheduleId?.operatorRouteConfigId;
+      const isReturn        = trip.variantId?.direction === "RETURN";
+      const bookingTimingArr = operatorCfg
+        ? (isReturn ? (operatorCfg.returnTimingConfig || operatorCfg.timingConfig) : operatorCfg.timingConfig)
+        : [];
+
+      if (bookingTimingArr.length > 0) {
+        const fromTc = bookingTimingArr.find(tc => tc.stopId?.toString() === fromStopId);
+        const toTc   = bookingTimingArr.find(tc => tc.stopId?.toString() === toStopId);
+
+        // Gate 3-B: stopBehavior
+        if (fromTc && !["BOARDING_ONLY", "BOTH"].includes(fromTc.stopBehavior)) {
+          return res.status(400).json({ status: false, message: "Boarding is not permitted at the selected origin stop." });
+        }
+        if (toTc && !["DROPPING_ONLY", "BOTH"].includes(toTc.stopBehavior)) {
+          return res.status(400).json({ status: false, message: "Dropping is not permitted at the selected destination stop." });
+        }
+
+        // Gate 2-B: Minimum journey minutes
+        const minMins = operatorCfg?.minimumJourneyMinutes ?? 60;
+        if (minMins > 0 && fromTc?.estimatedDeparture && toTc?.estimatedArrival) {
+          const depM   = _timeToMins(fromTc.estimatedDeparture);
+          const arrM   = _timeToMins(toTc.estimatedArrival);
+          const fDay   = fromTc.dayOffset || 0;
+          const tDay   = toTc.dayOffset   || 0;
+          const travelMins = (arrM + tDay * 1440) - (depM + fDay * 1440);
+          if (travelMins < minMins) {
+            return res.status(400).json({
+              status: false,
+              message: `This service requires a minimum journey of ${minMins} minutes. Please select stops that are further apart.`,
+            });
+          }
+        }
+      }
+    }
+
     // Determine price: Use tripFare if not null, otherwise use route basePrice
-    const tripPrice = trip.tripFare !== null ? trip.tripFare : trip.routeId.basePrice;
+    const tripPrice = trip.tripFare !== null ? trip.tripFare : trip.routeId?.basePrice ?? 0;
     const totalAmount = tripPrice * seatNumbers.length;
     const baseFare = tripPrice;
+
 
     const seatDoc = await Seat.findOne({ tripId: effectiveTripId });
 
@@ -598,13 +1005,21 @@ const bookTicket = async (req, res) => {
     }
 
     normalizedSeats.forEach((seat) => {
-      const rowPrefix = seat.charAt(0);
-      const seatKey = `seat${rowPrefix}`;
-      const seatObj = seatDoc[seatKey].find((s) => s.seatNo === seat);
-      if (seatObj) {
-        seatObj.booked = true;
-        seatObj.bookedBy = userId;
-        seatObj.bookedAt = new Date();
+      let seatKey = null;
+      if (seatDoc.seata.some((s) => s.seatNo.toLowerCase() === seat.toLowerCase())) {
+        seatKey = "seata";
+      } else if (seatDoc.seatb.some((s) => s.seatNo.toLowerCase() === seat.toLowerCase())) {
+        seatKey = "seatb";
+      } else if (seatDoc.seatc.some((s) => s.seatNo.toLowerCase() === seat.toLowerCase())) {
+        seatKey = "seatc";
+      }
+      if (seatKey) {
+        const seatObj = seatDoc[seatKey].find((s) => s.seatNo.toLowerCase() === seat.toLowerCase());
+        if (seatObj) {
+          seatObj.booked = true;
+          seatObj.bookedBy = userId;
+          seatObj.bookedAt = new Date();
+        }
       }
     });
 
@@ -1042,6 +1457,29 @@ const cancelTicket = async (req, res) => {
       });
     }
 
+    // Fetch the trip to get departure info for refund calculation
+    const trip = await Trip.findById(booking.tripId);
+    if (!trip) {
+      return res.status(404).json({
+        status: false,
+        message: "Trip details not found.",
+      });
+    }
+
+    // Calculate refund using the policy engine
+    const estimate = await calculateRefund({
+      totalAmount: booking.totalAmount || 0,
+      tripDate: trip.tripDate,
+      departureTime: trip.departureTime,
+    });
+
+    if (!estimate.eligible) {
+      return res.status(400).json({
+        status: false,
+        message: estimate.reason,
+      });
+    }
+
     // Free the seats in Seat collection
     const seatDoc = await Seat.findOne({ tripId: booking.tripId });
     if (!seatDoc) {
@@ -1053,79 +1491,139 @@ const cancelTicket = async (req, res) => {
 
     // Helper to free a seat from seata, seatb, or seatc
     const freeSeat = (seatNo) => {
-      const rowPrefix = seatNo.charAt(0).toLowerCase();
-      const seatKey = `seat${rowPrefix}`; // 'seata', 'seatb', or 'seatc'
-      const seatObj = seatDoc[seatKey]?.find((s) => s.seatNo === seatNo);
-      if (seatObj) {
-        seatObj.booked = false;
-        seatObj.bookedBy = null;
-        seatObj.bookedAt = null;
+      let seatKey = null;
+      if (seatDoc.seata.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
+        seatKey = "seata";
+      } else if (seatDoc.seatb.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
+        seatKey = "seatb";
+      } else if (seatDoc.seatc.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
+        seatKey = "seatc";
+      }
+      if (seatKey) {
+        const seatObj = seatDoc[seatKey]?.find((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase());
+        if (seatObj) {
+          seatObj.booked = false;
+          seatObj.bookedBy = null;
+          seatObj.bookedAt = null;
+        }
       }
     };
 
     booking.seats.forEach((s) => freeSeat(s.toLowerCase()));
 
-    // Mark modified for nested arrays if needed (though find/update usually works)
+    // Mark modified for nested arrays if needed
     seatDoc.markModified('seata');
     seatDoc.markModified('seatb');
     seatDoc.markModified('seatc');
     await seatDoc.save();
 
-    // Handle Refund Creation based on new model requirements
-    const originalAmount = booking.totalAmount || 0;
-    const cancellationCharge = 0; // Currently no cancellation rule, set to 0
-    const refundAmount = originalAmount; // Same as original for now
+    // Claw back any cashback earned from this booking (Spec 2.5)
+    const { clawbackCashback } = require("../../services/smLedgerService");
+    try {
+      const clawbackResult = await clawbackCashback(booking._id);
+      if (clawbackResult.clawedBack > 0) {
+        console.log(`Clawed back Rs. ${clawbackResult.clawedBack} cashback for cancelled booking ${booking._id}`);
+      }
+    } catch (cbErr) {
+      console.error("Cashback clawback failed during cancellation:", cbErr);
+      // We log but do not block the refund if clawback fails, though ideally it should be atomic.
+    }
 
-    await Refund.create({
+    // Create Refund record with policy-calculated amounts
+    const refundMethodInput = req.body.refundMethod || "original";
+    const isWalletRefund = refundMethodInput === "wallet";
+
+    let refundStatus = "pending";
+    let refundGateway = null;
+    let remarks = null;
+    let processedAt = null;
+    let completedAt = null;
+
+    if (isWalletRefund) {
+      refundStatus = "completed";
+      refundGateway = "yatra_balance";
+      remarks = "Refunded instantly to Shuvmarg Money";
+      processedAt = new Date();
+      completedAt = new Date();
+
+      // Process wallet credit instantly
+      const { creditWallet } = require("../../services/walletService");
+      try {
+        await creditWallet({
+          userId: userId,
+          amount: estimate.refundAmount,
+          purpose: "refund",
+          referenceType: "refund",
+          referenceId: booking._id,
+          remarks: `Instant refund for cancelled ticket ${booking.ticketId}`,
+        });
+      } catch (walletErr) {
+        console.error("Instant Yatra Balance credit failed:", walletErr);
+        // Fall back to original gateway queue if wallet credit fails
+        refundStatus = "pending";
+        refundGateway = null;
+        remarks = `Failed instant Yatra Balance refund: ${walletErr.message}. Queued for manual check.`;
+        processedAt = null;
+        completedAt = null;
+      }
+    }
+
+    const refund = await Refund.create({
+      userId: userId,
       bookingId: booking._id,
-      originalAmount: originalAmount,
-      cancellationCharge: cancellationCharge,
-      refundAmount: refundAmount,
-      status: "pending",
+      originalAmount: estimate.refundAmount + estimate.cancellationCharge,
+      cancellationCharge: estimate.cancellationCharge,
+      refundAmount: estimate.refundAmount,
+      status: refundStatus,
       requestedAt: new Date(),
-      reason: cancelReason || "User cancelled"
+      processedAt,
+      completedAt,
+      remarks,
+      refundGateway,
+      reason: cancelReason || "User cancelled",
     });
 
-    // Update booking status
+    // Update booking status and cancellation details
     booking.status = "cancelled";
+    booking.cancellationReason = cancelReason || "User cancelled";
+    booking.cancellationRequestedAt = new Date();
+    booking.cancelledBy = "user";
+    booking.refundId = refund._id;
 
     await booking.save();
 
     // Prepare and send notifications (local + push)
     try {
-      // Fetch trip details for route info
       const tripDetails = await Trip.findById(booking.tripId).populate("routeId");
       const routeInfo = tripDetails?.routeId
         ? `${tripDetails.routeId.from} to ${tripDetails.routeId.to}`
         : "Route information not available";
 
-      // Create local notification entry
       await createLocalNotification(
         userId,
         "TICKET_CANCELLED",
         "Booking Cancelled",
-        `Your booking (${booking.ticketId}) for ${routeInfo} has been cancelled${cancelReason ? `: ${cancelReason}` : "."}`,
+        `Your booking (${booking.ticketId}) for ${routeInfo} has been cancelled. Refund of NPR ${estimate.refundAmount} is being processed.`,
         {
           tripId: booking.tripId,
           seats: booking.seats,
           ticketId: booking.ticketId,
           route: routeInfo,
+          refundAmount: estimate.refundAmount,
         }
       );
 
-      // Send push notification to user's devices
       const userDevices = await UserDeviceInfo.find({ userId });
       const tokens = userDevices.map((device) => device.token).filter(Boolean);
       if (tokens.length > 0) {
         await notificationManager(
           tokens,
           "Booking Cancelled",
-          `Your booking (${booking.ticketId}) for ${routeInfo} has been cancelled.`
+          `Your booking (${booking.ticketId}) for ${routeInfo} has been cancelled. Refund: NPR ${estimate.refundAmount}.`
         );
       }
     } catch (notifyErr) {
       console.error("Error sending cancellation notifications:", notifyErr);
-      // Do not fail the request if notifications fail
     }
 
     return res.status(200).json({
@@ -1133,9 +1631,11 @@ const cancelTicket = async (req, res) => {
       message: "Booking cancelled successfully",
       data: {
         ticketId: booking.ticketId,
-        status: booking.status,
-        refundStatus: booking.refundStatus,
-        refundAmount: booking.refundAmount,
+        status: "cancelled",
+        refundAmount: estimate.refundAmount,
+        cancellationCharge: estimate.cancellationCharge,
+        refundPercentage: estimate.refundPercentage,
+        appliedPolicy: estimate.appliedPolicy?.name || "Default",
         seats: booking.seats,
       },
     });
@@ -1144,6 +1644,80 @@ const cancelTicket = async (req, res) => {
     return res
       .status(500)
       .json({ status: false, message: "Internal Server Error" });
+  }
+};
+
+// Cancel Estimate — preview refund breakdown without executing cancellation
+const cancelEstimate = async (req, res) => {
+  try {
+    const { ticketId } = req.body;
+    const userId = req.userInfo.id;
+
+    if (!ticketId) {
+      return res.status(400).json({
+        status: false,
+        message: "ticketId is required",
+      });
+    }
+
+    const booking = await Booking.findOne({ ticketId });
+    if (!booking) {
+      return res.status(404).json({
+        status: false,
+        message: "Booking not found",
+      });
+    }
+
+    if (booking.userId.toString() !== userId) {
+      return res.status(403).json({
+        status: false,
+        message: "You are not authorized to view this booking",
+      });
+    }
+
+    if (booking.status !== "booked") {
+      return res.status(400).json({
+        status: false,
+        message: `Cannot cancel a booking with status '${booking.status}'`,
+      });
+    }
+
+    const trip = await Trip.findById(booking.tripId);
+    if (!trip) {
+      return res.status(404).json({
+        status: false,
+        message: "Trip details not found",
+      });
+    }
+
+    const estimate = await calculateRefund({
+      totalAmount: booking.totalAmount || 0,
+      tripDate: trip.tripDate,
+      departureTime: trip.departureTime,
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Refund estimate calculated",
+      data: {
+        ticketId: booking.ticketId,
+        ticketFare: booking.totalAmount,
+        eligible: estimate.eligible,
+        reason: estimate.reason,
+        refundAmount: estimate.refundAmount,
+        cancellationCharge: estimate.cancellationCharge,
+        gatewayDeduction: estimate.gatewayDeduction,
+        refundPercentage: estimate.refundPercentage,
+        hoursBeforeDeparture: estimate.hoursBeforeDeparture,
+        appliedPolicy: estimate.appliedPolicy,
+      },
+    });
+  } catch (error) {
+    console.error("Cancel Estimate Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Failed to calculate refund estimate",
+    });
   }
 };
 
@@ -1205,16 +1779,44 @@ const getMyTicketHistory = async (req, res) => {
       .lean();
     const reviewedSet = new Set(foundReviews.map((r) => String(r.bookingId)));
 
-    const result = bookings.map((booking) => {
+    // Fetch refund records for all bookings (for cancelled tickets)
+    const refunds = await Refund.find({
+      bookingId: { $in: bookingIds },
+    })
+      .select({
+        bookingId: 1,
+        originalAmount: 1,
+        cancellationCharge: 1,
+        refundAmount: 1,
+        status: 1,
+        requestedAt: 1,
+        processedAt: 1,
+        completedAt: 1,
+        reason: 1,
+        remarks: 1,
+        refundGateway: 1,
+      })
+      .lean();
+    const refundByBookingId = new Map(
+      refunds.map((r) => [String(r.bookingId), r])
+    );
+
+    const result = await Promise.all(bookings.map(async (booking) => {
       const transaction = transactionByBookingId.get(String(booking._id)) || null;
+      const refund = refundByBookingId.get(String(booking._id)) || null;
 
       let trip = booking.tripId || null;
 
       if (trip && trip.busId) {
         const bus = trip.busId;
+        const rawImages = bus?.fleetImages || [];
+        const presignedImages = await Promise.all(
+          rawImages.map((key) => getPresignedUrl(key))
+        );
 
         trip.busId = {
           ...bus,
+          fleetImages: presignedImages.filter(Boolean),
           amenitiesDetail: bus.amenitiesId || null,
           boardingPointDetail: bus.boardingPointId || null,
           amenitiesId: undefined,
@@ -1223,9 +1825,19 @@ const getMyTicketHistory = async (req, res) => {
       }
 
       if (trip) {
+        // Build routeDetail — prefer populated routeId, fall back to denormalized fields
+        const routeDetail = trip.routeId
+          ? trip.routeId
+          : {
+              _id: trip.variantId || null,
+              routeName: trip.directionLabel || `${trip.fromStopName || "?"} → ${trip.toStopName || "?"}`,
+              from: trip.fromStopName || "N/A",
+              to: trip.toStopName || "N/A",
+            };
+
         trip = {
           ...trip,
-          routeDetail: trip.routeId || null,
+          routeDetail,
           routeId: undefined,
         };
       }
@@ -1235,8 +1847,8 @@ const getMyTicketHistory = async (req, res) => {
           seats: booking.seats,
           totalAmount: booking.totalAmount,
           status: booking.status,
-          refundStatus: booking.refundStatus,
-          refundAmount: booking.refundAmount,
+          refundStatus: refund?.status || booking.refundStatus || "",
+          refundAmount: refund?.refundAmount || booking.refundAmount || 0,
           ticketId: booking.ticketId,
           bookingId: booking._id,
           review: reviewedSet.has(String(booking._id)),
@@ -1251,8 +1863,22 @@ const getMyTicketHistory = async (req, res) => {
             paidAt: transaction.paidAt,
           }
           : null,
+        refund: refund
+          ? {
+            refundAmount: refund.refundAmount,
+            cancellationCharge: refund.cancellationCharge,
+            originalAmount: refund.originalAmount,
+            status: refund.status,
+            requestedAt: refund.requestedAt,
+            processedAt: refund.processedAt,
+            completedAt: refund.completedAt,
+            reason: refund.reason,
+            remarks: refund.remarks,
+            refundGateway: refund.refundGateway,
+          }
+          : null,
       };
-    });
+    }));
 
     return res.status(200).json({
       status: true,
@@ -1386,6 +2012,68 @@ const validateYatraPoints = async (req, res) => {
   }
 };
 
+/**
+ * Escape special regex characters in user-supplied strings.
+ * Never pass raw user input directly into RegExp — this prevents ReDoS attacks.
+ */
+function _esc(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Add `offsetMins` minutes to a base "HH:MM" time string.
+ * Handles midnight roll-over (e.g., 23:00 + 90 mins = 00:30).
+ *
+ * @param {string} baseTime  - "HH:MM" trip departure time
+ * @param {number|undefined} offsetMins - minutes from origin to this stop
+ * @returns {string} - adjusted "HH:MM" time, or baseTime if offset is null/undefined
+ */
+function _resolveStopTime(baseTime, offsetMins) {
+  // No offset data → fall back to the raw trip time (legacy routes, terminal stops)
+  if (offsetMins === null || offsetMins === undefined || !baseTime) return baseTime;
+  if (offsetMins === 0) return baseTime;
+
+  const [hours, minutes] = baseTime.split(":").map(Number);
+  const totalMins = hours * 60 + minutes + offsetMins;
+  const h = Math.floor(totalMins / 60) % 24;
+  const m = totalMins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/**
+ * Convert a time string to total minutes since midnight.
+ * Handles BOTH formats found in the DB:
+ *   "05:20 PM"  → 1040 mins  (12-hour AM/PM — written by admin portal)
+ *   "17:20"     → 1040 mins  (24-hour — standard HH:MM)
+ * Returns 0 for null/invalid inputs.
+ */
+function _timeToMins(time) {
+  if (!time || typeof time !== "string") return 0;
+  const t = time.trim().toUpperCase();
+
+  // 12-hour format: "05:20 PM" / "12:00 AM"
+  const match12 = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
+  if (match12) {
+    let h = parseInt(match12[1], 10);
+    const m = parseInt(match12[2], 10);
+    const period = match12[3];
+    if (period === "AM") {
+      if (h === 12) h = 0;       // 12:xx AM → 00:xx
+    } else {
+      if (h !== 12) h += 12;    // x:xx PM → (x+12):xx, but 12:xx PM stays 12
+    }
+    return h * 60 + m;
+  }
+
+  // 24-hour format: "17:20"
+  const match24 = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (match24) {
+    return parseInt(match24[1], 10) * 60 + parseInt(match24[2], 10);
+  }
+
+  return 0; // unparseable — treated as midnight
+}
+
 module.exports = {
   createTicket,
   createSeats,
@@ -1399,5 +2087,6 @@ module.exports = {
   validateYatraPoints,
   getMyYatraHistory,
   cancelTicket,
+  cancelEstimate,
   searchTrips
 };

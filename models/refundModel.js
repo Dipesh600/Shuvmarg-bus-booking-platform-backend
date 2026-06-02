@@ -75,7 +75,7 @@ const refundSchema = new mongoose.Schema(
     // The gateway refund reference (from eSewa/Khalti reversal API)
     refundGateway: {
       type: String,
-      enum: ["esewa", "khalti", "bank_transfer", "cash", "other"],
+      enum: ["esewa", "khalti", "bank_transfer", "cash", "yatra_balance", "other"],
       default: null,
     },
     refundGatewayId: {

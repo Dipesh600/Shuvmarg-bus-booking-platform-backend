@@ -12,10 +12,10 @@ const OTP_WINDOW_MS = 10 * 60 * 1000;  // 10 minutes
 const MAX_OTP_REQUESTS = 3;
 
 const otpRateLimiter = async (req, res, next) => {
-    const phone = req.body?.phone;
+    const phone = req.body?.phone || req.body?.emailOrPhone;
 
     if (!phone) {
-        return res.status(400).json({ success: false, message: "Phone number is required" });
+        return res.status(400).json({ success: false, message: "Phone number or identifier is required" });
     }
 
     try {

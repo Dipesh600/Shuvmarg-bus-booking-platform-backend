@@ -5,63 +5,59 @@ const routeSchema = new mongoose.Schema(
     routeName: {
       type: String,
       required: true,
-      trim: true, // e.g., "Kathmandu - Biratnagar"
+      trim: true,
+    },
+    via: {
+      type: String, // e.g. "BP Highway" or "Hetauda"
+      trim: true,
     },
     from: {
       type: String,
       required: true,
-      trim: true, // e.g., "Kathmandu"
+      trim: true,
     },
     to: {
       type: String,
       required: true,
-      trim: true, // e.g., "Biratnagar"
+      trim: true,
     },
-    isRoundTrip: {
-      type: Boolean,
-      default: false,
+    ownerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false, // Optional for GLOBAL routes
     },
-    distanceKm: {
-      type: Number,
-      default: null,  // e.g., 350
+    returnRouteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "BusRoute", // Links to the reciprocal trip
     },
-    durationMinutes: {
-      type: Number,
-      default: null,  // e.g., 480
-    },
-    // Legacy display strings (deprecated, prefer distanceKm/durationMinutes)
-    distance: { type: String, default: null }, // "350 km"
-    duration: { type: String, default: null }, // "8 hours"
-    basePrice: {
-      type: Number,
-      required: true,
-      min: [0, "Base price cannot be negative"],
+    type: {
+      type: String,
+      enum: ["GLOBAL", "CUSTOM"],
+      default: "GLOBAL",
     },
     status: {
       type: String,
       enum: ["ACTIVE", "INACTIVE"],
       default: "ACTIVE",
     },
+    distanceKm: {
+      type: Number,
+    },
+    durationMinutes: {
+      type: Number,
+    },
     stoppages: [{
       name: { type: String, required: true },
-      distanceFromSource: { type: Number, default: 0 },  // km
+      city: { type: String },
+      distanceFromSource: { type: Number, default: 0 },
+      linkedPoints: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "BoardingPoints",
+      }],
       isIntermediate: { type: Boolean, default: false },
-      coordinates: {
-        lat: { type: Number },
-        lng: { type: Number },
-      },
     }],
-    ownerId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User", // The Bus Owner who created/owns this route
-      required: true,
-    },
   },
   { timestamps: true }
 );
 
-// Index for faster searching
-routeSchema.index({ from: 1, to: 1, status: 1 });
-routeSchema.index({ ownerId: 1 });
-
-module.exports = mongoose.models.BusRoute || mongoose.model("BusRoute", routeSchema);
+module.exports = mongoose.model("BusRoute", routeSchema);

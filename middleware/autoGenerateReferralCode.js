@@ -22,7 +22,7 @@ const autoGenerateReferralCode = async (req, res, next) => {
     // Generate referral code if user doesn't have one
     if (!user.referralCode) {
       try {
-        const referralCode = await generateReferralCode();
+        const referralCode = await generateReferralCode(user.name);
         user.referralCode = referralCode;
         await user.save();
         

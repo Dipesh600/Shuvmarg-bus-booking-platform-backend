@@ -1,84 +1,64 @@
 const BusAmenities = require("../models/busAmenitiesModel.js");
 
-const createAmenity = async (userId, data) => {
-    const { amenities } = data;
+/**
+ * Create a new Amenity (Global or Custom)
+ */
+const createAmenity = async (data, ownerId = null) => {
+    const { name, description, icon, type } = data;
 
-    if (!amenities || !Array.isArray(amenities) || amenities.length === 0) {
-        throw new Error("Please provide at least one amenity.");
-    }
-
-    // Validate amenity structure
-    const isValid = amenities.every(a => a.name);
-    if (!isValid) {
-        throw new Error("Each amenity must have a name.");
+    if (!name) {
+        throw new Error("Amenity name is required.");
     }
 
     return await BusAmenities.create({
-        userId,
-        amenities,
+        name,
+        description,
+        icon,
+        type: type || (ownerId ? "CUSTOM" : "GLOBAL"),
+        ownerId: ownerId,
     });
 };
 
-const getAmenitiesByUserId = async (userId) => {
-    return await BusAmenities.find({ userId }).sort({ createdAt: -1 }).lean();
+/**
+ * Get all global amenities
+ */
+const getAllGlobalAmenities = async () => {
+    return await BusAmenities.find({ type: "GLOBAL", status: true }).sort({ name: 1 }).lean();
 };
 
-const getAmenityById = async (id, userId = null) => {
-    const query = { _id: id };
-    if (userId) query.userId = userId;
+/**
+ * Get all amenities for an owner (Global + Custom)
+ */
+const getAmenitiesForOwner = async (ownerId) => {
+    return await BusAmenities.find({
+        status: true,
+        $or: [
+            { type: "GLOBAL" },
+            { ownerId: ownerId }
+        ]
+    }).sort({ type: 1, name: 1 }).lean();
+};
 
-    const amenity = await BusAmenities.findOne(query);
+const getAmenityById = async (id) => {
+    const amenity = await BusAmenities.findById(id);
     if (!amenity) {
         throw new Error("Amenity not found.");
     }
     return amenity;
 };
 
-const updateAmenity = async (id, userId = null, data) => {
-    const { amenities, status } = data;
-
-    const query = { _id: id };
-    if (userId) query.userId = userId;
-
-    const existingAmenity = await BusAmenities.findOne(query);
-    if (!existingAmenity) {
-        throw new Error("Amenity not found or unauthorized.");
-    }
-
-    if (amenities) {
-        if (!Array.isArray(amenities) || amenities.length === 0) {
-            throw new Error("Please provide at least one amenity.");
-        }
-        const isValid = amenities.every(a => a.name);
-        if (!isValid) {
-            throw new Error("Each amenity must have a name.");
-        }
-    }
-
-    return await BusAmenities.findByIdAndUpdate(
-        id,
-        {
-            amenities: amenities !== undefined ? amenities : existingAmenity.amenities,
-            status: status !== undefined ? status : existingAmenity.status,
-        },
-        { new: true, runValidators: true }
-    );
+const updateAmenity = async (id, data) => {
+    return await BusAmenities.findByIdAndUpdate(id, data, { new: true, runValidators: true });
 };
 
-const deleteAmenity = async (id, userId = null) => {
-    const query = { _id: id };
-    if (userId) query.userId = userId;
-
-    const deletedAmenity = await BusAmenities.findOneAndDelete(query);
-    if (!deletedAmenity) {
-        throw new Error("Amenity not found or unauthorized.");
-    }
-    return deletedAmenity;
+const deleteAmenity = async (id) => {
+    return await BusAmenities.findByIdAndDelete(id);
 };
 
 module.exports = {
     createAmenity,
-    getAmenitiesByUserId,
+    getAllGlobalAmenities,
+    getAmenitiesForOwner,
     getAmenityById,
     updateAmenity,
     deleteAmenity,

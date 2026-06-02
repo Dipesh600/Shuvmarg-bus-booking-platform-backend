@@ -26,6 +26,8 @@
   "homepage": "https://github.com/2018dayanan/buss-booking-system-backend#readme",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1040.0",
+    "@aws-sdk/s3-request-presigner": "^3.1040.0",
     "axios": "^1.9.0",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.6.0",
@@ -44,8 +46,12 @@
     "nodemailer": "^6.10.1",
     "nodemon": "^3.1.9",
     "qs": "^6.14.0",
+    "sharp": "^0.34.5",
     "speakeasy": "^2.0.0",
     "uuid": "^11.1.0",
     "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "qrcode": "^1.5.4"
   }
 }

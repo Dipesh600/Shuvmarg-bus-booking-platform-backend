@@ -23,7 +23,8 @@ const logger  = require("../../utils/logger.js");
 const confirmBoarding = async (req, res) => {
     try {
         const { ticketId, tripId } = req.body;
-        const conductorId = req.userInfo?.id;
+        const userId   = req.userInfo?.id;
+        const userRole = req.userInfo?.role;
 
         if (!ticketId || !tripId) {
             return res.status(400).json({
@@ -32,8 +33,24 @@ const confirmBoarding = async (req, res) => {
             });
         }
 
-        // Verify the trip exists and belongs to this owner (conductorId = ownerId)
-        const trip = await Trip.findOne({ _id: tripId, ownerId: conductorId }).lean();
+        // ── Authorization: Bus Owner OR Conductor ─────────────────────────────
+        let trip;
+        if (userRole === "busOwner") {
+            // Bus owner: directly owns the trip
+            trip = await Trip.findOne({ _id: tripId, ownerId: userId }).lean();
+        } else if (userRole === "conductor") {
+            // Conductor: must belong to the same brand that owns the trip
+            const ConductorProfile = require("../../models/conductorProfileModel.js");
+            const profile = await ConductorProfile.findOne({ userId, status: { $ne: "INACTIVE" } }).lean();
+            if (!profile) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Conductor profile not found or deactivated.",
+                });
+            }
+            trip = await Trip.findOne({ _id: tripId, brandId: profile.brandId }).lean();
+        }
+
         if (!trip) {
             return res.status(404).json({
                 success: false,
@@ -78,16 +95,15 @@ const confirmBoarding = async (req, res) => {
                 $set: {
                     boardingConfirmed:   true,
                     boardingConfirmedAt: new Date(),
-                    boardingConfirmedBy: conductorId,
+                    boardingConfirmedBy: userId,
                 },
             },
             { new: true }
         );
 
         logger.info("conductor: boarding confirmed", {
-            ticketId,
             tripId,
-            conductorId,
+            conductorId: userId,
             seats: updated.seats,
         });
 
@@ -120,10 +136,26 @@ const confirmBoarding = async (req, res) => {
 const getTripManifest = async (req, res) => {
     try {
         const { tripId } = req.params;
-        const conductorId = req.userInfo?.id;
+        const userId   = req.userInfo?.id;
+        const userRole = req.userInfo?.role;
 
-        // Verify trip ownership
-        const trip = await Trip.findOne({ _id: tripId, ownerId: conductorId })
+        // ── Authorization: Bus Owner OR Conductor ─────────────────────────────
+        let tripFilter;
+        if (userRole === "busOwner") {
+            tripFilter = { _id: tripId, ownerId: userId };
+        } else if (userRole === "conductor") {
+            const ConductorProfile = require("../../models/conductorProfileModel.js");
+            const profile = await ConductorProfile.findOne({ userId, status: { $ne: "INACTIVE" } }).lean();
+            if (!profile) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Conductor profile not found or deactivated.",
+                });
+            }
+            tripFilter = { _id: tripId, brandId: profile.brandId };
+        }
+
+        const trip = await Trip.findOne(tripFilter)
             .populate("routeId", "routeName from to")
             .populate("busId",   "busName busNumber")
             .lean();
@@ -163,7 +195,7 @@ const getTripManifest = async (req, res) => {
             notYetBoarded:   bookings.filter(b => !b.boardingConfirmed).length,
         };
 
-        logger.info("conductor: manifest fetched", { tripId, conductorId, totalBookings: bookings.length });
+        logger.info("conductor: manifest fetched", { tripId, userId, totalBookings: bookings.length });
 
         return res.status(200).json({
             success: true,

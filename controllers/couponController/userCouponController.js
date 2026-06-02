@@ -329,12 +329,13 @@ const searchCoupons = async (req, res) => {
 // Get all coupons for user
 const getAllCouponsForUser = async (req, res) => {
   try {
-    // Find all active coupons
+    // Find all active coupons that are currently valid
+    const now = new Date();
     const coupons = await Coupon.find({
       isActive: true,
-      // validFrom: { $lte: new Date() },
-      // validTo: { $gte: new Date() },
-    });
+      validFrom: { $lte: now },
+      validTo: { $gte: now },
+    }).sort({ createdAt: -1 });
 
     const results = [];
 
@@ -369,6 +370,56 @@ const getAllCouponsForUser = async (req, res) => {
   }
 };
 
+// Get ALL coupons for user — active AND expired (for "See All" page)
+const getAllCouponsIncludingExpired = async (req, res) => {
+  try {
+    const now = new Date();
+
+    // Fetch active valid coupons first, then expired ones
+    const [activeCoupons, expiredCoupons] = await Promise.all([
+      Coupon.find({
+        isActive: true,
+        validFrom: { $lte: now },
+        validTo: { $gte: now },
+      }).sort({ createdAt: -1 }),
+      Coupon.find({
+        $or: [
+          { isActive: false },
+          { validTo: { $lt: now } },
+        ],
+      })
+        .sort({ validTo: -1 })
+        .limit(20), // cap expired to last 20
+    ]);
+
+    const format = (coupon) => ({
+      _id: coupon._id,
+      couponCode: coupon.couponCode,
+      title: coupon.title,
+      description: coupon.description,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      minOrderAmount: coupon.minOrderAmount,
+      maxDiscountAmount: coupon.maxDiscountAmount,
+      validFrom: coupon.validFrom,
+      validTo: coupon.validTo,
+      perUserLimit: coupon.perUserLimit,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "All coupons retrieved successfully!",
+      data: [...activeCoupons.map(format), ...expiredCoupons.map(format)],
+    });
+  } catch (error) {
+    console.error("Error fetching all coupons with expired:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error!",
+    });
+  }
+};
+
 module.exports = {
   getAvailableCoupons,
   validateCoupon,
@@ -376,4 +427,5 @@ module.exports = {
   getBestCoupon,
   searchCoupons,
   getAllCouponsForUser,
+  getAllCouponsIncludingExpired,
 };

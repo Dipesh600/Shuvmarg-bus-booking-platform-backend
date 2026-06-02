@@ -1,239 +1,122 @@
-const mongoose = require("mongoose");
-const BoardingPoints = require("../../../models/boardingPointsModel");
+const boardingPointService = require("../../../services/boardingPointService.js");
 
-// Create Boarding Point
+/**
+ * Create Boarding/Dropping Point
+ */
 const createBoardingPoint = async (req, res) => {
     try {
-        const { userId, city, description, boardingPoints } = req.body;
-
-        if (!userId) {
-            return res.status(400).json({
-                success: false,
-                message: "UserId is required",
-            });
-        }
-
-        if (!mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid UserId",
-            });
-        }
-
-        if (!Array.isArray(boardingPoints) || boardingPoints.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Please provide at least one boarding point",
-            });
-        }
-
-        const isValid = boardingPoints.every(p => p.pointName && p.time);
-        if (!isValid) {
-            return res.status(400).json({
-                success: false,
-                message: "Each boarding point must have a pointName and time",
-            });
-        }
-
-        const newBoardingPoint = await BoardingPoints.create({
-            userId,
-            city,
-            description,
-            boardingPoints,
-        });
+        const { ownerId, isGlobal } = req.body;
+        // Super Admin can create global points, Owners create custom points
+        const newPoint = await boardingPointService.createBoardingPoint(req.body, ownerId);
 
         return res.status(201).json({
             success: true,
-            message: "Boarding points created successfully",
-            data: newBoardingPoint,
+            message: `${newPoint.type} point created successfully`,
+            data: newPoint,
         });
     } catch (error) {
         console.error("createBoardingPoint error:", error);
         return res.status(500).json({
             success: false,
-            message: "Internal Server Error",
-            error: error.message,
+            message: error.message || "Internal Server Error",
         });
     }
 };
 
-// Get All Boarding Points
-const getAllBoardingPoints = async (req, res) => {
+/**
+ * Get Points by City (Global + Optional Owner Custom)
+ */
+const getPointsByCity = async (req, res) => {
     try {
-        const result = await BoardingPoints.find().sort({ createdAt: -1 });
+        const { city } = req.params;
+        const { ownerId, type } = req.query;
+
+        let points;
+        if (ownerId) {
+            points = await boardingPointService.getPointsForOwner(city, ownerId, type);
+        } else {
+            points = await boardingPointService.getGlobalPointsByCity(city, type);
+        }
+
         return res.status(200).json({
             success: true,
-            message: "Boarding points fetched successfully",
-            results: result.length,
-            data: result,
+            message: "Points fetched successfully",
+            results: points.length,
+            data: points,
         });
     } catch (error) {
-        console.error("getAllBoardingPoints error:", error);
+        console.error("getPointsByCity error:", error);
         return res.status(500).json({
             success: false,
-            message: "Internal Server Error",
-            error: error.message,
+            message: error.message || "Internal Server Error",
         });
     }
 };
 
-// Get Boarding Point By ID
 const getBoardingPointById = async (req, res) => {
     try {
-        const { id } = req.params;
-
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid ID",
-            });
-        }
-
-        const result = await BoardingPoints.findById(id);
-
-        if (!result) {
-            return res.status(404).json({
-                success: false,
-                message: "Boarding point not found",
-            });
-        }
-
+        const result = await boardingPointService.getBoardingPointById(req.params.id);
         return res.status(200).json({
             success: true,
-            message: "Boarding point fetched successfully",
             data: result,
         });
     } catch (error) {
-        console.error("getBoardingPointById error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error",
-            error: error.message,
-        });
+        return res.status(404).json({ success: false, message: error.message });
     }
 };
 
-// Update Boarding Point
 const updateBoardingPoint = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { city, description, boardingPoints } = req.body;
-
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid ID",
-            });
-        }
-
-        const updatedDoc = await BoardingPoints.findByIdAndUpdate(
-            id,
-            { city, description, boardingPoints },
-            { new: true, runValidators: true }
-        );
-
-        if (!updatedDoc) {
-            return res.status(404).json({
-                success: false,
-                message: "Boarding point not found",
-            });
-        }
-
+        const updated = await boardingPointService.updateBoardingPoint(req.params.id, req.body);
         return res.status(200).json({
             success: true,
-            message: "Boarding points updated successfully",
-            data: updatedDoc,
+            message: "Point updated successfully",
+            data: updated,
         });
     } catch (error) {
-        console.error("updateBoardingPoint error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error",
-            error: error.message,
-        });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Delete Boarding Point
 const deleteBoardingPoint = async (req, res) => {
     try {
-        const { id } = req.params;
-
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid ID",
-            });
-        }
-
-        const deletedDoc = await BoardingPoints.findByIdAndDelete(id);
-
-        if (!deletedDoc) {
-            return res.status(404).json({
-                success: false,
-                message: "Boarding point not found",
-            });
-        }
-
+        await boardingPointService.deleteBoardingPoint(req.params.id);
         return res.status(200).json({
             success: true,
-            message: "Boarding point deleted successfully",
-            deletedData: deletedDoc,
+            message: "Point deleted successfully",
         });
     } catch (error) {
-        console.error("deleteBoardingPoint error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error",
-            error: error.message,
-        });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Toggle Boarding Point Status
-const toggleBoardingPointStatus = async (req, res) => {
+/**
+ * Get all boarding/dropping points owned by a specific ownerId (across all cities)
+ * GET /boardingPoints/owner/:ownerId
+ */
+const getPointsByOwner = async (req, res) => {
     try {
-        const { id } = req.params;
-
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid ID",
-            });
+        const { ownerId } = req.params;
+        if (!ownerId) {
+            return res.status(400).json({ success: false, message: "ownerId is required." });
         }
-
-        const doc = await BoardingPoints.findById(id);
-
-        if (!doc) {
-            return res.status(404).json({
-                success: false,
-                message: "Boarding point not found",
-            });
-        }
-
-        doc.status = !doc.status;
-        await doc.save();
-
+        const points = await boardingPointService.getBoardingPointsByOwner(ownerId);
         return res.status(200).json({
             success: true,
-            message: `Boarding points ${doc.status ? "activated" : "deactivated"} successfully`,
-            data: doc,
+            results: points.length,
+            data: points,
         });
     } catch (error) {
-        console.error("toggleBoardingPointStatus error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error",
-            error: error.message,
-        });
+        console.error("getPointsByOwner error:", error);
+        return res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
     }
 };
 
 module.exports = {
     createBoardingPoint,
-    getAllBoardingPoints,
+    getPointsByCity,
     getBoardingPointById,
     updateBoardingPoint,
     deleteBoardingPoint,
-    toggleBoardingPointStatus,
+    getPointsByOwner,
 };

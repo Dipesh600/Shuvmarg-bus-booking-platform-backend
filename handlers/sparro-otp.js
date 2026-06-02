@@ -4,7 +4,7 @@ const qs = require("qs");
 async function sendOTP(phone, message) {
   const payload = qs.stringify({
     token: "v2_xRg3g3C0Fh9n0avtMoMV5ohNjSV.WfMx",
-    from: "Demo",
+    from: "TheAlert",
     to: phone,
     text: message,
   });

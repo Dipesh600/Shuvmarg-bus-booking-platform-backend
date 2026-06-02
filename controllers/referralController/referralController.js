@@ -3,10 +3,30 @@ const {
   generateReferralCode,
   validateReferralCode,
 } = require("../../handlers/referralCodeGenerator.js");
-const ReferralHistory = require("../../models/referralModel");
+const referralV2Service = require("../../services/referralV2Service.js");
 
 /**
- * Generate referral code for authenticated user
+ * Referral Controller — V2 (Progressive Unlock)
+ *
+ * SPEC REFERENCE: shuvmarg-money-spec.md §3
+ *
+ * All business logic is delegated to referralV2Service.js.
+ * This controller handles HTTP concerns only: request parsing,
+ * response formatting, and error mapping.
+ *
+ * BACKWARD COMPATIBILITY:
+ *   - Same route paths (/api/referral/*)
+ *   - Response shapes updated to include V2 fields (locked/unlocked/progress)
+ *   - Old ReferralHistory model is NOT queried — all data comes from ReferralV2
+ */
+
+// ═══════════════════════════════════════════════════════════════════════
+// CODE MANAGEMENT (unchanged logic, now passes user name for branded codes)
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/referral/generateCode
+ * Generate referral code for authenticated user.
  */
 const generateMyReferralCode = async (req, res) => {
   try {
@@ -33,14 +53,12 @@ const generateMyReferralCode = async (req, res) => {
         message: "Referral code already exists",
         data: {
           referralCode: user.referralCode,
-          totalReferrals: user.totalReferrals,
-          yatrapoints: user.yatrapoints,
         },
       });
     }
 
-    // Generate unique referral code
-    const referralCode = await generateReferralCode();
+    // Generate branded referral code (SHUV-XXX##)
+    const referralCode = await generateReferralCode(user.name);
     user.referralCode = referralCode;
     await user.save();
 
@@ -49,8 +67,6 @@ const generateMyReferralCode = async (req, res) => {
       message: "Referral code generated successfully",
       data: {
         referralCode: user.referralCode,
-        totalReferrals: user.totalReferrals,
-        yatrapoints: user.yatrapoints,
       },
     });
   } catch (error) {
@@ -63,203 +79,10 @@ const generateMyReferralCode = async (req, res) => {
 };
 
 /**
- * Referral Dashboard for authenticated user
- * Returns:
- * - referralCode
- * - totalUsersUsedCode (count of referred users)
- * - totalReferralPoints (sum of pointsAwarded in history)
- * - referrals (separate list with user and points)
- * - pointsBalance (overall yatrapoints of the user)
+ * GET /api/referral/ensureCode
+ * Check and generate referral code if needed.
  */
-const getReferralDashboard = async (req, res) => {
-  try {
-    if (!req.userInfo || !req.userInfo.id) {
-      return res.status(401).json({
-        status: false,
-        message: "Authentication required. Please log in.",
-      });
-    }
-
-    const userId = req.userInfo.id;
-
-  const user = await User.findById(userId).select(
-      "referralCode yatrapoints totalReferrals"
-    );
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    // History records with populated referred user using new ReferralHistory model
-    const history = await ReferralHistory.find({ 
-      referrerUserId: userId,
-      pointsCredited: true 
-    })
-      .populate({
-        path: "referredUserId",
-        select: "name email phone",
-        model: "User",
-      })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const referrals = history.map((h) => ({
-      id: h._id,
-      referredUser: {
-        name: h.referredUserId?.name || "Deleted User",
-        email: h.referredUserId?.email,
-        phone: h.referredUserId?.phone,
-      },
-      referrerPoints: h.referrerPoints || 0,
-      referredUserPoints: h.referredUserPoints || 0,
-      usedReferralCode: h.usedReferralCode,
-      status: h.status,
-      date: h.createdAt,
-    }));
-
-    // Calculate total points earned by the referrer from all referrals
-    const totalReferralPoints = referrals.reduce(
-      (sum, r) => sum + (r.referrerPoints || 0),
-      0
-    );
-
-    // Fallback to counting referredBy if history is empty
-    let totalUsersUsedCode = referrals.length;
-    if (totalUsersUsedCode === 0) {
-      totalUsersUsedCode = await User.countDocuments({ referredBy: userId });
-    }
-
-    // Calculate additional statistics
-    const completedReferrals = referrals.filter(r => r.status === 'completed').length;
-    const pendingReferrals = referrals.filter(r => r.status === 'pending').length;
-
-    return res.status(200).json({
-      status: true,
-      message: "Referral dashboard data",
-      data: {
-        referralCode: user.referralCode,
-        totalUsersUsedCode,
-        totalReferralPoints,
-        pointsBalance: user.yatrapoints,
-        completedReferrals,
-        pendingReferrals,
-        // referrals: referrals.slice(0, 10), // Show latest 10 referrals
-        hasMoreReferrals: referrals.length > 10,
-      },
-    });
-  } catch (err) {
-    console.error("Error fetching referral dashboard:", err);
-    return res.status(500).json({
-      status: false,
-      message: "Failed to fetch referral dashboard",
-      error: process.env.NODE_ENV === "development" ? err.message : undefined,
-    });
-  }
-};
-
-/**
- * Apply referral code during registration
- */
-const applyReferralCode = async (req, res) => {
-  try {
-    const { referralCode, userId } = req.body;
-
-    if (!referralCode || !userId) {
-      return res.status(400).json({
-        status: false,
-        message: "Referral code and user ID are required",
-      });
-    }
-
-    // Validate referral code format
-    if (!validateReferralCode(referralCode)) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid referral code format",
-      });
-    }
-
-    // Find user by referral code
-    const referrer = await User.findOne({ referralCode });
-    if (!referrer) {
-      return res.status(404).json({
-        status: false,
-        message: "Invalid referral code",
-      });
-    }
-
-    // Check if user is trying to refer themselves
-    if (referrer._id.toString() === userId) {
-      return res.status(400).json({
-        status: false,
-        message: "You cannot refer yourself",
-      });
-    }
-
-    // Find the user to be referred
-    const userToRefer = await User.findById(userId);
-    if (!userToRefer) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    // Check if user is already referred
-    if (userToRefer.referredBy) {
-      return res.status(400).json({
-        status: false,
-        message: "User is already referred by someone else",
-      });
-    }
-
-    // Apply referral
-    userToRefer.referredBy = referrer._id;
-    await userToRefer.save();
-
-    // Update referrer's statistics
-    referrer.totalReferrals += 1;
-    referrer.yatrapoints += 100; // Give 100 points for successful referral
-    await referrer.save();
-
-    // Record referral history for dashboard analytics
-    try {
-      await new Referral({
-        referrer: referrer._id,
-        referredUser: userToRefer._id,
-        pointsAwarded: 100,
-      }).save();
-    } catch (historyErr) {
-      console.error("Failed to save referral history:", historyErr);
-    }
-
-    // Give bonus points to the referred user
-    userToRefer.yatrapoints += 50; // Give 50 points to new user
-    await userToRefer.save();
-
-    return res.status(200).json({
-      status: true,
-      message: "Referral code applied successfully",
-      data: {
-        referrerName: referrer.name,
-        bonusPoints: 50,
-      },
-    });
-  } catch (error) {
-    console.error("Apply Referral Code Error:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Internal server error",
-    });
-  }
-};
-
-/**
- * Get user's referral statistics
- */
-const getMyReferralStats = async (req, res) => {
+const ensureReferralCode = async (req, res) => {
   try {
     const userId = req.userInfo?.id;
     if (!userId) {
@@ -277,24 +100,33 @@ const getMyReferralStats = async (req, res) => {
       });
     }
 
-    // Get referred users
-    const referredUsers = await User.find({ referredBy: userId })
-      .select("name email phone createdAt")
-      .sort({ createdAt: -1 });
+    // Generate referral code if user doesn't have one
+    if (!user.referralCode) {
+      const referralCode = await generateReferralCode(user.name);
+      user.referralCode = referralCode;
+      await user.save();
 
+      return res.status(200).json({
+        status: true,
+        message: "Referral code generated successfully",
+        data: {
+          referralCode: user.referralCode,
+          wasGenerated: true,
+        },
+      });
+    }
+
+    // User already has referral code
     return res.status(200).json({
       status: true,
-      message: "Referral statistics retrieved successfully",
+      message: "User already has referral code",
       data: {
         referralCode: user.referralCode,
-        totalReferrals: user.totalReferrals,
-        yatrapoints: user.yatrapoints,
-        referredUsers: referredUsers,
-        referredBy: user.referredBy ? true : false,
+        wasGenerated: false,
       },
     });
   } catch (error) {
-    console.error("Get Referral Stats Error:", error);
+    console.error("Ensure Referral Code Error:", error);
     return res.status(500).json({
       status: false,
       message: "Internal server error",
@@ -303,34 +135,8 @@ const getMyReferralStats = async (req, res) => {
 };
 
 /**
- * Get all referral codes (Admin only)
- */
-const getAllReferralCodes = async (req, res) => {
-  try {
-    const users = await User.find({
-      referralCode: { $exists: true, $ne: null },
-    })
-      .select(
-        "name email phone referralCode totalReferrals yatrapoints createdAt"
-      )
-      .sort({ totalReferrals: -1 });
-
-    return res.status(200).json({
-      status: true,
-      message: "Referral codes retrieved successfully",
-      data: users,
-    });
-  } catch (error) {
-    console.error("Get All Referral Codes Error:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Internal server error",
-    });
-  }
-};
-
-/**
- * Validate referral code (public endpoint)
+ * POST /api/referral/validateCode
+ * Validate referral code format and existence (public endpoint).
  */
 const validateReferralCodeEndpoint = async (req, res) => {
   try {
@@ -343,7 +149,7 @@ const validateReferralCodeEndpoint = async (req, res) => {
       });
     }
 
-    // Validate format
+    // Validate format (accepts both old and new branded format)
     if (!validateReferralCode(referralCode)) {
       return res.status(400).json({
         status: false,
@@ -352,7 +158,9 @@ const validateReferralCodeEndpoint = async (req, res) => {
     }
 
     // Check if code exists
-    const user = await User.findOne({ referralCode }).select("name");
+    const user = await User.findOne({
+      referralCode: referralCode.trim().toUpperCase(),
+    }).select("name");
     if (!user) {
       return res.status(404).json({
         status: false,
@@ -376,191 +184,199 @@ const validateReferralCodeEndpoint = async (req, res) => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════
+// V2: APPLY REFERRAL CODE (Progressive Unlock)
+// ═══════════════════════════════════════════════════════════════════════
+
 /**
- * Check and ensure user has referral code
+ * POST /api/referral/applyCode
+ *
+ * Apply a referral code during or after registration.
+ * Delegates to referralV2Service.createReferral() which:
+ *   1. Validates all rules (self-refer, 24h window, first journey, etc.)
+ *   2. Creates ReferralV2 document
+ *   3. Creates REFERRAL_LOCKED ledger entry (NPR 100)
+ *   4. Tags the referred user with referredBy
+ *   5. Runs fraud detection (async)
+ *   6. Sends notification to referrer (async)
  */
-const ensureReferralCode = async (req, res) => {
+const applyReferralCode = async (req, res) => {
   try {
-    const userId = req.userInfo?.id;
-    if (!userId) {
-      return res.status(401).json({
+    const { referralCode, userId } = req.body;
+
+    if (!referralCode || !userId) {
+      return res.status(400).json({
         status: false,
-        message: "Unauthorized: User not authenticated",
+        message: "Referral code and user ID are required",
       });
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
+    // Validate format
+    if (!validateReferralCode(referralCode)) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid referral code format",
+      });
+    }
+
+    // Find referrer by code
+    const referrer = await User.findOne({
+      referralCode: referralCode.trim().toUpperCase(),
+    });
+    if (!referrer) {
       return res.status(404).json({
         status: false,
-        message: "User not found",
+        message: "Invalid referral code",
       });
     }
 
-    // Generate referral code if user doesn't have one
-    if (!user.referralCode) {
-      const referralCode = await generateReferralCode();
-      user.referralCode = referralCode;
-      await user.save();
+    // Delegate to V2 service — all validation happens inside
+    const referral = await referralV2Service.createReferral({
+      referrerId: referrer._id,
+      referredUserId: userId,
+      referralCode: referralCode.trim().toUpperCase(),
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
+      deviceInfo: req.headers["user-agent"] || null,
+    });
 
-      return res.status(200).json({
-        status: true,
-        message: "Referral code generated successfully",
-        data: {
-          referralCode: user.referralCode,
-          totalReferrals: user.totalReferrals,
-          yatrapoints: user.yatrapoints,
-          wasGenerated: true,
-        },
-      });
-    }
-
-    // User already has referral code
     return res.status(200).json({
       status: true,
-      message: "User already has referral code",
+      message: "Referral code applied successfully",
       data: {
-        referralCode: user.referralCode,
-        totalReferrals: user.totalReferrals,
-        yatrapoints: user.yatrapoints,
-        wasGenerated: false,
+        referrerName: referrer.name,
+        lockedReward: referralV2Service.TOTAL_REFERRAL_REWARD,
+        referralStatus: referral.status,
       },
     });
   } catch (error) {
-    console.error("Ensure Referral Code Error:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Internal server error",
-    });
-  }
-};
+    console.error("Apply Referral Code Error:", error);
 
-/**
- * Sync referrer points from ReferralHistory to user's yatrapoints
- * This function ensures referrer points are properly reflected in yatrapoints
- * It's smart enough to avoid double-adding points
- */
-const addReferrerPointsToYatraPoints = async (req, res) => {
-  try {
-    const userId = req.userInfo?.id;
-    if (!userId) {
-      return res.status(401).json({
-        status: false,
-        message: "Unauthorized: User not authenticated",
-      });
-    }
+    // Map service errors to HTTP status codes
+    const clientErrors = [
+      "You cannot refer yourself",
+      "This user already has a referral code applied",
+      "Referral code can only be applied within 24 hours",
+      "Referral code can't be applied after your first trip",
+    ];
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    // Get all referral history records where this user is the referrer
-    const referralRecords = await ReferralHistory.find({ 
-      referrerUserId: userId,
-      pointsCredited: true,
-      status: 'completed'
-    });
-
-    // Calculate total referrer points that should be in yatrapoints
-    const totalReferrerPointsFromHistory = referralRecords.reduce(
-      (sum, record) => sum + (record.referrerPoints || 0),
-      0
+    const isClientError = clientErrors.some((msg) =>
+      error.message.includes(msg)
     );
 
-    // Get current yatrapoints
-    const currentYatraPoints = user.yatrapoints || 0;
-
-    // Calculate how many points from referrals are already in yatrapoints
-    // We'll assume that the registration process already added the initial points
-    // So we just need to ensure consistency
-    
-    return res.status(200).json({
-      status: true,
-      message: "Referrer points sync completed",
-      data: {
-        currentYatraPoints: currentYatraPoints,
-        totalReferrerPointsFromHistory: totalReferrerPointsFromHistory,
-        totalReferrals: referralRecords.length,
-        referralRecords: referralRecords.map(record => ({
-          referredUserId: record.referredUserId,
-          referrerPoints: record.referrerPoints,
-          usedReferralCode: record.usedReferralCode,
-          date: record.createdAt,
-          status: record.status
-        })),
-        note: "Points are automatically added during registration. This endpoint shows your referral history and points."
-      },
-    });
-  } catch (error) {
-    console.error("Sync Referrer Points Error:", error);
-    return res.status(500).json({
+    return res.status(isClientError ? 400 : 500).json({
       status: false,
-      message: "Internal server error",
+      message: isClientError ? error.message : "Internal server error",
     });
   }
 };
 
-    // GET /api/referral/history
- 
-const getReferralHistory = async (req, res) => {
+// ═══════════════════════════════════════════════════════════════════════
+// V2: DASHBOARD & HISTORY
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/referral/dashboard
+ *
+ * Returns the referrer's full referral dashboard:
+ *   - Their referral code
+ *   - Summary stats (total, active, unlocked, expired, total earned, total locked)
+ *   - Per-referral breakdown with journey progress
+ */
+const getReferralDashboard = async (req, res) => {
   try {
-    // Check if user is authenticated and has a valid ID
     if (!req.userInfo || !req.userInfo.id) {
       return res.status(401).json({
         status: false,
-        message: 'Authentication required. Please log in.'
+        message: "Authentication required. Please log in.",
       });
     }
-    
-    const userId = req.userInfo.id;
-    
-    // Find all referrals for this user and populate the referred user's details using new model
-    const history = await ReferralHistory.find({ referrerUserId: userId })
-      .populate({
-        path: 'referredUserId',
-        select: 'name email phone', // Only select necessary fields
-        model: 'User'
-      })
-      .sort({ createdAt: -1 }) // Sort by most recent first
-      .lean();
 
-    // Transform the data to include only necessary fields
-    const referralHistory = history.map(referral => ({
-      id: referral._id,
-      referredUser: {
-        name: referral.referredUserId?.name || 'Deleted User',
-        // email: referral.referredUserId?.email,
-        // phone: referral.referredUserId?.phone
-      },
-      referrerPointsEarned: referral.referrerPoints || 0,
-      referredUserPoints: referral.referredUserPoints || 0,
+    const userId = req.userInfo.id;
+    const dashboard = await referralV2Service.getReferralDashboard(userId);
+
+    return res.status(200).json({
+      status: true,
+      message: "Referral dashboard data",
+      data: dashboard,
+    });
+  } catch (err) {
+    console.error("Error fetching referral dashboard:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Failed to fetch referral dashboard",
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+};
+
+/**
+ * GET /api/referral/history
+ *
+ * Returns the referrer's referral history with per-referral unlock details.
+ * Similar to dashboard but focused on the timeline of events.
+ */
+const getReferralHistory = async (req, res) => {
+  try {
+    if (!req.userInfo || !req.userInfo.id) {
+      return res.status(401).json({
+        status: false,
+        message: "Authentication required. Please log in.",
+      });
+    }
+
+    const userId = req.userInfo.id;
+    const dashboard = await referralV2Service.getReferralDashboard(userId);
+
+    // Transform into a timeline-focused response
+    const history = dashboard.referrals.map((referral) => ({
+      id: referral.id,
+      referredUser: referral.referredUser,
       status: referral.status,
-      referralCodeUsed: referral.usedReferralCode,
-      rewardType: referral.rewardType,
-      date: referral.createdAt
+      journeysCompleted: referral.journeysCompleted,
+      totalUnlocked: referral.totalUnlocked,
+      lockedRemaining: referral.lockedRemaining,
+      unlockHistory: referral.unlockHistory,
+      expiresAt: referral.expiresAt,
+      createdAt: referral.createdAt,
     }));
 
-    // Calculate total points earned by the referrer
-    const totalPointsEarned = referralHistory.reduce(
-      (sum, referral) => sum + (referral.referrerPointsEarned || 0), 0
-    );
-
-    res.status(200).json({
+    return res.status(200).json({
       status: true,
-      message: "Sucessfully fetched refral History!",
-      data: referralHistory
+      message: "Successfully fetched referral history!",
+      data: history,
     });
-
   } catch (err) {
-    console.error('Error fetching referral history:', err);
-    res.status(500).json({
+    console.error("Error fetching referral history:", err);
+    return res.status(500).json({
       status: false,
-      message: 'Failed to fetch referral history',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      message: "Failed to fetch referral history",
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
+    });
+  }
+};
+
+/**
+ * GET /api/referral/allCodes (Admin only)
+ * Get all referral codes with V2 stats.
+ */
+const getAllReferralCodes = async (req, res) => {
+  try {
+    const users = await User.find({
+      referralCode: { $exists: true, $ne: null },
+    })
+      .select("name email phone referralCode totalReferrals createdAt")
+      .sort({ totalReferrals: -1 });
+
+    return res.status(200).json({
+      status: true,
+      message: "Referral codes retrieved successfully",
+      data: users,
+    });
+  } catch (error) {
+    console.error("Get All Referral Codes Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
     });
   }
 };
@@ -568,11 +384,9 @@ const getReferralHistory = async (req, res) => {
 module.exports = {
   generateMyReferralCode,
   applyReferralCode,
-  getMyReferralStats,
+  getReferralDashboard,
   getAllReferralCodes,
   validateReferralCodeEndpoint,
   ensureReferralCode,
-  addReferrerPointsToYatraPoints,
   getReferralHistory,
-  getReferralDashboard
 };

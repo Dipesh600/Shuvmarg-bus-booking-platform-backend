@@ -4,10 +4,14 @@ const otpSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: true,
-    unique: true,
   },
   otp: {
     type: String,
+    required: true,
+  },
+  purpose: {
+    type: String,
+    enum: ["REGISTRATION", "PASSWORD_RESET", "PHONE_CHANGE", "ACCOUNT_ACTIVATION"],
     required: true,
   },
   otpExpiry: {
@@ -24,13 +28,12 @@ const otpSchema = new mongoose.Schema({
   },
   maxAttempts: {
     type: Number,
-    default: 3,
+    default: 5,
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+}, { timestamps: true });
+
+// Compound index: one active OTP per phone per purpose
+otpSchema.index({ phone: 1, purpose: 1 }, { unique: true });
 
 // Index for automatic cleanup of expired OTPs
 otpSchema.index({ otpExpiry: 1 }, { expireAfterSeconds: 0 });

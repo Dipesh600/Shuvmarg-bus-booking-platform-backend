@@ -18,9 +18,10 @@ const getUnifiedKycList = async (req, res) => {
             .populate("user", "name email phone")
             .lean();
 
-        // 3. Fetch Fleets (Buses)
+        // 3. Fetch Fleets (Buses) — populate both owner and brand
         const fleets = await Bus.find()
             .populate("ownerId", "name email phone")
+            .populate("brandId", "brandName brandCode logo")
             .lean();
 
         const unifiedData = [];
@@ -40,13 +41,22 @@ const getUnifiedKycList = async (req, res) => {
 
         // Map Bus Owners
         busOwners.forEach((owner) => {
+            // Count real uploaded documents across all Bus-Owner-level KYC sections
+            const docCount =
+                (owner.companyRegistration?.documentUrls?.length || 0) +
+                (owner.ownerIdentity?.documentUrls?.length || 0) +
+                (owner.taxRegistration?.documentUrls?.length || 0) +
+                (owner.bankDetails?.documentUrls?.length || 0);
+
             unifiedData.push({
                 busownerId: owner.busOwnerId,
                 companyname: owner.companyName || "N/A",
                 owner: owner.user?.name || "Unknown",
+                // Normalize date to ISO string so the frontend always formats it the same way
                 submitdate: owner.createdAt,
                 status: owner.verificationStatus,
                 kyctype: "busowner",
+                documents: docCount,
                 data: owner,
             });
         });
@@ -55,7 +65,9 @@ const getUnifiedKycList = async (req, res) => {
         fleets.forEach((fleet) => {
             unifiedData.push({
                 fleetId: fleet.fleetId,
-                companyname: fleet.busName || "N/A",
+                // Use real brand name if available, fallback to bus name
+                companyname: fleet.brandId?.brandName || fleet.busName || "N/A",
+                brandId: fleet.brandId?._id || null,
                 owner: fleet.ownerId?.name || "Unknown",
                 submitdate: fleet.createdAt,
                 status: fleet.approvalStatus?.toLowerCase() || "pending",

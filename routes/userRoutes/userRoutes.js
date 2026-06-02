@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authCoontroller = require("../../controllers/authControllers.js/authController.js");
 const auth = require("../../middleware/authMiddleware.js");
+const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
 const userCouponController = require("../../controllers/couponController/userCouponController.js");
 const recordCouponUsageController = require("../../controllers/couponController/recordCouponUsageController.js");
@@ -17,6 +18,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// ── PUBLIC AUTH ROUTES (no JWT needed) ────────────────────────────────────────
 // New three-step registration process
 router.post("/sendPhoneOTP",       otpRateLimiter, authCoontroller.sendPhoneOTP);    // ← OTP rate limit
 router.post("/verifyPhoneOTP",     authCoontroller.verifyPhoneOTP);
@@ -29,10 +31,17 @@ router.post("/verifyOtpForReset",  authCoontroller.verifyOtpForReset);
 router.post("/resetPassword",      authCoontroller.resetPassword);
 router.post("/resendOtp",          otpRateLimiter, authCoontroller.resendOtp);        // ← OTP rate limit
 
+// Token management (refresh, logout, force password change)
+router.post("/refresh",            authCoontroller.refreshAccessToken);               // ← No auth needed (uses refresh token)
+router.post("/logout",             authCoontroller.logout);                            // ← No auth needed (uses refresh token)
+router.post("/changeForcePassword", authCoontroller.changeForcePassword);              // ← Uses temp token
+
+// ── PROTECTED ROUTES (JWT + DB verification) ─────────────────────────────────
 // Update Profile picture
 router.put(
   "/UpdateProfilePic",
   auth,
+  verifyRoleFromDB,
   autoGenerateReferralCode,
   authCoontroller.UpdateProfilePic
 );
@@ -41,20 +50,25 @@ router.put(
 router.patch(
   "/updateProfile",
   auth,
+  verifyRoleFromDB,
   autoGenerateReferralCode,
   authCoontroller.updateProfile
 );
 
 // Update Password
-router.put("/updatePassword", auth, authCoontroller.updatePassword);
+router.put("/updatePassword", auth, verifyRoleFromDB, authCoontroller.updatePassword);
 
 // Get User Detail
-router.get("/getUserDetail", auth, authCoontroller.getUserDetail);
+router.get("/getUserDetail", auth, verifyRoleFromDB, authCoontroller.getUserDetail);
 
 // Coupon Routes
 router.get(
   "/coupons/all",
-  userCouponController.getAllCouponsForUser
+  userCouponController.getAllCouponsForUser          // active only → home carousel
+);
+router.get(
+  "/coupons/all-with-expired",
+  userCouponController.getAllCouponsIncludingExpired // active + expired → "See All" page
 );
 router.get(
   "/coupons/available",
@@ -86,5 +100,17 @@ router.get(
   auth,
   recordCouponUsageController.getUserUsedCoupons
 );
+
+// Wallet Routes
+const walletController = require("../../controllers/walletController/walletController.js");
+const scratchCardController = require("../../controllers/walletController/scratchCardController.js");
+
+router.get("/wallet/details", auth, verifyRoleFromDB, walletController.getWalletDetails);
+router.post("/wallet/setup-pin", auth, verifyRoleFromDB, walletController.setupWalletPin);
+router.post("/wallet/verify-pin", auth, verifyRoleFromDB, walletController.verifyWalletPin);
+
+// Scratch Card Routes
+router.get("/wallet/scratch-cards", auth, verifyRoleFromDB, scratchCardController.getScratchCards);
+router.post("/wallet/scratch/:cardId", auth, verifyRoleFromDB, scratchCardController.scratchCard);
 
 module.exports = router;

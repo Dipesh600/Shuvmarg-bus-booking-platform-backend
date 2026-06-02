@@ -63,28 +63,27 @@ function isTripCompleted(trip) {
 
   try {
     const now = new Date();
-    const [y, m, d] = String(trip.tripDate || "")
-      .split(/[-/]/)
-      .map((x) => parseInt(x, 10));
-    if (!y || !m || !d) return false;
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    let year = y;
-    let month = m;
-    let day = d;
-    if (y <= 31 && d && d > 31) {
-      year = d;
-      day = y;
-      month = m;
+    // tripDate could be a Date object (from MongoDB) or a string
+    let tripDate;
+    if (trip.tripDate instanceof Date) {
+      tripDate = trip.tripDate;
+    } else {
+      tripDate = new Date(trip.tripDate);
+    }
+    if (isNaN(tripDate.getTime())) return false;
+
+    const tripDayStart = new Date(tripDate.getFullYear(), tripDate.getMonth(), tripDate.getDate());
+
+    if (tripDayStart < todayStart) {
+      return true;  // Trip date is in the past
+    }
+    if (tripDayStart > todayStart) {
+      return false; // Trip date is in the future
     }
 
-    const tripDate = new Date(year, (month || 1) - 1, day || 1);
-    if (tripDate < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
-      return true;
-    }
-    if (tripDate > new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
-      return false;
-    }
-
+    // Same day: compare by arrival/departure time
     const arrivalMin = parseTimeToMinutes(trip.arrivalTime);
     const departureMin = parseTimeToMinutes(trip.departureTime);
     const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -92,6 +91,7 @@ function isTripCompleted(trip) {
     if (departureMin != null) return nowMin >= departureMin;
     return false;
   } catch (e) {
+    console.error("isTripCompleted error:", e);
     return false;
   }
 }
@@ -103,6 +103,12 @@ const createReview = async (req, res) => {
     }
     const userId = req.userInfo?.id;
     const { bookingId, fleetId, rating, title, comment, images, isAnonymous } = req.body;
+
+    console.log("═══ [CREATE REVIEW] ═══");
+    console.log("[CREATE REVIEW] userId:", userId);
+    console.log("[CREATE REVIEW] bookingId:", bookingId);
+    console.log("[CREATE REVIEW] fleetId:", fleetId);
+    console.log("[CREATE REVIEW] rating:", rating);
 
     if (!userId) {
       return res.status(401).json({ status: false, message: "Unauthorized" });
@@ -117,11 +123,13 @@ const createReview = async (req, res) => {
     // Verify booking ownership and status
     const booking = await Booking.findById(bookingId);
     if (!booking || String(booking.userId) !== String(userId)) {
+      console.log("[CREATE REVIEW] ❌ Booking not found or userId mismatch. Booking exists:", !!booking, "UserId:", userId);
       return res
         .status(404)
         .json({ status: false, message: "Booking not found" });
     }
     if (booking.status === "cancelled") {
+      console.log("[CREATE REVIEW] ❌ Booking is cancelled:", booking.status);
       return res.status(400).json({
         status: false,
         message: "Cannot review a cancelled booking",
@@ -130,11 +138,13 @@ const createReview = async (req, res) => {
 
     const trip = await Trip.findById(booking.tripId);
     if (!trip) {
+      console.log("[CREATE REVIEW] ❌ Trip not found:", booking.tripId);
       return res.status(404).json({ status: false, message: "Trip not found" });
     }
 
     // Ensure booking-trip belongs to fleetId from frontend
     if (String(trip.busId) !== String(fleetId)) {
+      console.log("[CREATE REVIEW] ❌ Fleet mismatch. trip.busId:", trip.busId, "fleetId:", fleetId);
       return res.status(400).json({
         status: false,
         message: "This booking does not match the provided fleet",
@@ -142,17 +152,20 @@ const createReview = async (req, res) => {
     }
 
     if (!isTripCompleted(trip)) {
+      console.log("[CREATE REVIEW] ❌ Trip not completed yet. TripDate:", trip.tripDate, "TripStatus:", trip.status);
       return res.status(400).json({
         status: false,
         message: "You can only review after the trip is completed",
       });
     }
 
+    console.log("[CREATE REVIEW] ✅ All checks passed, preparing payload...");
     // Prepare review payload
     const payload = {
       userId,
       bookingId: booking._id,
       fleetId,
+      tripId: booking.tripId,
       rating,
       title: title || null,
       comment: comment || null,
@@ -227,7 +240,26 @@ const getReviewsForFleet = async (req, res) => {
           : { name: r.userId.name, profilePicture: r.userId.profilePicture },
     }));
 
-    return res.status(200).json({ status: true, data: reviews });
+    // Build rating distribution (1-5 star counts) + aggregate stats
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalRating = 0;
+    for (const r of docs) {
+      const star = Math.max(1, Math.min(5, r.rating));
+      distribution[star] = (distribution[star] || 0) + 1;
+      totalRating += r.rating;
+    }
+    const totalReviews = docs.length;
+    const averageRating = totalReviews > 0 ? Math.round((totalRating / totalReviews) * 10) / 10 : 0;
+
+    return res.status(200).json({
+      status: true,
+      data: reviews,
+      stats: {
+        averageRating,
+        totalReviews,
+        distribution,
+      },
+    });
   } catch (e) {
     console.error("getReviewsForFleet error", e);
     return res.status(500).json({ status: false, message: "Internal Server Error" });

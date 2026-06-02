@@ -86,4 +86,10 @@ const superAdminSchema = new mongoose.Schema(
   }
 );
 
+// ── DUAL REGISTRATION (intentional) ──────────────────────────────────────────
+// Some older models reference `ref: "Admin"` while newer ones use `ref: "SuperAdmin"`.
+// Both are registered to the same schema + collection ("superadmins") so that
+// Mongoose populate() works regardless of which ref name a model uses.
+// DO NOT remove either registration without migrating all existing refs first.
+mongoose.model("Admin", superAdminSchema, "superadmins");
 module.exports = mongoose.model("SuperAdmin", superAdminSchema);

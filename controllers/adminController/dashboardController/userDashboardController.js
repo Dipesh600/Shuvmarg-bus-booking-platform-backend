@@ -25,32 +25,44 @@ const getUserDashboardStats = async (req, res) => {
         const startOfLast30Days = new Date(now);
         startOfLast30Days.setDate(startOfLast30Days.getDate() - 30);
 
-        const [
-            totalUsersCount,
-            usersThisMonthCount,
-            usersLastMonthCount,
-            activeUsersLast30DaysCount,
-            newUsersTodayCount,
-            newUsersYesterdayCount,
-        ] = await Promise.all([
-            User.countDocuments({}),
-            User.countDocuments({
-                createdAt: { $gte: startOfThisMonth, $lte: endOfThisMonth },
-            }),
-            User.countDocuments({
-                createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth },
-            }),
-            User.countDocuments({
-                status: "active",
-                createdAt: { $gte: startOfLast30Days, $lte: now },
-            }),
-            User.countDocuments({
-                createdAt: { $gte: startOfToday, $lte: endOfToday },
-            }),
-            User.countDocuments({
-                createdAt: { $gte: startOfYesterday, $lte: endOfYesterday },
-            }),
+        // Execute a single $facet aggregation to count passenger roles efficiently
+        const stats = await User.aggregate([
+            { $match: { role: "passenger" } },
+            {
+                $facet: {
+                    totalUsersCount: [{ $count: "count" }],
+                    usersThisMonthCount: [
+                        { $match: { createdAt: { $gte: startOfThisMonth, $lte: endOfThisMonth } } },
+                        { $count: "count" }
+                    ],
+                    usersLastMonthCount: [
+                        { $match: { createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth } } },
+                        { $count: "count" }
+                    ],
+                    activeUsersLast30DaysCount: [
+                        { $match: { status: "active", createdAt: { $gte: startOfLast30Days, $lte: now } } },
+                        { $count: "count" }
+                    ],
+                    newUsersTodayCount: [
+                        { $match: { createdAt: { $gte: startOfToday, $lte: endOfToday } } },
+                        { $count: "count" }
+                    ],
+                    newUsersYesterdayCount: [
+                        { $match: { createdAt: { $gte: startOfYesterday, $lte: endOfYesterday } } },
+                        { $count: "count" }
+                    ]
+                }
+            }
         ]);
+
+        const aggregates = stats[0];
+
+        const totalUsersCount = aggregates.totalUsersCount[0]?.count || 0;
+        const usersThisMonthCount = aggregates.usersThisMonthCount[0]?.count || 0;
+        const usersLastMonthCount = aggregates.usersLastMonthCount[0]?.count || 0;
+        const activeUsersLast30DaysCount = aggregates.activeUsersLast30DaysCount[0]?.count || 0;
+        const newUsersTodayCount = aggregates.newUsersTodayCount[0]?.count || 0;
+        const newUsersYesterdayCount = aggregates.newUsersYesterdayCount[0]?.count || 0;
 
         const thisMonthIncrease = usersThisMonthCount;
         const thisMonthGrowthPercent =

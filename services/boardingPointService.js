@@ -1,89 +1,87 @@
 const BoardingPoints = require("../models/boardingPointsModel.js");
 
-const createBoardingPoints = async (userId, data) => {
-    const { city, boardingPoints, description } = data;
+/**
+ * Create a new Boarding/Dropping point (Global or Custom)
+ */
+const createBoardingPoint = async (data, ownerId = null) => {
+    const { city, pointName, landmark, coordinates, contactNumber, type, isGlobal } = data;
 
-    if (!city || !boardingPoints || !Array.isArray(boardingPoints) || boardingPoints.length === 0) {
-        throw new Error("Please provide city and at least one boarding point.");
-    }
-
-    // Validate each boarding point structure
-    const isValidPoints = boardingPoints.every(pt => pt.pointName && pt.time);
-    if (!isValidPoints) {
-        throw new Error("Each boarding point must have a pointName and time.");
+    if (!city || !pointName) {
+        throw new Error("City and Point Name are required.");
     }
 
     return await BoardingPoints.create({
-        userId,
         city,
-        boardingPoints,
-        description,
+        pointName,
+        landmark,
+        coordinates,
+        contactNumber,
+        type: type || "BOTH",
+        isGlobal: isGlobal !== undefined ? isGlobal : (ownerId ? false : true),
+        ownerId: ownerId,
     });
 };
 
-const getBoardingPointsByUserId = async (userId) => {
-    return await BoardingPoints.find({ userId }).sort({ createdAt: -1 }).lean();
+/**
+ * Get all global points for a city
+ */
+const getGlobalPointsByCity = async (city, type = null) => {
+    const query = { city, isGlobal: true, status: true };
+    if (type && type !== "BOTH") {
+        query.$or = [{ type: type }, { type: "BOTH" }];
+    }
+    return await BoardingPoints.find(query).sort({ pointName: 1 }).lean();
 };
 
-const getBoardingPointById = async (id, userId = null) => {
-    const query = { _id: id };
-    if (userId) query.userId = userId;
-
-    const boardingPoint = await BoardingPoints.findOne(query);
-    if (!boardingPoint) {
-        throw new Error("Boarding point not found.");
+/**
+ * Get all points (Global + Owner's Custom) for an owner in a city
+ */
+const getPointsForOwner = async (city, ownerId, type = null) => {
+    const query = { 
+        city, 
+        status: true,
+        $or: [
+            { isGlobal: true },
+            { ownerId: ownerId }
+        ]
+    };
+    if (type && type !== "BOTH") {
+        query.type = { $in: [type, "BOTH"] };
     }
-    return boardingPoint;
+    return await BoardingPoints.find(query).sort({ isGlobal: -1, pointName: 1 }).lean();
 };
 
-const updateBoardingPoints = async (id, userId = null, data) => {
-    const { city, boardingPoints, description, status } = data;
-
-    const query = { _id: id };
-    if (userId) query.userId = userId;
-
-    const existingBoardingPoint = await BoardingPoints.findOne(query);
-    if (!existingBoardingPoint) {
-        throw new Error("Boarding point not found or unauthorized.");
+const getBoardingPointById = async (id) => {
+    const point = await BoardingPoints.findById(id);
+    if (!point) {
+        throw new Error("Point not found.");
     }
-
-    if (boardingPoints) {
-        if (!Array.isArray(boardingPoints) || boardingPoints.length === 0) {
-            throw new Error("Please provide at least one boarding point.");
-        }
-        const isValidPoints = boardingPoints.every(pt => pt.pointName && pt.time);
-        if (!isValidPoints) {
-            throw new Error("Each boarding point must have a pointName and time.");
-        }
-    }
-
-    return await BoardingPoints.findByIdAndUpdate(
-        id,
-        {
-            city: city !== undefined ? city : existingBoardingPoint.city,
-            boardingPoints: boardingPoints !== undefined ? boardingPoints : existingBoardingPoint.boardingPoints,
-            description: description !== undefined ? description : existingBoardingPoint.description,
-            status: status !== undefined ? status : existingBoardingPoint.status,
-        },
-        { new: true, runValidators: true }
-    );
+    return point;
 };
 
-const deleteBoardingPoint = async (id, userId = null) => {
-    const query = { _id: id };
-    if (userId) query.userId = userId;
+const updateBoardingPoint = async (id, data) => {
+    return await BoardingPoints.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+};
 
-    const deletedBoardingPoint = await BoardingPoints.findOneAndDelete(query);
-    if (!deletedBoardingPoint) {
-        throw new Error("Boarding point not found or unauthorized.");
-    }
-    return deletedBoardingPoint;
+const deleteBoardingPoint = async (id) => {
+    return await BoardingPoints.findByIdAndDelete(id);
+};
+
+/**
+ * Get all custom boarding points created by a specific owner (across all cities)
+ */
+const getBoardingPointsByOwner = async (ownerId) => {
+    return await BoardingPoints.find({ ownerId, isGlobal: false })
+        .sort({ city: 1, pointName: 1 })
+        .lean();
 };
 
 module.exports = {
-    createBoardingPoints,
-    getBoardingPointsByUserId,
+    createBoardingPoint,
+    getGlobalPointsByCity,
+    getPointsForOwner,
+    getBoardingPointsByOwner,
     getBoardingPointById,
-    updateBoardingPoints,
+    updateBoardingPoint,
     deleteBoardingPoint,
 };
