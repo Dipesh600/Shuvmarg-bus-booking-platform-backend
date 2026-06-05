@@ -1085,10 +1085,15 @@ const bookTicket = async (req, res) => {
             message: "Coupon usage limit reached",
           });
         }
+        // Multi-role coupon eligibility: check user's roles array (not just primary role)
+        const userRoles = req.dbUser?.roles || [req.userInfo.role];
+        const isCouponEligible = coupon.applicableUserTypes.some(
+          (type) => userRoles.includes(type)
+        );
         if (
           Array.isArray(coupon.applicableUserTypes) &&
           coupon.applicableUserTypes.length > 0 &&
-          !coupon.applicableUserTypes.includes(req.userInfo.role)
+          !isCouponEligible
         ) {
           return res.status(400).json({
             status: false,
@@ -1826,7 +1831,7 @@ const getMyTicketHistory = async (req, res) => {
 
       if (trip) {
         // Build routeDetail — prefer populated routeId, fall back to denormalized fields
-        const routeDetail = trip.routeId
+        const baseRouteDetail = trip.routeId
           ? trip.routeId
           : {
               _id: trip.variantId || null,
@@ -1835,8 +1840,20 @@ const getMyTicketHistory = async (req, res) => {
               to: trip.toStopName || "N/A",
             };
 
+        // Override with booking's actual searched route (bookedFrom/bookedTo)
+        // This shows the user's actual journey (e.g., "Bardibas → Kathmandu")
+        // instead of the bus's full terminal route (e.g., "Janakpur → Kathmandu")
+        const routeDetail = {
+          ...baseRouteDetail,
+          from: booking.bookedFrom || baseRouteDetail.from,
+          to:   booking.bookedTo   || baseRouteDetail.to,
+        };
+
         trip = {
           ...trip,
+          // Override times with user's stop-specific times when available
+          departureTime: booking.bookedDepartureTime || trip.departureTime,
+          arrivalTime:   booking.bookedArrivalTime   || trip.arrivalTime,
           routeDetail,
           routeId: undefined,
         };

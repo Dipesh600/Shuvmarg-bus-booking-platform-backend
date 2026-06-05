@@ -377,6 +377,10 @@ const confirmBooking = async (req, res) => {
       couponCode,
       boardingPoint,    // { name, time, lat, lng } — now persisted
       droppingPoint,    // { name, time, lat, lng } — now persisted
+      bookedFrom,       // User's searched origin (e.g., "Bardibas") — persisted on Booking
+      bookedTo,         // User's searched destination (e.g., "Kathmandu") — persisted on Booking
+      bookedDepartureTime, // Stop-specific departure time (resolved by search)
+      bookedArrivalTime,   // Stop-specific arrival time (resolved by search)
       passengerDetails, // [{ name, age, gender, seatNo }] — DoT compliance
       walletPin,        // Required when gateway === "wallet" — server-side PIN verification
       smMoneyToUse,     // SM Money amount to debit (split payment)
@@ -856,6 +860,10 @@ const confirmBooking = async (req, res) => {
         tripId: scheduleId,
         brandId: trip.brandId || null,
         busId:   trip.busId   || null,
+        bookedFrom: bookedFrom || null,
+        bookedTo:   bookedTo   || null,
+        bookedDepartureTime: bookedDepartureTime || null,
+        bookedArrivalTime:   bookedArrivalTime   || null,
         seats: normalizedSeats,
         passengerDetails: formattedPassengers,
         boardingPoint: boardingPoint || {},
