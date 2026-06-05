@@ -47,6 +47,17 @@ const userSchema = new mongoose.Schema(
       enum: ["passenger", "agent", "busOwner", "conductor", "driver", "admin"],
       default: "passenger",
     },
+    // === MULTI-ROLE SUPPORT ===
+    // All roles this user actively participates in. The primary `role` field
+    // remains the user's original registration role (immutable by API).
+    // `roles` is additive-only — used by admin queries, coupon eligibility,
+    // and notification targeting. Auth middleware continues to use `role`.
+    roles: {
+      type: [String],
+      enum: ["passenger", "agent", "busOwner", "conductor", "driver", "admin"],
+      default: ["passenger"],
+      index: true,
+    },
     isVerified: {
       type: Boolean,
       default: false,
@@ -120,6 +131,25 @@ const userSchema = new mongoose.Schema(
       default: null,    // Non-null = account soft-deleted
     },
 
+    // === ADMIN ENFORCEMENT ===
+    // Why the user was banned/suspended — shown to the user in the app
+    suspensionReason: {
+      type: String,
+      default: null,
+      maxlength: 500,
+    },
+    // When the status was last changed by an admin
+    suspendedAt: {
+      type: Date,
+      default: null,
+    },
+    // Which admin changed the status (for internal tracking)
+    statusChangedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SuperAdmin",
+      default: null,
+    },
+
     // === ADMIN-GENERATED CREDENTIALS ===
     forcePasswordChange: {
       type: Boolean,
@@ -128,5 +158,19 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// === PRE-SAVE HOOK: Sync roles with primary role ===
+// Safety net: guarantees `roles` always includes the primary `role`.
+// This handles legacy code paths that only set `role` without `roles`.
+userSchema.pre("save", function (next) {
+  if (this.role) {
+    if (!this.roles || this.roles.length === 0) {
+      this.roles = [this.role];
+    } else if (!this.roles.includes(this.role)) {
+      this.roles.push(this.role);
+    }
+  }
+  next();
+});
 
 module.exports = mongoose.model("User", userSchema);

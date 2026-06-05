@@ -185,6 +185,7 @@ const register = async (req, res) => {
             phone,
             password: hashedPassword,
             role: "agent",
+            roles: ["agent"],
             status: "pending",
             phoneVerified: true,
             isVerified: false,

@@ -191,6 +191,7 @@ const completeRegistration = async (req, res) => {
       gender,
       phoneVerified: true,
       isVerified: true,
+      roles: ["passenger"],
       referralCode: myReferralCode,
     });
 
@@ -308,7 +309,15 @@ const login = async (req, res) => {
 
     // === SOFT-DELETE CHECK ===
     if (user.deletedAt) {
-      return res.status(403).json({ success: false, message: "This account has been deactivated. Contact support." });
+      return res.status(403).json({
+        success: false,
+        message: "This account has been deactivated. Please contact support for assistance.",
+        errorCode: "ACCOUNT_DELETED",
+        contact: {
+          email: "support@shuvmarg.com",
+          phone: "+977-9800000000",
+        },
+      });
     }
 
     // === ACCOUNT LOCK CHECK ===
@@ -323,7 +332,36 @@ const login = async (req, res) => {
 
     // === BANNED CHECK ===
     if (user.status === "banned") {
-      return res.status(403).json({ success: false, message: "Your account has been banned. Contact support." });
+      return res.status(403).json({
+        success: false,
+        message: user.suspensionReason
+          ? `Your account has been banned. Reason: ${user.suspensionReason}`
+          : "Your account has been banned.",
+        errorCode: "ACCOUNT_BANNED",
+        reason: user.suspensionReason || null,
+        bannedAt: user.suspendedAt || null,
+        contact: {
+          email: "support@shuvmarg.com",
+          phone: "+977-9800000000",
+        },
+      });
+    }
+
+    // === SUSPENDED / INACTIVE CHECK ===
+    if (user.status === "inactive") {
+      return res.status(403).json({
+        success: false,
+        message: user.suspensionReason
+          ? `Your account has been suspended. Reason: ${user.suspensionReason}`
+          : "Your account has been suspended.",
+        errorCode: "ACCOUNT_SUSPENDED",
+        reason: user.suspensionReason || null,
+        suspendedAt: user.suspendedAt || null,
+        contact: {
+          email: "support@shuvmarg.com",
+          phone: "+977-9800000000",
+        },
+      });
     }
 
     // === INVITED BUT NOT YET ACTIVATED ===
@@ -377,13 +415,45 @@ const login = async (req, res) => {
     }
 
     // === SUCCESS — reset counters, record login time ===
-    await User.findByIdAndUpdate(user._id, {
+    const loginUpdate = {
       $set: {
         failedLoginAttempts: 0,
         lockedUntil: null,
         lastLoginAt: new Date(),
       },
-    });
+    };
+
+    // === CROSS-ROLE DETECTION ===
+    // When the passenger app sends X-App-Source: passenger and the user
+    // registered under a different role (e.g., busOwner), we add "passenger"
+    // to their roles array. This is additive-only and grants zero elevated
+    // privileges — passenger is the lowest-privilege role.
+    const VALID_APP_SOURCES = ["passenger", "busOwner", "agent", "conductor", "driver"];
+    const appSource = (req.get("X-App-Source") || "").toLowerCase();
+
+    if (
+      VALID_APP_SOURCES.includes(appSource) &&
+      user.role !== appSource &&
+      user.role !== "admin" &&
+      (!user.roles || !user.roles.includes(appSource))
+    ) {
+      loginUpdate.$addToSet = { roles: appSource };
+    }
+
+    // Also ensure roles array contains the primary role (backfill for
+    // users created before the roles field existed)
+    if (!user.roles || user.roles.length === 0) {
+      if (!loginUpdate.$addToSet) {
+        loginUpdate.$set.roles = appSource && VALID_APP_SOURCES.includes(appSource)
+          ? [user.role, appSource].filter((v, i, a) => a.indexOf(v) === i)
+          : [user.role];
+      } else {
+        loginUpdate.$set.roles = [user.role];
+        // $addToSet will add the appSource on top of this
+      }
+    }
+
+    await User.findByIdAndUpdate(user._id, loginUpdate);
 
     const userWithoutPassword = user.toObject();
     delete userWithoutPassword.password;

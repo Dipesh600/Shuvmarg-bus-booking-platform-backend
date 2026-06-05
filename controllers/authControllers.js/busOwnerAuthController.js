@@ -185,6 +185,7 @@ const register = async (req, res) => {
             phone,
             password: hashedPassword,
             role: "busOwner",
+            roles: ["busOwner"],
             status: "pending",      // No dashboard until admin approves
             phoneVerified: true,
             isVerified: false,       // KYC not yet submitted
