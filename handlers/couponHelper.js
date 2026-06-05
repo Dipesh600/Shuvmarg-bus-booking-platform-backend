@@ -246,7 +246,7 @@ class CouponHelper {
         isActive: true,
         validFrom: { $lte: now },
         validTo: { $gte: now },
-        applicableUserTypes: user.role,
+        applicableUserTypes: { $in: user.roles || [user.role] },
         $or: [
           { totalUsageLimit: null },
           { $expr: { $lt: ["$usedCount", "$totalUsageLimit"] } },

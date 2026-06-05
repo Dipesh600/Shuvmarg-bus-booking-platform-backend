@@ -17,7 +17,7 @@ const sendOfferNotificationToPassengers = async (couponCode, title, discountType
   try {
     // Get all passenger user IDs
     const passengerUsers = await User.find(
-      { role: "passenger", status: "active" },
+      { roles: "passenger", status: "active" },
       { _id: 1 }
     ).lean();
     const passengerIds = passengerUsers.map((u) => u._id.toString());

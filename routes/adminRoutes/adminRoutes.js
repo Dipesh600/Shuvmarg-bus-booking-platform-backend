@@ -37,7 +37,9 @@ const tripExceptionCtrl    = require("../../controllers/adminController/tripExce
 const brandFinancialCtrl   = require("../../controllers/adminController/brandFinancialController.js");
 const driverController     = require("../../controllers/adminController/driverController.js");
 const fleetWorkstation     = require("../../controllers/adminController/fleetWorkstationController.js");
+const tripOverviewCtrl     = require("../../controllers/adminController/tripOverviewController.js");
 const adminWalletCtrl      = require("../../controllers/adminController/walletController/adminWalletController.js");
+const transactionCtrl      = require("../../controllers/adminController/transactionController/transactionController.js");
 // Auth Routes
 router.post("/auth/login",   authController.login);
 router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);
@@ -49,17 +51,13 @@ router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);
 
 
 // User Management Routes
-router.post("/createAccount", adminMiddleware, admin.createAccount);
 router.delete("/deleteAccount", adminMiddleware, admin.deleteAccount);
-router.patch("/updateAccount", adminMiddleware, admin.updateAccount);
 router.get("/getAllUsers", adminMiddleware, admin.getAllUsers);
 router.get("/userDashboard", adminMiddleware, userDashboard.getUserDashboardStats);
 router.post("/getuserById", adminMiddleware, admin.getUserById);
-router.post("/activity", adminMiddleware, admin.getUserActivitySummary);
-router.post("/accountStatus", adminMiddleware, admin.getUserAccountStatus);
 router.patch("/resetPassword", adminMiddleware, admin.changeUserPassword);
 router.patch("/updateStatus", adminMiddleware, admin.updateUserStatus);
-router.post("/getUserBookings", adminMiddleware, admin.getUserBookings);
+router.get("/users/:id/transactions", adminMiddleware, admin.getUserTransactions);
 
 // Ticket Management Routes
 router.get("/getAllTicket", adminMiddleware, ticketController.getAllTickets);
@@ -154,6 +152,7 @@ router.patch("/refund-policy/toggleStatus", adminMiddleware, refundPolicyControl
 
 // Shuvmarg Money (Wallet) Management
 router.get("/wallet/overview",              adminMiddleware, adminWalletCtrl.getOverview);
+router.get("/wallet/global-feed",           adminMiddleware, adminWalletCtrl.getGlobalFeed);
 router.get("/wallet/lookup",                adminMiddleware, adminWalletCtrl.lookupUser);
 router.post("/wallet/adjust",               adminMiddleware, adminWalletCtrl.adjustBalance);
 router.patch("/wallet/freeze",              adminMiddleware, adminWalletCtrl.freezeWallet);
@@ -240,6 +239,16 @@ router.patch("/fleet/update/:id", adminMiddleware, adminFleetController.updateFl
 router.delete("/fleet/delete/:id", adminMiddleware, adminFleetController.deleteFleetByAdmin);
 router.patch("/fleet/resubmit/:id", adminMiddleware, adminFleetController.resubmitFleetByAdmin);
 router.patch("/fleet/reupload-doc/:id", adminMiddleware, adminFleetController.reuploadFleetDocument);
+
+// ─── TRIP CONTROL CENTER (Platform-wide oversight — read-only) ────────────────
+// Exception triage dashboard with per-trip booking aggregation
+router.get("/trips/overview",          adminMiddleware, tripOverviewCtrl.getOverview);
+// Schedule generation health monitor (CRON health check)
+router.get("/trips/schedule-health",   adminMiddleware, tripOverviewCtrl.getScheduleHealth);
+// Enhanced global trip search with booking stats
+router.get("/trips/search",            adminMiddleware, tripOverviewCtrl.searchTrips);
+// Route performance: load factor, revenue, completion rate per schedule
+router.get("/trips/route-performance", adminMiddleware, tripOverviewCtrl.getRoutePerformance);
 
 // Dedicated Trip Management (Admin on behalf of Owner)
 router.post("/trips/create",               adminMiddleware, adminTripController.createTripForOwner);
@@ -400,6 +409,11 @@ router.post("/schedules/:id/cancel-range",          adminMiddleware, tripExcepti
 // Extra run — one-off trip on a date not in the regular schedule
 router.post("/schedules/:id/extra-run",             adminMiddleware, tripExceptionCtrl.createExtraRun);
 
+// ─── TRANSACTION MANAGEMENT ────────────────────────────────────────────────────
+// Paginated list with stats + single detail view (full population)
+router.get("/transactions",      adminMiddleware, transactionCtrl.getAllTransactions);
+router.get("/transactions/:id",  adminMiddleware, transactionCtrl.getTransactionById);
+
 // ─── DISPUTED PAYMENT MANAGEMENT ──────────────────────────────────────────────
 // Money received by eSewa but booking creation failed on our end.
 // Finance team resolves manually from the eSewa merchant dashboard.
@@ -414,6 +428,17 @@ const platformConfigCtrl = require("../../controllers/adminController/platformCo
 router.get("/platform-config",              adminMiddleware, platformConfigCtrl.listConfigs);
 router.get("/platform-config/:key",         adminMiddleware, platformConfigCtrl.getConfig);
 router.put("/platform-config/:key",         adminMiddleware, platformConfigCtrl.updateConfig);
+
+// ─── SCRATCH CARD THEME MANAGEMENT ────────────────────────────────────────────
+// Admin-managed overlay textures for scratch cards. Themes are weighted for
+// probability-based random assignment during the booking checkout flow.
+const scratchThemeCtrl = require("../../controllers/adminController/scratchThemeController.js");
+router.get("/scratch-themes",                    adminMiddleware, scratchThemeCtrl.listThemes);
+router.post("/scratch-themes",                   adminMiddleware, scratchThemeCtrl.createTheme);
+router.patch("/scratch-themes/:themeId",          adminMiddleware, scratchThemeCtrl.updateTheme);
+router.patch("/scratch-themes/:themeId/image",    adminMiddleware, scratchThemeCtrl.replaceThemeImage);
+router.patch("/scratch-themes/:themeId/toggle",   adminMiddleware, scratchThemeCtrl.toggleTheme);
+router.delete("/scratch-themes/:themeId",         adminMiddleware, scratchThemeCtrl.deleteTheme);
 
 module.exports = router;
 

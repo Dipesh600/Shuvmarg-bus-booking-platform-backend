@@ -1,70 +1,81 @@
+/**
+ * adminController.js — User Management Operations
+ *
+ * Admin role: Observer + Enforcer
+ *   - View user profiles with enriched metrics
+ *   - Enforce actions: ban, suspend, reactivate, force password reset
+ *   - Soft-delete with safety checks
+ *
+ * Admin is NOT an editor — users manage their own profile data
+ * through the passenger app.
+ */
+
 const User = require("../../models/userModel.js");
 const Booking = require("../../models/bookTicketModel.js");
-const cloudinary = require("../../handlers/cloudinary.js");
-const generatePassword = require("../../handlers/passwordGenerator.js");
-const emailTemplate = require("../../handlers/password-email-template.js");
-const emailManager = require("../../emailManager/emailManager.js");
+const AdminAuditLog = require("../../models/adminAuditLogModel.js");
+const RefreshToken = require("../../models/refreshTokenModel.js");
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
-const createAccount = async (req, res) => {
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+/**
+ * Revoke all active sessions for a user by deleting their refresh tokens.
+ * This forces immediate logout on all devices on next token refresh attempt.
+ */
+const revokeUserSessions = async (userId) => {
+  return RefreshToken.deleteMany({ userId });
+};
+
+/**
+ * Send a push notification to a specific user via their registered devices.
+ * Fails silently — enforcement action must not be blocked by notification failure.
+ */
+const sendUserNotification = async (userId, title, description) => {
   try {
-    const { name, email, phone, address } = req.body;
-    if (!name || !email || !phone || !address) {
-      const missingField = !name
-        ? "Name"
-        : !email
-          ? "Email"
-          : // : !password
-          // ? "Password"
-          !phone
-            ? "Phone"
-            : !address
-              ? "Address"
-              : "Gender";
+    const UserDeviceInfo = require("../../models/userDeviceInfoModel.js");
+    const {
+      notificationManager,
+      createLocalNotification,
+    } = require("../notificationController/notification_manager.js");
 
-      return res.status(400).json({
-        success: false,
-        message: `${missingField} is required!`,
-      });
+    const devices = await UserDeviceInfo.find({ userId });
+    const tokens = devices.map((d) => d.token).filter(Boolean);
+
+    // Always create local notification (visible in app notification center)
+    await createLocalNotification(userId, "ACCOUNT_ACTION", title, description, {});
+
+    // Send push notification if device tokens exist
+    if (tokens.length > 0) {
+      await notificationManager(tokens, title, description);
     }
-
-    const existingUser = await User.findOne({ $or: [{ email }, { phone }] });
-    if (existingUser) {
-      return res.status(400).json({
-        status: false,
-        message: "Email or phone number already registered!",
-      });
-    }
-    const newPassword = generatePassword((length = 8));
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    const newUser = new User({
-      name,
-      email,
-      phone,
-      address,
-      password: hashedPassword,
-      gender: "male",
-    });
-
-    const savedUser = await newUser.save();
-    const userWithoutPassword = savedUser.toObject();
-    delete userWithoutPassword.password;
-    const emailContent = emailTemplate(newPassword, name);
-    await emailManager(email, "Auto Generated Password", emailContent);
-
-    return res.status(201).json({
-      status: true,
-      message: "Account Created Successfully!",
-    });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({
-      status: false,
-      message: "Internal Server Error!",
-    });
+  } catch (err) {
+    // Log but don't throw — notification failure must not block the admin action
+    console.error(`[AdminController] Failed to notify user ${userId}:`, err.message);
   }
 };
-// Admin Change User Password
+
+/**
+ * Log an admin action to the immutable audit trail.
+ */
+const logAdminAction = async (adminId, action, targetType, targetId, reason, metadata = {}) => {
+  try {
+    await AdminAuditLog.create({
+      adminId,
+      action,
+      targetType,
+      targetId,
+      reason,
+      metadata,
+    });
+  } catch (err) {
+    // Audit log failure is serious but must not block the primary operation
+    console.error("[AdminController] Audit log write failed:", err.message);
+  }
+};
+
+// ─── ADMIN CHANGE USER PASSWORD ───────────────────────────────────────────────
+
 const changeUserPassword = async (req, res) => {
   try {
     const { id, password, confirmPassword } = req.body;
@@ -82,7 +93,7 @@ const changeUserPassword = async (req, res) => {
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
-        status: false,
+        success: false,
         message: "Invalid user ID format!",
       });
     }
@@ -94,10 +105,10 @@ const changeUserPassword = async (req, res) => {
       });
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return res.status(400).json({
         success: false,
-        message: "Password must be at least 6 characters long!",
+        message: "Password must be at least 8 characters long!",
       });
     }
 
@@ -110,150 +121,50 @@ const changeUserPassword = async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Soft-deleted users can't have their password changed
+    if (user.deletedAt) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot change password for a deleted account.",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
     user.password = hashedPassword;
+    user.forcePasswordChange = true; // Require user to set their own password on next login
     await user.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "Password updated successfully!",
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
-// Get User Account Status
-const getUserAccountStatus = async (req, res) => {
-  try {
-    const { id } = req.body;
+    // Revoke all sessions — force re-login with new password
+    await revokeUserSessions(id);
 
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Id is required!",
-      });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid user ID format!",
-      });
-    }
-
-    const user = await User.findById(id).select(
-      "status yatrapoints referralCode totalReferrals"
+    // Audit log
+    await logAdminAction(
+      req.adminInfo.id,
+      "FORCE_PASSWORD_RESET",
+      "user",
+      id,
+      "Admin reset user password",
+      {}
     );
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found!",
-      });
-    }
-
-    const accountStatus = user.status || "active";
-    const yaatraPointsBalance = user.yatrapoints || 0;
-
-    const referralStatistics = {
-      referralCode: user.referralCode || null,
-      totalReferrals: user.totalReferrals || 0,
-    };
-
-    const complaintHistory = {
-      data: [
-        {
-          id: 1,
-          title: "Late Service",
-          description: "Service was delayed by 2 hours",
-          status: "Pending",
-          date: "2025-01-10"
-        },
-        {
-          id: 2,
-          title: "Wrong Billing",
-          description: "Charged extra amount",
-          status: "Resolved",
-          date: "2025-01-15"
-        },
-        {
-          id: 3,
-          title: "Poor Support",
-          description: "Customer support did not respond",
-          status: "In Progress",
-          date: "2025-01-20"
-        }
-      ],
-    };
-
-
     return res.status(200).json({
       success: true,
-      message: "User account status retrieved successfully!",
-      data: {
-        accountStatus: {
-          status: accountStatus,
-          yaatraPointsBalance,
-          referralStatistics,
-          complaintHistory,
-        },
-      },
+      message: "Password updated successfully! User will be required to set a new password on next login.",
     });
   } catch (error) {
-    console.error(error);
+    console.error("changeUserPassword error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal Server Error!",
     });
   }
 };
-// Delete Account
+
+// ─── SOFT DELETE ACCOUNT ──────────────────────────────────────────────────────
+
 const deleteAccount = async (req, res) => {
   try {
-    const { id } = req.body;
-
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Id is required!",
-      });
-    }
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid user ID format!",
-      });
-    }
-
-    const deletedUser = await User.findByIdAndDelete({ _id: id });
-
-    if (!deletedUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found!",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Account deleted successfully!",
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
-// Get User Activity Summary
-const getUserActivitySummary = async (req, res) => {
-  try {
-    const { id } = req.body;
+    const { id, reason } = req.body;
 
     if (!id) {
       return res.status(400).json({
@@ -264,315 +175,8 @@ const getUserActivitySummary = async (req, res) => {
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
-        status: false,
+        success: false,
         message: "Invalid user ID format!",
-      });
-    }
-
-    const userObjectId = new mongoose.Types.ObjectId(id);
-
-    const [
-      totalBookings,
-      favoriteRoutesAgg,
-      paymentMethodsAgg,
-      averageBookingAgg,
-      lastBooking,
-    ] = await Promise.all([
-      // Total bookings made by user (all statuses)
-      Booking.countDocuments({ userId: userObjectId }),
-
-      // Favorite routes: group by scheduleId and sort by count desc,
-      // including route.from and route.to from busSchedule
-      Booking.aggregate([
-        { $match: { userId: userObjectId } },
-        {
-          $group: {
-            _id: "$scheduleId",
-            bookings: { $sum: 1 },
-          },
-        },
-        { $sort: { bookings: -1 } },
-        { $limit: 5 },
-        {
-          $lookup: {
-            from: "busschedules",
-            localField: "_id",
-            foreignField: "_id",
-            as: "schedule",
-          },
-        },
-        { $unwind: { path: "$schedule", preserveNullAndEmptyArrays: true } },
-        {
-          $project: {
-            _id: 1,
-            bookings: 1,
-            routeFrom: "$schedule.route.from",
-            routeTo: "$schedule.route.to",
-          },
-        },
-      ]),
-
-      // Payment methods used: group by gateway
-      Booking.aggregate([
-        { $match: { userId: userObjectId } },
-        {
-          $group: {
-            _id: "$gateway",
-            count: { $sum: 1 },
-          },
-        },
-      ]),
-
-      // Average booking value for successful bookings
-      Booking.aggregate([
-        { $match: { userId: userObjectId, status: "booked" } },
-        {
-          $group: {
-            _id: null,
-            averageValue: { $avg: "$totalAmount" },
-          },
-        },
-      ]),
-
-      // Last activity: most recent booking
-      Booking.findOne({ userId: userObjectId })
-        .sort({ createdAt: -1 })
-        .select("createdAt bookedAt status"),
-    ]);
-
-    const favoriteRoutes = favoriteRoutesAgg.map((item) => ({
-      scheduleId: item._id,
-      bookings: item.bookings,
-      route: {
-        from: item.routeFrom || null,
-        to: item.routeTo || null,
-      },
-    }));
-
-    const paymentMethods = paymentMethodsAgg.map((item) => ({
-      method: item._id,
-      count: item.count,
-    }));
-
-    const averageBookingValue =
-      averageBookingAgg && averageBookingAgg.length > 0
-        ? averageBookingAgg[0].averageValue
-        : 0;
-
-    const lastActivityTimestamp = lastBooking
-      ? lastBooking.createdAt || lastBooking.bookedAt
-      : null;
-
-    return res.status(200).json({
-      success: true,
-      message: "User activity summary retrieved successfully!",
-      data: {
-        activitySummary: {
-          totalBookings,
-          favoriteRoutes,
-          paymentMethods,
-          averageBookingValue,
-          lastActivityTimestamp,
-        },
-      },
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
-// Update Account
-const updateAccount = async (req, res) => {
-  try {
-    const { name, phone, address, email, id } = req.body;
-    const profilePic = req.files?.profilePic;
-
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Id is required!",
-      });
-    }
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid user ID format!",
-      });
-    }
-
-    const user = await User.findById({ _id: id });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found!",
-      });
-    }
-
-    if (name) user.name = name;
-    if (phone) user.phone = phone;
-    if (address) user.address = address;
-    if (email) user.email = email.toLowerCase();
-
-    if (profilePic) {
-      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-      if (!allowedTypes.includes(profilePic.mimetype)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed",
-        });
-      }
-
-      if (profilePic.size > 5 * 1024 * 1024) {
-        return res.status(400).json({
-          success: false,
-          message: "File size too large. Maximum 5MB allowed",
-        });
-      }
-
-      const base64profilePic = `data:${profilePic.mimetype
-        };base64,${profilePic.data.toString("base64")}`;
-
-      const result = await cloudinary.uploader.upload(base64profilePic, {
-        folder: "profile_picture",
-        public_id: `admin_update_${id}_${Date.now()}`,
-        overwrite: true,
-        transformation: [{ width: 400, height: 400, crop: "fill", quality: "auto" }],
-      });
-
-      user.profilePicture = result.secure_url;
-    }
-
-    const updatedUser = await user.save();
-
-    return res.status(200).json({
-      success: true,
-      message: "Account updated successfully!",
-      data: {
-        name: updatedUser.name,
-        email: updatedUser.email,
-        phone: updatedUser.phone,
-        address: updatedUser.address,
-      },
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
-// Get User by id
-const getUserById = async (req, res) => {
-  try {
-    const { id } = req.body;
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Id is required!",
-      });
-    }
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid user ID format!",
-      });
-    }
-    const user = await User.findById(id).select("-password -__v -otp -otpExpiry");
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found!",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "User retrieved successfully!",
-      data: user,
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
-// Get all users
-const getAllUsers = async (req, res) => {
-  try {
-    const users = await User.find({ role: "passenger" }).select("-password");
-
-    if (!users || users.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No users found!",
-      });
-    }
-
-    const formattedUsers = users.map((user) => ({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      address: user.address,
-      gender: user.gender,
-      role: user.role,
-      status: user.status,
-      profilePicture: user.profilePicture,
-      referralCode: user.referralCode,
-      totalReferrals: user.totalReferrals,
-      yatrapoints: user.yatrapoints,
-      yatrapoints: user.yatrapoints,
-      createdAt: user.createdAt,
-    }));
-
-    return res.status(200).json({
-      success: true,
-      message: "Users retrieved successfully!",
-      data: formattedUsers,
-    });
-  } catch (error) {
-    console.error("Error fetching all users:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
-// Update user status 
-const updateUserStatus = async (req, res) => {
-  try {
-    const { id, status } = req.body;
-
-    if (!id || !status) {
-      return res.status(400).json({
-        success: false,
-        message: !id ? "Id is required!" : "Status is required!",
-      });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid user ID format!",
-      });
-    }
-
-    const allowedStatuses = ["active", "inactive", "banned"];
-    const normalizedStatus = String(status).toLowerCase();
-
-    if (!allowedStatuses.includes(normalizedStatus)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid status value. Allowed values are: active, inactive, banned",
       });
     }
 
@@ -585,19 +189,59 @@ const updateUserStatus = async (req, res) => {
       });
     }
 
-    user.status = normalizedStatus;
+    // Already soft-deleted
+    if (user.deletedAt) {
+      return res.status(400).json({
+        success: false,
+        message: "This account has already been deleted.",
+      });
+    }
+
+    // Safety check: deny deletion if user has upcoming/active bookings
+    const activeBookings = await Booking.countDocuments({
+      userId: user._id,
+      status: "booked",
+      bookedAt: { $gte: new Date() },
+    });
+
+    if (activeBookings > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete account: user has ${activeBookings} active/upcoming booking(s). Cancel them first.`,
+      });
+    }
+
+    // Soft-delete: mark as deleted + deactivate, preserve all data
+    user.deletedAt = new Date();
+    user.status = "inactive";
     await user.save();
+
+    // Revoke all sessions — immediate logout
+    await revokeUserSessions(id);
+
+    // Notify user
+    await sendUserNotification(
+      id,
+      "Account Deactivated",
+      "Your ShuV Marg account has been deactivated by admin. If you believe this is an error, please contact support at support@shuvmarg.com."
+    );
+
+    // Audit log
+    await logAdminAction(
+      req.adminInfo.id,
+      "SOFT_DELETE",
+      "user",
+      id,
+      reason || "No reason provided",
+      { previousStatus: user.status }
+    );
 
     return res.status(200).json({
       success: true,
-      message: "User status updated successfully!",
-      data: {
-        id: user._id,
-        status: user.status,
-      },
+      message: "Account deactivated successfully. User data has been preserved.",
     });
   } catch (error) {
-    console.error(error);
+    console.error("deleteAccount error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal Server Error!",
@@ -605,8 +249,9 @@ const updateUserStatus = async (req, res) => {
   }
 };
 
-// Get all bookings for a specific user
-const getUserBookings = async (req, res) => {
+// ─── GET USER BY ID (ENRICHED PROFILE) ────────────────────────────────────────
+
+const getUserById = async (req, res) => {
   try {
     const { id } = req.body;
 
@@ -619,24 +264,151 @@ const getUserBookings = async (req, res) => {
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
-        status: false,
+        success: false,
         message: "Invalid user ID format!",
       });
     }
 
     const userObjectId = new mongoose.Types.ObjectId(id);
 
-    const bookings = await Booking.find({ userId: userObjectId })
-      .sort({ createdAt: -1 })
-      .lean();
+    // ── Parallel data fetch — single round of DB queries ──
+    const [user, bookingMetrics, recentAuditActions, sessionCount] = await Promise.all([
+      // 1. User document (exclude sensitive fields)
+      User.findById(id)
+        .select("-password -otp -otpExpiry -__v")
+        .populate("referredBy", "name phone referralCode")
+        .lean(),
+
+      // 2. Booking metrics aggregation
+      Booking.aggregate([
+        { $match: { userId: userObjectId } },
+        {
+          $facet: {
+            total: [{ $count: "count" }],
+            completed: [
+              { $match: { status: "booked" } },
+              { $count: "count" },
+            ],
+            cancelled: [
+              { $match: { status: "cancelled" } },
+              { $count: "count" },
+            ],
+            totalSpent: [
+              { $match: { status: "booked" } },
+              { $group: { _id: null, sum: { $sum: "$totalAmount" } } },
+            ],
+            avgPerBooking: [
+              { $match: { status: "booked" } },
+              { $group: { _id: null, avg: { $avg: "$totalAmount" } } },
+            ],
+            paymentMethods: [
+              { $group: { _id: "$paymentMethod", count: { $sum: 1 } } },
+              { $sort: { count: -1 } },
+            ],
+            topRoutes: [
+              {
+                $lookup: {
+                  from: "trips",
+                  localField: "tripId",
+                  foreignField: "_id",
+                  as: "trip",
+                },
+              },
+              { $unwind: { path: "$trip", preserveNullAndEmptyArrays: true } },
+              {
+                $lookup: {
+                  from: "routes",
+                  localField: "trip.routeId",
+                  foreignField: "_id",
+                  as: "route",
+                },
+              },
+              { $unwind: { path: "$route", preserveNullAndEmptyArrays: true } },
+              {
+                $group: {
+                  _id: "$trip.routeId",
+                  from: { $first: "$route.from" },
+                  to: { $first: "$route.to" },
+                  count: { $sum: 1 },
+                },
+              },
+              { $sort: { count: -1 } },
+              { $limit: 5 },
+            ],
+          },
+        },
+      ]),
+
+      // 3. Recent admin actions on this user (last 20)
+      AdminAuditLog.find({ targetId: userObjectId })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .populate("adminId", "email role")
+        .lean(),
+
+      // 4. Active session count
+      RefreshToken.countDocuments({ userId: userObjectId }),
+    ]);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found!",
+      });
+    }
+
+    // Extract aggregation results
+    const metrics = bookingMetrics[0] || {};
+
+    const enrichedResponse = {
+      // Profile data (read-only for admin)
+      profile: user,
+
+      // Booking metrics
+      metrics: {
+        bookings: {
+          total: metrics.total?.[0]?.count || 0,
+          completed: metrics.completed?.[0]?.count || 0,
+          cancelled: metrics.cancelled?.[0]?.count || 0,
+          totalSpent: metrics.totalSpent?.[0]?.sum || 0,
+          avgPerBooking: Math.round(metrics.avgPerBooking?.[0]?.avg || 0),
+        },
+        paymentMethods: metrics.paymentMethods || [],
+        topRoutes: metrics.topRoutes || [],
+      },
+
+      // Security posture
+      security: {
+        failedLoginAttempts: user.failedLoginAttempts || 0,
+        accountLocked: user.lockedUntil ? user.lockedUntil > new Date() : false,
+        lockedUntil: user.lockedUntil || null,
+        forcePasswordChange: user.forcePasswordChange || false,
+        activeSessions: sessionCount,
+        lastLoginAt: user.lastLoginAt || null,
+        softDeleted: !!user.deletedAt,
+        deletedAt: user.deletedAt || null,
+        suspensionReason: user.suspensionReason || null,
+        suspendedAt: user.suspendedAt || null,
+      },
+
+      // Referral data
+      referral: {
+        code: user.referralCode || null,
+        totalReferrals: user.totalReferrals || 0,
+        referredBy: user.referredBy || null,
+      },
+
+      // Admin audit trail
+      auditLog: recentAuditActions,
+    };
 
     return res.status(200).json({
       success: true,
-      message: "User bookings retrieved successfully!",
-      data: bookings,
+      message: "User profile retrieved successfully!",
+      data: enrichedResponse,
     });
   } catch (error) {
-    console.error(error);
+    console.error("getUserById error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal Server Error!",
@@ -644,67 +416,302 @@ const getUserBookings = async (req, res) => {
   }
 };
 
-// Get User Dashboard Stats
-const getUserDashboard = async (req, res) => {
-  try {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+// ─── GET ALL USERS (WITH REAL BOOKING COUNTS) ─────────────────────────────────
 
-    // Execute a single, highly-optimized aggregation pass mapping over passengers
-    const stats = await User.aggregate([
-      { $match: { role: "passenger" } },
-      {
-        $facet: {
-          totalUsers: [{ $count: "count" }],
-          activeUsers: [
-            { $match: { status: "active" } },
-            { $count: "count" }
-          ],
-          newUsersToday: [
-            { $match: { createdAt: { $gte: startOfToday, $lte: endOfToday } } },
-            { $count: "count" }
-          ],
-          verifiedUsers: [
-            { $match: { isVerified: true } },
-            { $count: "count" }
-          ]
-        }
-      }
+const getAllUsers = async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 25));
+    const search = (req.query.search || "").trim();
+    const statusFilter = (req.query.status || "").trim().toLowerCase();
+
+    const skip = (page - 1) * limit;
+
+    // Build query — always exclude soft-deleted users
+    const query = {
+      roles: "passenger",
+      deletedAt: null,
+    };
+
+    // Status filter
+    if (statusFilter && ["active", "inactive", "banned"].includes(statusFilter)) {
+      query.status = statusFilter;
+    }
+
+    // Server-side search across name, phone, email
+    if (search) {
+      // Escape regex special characters to prevent injection
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.$or = [
+        { name: { $regex: escaped, $options: "i" } },
+        { phone: { $regex: escaped, $options: "i" } },
+        { email: { $regex: escaped, $options: "i" } },
+      ];
+    }
+
+    // Fetch users + total count in parallel
+    const [users, totalCount, bookingCounts] = await Promise.all([
+      User.find(query)
+        .select("name email phone address gender role roles status profilePicture referralCode totalReferrals isVerified lastLoginAt createdAt")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      User.countDocuments(query),
+
+      // Aggregate booking counts for all passengers (matching current filter)
+      // This gives us per-user booking count and total spent
+      Booking.aggregate([
+        { $match: { status: "booked" } },
+        {
+          $group: {
+            _id: "$userId",
+            bookingCount: { $sum: 1 },
+            totalSpent: { $sum: "$totalAmount" },
+          },
+        },
+      ]),
     ]);
 
-    const aggregates = stats[0];
+    // Build a lookup map: userId -> { bookingCount, totalSpent }
+    const bookingMap = {};
+    for (const b of bookingCounts) {
+      bookingMap[b._id.toString()] = {
+        bookingCount: b.bookingCount,
+        totalSpent: b.totalSpent,
+      };
+    }
+
+    const formattedUsers = users.map((user) => {
+      const stats = bookingMap[user._id.toString()] || { bookingCount: 0, totalSpent: 0 };
+      return {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        address: user.address,
+        gender: user.gender,
+        role: user.role,
+        roles: user.roles,
+        status: user.status,
+        profilePicture: user.profilePicture,
+        referralCode: user.referralCode,
+        totalReferrals: user.totalReferrals,
+        isVerified: user.isVerified,
+        lastLoginAt: user.lastLoginAt,
+        createdAt: user.createdAt,
+        bookingCount: stats.bookingCount,
+        totalSpent: stats.totalSpent,
+      };
+    });
 
     return res.status(200).json({
       success: true,
-      data: {
-        totalUsers: aggregates.totalUsers[0]?.count || 0,
-        activeUsers: aggregates.activeUsers[0]?.count || 0,
-        newUsersToday: aggregates.newUsersToday[0]?.count || 0,
-        verifiedUsers: aggregates.verifiedUsers[0]?.count || 0,
+      message: "Users retrieved successfully!",
+      data: formattedUsers,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        hasMore: page * limit < totalCount,
       },
     });
   } catch (error) {
-    console.error("Error fetching user dashboard stats:", error);
+    console.error("getAllUsers error:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch user dashboard stats",
-      error: error.message,
+      message: "Internal Server Error!",
     });
   }
 };
 
+// ─── UPDATE USER STATUS (BAN / SUSPEND / REACTIVATE) ──────────────────────────
+
+const updateUserStatus = async (req, res) => {
+  try {
+    const { id, status, reason } = req.body;
+
+    if (!id || !status) {
+      return res.status(400).json({
+        success: false,
+        message: !id ? "Id is required!" : "Status is required!",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format!",
+      });
+    }
+
+    const allowedStatuses = ["active", "inactive", "banned"];
+    const normalizedStatus = String(status).toLowerCase();
+
+    if (!allowedStatuses.includes(normalizedStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid status value. Allowed values are: active, inactive, banned",
+      });
+    }
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found!",
+      });
+    }
+
+    // Soft-deleted users can only be managed through the delete endpoint
+    if (user.deletedAt) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot change status of a deleted account.",
+      });
+    }
+
+    const previousStatus = user.status;
+
+    // Determine audit action type
+    let auditAction = "STATUS_CHANGE";
+    if (normalizedStatus === "banned") auditAction = "BAN";
+    else if (normalizedStatus === "inactive") auditAction = "SUSPEND";
+    else if (normalizedStatus === "active" && ["banned", "inactive"].includes(previousStatus)) {
+      auditAction = "REACTIVATE";
+    }
+
+    // Update user status
+    user.status = normalizedStatus;
+
+    // For ban/suspend: store reason and timestamp
+    if (normalizedStatus === "banned" || normalizedStatus === "inactive") {
+      user.suspensionReason = reason || null;
+      user.suspendedAt = new Date();
+      user.statusChangedBy = req.adminInfo.id;
+
+      // Revoke all active sessions — immediate forced logout
+      await revokeUserSessions(id);
+
+      // Send push notification to the user
+      const actionLabel = normalizedStatus === "banned" ? "Banned" : "Suspended";
+      const reasonText = reason
+        ? `Reason: ${reason}`
+        : "No specific reason was provided.";
+
+      await sendUserNotification(
+        id,
+        `Account ${actionLabel}`,
+        `Your ShuV Marg account has been ${actionLabel.toLowerCase()}. ${reasonText} If you believe this is an error, please contact support at support@shuvmarg.com or call +977-9800000000.`
+      );
+    }
+
+    // For reactivation: clear suspension data
+    if (normalizedStatus === "active") {
+      user.suspensionReason = null;
+      user.suspendedAt = null;
+      user.statusChangedBy = null;
+
+      // Notify user of reactivation
+      await sendUserNotification(
+        id,
+        "Account Reactivated",
+        "Your ShuV Marg account has been reactivated. You can now log in and use all services. Welcome back!"
+      );
+    }
+
+    await user.save();
+
+    // Audit log
+    await logAdminAction(
+      req.adminInfo.id,
+      auditAction,
+      "user",
+      id,
+      reason || null,
+      { previousStatus, newStatus: normalizedStatus }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `User status updated to '${normalizedStatus}' successfully!`,
+      data: {
+        id: user._id,
+        status: user.status,
+        previousStatus,
+      },
+    });
+  } catch (error) {
+    console.error("updateUserStatus error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error!",
+    });
+  }
+};
+
+// ─── GET USER TRANSACTIONS ────────────────────────────────────────────────────
+
+const getUserTransactions = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid user ID is required!",
+      });
+    }
+
+    const Transaction = require("../../models/transactionModel.js");
+
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const [transactions, totalCount] = await Promise.all([
+      Transaction.find({ userId: id })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("bookingId", "ticketId seats totalAmount status paymentMethod bookedAt")
+        .lean(),
+
+      Transaction.countDocuments({ userId: id }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "User transactions retrieved successfully!",
+      data: transactions,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+      },
+    });
+  } catch (error) {
+    console.error("getUserTransactions error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error!",
+    });
+  }
+};
+
+// ─── GET USER DASHBOARD STATS ─────────────────────────────────────────────────
+// NOTE: The primary dashboard endpoint is in userDashboardController.js
+// This is REMOVED to avoid duplication. Use the route at /userDashboard instead.
+
 module.exports = {
-  createAccount,
+  changeUserPassword,
   deleteAccount,
-  updateAccount,
   getUserById,
   getAllUsers,
-  getUserActivitySummary,
-  getUserAccountStatus,
-  changeUserPassword,
   updateUserStatus,
-  getUserBookings,
-  getUserDashboard,
+  getUserTransactions,
 };

@@ -27,7 +27,7 @@ const getUserDashboardStats = async (req, res) => {
 
         // Execute a single $facet aggregation to count passenger roles efficiently
         const stats = await User.aggregate([
-            { $match: { role: "passenger" } },
+            { $match: { roles: "passenger" } },
             {
                 $facet: {
                     totalUsersCount: [{ $count: "count" }],

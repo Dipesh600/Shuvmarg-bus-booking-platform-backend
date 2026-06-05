@@ -160,6 +160,11 @@ const buildS3Path = ({ type, ownerId, brandId, fleetId, driverId, documentType, 
             // disputeType: "booking-mismatch" | "verification-lag" | "general"
             return `disputes/${sanitizeSegment(disputeType || "general")}/${sanitizeSegment(transactionId)}`;
 
+        case "scratch_theme":
+            // platform/scratch-themes/
+            // Platform-level assets — not tied to any owner/brand hierarchy
+            return `platform/scratch-themes`;
+
         default:
             return `misc/${sanitizeSegment(type)}`;
     }
