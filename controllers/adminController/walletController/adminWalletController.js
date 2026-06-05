@@ -433,10 +433,124 @@ const getUserBalance = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. GLOBAL PLATFORM TRANSACTION FEED
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /admin/wallet/global-feed?page=1&limit=25&type=all
+ *
+ * Returns a paginated, filterable feed of ALL platform-wide SM Ledger entries.
+ * Populates userId for display. Includes today's credit/debit stats.
+ *
+ * Query params:
+ *   type: "all" | "cashback" | "referral" | "spent" | "admin" | "refunds"
+ *   page: positive integer (default 1)
+ *   limit: 1–100 (default 25)
+ */
+const getGlobalFeed = async (req, res) => {
+  try {
+    const { type = "all", page = 1, limit = 25 } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 25));
+    const skip = (pageNum - 1) * limitNum;
+
+    // ── Build type filter ──────────────────────────────────────────────
+    const matchStage = {};
+
+    switch (type) {
+      case "cashback":
+        matchStage.type = { $in: ["CASHBACK", "CASHBACK_CLAWBACK"] };
+        break;
+      case "referral":
+        matchStage.type = { $in: ["REFERRAL_LOCKED", "REFERRAL_UNLOCK"] };
+        break;
+      case "spent":
+        matchStage.type = { $in: ["DEBIT", "DEBIT_REVERSAL"] };
+        break;
+      case "admin":
+        matchStage.type = { $in: ["ADMIN_CREDIT", "ADMIN_DEBIT"] };
+        break;
+      case "refunds":
+        matchStage.type = "REFUND";
+        break;
+      // "all" — no type filter
+    }
+
+    // ── Fetch entries + count in parallel ─────────────────────────────
+    const [entries, totalCount] = await Promise.all([
+      SMLedger.find(matchStage)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .populate({ path: "userId", select: "name phone" })
+        .populate({ path: "bookingId", select: "ticketId" })
+        .lean(),
+      SMLedger.countDocuments(matchStage),
+    ]);
+
+    // ── Today's stats (lightweight aggregation) ──────────────────────
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const statsResult = await SMLedger.aggregate([
+      { $match: { createdAt: { $gte: todayStart } } },
+      {
+        $group: {
+          _id: "$direction",
+          totalAmount: { $sum: "$amount" },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    let totalCreditsToday = 0;
+    let totalDebitsToday = 0;
+    let totalCreditAmountToday = 0;
+    let totalDebitAmountToday = 0;
+
+    statsResult.forEach((group) => {
+      if (group._id === "CREDIT") {
+        totalCreditsToday = group.count;
+        totalCreditAmountToday = Math.round(group.totalAmount * 100) / 100;
+      } else if (group._id === "DEBIT") {
+        totalDebitsToday = group.count;
+        totalDebitAmountToday = Math.round(group.totalAmount * 100) / 100;
+      }
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Global transaction feed",
+      data: {
+        entries,
+        stats: {
+          totalCreditsToday,
+          totalDebitsToday,
+          totalCreditAmountToday,
+          totalDebitAmountToday,
+        },
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limitNum),
+          hasMore: skip + entries.length < totalCount,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Admin global feed error:", error);
+    return res.status(500).json({ status: false, message: "Internal Server Error" });
+  }
+};
+
 module.exports = {
   getOverview,
   lookupUser,
   adjustBalance,
   freezeWallet,
   getUserBalance,
+  getGlobalFeed,
 };

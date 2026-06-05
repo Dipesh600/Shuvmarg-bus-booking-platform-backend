@@ -1,9 +1,11 @@
 const ScratchCard = require("../../models/scratchCardModel");
 const mongoose = require("mongoose");
+const { getPresignedUrl } = require("../../services/s3Service");
 
 /**
  * Get all scratch cards for a user.
  * Returns unscratched cards, and recently scratched cards (last 7 days).
+ * Resolves S3 image keys to presigned URLs for mobile rendering.
  */
 const getScratchCards = async (req, res) => {
   try {
@@ -23,9 +25,24 @@ const getScratchCards = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    // Resolve S3 image keys to presigned URLs (non-fatal per card)
+    const enriched = await Promise.all(
+      cards.map(async (card) => {
+        if (card.imageUrl && !card.imageUrl.startsWith("http")) {
+          try {
+            card.imageUrl = await getPresignedUrl(card.imageUrl);
+          } catch (_) {
+            // S3 key invalid or deleted — mobile app will fallback to solid color
+            card.imageUrl = null;
+          }
+        }
+        return card;
+      })
+    );
+
     return res.status(200).json({
       status: true,
-      data: cards,
+      data: enriched,
     });
   } catch (error) {
     console.error("Error fetching scratch cards:", error);

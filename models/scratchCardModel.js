@@ -69,6 +69,20 @@ const scratchCardSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+
+    // Theme assigned at creation — snapshot of the active theme at booking time.
+    // If the admin later deletes the theme, existing cards retain their image.
+    themeName: {
+      type: String,
+      default: "Default",
+    },
+
+    // S3 object key for the scratch overlay texture (null = solid lime fallback).
+    // Converted to a presigned URL on read by the API layer.
+    imageUrl: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );

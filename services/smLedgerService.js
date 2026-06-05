@@ -444,6 +444,34 @@ async function generateCashback({ userId, bookingId, baseTicketPrice }) {
 
   const cashbackAmount = calculateCashbackAmount(baseTicketPrice, config);
 
+  // ── Pick a random scratch card theme ────────────────────────────────
+  // This runs BEFORE the transaction. If theme lookup fails, we fall back
+  // to the default (no image, solid lime color on mobile). A theme config
+  // failure must NEVER prevent a booking from completing.
+  let selectedTheme = { name: "Default", imageKey: null };
+  try {
+    const themes = await PlatformConfig.getConfig("scratch_card_themes");
+    if (Array.isArray(themes)) {
+      const activeThemes = themes.filter((t) => t.isActive && t.imageKey);
+      if (activeThemes.length > 0) {
+        // Weighted random selection using cumulative distribution
+        const totalWeight = activeThemes.reduce((sum, t) => sum + (t.weight || 1), 0);
+        const roll = Math.random() * totalWeight;
+        let cumulative = 0;
+        for (const theme of activeThemes) {
+          cumulative += (theme.weight || 1);
+          if (roll < cumulative) {
+            selectedTheme = { name: theme.name, imageKey: theme.imageKey };
+            break;
+          }
+        }
+      }
+    }
+  } catch (themeErr) {
+    // Non-fatal — log and proceed with default theme
+    console.warn("[generateCashback] Theme selection failed, using default:", themeErr.message);
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -459,7 +487,7 @@ async function generateCashback({ userId, bookingId, baseTicketPrice }) {
       session,
     });
 
-    // 2. Create scratch card
+    // 2. Create scratch card (with theme snapshot)
     const scratchExpiryDays = smConfig.scratchCardExpiryDays || 90;
     const scratchExpiresAt = new Date();
     scratchExpiresAt.setDate(scratchExpiresAt.getDate() + scratchExpiryDays);
@@ -474,6 +502,8 @@ async function generateCashback({ userId, bookingId, baseTicketPrice }) {
             status: "UNSCRATCHED",
             ledgerEntryId: ledgerEntry._id,
             expiresAt: scratchExpiresAt,
+            themeName: selectedTheme.name,
+            imageUrl: selectedTheme.imageKey, // S3 key — resolved to presigned URL on read
           },
         ],
         { session }
