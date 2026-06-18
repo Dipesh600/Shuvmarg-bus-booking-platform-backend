@@ -38,6 +38,13 @@ const refreshTokenSchema = new mongoose.Schema(
             type: String,
             default: null,
         },
+        // Which role context this session was operating in (e.g. "agent")
+        // Preserved across token rotation so refresh doesn't need X-App-Source
+        activeRole: {
+            type: String,
+            enum: ["passenger", "agent", "busOwner", "conductor", "driver"],
+            default: "passenger",
+        },
     },
     { timestamps: true }
 );

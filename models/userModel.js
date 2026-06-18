@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema(
       // required: [true, "Email is required"],
       trim: true,
       unique: true,
-      sparse: true, // <--- ADD THIS LINE
+      sparse: true,
       lowercase: true,
       match: [/^\S+@\S+\.\S+$/, "Please use a valid email address"],
     },
@@ -42,21 +42,34 @@ const userSchema = new mongoose.Schema(
       enum: ["male", "female"],
       //   required: [true, "Gender is required"],
     },
+    // The FIRST role this user registered with — historical/analytics only.
+    // NOT used for authorization. Auth checks use `roles[]` and JWT `activeRole`.
     role: {
       type: String,
-      enum: ["passenger", "agent", "busOwner", "conductor", "driver", "admin"],
+      enum: ["passenger", "agent", "busOwner", "conductor", "driver"],
       default: "passenger",
     },
-    // === MULTI-ROLE SUPPORT ===
-    // All roles this user actively participates in. The primary `role` field
-    // remains the user's original registration role (immutable by API).
-    // `roles` is additive-only — used by admin queries, coupon eligibility,
-    // and notification targeting. Auth middleware continues to use `role`.
+    // === MULTI-ROLE SUPPORT (SOURCE OF TRUTH FOR AUTHORIZATION) ===
+    // All roles this user actively holds. One phone number = one User = many roles.
+    // Role is added when user registers/is onboarded via a specific app.
+    // Role-specific status lives on role profile models (Agent.applicationStatus,
+    // BusOwner.verificationStatus), NOT on User.status.
+    // User.status is platform-wide only (active/banned/etc).
     roles: {
       type: [String],
-      enum: ["passenger", "agent", "busOwner", "conductor", "driver", "admin"],
-      default: ["passenger"],
+      enum: ["passenger", "agent", "busOwner", "conductor", "driver"],
+      default: [],
+      validate: {
+        validator: (v) => v.length > 0,
+        message: "User must have at least one role",
+      },
       index: true,
+    },
+    // Track when each role was granted: { passenger: Date, agent: Date, ... }
+    roleActivatedAt: {
+      type: Map,
+      of: Date,
+      default: {},
     },
     isVerified: {
       type: Boolean,
@@ -159,10 +172,20 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// === PRE-SAVE HOOK: Sync roles with primary role ===
-// Safety net: guarantees `roles` always includes the primary `role`.
-// This handles legacy code paths that only set `role` without `roles`.
+// === PRE-SAVE HOOK: Normalize phone + sync roles ===
+// 1. Normalizes phone to consistent local format (strips +977, 977, leading 0)
+// 2. Guarantees `roles` always includes the primary `role`.
+// 3. Backfills roleActivatedAt for roles missing timestamps.
 userSchema.pre("save", function (next) {
+  // Phone normalization — single canonical form in the DB
+  if (this.isModified("phone") && this.phone) {
+    let p = String(this.phone).replace(/[\s\-\(\)]/g, "");
+    if (p.startsWith("+977")) p = p.slice(4);
+    else if (p.startsWith("977") && p.length > 10) p = p.slice(3);
+    if (p.startsWith("0") && p.length === 11) p = p.slice(1);
+    this.phone = p;
+  }
+
   if (this.role) {
     if (!this.roles || this.roles.length === 0) {
       this.roles = [this.role];
@@ -170,6 +193,18 @@ userSchema.pre("save", function (next) {
       this.roles.push(this.role);
     }
   }
+
+  // Backfill roleActivatedAt for any roles without a timestamp
+  if (this.roles && this.roles.length > 0) {
+    const now = new Date();
+    for (const r of this.roles) {
+      if (!this.roleActivatedAt || !this.roleActivatedAt.get(r)) {
+        if (!this.roleActivatedAt) this.roleActivatedAt = new Map();
+        this.roleActivatedAt.set(r, now);
+      }
+    }
+  }
+
   next();
 });
 

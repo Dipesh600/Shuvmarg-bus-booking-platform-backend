@@ -68,6 +68,15 @@ const conductorProfileSchema = new mongoose.Schema(
             default: null,
             trim: true,
         },
+
+        // ─── TRIP ASSIGNMENT ───────────────────────────────────────────────────
+        // Trips this conductor is assigned to operate.
+        // Populated by bus owner in operator panel.
+        // Used by conductor mode in the agent app to show "My trips today".
+        assignedTripIds: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Trip",
+        }],
     },
     { timestamps: true }
 );
