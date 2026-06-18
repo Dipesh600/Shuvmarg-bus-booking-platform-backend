@@ -1,3 +1,16 @@
+/**
+ * controllers/adminController/adminAgentController/adminAgentController.js
+ *
+ * Admin-facing agent management endpoints.
+ *
+ * Routes (registered in adminRoutes.js):
+ *   POST  /api/admin/getAgentDetails     — Get single agent by ID
+ *   GET   /api/admin/getAllAgents         — List all agents (with filters)
+ *   POST  /api/admin/makeUserAgent       — Convert passenger user to agent
+ *   PATCH /api/admin/agentKycStatus      — Review application (approve/reject/more-info)
+ *   GET   /api/admin/agentDashboard      — Agent module stats
+ */
+
 const mongoose = require("mongoose");
 const User = require("../../../models/userModel.js");
 const Agent = require("../../../models/agentModel.js");
@@ -9,8 +22,27 @@ const {
     createLocalNotification,
 } = require("../../notificationController/notification_manager.js");
 const generateAgentStatusEmail = require("../../../handlers/agentStatusEmailTemp.js");
+const { getPresignedUrl } = require("../../../services/s3Service.js");
 
-// Get agen by Id. api/admin/getAgentDetails
+// ─── HELPER: Resolve document presigned URLs for admin review ────────────────
+const resolveDocumentUrls = async (documents) => {
+    if (!documents || documents.length === 0) return [];
+
+    return Promise.all(
+        documents.map(async (doc) => {
+            const docObj = typeof doc.toObject === "function" ? doc.toObject() : { ...doc };
+            if (docObj.fileKey && !docObj.fileKey.startsWith("http")) {
+                docObj.previewUrl = await getPresignedUrl(docObj.fileKey);
+            }
+            return docObj;
+        })
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/getAgentDetails
+// Body: { id } — can be userId, agentId (SHV-AG-XXX-NNN), or Agent._id
+// ─────────────────────────────────────────────────────────────────────────────
 const getAgentsById = async (req, res) => {
     try {
         const { id } = req.body;
@@ -25,35 +57,44 @@ const getAgentsById = async (req, res) => {
         let user = null;
         let agent = null;
 
-        // If id is a valid ObjectId, treat it as user _id
+        // Try as ObjectId (userId or Agent._id)
         if (mongoose.Types.ObjectId.isValid(id)) {
-            user = await User.findById(id).select("-password -__v -otp -otpExpiry");
             agent = await Agent.findOne({ user: id });
-        }
-
-        // If not found by user id, try treating id as agentId string
-        if (!agent) {
-            agent = await Agent.findOne({ agentId: id });
-            if (agent && !user) {
-                user = await User.findById(agent.user).select(
-                    "-password -__v -otp -otpExpiry"
-                );
+            if (agent) {
+                user = await User.findById(id).select("-password -__v");
+            } else {
+                agent = await Agent.findById(id);
+                if (agent) {
+                    user = await User.findById(agent.user).select("-password -__v");
+                }
             }
         }
 
-        if (!user && !agent) {
+        // Try as agentId string (SHV-AG-XXX-NNN)
+        if (!agent) {
+            agent = await Agent.findOne({ agentId: id });
+            if (agent) {
+                user = await User.findById(agent.user).select("-password -__v");
+            }
+        }
+
+        if (!agent) {
             return res.status(404).json({
                 success: false,
                 message: "Agent not found!",
             });
         }
 
+        // Resolve document presigned URLs for admin review
+        const agentData = agent.toObject();
+        agentData.documents = await resolveDocumentUrls(agent.documents);
+
         return res.status(200).json({
             success: true,
             message: "Agent details retrieved successfully!",
             data: {
                 profile: user,
-                agentDetails: agent,
+                agentDetails: agentData,
             },
         });
     } catch (error) {
@@ -65,18 +106,39 @@ const getAgentsById = async (req, res) => {
     }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/admin/agentKycStatus
+// Body: { id, applicationStatus, rejectionReason, moreInfoRequest, ... }
+//
+// Admin reviews agent application:
+//   PENDING → APPROVED | REJECTED | MORE_INFO
+//   MORE_INFO → (agent resubmits) → PENDING (handled by agent controller)
+//   APPROVED → SUSPENDED (admin action)
+//   SUSPENDED → APPROVED (admin re-activation)
+// ─────────────────────────────────────────────────────────────────────────────
 const updateAgentKyc = async (req, res) => {
     try {
-        const { id, citizenshipCertificate, addressProof, bankAccount, agentAgreement, verificationStatus, rejectionReason } = req.body;
+        const {
+            id,
+            applicationStatus,
+            rejectionReason,
+            moreInfoRequest,
+            isPermanentlyRejected,
+            commissionRate,
+            minSettlementThreshold,
+            adminNotes,
+            // Per-document verification
+            documentVerifications,
+        } = req.body;
 
         let agent = null;
 
         if (id && mongoose.Types.ObjectId.isValid(id)) {
             agent = await Agent.findOne({ user: id });
+            if (!agent) agent = await Agent.findById(id);
         }
-
-        if (!agent && agentId) {
-            agent = await Agent.findOne({ agentId });
+        if (!agent && id) {
+            agent = await Agent.findOne({ agentId: id });
         }
 
         if (!agent) {
@@ -86,143 +148,150 @@ const updateAgentKyc = async (req, res) => {
             });
         }
 
-        if (citizenshipCertificate) {
-            if (!agent.citizenshipCertificate) agent.citizenshipCertificate = {};
-            if (typeof citizenshipCertificate.verified === "boolean") {
-                agent.citizenshipCertificate.verified = citizenshipCertificate.verified;
-            }
-            if (typeof citizenshipCertificate.rejectionReason === "string") {
-                agent.citizenshipCertificate.rejectionReason = citizenshipCertificate.rejectionReason;
-            }
-        }
-
-        if (addressProof) {
-            if (!agent.addressProof) agent.addressProof = {};
-            if (typeof addressProof.verified === "boolean") {
-                agent.addressProof.verified = addressProof.verified;
-            }
-            if (typeof addressProof.rejectionReason === "string") {
-                agent.addressProof.rejectionReason = addressProof.rejectionReason;
-            }
-        }
-
-        if (bankAccount) {
-            if (!agent.bankAccount) agent.bankAccount = {};
-            if (typeof bankAccount.verified === "boolean") {
-                agent.bankAccount.verified = bankAccount.verified;
-            }
-            if (typeof bankAccount.rejectionReason === "string") {
-                agent.bankAccount.rejectionReason = bankAccount.rejectionReason;
+        // ── Per-document verification ──────────────────────────────────────
+        if (documentVerifications && Array.isArray(documentVerifications)) {
+            for (const dv of documentVerifications) {
+                const doc = agent.documents.find((d) => d.type === dv.type);
+                if (doc) {
+                    if (typeof dv.verified === "boolean") {
+                        doc.verified = dv.verified;
+                        if (dv.verified) {
+                            doc.verifiedBy = req.adminInfo?.id || null;
+                            doc.verifiedAt = new Date();
+                            doc.rejectionReason = null;
+                        }
+                    }
+                    if (typeof dv.rejectionReason === "string") {
+                        doc.rejectionReason = dv.rejectionReason;
+                    }
+                }
             }
         }
 
-        if (agentAgreement) {
-            if (!agent.agentAgreement) agent.agentAgreement = {};
-            if (typeof agentAgreement.verified === "boolean") {
-                agent.agentAgreement.verified = agentAgreement.verified;
+        // ── Application-level status change ────────────────────────────────
+        if (applicationStatus) {
+            const prevStatus = agent.applicationStatus;
+
+            agent.applicationStatus = applicationStatus;
+
+            if (applicationStatus === "APPROVED") {
+                agent.approvedAt = new Date();
+                agent.approvedBy = req.adminInfo?.id || null;
+                agent.rejectionReason = null;
+                agent.moreInfoRequest = null;
+
+                // Sync User model
+                await User.findByIdAndUpdate(agent.user, {
+                    isVerified: true,
+                    status: "active",
+                });
             }
-            if (typeof agentAgreement.rejectionReason === "string") {
-                agent.agentAgreement.rejectionReason = agentAgreement.rejectionReason;
+
+            if (applicationStatus === "REJECTED") {
+                agent.rejectionReason = rejectionReason || "Application rejected.";
+                if (typeof isPermanentlyRejected === "boolean") {
+                    agent.isPermanentlyRejected = isPermanentlyRejected;
+                }
+
+                // NOTE: Do NOT set User.status = "pending" here!
+                // That would lock the user out of ALL apps (passenger, etc).
+                // Agent-specific rejection lives on Agent.applicationStatus only.
+                // Only update isVerified on the User model.
+                await User.findByIdAndUpdate(agent.user, {
+                    isVerified: false,
+                });
+            }
+
+            if (applicationStatus === "MORE_INFO") {
+                agent.moreInfoRequest = moreInfoRequest || "Additional information required.";
+                agent.moreInfoRequestedAt = new Date();
+            }
+
+            if (applicationStatus === "SUSPENDED") {
+                agent.suspendedAt = new Date();
+                agent.suspendedBy = req.adminInfo?.id || null;
+                agent.suspensionReason = rejectionReason || "Account suspended.";
+
+                await User.findByIdAndUpdate(agent.user, { status: "inactive" });
+            }
+
+            // Re-activation
+            if (applicationStatus === "APPROVED" && prevStatus === "SUSPENDED") {
+                agent.suspendedAt = null;
+                agent.suspendedBy = null;
+                agent.suspensionReason = null;
+
+                await User.findByIdAndUpdate(agent.user, {
+                    status: "active",
+                    isVerified: true,
+                });
             }
         }
 
-        if (verificationStatus) {
-            agent.verificationStatus = verificationStatus;
-        }
-
-        if (typeof rejectionReason === "string") {
-            agent.rejectionReason = rejectionReason;
-        }
+        // ── Admin config fields ────────────────────────────────────────────
+        if (typeof commissionRate === "number") agent.commissionRate = commissionRate;
+        if (typeof minSettlementThreshold === "number") agent.minSettlementThreshold = minSettlementThreshold;
+        if (typeof adminNotes === "string") agent.adminNotes = adminNotes;
 
         await agent.save();
 
-        // Fetch user details for notifications
+        // ── Notifications (best-effort) ────────────────────────────────────
         const user = await User.findById(agent.user).select("name email phone");
+        const statusText = agent.applicationStatus || "DRAFT";
 
-        // Build list of invalid / rejected documents based on saved agent state
-        const invalidDocs = [];
-
-        if (agent.citizenshipCertificate && (agent.citizenshipCertificate.verified === false || agent.citizenshipCertificate.rejectionReason)) {
-            invalidDocs.push({
-                label: "Citizenship Certificate",
-                reason: agent.citizenshipCertificate.rejectionReason || null,
-            });
-        }
-
-        if (agent.addressProof && (agent.addressProof.verified === false || agent.addressProof.rejectionReason)) {
-            invalidDocs.push({
-                label: "Address Proof",
-                reason: agent.addressProof.rejectionReason || null,
-            });
-        }
-
-        if (agent.bankAccount && (agent.bankAccount.verified === false || agent.bankAccount.rejectionReason)) {
-            invalidDocs.push({
-                label: "Bank Account",
-                reason: agent.bankAccount.rejectionReason || null,
-            });
-        }
-
-        if (agent.agentAgreement && (agent.agentAgreement.verified === false || agent.agentAgreement.rejectionReason)) {
-            invalidDocs.push({
-                label: "Agent Agreement",
-                reason: agent.agentAgreement.rejectionReason || null,
-            });
-        }
-
-        const statusText = agent.verificationStatus || "pending";
+        // Identify rejected documents for notification detail
+        const invalidDocs = agent.documents
+            .filter((d) => d.verified === false || d.rejectionReason)
+            .map((d) => ({
+                label: d.type.replace(/_/g, " "),
+                reason: d.rejectionReason || null,
+            }));
 
         // Email notification
         if (user && user.email) {
-            const invalidListHtml =
-                invalidDocs.length > 0
-                    ? invalidDocs
-                        .map(
-                            (d) =>
-                                `<li><strong>${d.label}</strong>${d.reason ? ` - ${d.reason}` : ""
-                                }</li>`
-                        )
-                        .join("")
-                    : "<li>All submitted documents are verified.</li>`";
-
-            if (user && user.email) {
+            try {
                 const emailHtml = generateAgentStatusEmail(
                     user.name,
                     statusText,
                     invalidDocs
                 );
-                await emailManager(user.email, "Agent KYC Update", emailHtml);
-            };
-
+                await emailManager(user.email, "Agent Application Update", emailHtml);
+            } catch (emailErr) {
+                console.warn("[updateAgentKyc] Email failed (non-fatal):", emailErr.message);
+            }
         }
 
         // SMS notification
         if (user && user.phone) {
-            let smsText = `Dear ${user.name || "Agent"}, your KYC status is ${statusText}.`;
-            if (invalidDocs.length > 0) {
-                const docNames = invalidDocs.map((d) => d.label).join(", ");
-                smsText += ` Invalid documents: ${docNames}.`;
+            try {
+                let smsText = `Dear ${user.name || "Agent"}, your agent application status is ${statusText}.`;
+                if (invalidDocs.length > 0) {
+                    const docNames = invalidDocs.map((d) => d.label).join(", ");
+                    smsText += ` Documents needing attention: ${docNames}.`;
+                }
+                await sendOTP(user.phone, smsText);
+            } catch (smsErr) {
+                console.warn("[updateAgentKyc] SMS failed (non-fatal):", smsErr.message);
             }
-            await sendOTP(user.phone, smsText);
         }
 
-        // Push notification (FCM + local notification)
+        // Push notification (FCM + local)
         try {
-            const title = "Agent KYC Updated";
+            const title = "Agent Application Update";
             const body =
-                invalidDocs.length > 0
-                    ? `Status: ${statusText}. Some documents need attention.`
-                    : `Status: ${statusText}.`;
+                applicationStatus === "APPROVED"
+                    ? "Congratulations! Your agent application has been approved."
+                    : applicationStatus === "REJECTED"
+                    ? "Your agent application has been reviewed. Please check the app for details."
+                    : applicationStatus === "MORE_INFO"
+                    ? "We need additional information for your application. Please check the app."
+                    : `Application status: ${statusText}.`;
 
-            // Local notification record for this user
             if (agent.user) {
-                await createLocalNotification(agent.user, "AGENT_KYC_UPDATE", title, body, {
-                    verificationStatus: statusText,
+                await createLocalNotification(agent.user, "AGENT_APPLICATION_UPDATE", title, body, {
+                    applicationStatus: statusText,
                 });
-            }
 
-            // Send FCM only to this user's devices
-            if (agent.user) {
                 const devices = await UserDeviceInfo.find({ userId: agent.user });
                 const tokens = devices.map((d) => d.token).filter(Boolean);
                 if (tokens.length > 0) {
@@ -230,12 +299,12 @@ const updateAgentKyc = async (req, res) => {
                 }
             }
         } catch (notifyError) {
-            console.error("KYC notification error:", notifyError);
+            console.error("Agent notification error:", notifyError);
         }
 
         return res.status(200).json({
             success: true,
-            message: "Agent KYC updated successfully!",
+            message: "Agent application updated successfully!",
         });
     } catch (error) {
         console.error("updateAgentKyc error:", error);
@@ -246,18 +315,50 @@ const updateAgentKyc = async (req, res) => {
     }
 };
 
-// Get all agents api/admin/getAllAgents
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/getAllAgents?status=PENDING&type=DEFAULT
+// ─────────────────────────────────────────────────────────────────────────────
 const getAllAgents = async (req, res) => {
     try {
-        const agents = await User.find({ role: "agent" }).select(
-            "-password -__v -otp -otpExpiry"
-        );
+        const { status, type } = req.query;
+
+        const filter = {};
+        if (status) filter.applicationStatus = status;
+        if (type) filter.agentType = type;
+
+        const agents = await Agent.find(filter)
+            .populate("user", "name email phone profilePicture status")
+            .populate("linkedOperatorId", "brandName brandCode")
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const formatted = agents.map((a) => ({
+            id: a._id,
+            agentId: a.agentId,
+            userId: a.user?._id,
+            name: a.user?.name || "N/A",
+            phone: a.user?.phone || "N/A",
+            email: a.user?.email || null,
+            profileImg: a.user?.profilePicture || null,
+            applicationStatus: a.applicationStatus,
+            agentType: a.agentType,
+            linkedOperator: a.linkedOperatorId
+                ? { name: a.linkedOperatorId.brandName, code: a.linkedOperatorId.brandCode }
+                : null,
+            location: [a.municipality, a.district].filter(Boolean).join(", ") || "N/A",
+            commission: `${a.commissionRate}%`,
+            commissionBalance: a.commissionBalance,
+            totalBookings: a.totalOnlineBookings + a.totalCashBookings,
+            operationType: a.operationType,
+            submittedAt: a.submittedAt,
+            createdAt: a.createdAt,
+        }));
 
         return res.status(200).json({
             success: true,
-            message: agents.length === 0 ? "No agents registered yet." : "Agents retrieved successfully!",
-            results: agents.length,
-            data: agents,
+            message: formatted.length === 0 ? "No agents found." : "Agents retrieved successfully!",
+            results: formatted.length,
+            data: formatted,
         });
     } catch (error) {
         console.error("getAllAgents error:", error);
@@ -268,7 +369,10 @@ const getAllAgents = async (req, res) => {
     }
 };
 
-// Make a user an agent 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/makeUserAgent
+// Body: { id } — User._id to convert
+// ─────────────────────────────────────────────────────────────────────────────
 const makeUserAgent = async (req, res) => {
     try {
         const { id } = req.body;
@@ -296,17 +400,20 @@ const makeUserAgent = async (req, res) => {
             });
         }
 
-        // If already an agent, do not proceed
-        if (user.role === "agent") {
+        // Multi-role check: verify via roles[] array
+        const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+        if (userRoles.includes("agent")) {
             return res.status(400).json({
                 success: false,
                 message: "User is already an agent!",
             });
         }
 
-        // Update user role to agent
-        user.role = "agent";
-        await user.save();
+        // Add agent role to existing user (DO NOT overwrite user.role)
+        await User.findByIdAndUpdate(id, {
+            $addToSet: { roles: "agent" },
+            $set: { [`roleActivatedAt.agent`]: new Date() },
+        });
 
         // Ensure Agent document exists
         let agent = await Agent.findOne({ user: user._id });
@@ -317,11 +424,12 @@ const makeUserAgent = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "User converted to agent successfully!",
+            message: "Agent role added to user successfully!",
             data: {
                 userId: user._id,
-                role: user.role,
+                roles: [...userRoles, "agent"],
                 agentId: agent.agentId,
+                agentMongoId: agent._id,
             },
         });
     } catch (error) {
@@ -333,32 +441,209 @@ const makeUserAgent = async (req, res) => {
     }
 };
 
-// Get Agent Dashboard Stats
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/admin/finalizeAgentSetup
+//
+// Called after makeUserAgent — fills in all profile fields and, for
+// OPERATOR_LINKED agents, approves immediately + sends a welcome SMS.
+// ─────────────────────────────────────────────────────────────────────────────
+const finalizeAgentSetup = async (req, res) => {
+    try {
+        const {
+            id,
+            agentType,
+            linkedOperatorId,
+            busAccessScope,
+            allowedRouteIds,
+            commissionRate,
+            minSettlementThreshold,
+            adminNotes,
+            district,
+            municipality,
+            businessName,
+            shopAddress,
+            operationType,
+            claimedMonthlyVolume,
+            currentOperators,
+            settlementMethod,
+            bankName,
+            bankAccountNumber,
+            bankAccountName,
+            esewaNumber,
+            khaltiNumber,
+        } = req.body;
+
+        if (!id) {
+            return res.status(400).json({ success: false, message: "id is required" });
+        }
+
+        // Resolve agent by _id or agentId string
+        let agent = null;
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            agent = await Agent.findById(id);
+        }
+        if (!agent) {
+            agent = await Agent.findOne({ agentId: id });
+        }
+        if (!agent) {
+            return res.status(404).json({ success: false, message: "Agent not found" });
+        }
+
+        // ── Agent type ────────────────────────────────────────────────────
+        if (agentType) agent.agentType = agentType;
+
+        // ── Operator link (OPERATOR_LINKED only) ──────────────────────────
+        if (agentType === "OPERATOR_LINKED") {
+            if (!linkedOperatorId || !mongoose.Types.ObjectId.isValid(linkedOperatorId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "linkedOperatorId is required for OPERATOR_LINKED agents",
+                });
+            }
+            agent.linkedOperatorId = linkedOperatorId;
+            agent.busAccessScope = busAccessScope || "ALL_OPERATOR_BUSES";
+
+            if (busAccessScope === "SPECIFIC_ROUTES") {
+                if (!allowedRouteIds || allowedRouteIds.length === 0) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "allowedRouteIds is required when busAccessScope is SPECIFIC_ROUTES",
+                    });
+                }
+                agent.allowedRouteIds = allowedRouteIds;
+            } else {
+                agent.allowedRouteIds = [];
+            }
+
+            // Auto-approve — operator vouches for this counter staff member
+            agent.applicationStatus = "APPROVED";
+            agent.approvedAt = new Date();
+            agent.approvedBy = req.adminInfo?.id || null;
+            agent.submittedAt = new Date();
+
+            await User.findByIdAndUpdate(agent.user, {
+                isVerified: true,
+                status: "active",
+            });
+        }
+
+        // ── Personal ──────────────────────────────────────────────────────
+        if (district)     agent.district     = district;
+        if (municipality) agent.municipality = municipality;
+
+        // ── Business ──────────────────────────────────────────────────────
+        if (businessName)         agent.businessName         = businessName;
+        if (shopAddress)          agent.shopAddress          = shopAddress;
+        if (operationType)        agent.operationType        = operationType;
+        if (claimedMonthlyVolume) agent.claimedMonthlyVolume = claimedMonthlyVolume;
+        if (currentOperators)     agent.currentOperators     = currentOperators;
+
+        // ── Settlement ────────────────────────────────────────────────────
+        if (settlementMethod)  agent.settlementMethod  = settlementMethod;
+        if (bankName)          agent.bankName          = bankName;
+        if (bankAccountNumber) agent.bankAccountNumber = bankAccountNumber;
+        if (bankAccountName)   agent.bankAccountName   = bankAccountName;
+        if (esewaNumber)       agent.esewaNumber       = esewaNumber;
+        if (khaltiNumber)      agent.khaltiNumber      = khaltiNumber;
+
+        // ── Admin config ──────────────────────────────────────────────────
+        if (typeof commissionRate === "number")         agent.commissionRate         = commissionRate;
+        if (typeof minSettlementThreshold === "number") agent.minSettlementThreshold = minSettlementThreshold;
+        if (typeof adminNotes === "string")             agent.adminNotes             = adminNotes;
+
+        await agent.save();
+
+        // ── Welcome notification for OPERATOR_LINKED ──────────────────────
+        // Counter staff may not have the app yet — send a download invitation
+        // instead of the generic "application approved" message.
+        if (agentType === "OPERATOR_LINKED") {
+            const agentUser = await User.findById(agent.user).select("name phone");
+
+            if (agentUser?.phone) {
+                try {
+                    const welcomeSms =
+                        `Welcome to Shuvmarg, ${agentUser.name || "Agent"}! ` +
+                        `Your agent account (${agent.agentId}) is ready. ` +
+                        `Download the Shuvmarg Partner App to start booking tickets for passengers.`;
+                    await sendOTP(agentUser.phone, welcomeSms);
+                } catch (smsErr) {
+                    console.warn("[finalizeAgentSetup] SMS failed (non-fatal):", smsErr.message);
+                }
+            }
+
+            try {
+                await createLocalNotification(
+                    agent.user,
+                    "AGENT_APPLICATION_UPDATE",
+                    "Welcome to Shuvmarg!",
+                    "Your agent account is ready. Download the Shuvmarg Partner App to get started.",
+                    { applicationStatus: "APPROVED", agentId: agent.agentId }
+                );
+            } catch (notifyErr) {
+                console.warn("[finalizeAgentSetup] Push failed (non-fatal):", notifyErr.message);
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: agentType === "OPERATOR_LINKED"
+                ? "Operator-linked agent created and approved!"
+                : "Agent profile updated.",
+            data: {
+                agentId: agent.agentId,
+                agentMongoId: agent._id,
+                applicationStatus: agent.applicationStatus,
+                agentType: agent.agentType,
+            },
+        });
+    } catch (error) {
+        console.error("finalizeAgentSetup error:", error);
+        return res.status(500).json({ success: false, message: "Internal Server Error!" });
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/agentDashboard
+// ─────────────────────────────────────────────────────────────────────────────
 const getAgentDashboard = async (req, res) => {
     try {
         const [
             totalAgents,
-            verifiedAgents,
+            approvedAgents,
             pendingAgents,
             rejectedAgents,
+            moreInfoAgents,
+            suspendedAgents,
+            defaultAgents,
+            operatorLinkedAgents,
         ] = await Promise.all([
             Agent.countDocuments({}),
-            Agent.countDocuments({ verificationStatus: "verified" }),
-            Agent.countDocuments({ verificationStatus: "pending" }),
-            Agent.countDocuments({ verificationStatus: "rejected" }),
+            Agent.countDocuments({ applicationStatus: "APPROVED" }),
+            Agent.countDocuments({ applicationStatus: "PENDING" }),
+            Agent.countDocuments({ applicationStatus: "REJECTED" }),
+            Agent.countDocuments({ applicationStatus: "MORE_INFO" }),
+            Agent.countDocuments({ applicationStatus: "SUSPENDED" }),
+            Agent.countDocuments({ agentType: "DEFAULT" }),
+            Agent.countDocuments({ agentType: "OPERATOR_LINKED" }),
         ]);
 
-        const verifiedPercentage = totalAgents > 0 
-            ? ((verifiedAgents / totalAgents) * 100).toFixed(0) 
+        const approvedPercentage = totalAgents > 0
+            ? ((approvedAgents / totalAgents) * 100).toFixed(0)
             : 0;
 
         return res.status(200).json({
             success: true,
             data: {
                 totalAgents,
-                verifiedAgents: `${verifiedAgents} (${verifiedPercentage}% of total)`,
+                approvedAgents: `${approvedAgents} (${approvedPercentage}% of total)`,
                 pendingAgents,
                 rejectedAgents,
+                moreInfoAgents,
+                suspendedAgents,
+                byType: {
+                    default: defaultAgents,
+                    operatorLinked: operatorLinkedAgents,
+                },
             },
         });
     } catch (error) {
@@ -375,6 +660,7 @@ module.exports = {
     getAgentsById,
     getAllAgents,
     makeUserAgent,
+    finalizeAgentSetup,
     updateAgentKyc,
     getAgentDashboard,
 };

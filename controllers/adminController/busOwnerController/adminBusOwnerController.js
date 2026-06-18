@@ -183,7 +183,10 @@ const updateBusOwnerKyc = async (req, res) => {
             if (verificationStatus === "approved") {
                 await User.findByIdAndUpdate(busOwner.user, { status: "active", isVerified: true });
             } else if (verificationStatus === "rejected") {
-                await User.findByIdAndUpdate(busOwner.user, { status: "pending", isVerified: false });
+                // NOTE: Do NOT set User.status = "pending" here!
+                // That would lock the user out of ALL apps (passenger, etc).
+                // BusOwner-specific rejection lives on BusOwner.verificationStatus only.
+                await User.findByIdAndUpdate(busOwner.user, { isVerified: false });
             }
         }
 
@@ -351,24 +354,13 @@ const getBusOwnerKycById = async (req, res) => {
             });
         }
 
-        // Map S3 object keys to presigned URLs for all document sections
-        const mapUrls = async (urls) => {
-            if (!urls || !Array.isArray(urls)) return [];
-            return await Promise.all(urls.map(url => getPresignedUrl(url)));
-        };
-
-        if (busOwnerKyc.companyRegistration?.documentUrls) {
-            busOwnerKyc.companyRegistration.documentUrls = await mapUrls(busOwnerKyc.companyRegistration.documentUrls);
-        }
-        if (busOwnerKyc.ownerIdentity?.documentUrls) {
-            busOwnerKyc.ownerIdentity.documentUrls = await mapUrls(busOwnerKyc.ownerIdentity.documentUrls);
-        }
-        if (busOwnerKyc.taxRegistration?.documentUrls) {
-            busOwnerKyc.taxRegistration.documentUrls = await mapUrls(busOwnerKyc.taxRegistration.documentUrls);
-        }
-        if (busOwnerKyc.bankDetails?.documentUrls) {
-            busOwnerKyc.bankDetails.documentUrls = await mapUrls(busOwnerKyc.bankDetails.documentUrls);
-        }
+        // ── Security: Return raw S3 object keys, NOT presigned URLs. ──────────
+        // The frontend uses the secure proxy endpoint (/api/admin/documents/view?key=...)
+        // to stream files through the server. This ensures:
+        //   - AWS credentials are NEVER exposed to the browser
+        //   - Internal S3 bucket structure is hidden from clients
+        //   - Access is always gated behind adminMiddleware (JWT check)
+        // No presigned URL generation needed here.
 
         return res.status(200).json({
             success: true,
@@ -453,7 +445,9 @@ const getBusOwnerById = async (req, res) => {
             });
         }
 
-        if (user && user.role !== "busOwner") {
+        // Multi-role check: verify the user has busOwner in their roles
+        const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+        if (!userRoles.includes("busOwner")) {
             return res.status(400).json({
                 success: false,
                 message: "User is not a bus owner!",
@@ -513,16 +507,73 @@ const createBusOwnerFull = async (req, res) => {
 
         const userEmail = email && email.trim() !== "" ? email.toLowerCase() : null;
 
+        // Check if phone or email already exists
         const query = { $or: [{ phone }] };
         if (userEmail) {
             query.$or.push({ email: userEmail });
         }
         const existingUser = await User.findOne(query);
+
+        let savedUser;
+
         if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: "Email or phone number already registered!",
-            });
+            // Check if already a busOwner
+            const existingRoles = existingUser.roles && existingUser.roles.length > 0
+                ? existingUser.roles : [existingUser.role];
+
+            if (existingRoles.includes("busOwner")) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This user is already registered as a bus owner!",
+                    errorCode: "ROLE_ALREADY_REGISTERED",
+                });
+            }
+
+            // UPGRADE PATH: Add busOwner role to existing user
+            savedUser = await User.findByIdAndUpdate(
+                existingUser._id,
+                {
+                    $addToSet: { roles: "busOwner" },
+                    $set: {
+                        [`roleActivatedAt.busOwner`]: new Date(),
+                        forcePasswordChange: false, // Keep their existing password
+                    },
+                },
+                { new: true }
+            );
+        } else {
+            // NEW USER PATH: Create User with temp password
+            const newPassword = generatePassword(8);
+            const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+            const newUserData = {
+                name: ownerName,
+                phone,
+                address,
+                password: hashedPassword,
+                gender: "male",
+                role: "busOwner",
+                roles: ["busOwner"],
+                status: "active",               // Admin-onboarded = already approved
+                forcePasswordChange: true,       // Must change temp password on first login
+                roleActivatedAt: { busOwner: new Date() },
+            };
+            if (userEmail) newUserData.email = userEmail;
+
+            const newUser = new User(newUserData);
+            savedUser = await newUser.save();
+
+            // Send temp credentials via SMS (only for new users)
+            try {
+                await sendOTP(phone, `Welcome to Sumarg! Your bus owner login: Phone: ${phone} | Temp Password: ${newPassword} — Please change your password on first login.`);
+            } catch (smsErr) {
+                console.warn("[createBusOwnerFull] SMS notification failed (non-fatal):", smsErr.message);
+            }
+
+            if (email && email.trim() !== "") {
+                const emailContent = emailTemplate(newPassword, ownerName);
+                await emailManager(userEmail, "Auto Generated Password", emailContent).catch(e => console.log("Email error", e));
+            }
         }
 
         // Upload documents if provided
@@ -534,39 +585,6 @@ const createBusOwnerFull = async (req, res) => {
                 success: false,
                 message: "Mandatory KYC documents (Company Registration, PAN Card, Citizenship) are missing from the upload.",
             });
-        }
-
-        // Create User first (needed for busOwner reference)
-        const newPassword = generatePassword(8);
-        const hashedPassword = await bcrypt.hash(newPassword, 12);
-
-        const newUserData = {
-            name: ownerName,
-            phone,
-            address,
-            password: hashedPassword,
-            gender: "male",
-            role: "busOwner",
-            status: "active",               // Admin-onboarded = already approved
-            forcePasswordChange: true,       // Must change temp password on first login
-        };
-        // Only add email if actually provided — sparse index skips absent fields,
-        // but if we pass email: null the index treats it as a real value and collides.
-        if (userEmail) newUserData.email = userEmail;
-
-        const newUser = new User(newUserData);
-        const savedUser = await newUser.save();
-
-        // Send temp credentials via SMS
-        try {
-            await sendOTP(phone, `Welcome to Sumarg! Your bus owner login: Phone: ${phone} | Temp Password: ${newPassword} — Please change your password on first login.`);
-        } catch (smsErr) {
-            console.warn("[createBusOwnerFull] SMS notification failed (non-fatal):", smsErr.message);
-        }
-
-        if (email && email.trim() !== "") {
-            const emailContent = emailTemplate(newPassword, ownerName);
-            await emailManager(userEmail, "Auto Generated Password", emailContent).catch(e => console.log("Email error", e));
         }
 
         // Create BusOwner skeleton first to get its _id for structured S3 paths
