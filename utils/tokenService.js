@@ -59,14 +59,19 @@ const generateRefreshTokenString = () => {
 /**
  * Build the JWT access token payload for a user.
  * Minimal payload — only what's needed for route authorization.
+ *
+ * @param {Object} user - User document
+ * @param {string} activeRole - Which role this session is operating as
  */
-const buildAccessTokenPayload = (user) => {
+const buildAccessTokenPayload = (user, activeRole) => {
     return {
         id: user._id,
         name: user.name,
         email: user.email,
         phone: user.phone,
-        role: user.role,
+        role: user.role,              // backward compat — first registered role
+        activeRole: activeRole,       // the role context for THIS session
+        roles: user.roles || [],      // all roles the user holds
         isVerified: user.isVerified,
     };
 };
@@ -74,14 +79,16 @@ const buildAccessTokenPayload = (user) => {
 /**
  * Sign a new access token for a user.
  * @param {Object} user - Mongoose user document or plain object with _id, role, etc.
+ * @param {string} [activeRole] - Which role context this session operates in.
+ *   Falls back to user.role for backward compat with old callers.
  * @returns {string} Signed JWT access token
  */
-const signAccessToken = (user) => {
-    const role = user.role || "passenger";
-    const expiry = ACCESS_TOKEN_EXPIRY[role] || "15m";
+const signAccessToken = (user, activeRole) => {
+    const effectiveRole = activeRole || user.role || "passenger";
+    const expiry = ACCESS_TOKEN_EXPIRY[effectiveRole] || "15m";
 
     return jwt.sign(
-        buildAccessTokenPayload(user),
+        buildAccessTokenPayload(user, effectiveRole),
         process.env.SECRET_KEY,
         { expiresIn: expiry }
     );
@@ -95,20 +102,21 @@ const signAccessToken = (user) => {
  * @param {Object} [meta] - Optional metadata
  * @param {string} [meta.deviceInfo] - User-Agent string
  * @param {string} [meta.ipAddress] - Client IP
+ * @param {string} [meta.activeRole] - Which role context this session operates in
  * @returns {Promise<{accessToken: string, refreshToken: string|null}>}
  */
 const generateTokenPair = async (user, meta = {}) => {
-    const accessToken = signAccessToken(user);
+    const activeRole = meta.activeRole || user.role || "passenger";
+    const accessToken = signAccessToken(user, activeRole);
 
-    const role = user.role || "passenger";
-    const refreshDays = REFRESH_TOKEN_EXPIRY_DAYS[role];
+    const refreshDays = REFRESH_TOKEN_EXPIRY_DAYS[activeRole] || REFRESH_TOKEN_EXPIRY_DAYS["passenger"];
 
-    // Admin role: no refresh token
+    // No refresh token for zero-day roles
     if (refreshDays === 0) {
         return { accessToken, refreshToken: null };
     }
 
-    // Generate and store refresh token
+    // Generate and store refresh token with activeRole for rotation
     const rawRefreshToken = generateRefreshTokenString();
     const tokenHash = hashToken(rawRefreshToken);
     const expiresAt = new Date(Date.now() + refreshDays * 24 * 60 * 60 * 1000);
@@ -119,6 +127,7 @@ const generateTokenPair = async (user, meta = {}) => {
         expiresAt,
         deviceInfo: meta.deviceInfo || null,
         ipAddress: meta.ipAddress || null,
+        activeRole,
     });
 
     return { accessToken, refreshToken: rawRefreshToken };
@@ -148,6 +157,9 @@ const rotateRefreshToken = async (oldRefreshToken, meta = {}) => {
         throw new Error("REFRESH_TOKEN_EXPIRED");
     }
 
+    // Preserve the activeRole from the original session
+    const sessionActiveRole = storedToken.activeRole || "passenger";
+
     // Delete the old refresh token (single-use)
     await RefreshToken.deleteOne({ _id: storedToken._id });
 
@@ -163,8 +175,16 @@ const rotateRefreshToken = async (oldRefreshToken, meta = {}) => {
     if (user.deletedAt) throw new Error("ACCOUNT_DEACTIVATED");
     if (user.status === "banned") throw new Error("ACCOUNT_BANNED");
 
-    // Generate new token pair
-    const newPair = await generateTokenPair(user, meta);
+    // Verify the activeRole is still in the user's roles (role may have been revoked)
+    if (!user.roles || !user.roles.includes(sessionActiveRole)) {
+        throw new Error("ROLE_REVOKED");
+    }
+
+    // Generate new token pair with the preserved activeRole
+    const newPair = await generateTokenPair(user, {
+        ...meta,
+        activeRole: sessionActiveRole,
+    });
 
     return {
         accessToken: newPair.accessToken,

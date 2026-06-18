@@ -5,11 +5,11 @@ const paymentBooking = require("../../controllers/ticketController/paymentBookin
 const role = require("../../middleware/checkRole.js")
 const auth = require("../../middleware/authMiddleware.js")
 
-router.post("/createTicket", auth, role.isAdminOrBusOwner, ticket.createTicket);
-router.post("/creatSeats", auth, role.isAdminOrBusOwner, ticket.createSeats);
-router.patch("/updateTicket", auth, role.isAdminOrBusOwner, ticket.updateTicket);
-router.delete("/deleteTicket", auth, role.isAdminOrBusOwner, ticket.deleteTicket);
-router.post("/getTicketById", auth, role.isAdminOrBusOwner, ticket.getTicketById);
+router.post("/createTicket", auth, role.busOwnerMiddleware, ticket.createTicket);
+router.post("/creatSeats", auth, role.busOwnerMiddleware, ticket.createSeats);
+router.patch("/updateTicket", auth, role.busOwnerMiddleware, ticket.updateTicket);
+router.delete("/deleteTicket", auth, role.busOwnerMiddleware, ticket.deleteTicket);
+router.post("/getTicketById", auth, role.busOwnerMiddleware, ticket.getTicketById);
 
 // Book Ticket (Original - for backend payment)
 router.post("/bookTicket", auth, ticket.bookTicket);

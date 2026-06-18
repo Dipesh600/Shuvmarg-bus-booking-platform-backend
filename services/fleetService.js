@@ -285,6 +285,21 @@ const mapFleetWithPresignedUrls = async (fleet) => {
     return fleet;
 };
 
+/**
+ * Admin-only variant: returns raw S3 object keys instead of presigned URLs.
+ *
+ * The admin panel uses the secure document proxy (/api/admin/documents/view?key=...)
+ * to stream files through the server — it needs the raw key, not a presigned URL.
+ * Presigned URLs contain AWS credentials (AKIA...) and would fail the proxy's
+ * key-prefix allowlist check.
+ */
+const mapFleetWithRawKeys = (fleet) => {
+    // Keys are already stored as raw S3 paths — nothing to map.
+    // This function exists to make the intent explicit and allow
+    // easy future transformation if needed (e.g. stripping bucket prefix).
+    return fleet;
+};
+
 const getFleetsByOwnerId = async (ownerId, brandId) => {
     const query = { ownerId };
     if (brandId) {
@@ -332,6 +347,30 @@ const getFleetDetails = async (fleetId, ownerId = null) => {
         throw new Error("Fleet not found or unauthorized.");
     }
     return await mapFleetWithPresignedUrls(fleet);
+};
+
+/**
+ * Admin-only: returns fleet with raw S3 keys (no presigned URL generation).
+ * Used by the admin fleet detail API so the secure document proxy can stream files.
+ */
+const getFleetDetailsRaw = async (fleetId) => {
+    const fleet = await Bus.findById(fleetId)
+        .populate("ownerId", "name email phone")
+        .populate("amenitiesId")
+        .populate("boardingPointId")
+        .populate({
+            path: "corridorId",
+            select: "code originId destinationId status",
+            populate: [
+                { path: "originId", select: "name code city" },
+                { path: "destinationId", select: "name code city" }
+            ]
+        })
+        .populate("routeRequestId")
+        .lean();
+    
+    if (!fleet) throw new Error("Fleet not found or unauthorized.");
+    return mapFleetWithRawKeys(fleet);
 };
 
 const updateFleetDetails = async (fleetId, updateData, files, ownerId = null) => {
@@ -581,6 +620,7 @@ module.exports = {
     createFleet,
     getFleetsByOwnerId,
     getFleetDetails,
+    getFleetDetailsRaw,
     updateFleetDetails,
     removeFleet,
     resubmitFleet,

@@ -118,6 +118,9 @@ const deleteFromS3 = async (keys) => {
  *   Driver documents:
  *     brands/{brandId}/drivers/{driverId}/docs/{documentType}/
  *
+ *   Agent KYC documents:
+ *     agents/{agentId}/kyc/{documentType}/
+ *
  *   Dispute proofs:
  *     disputes/{disputeType}/{transactionId}/
  *
@@ -126,17 +129,18 @@ const deleteFromS3 = async (keys) => {
  *   - Prevents path drift when a brand is renamed
  *
  * @param {object} options
- * @param {'owner_kyc' | 'fleet_images' | 'fleet_docs' | 'driver_docs' | 'dispute_proof'} options.type
+ * @param {'owner_kyc' | 'fleet_images' | 'fleet_docs' | 'driver_docs' | 'agent_kyc' | 'dispute_proof'} options.type
  * @param {string} [options.ownerId]        - BusOwner's User._id (Mongo ObjectId string)
  * @param {string} [options.brandId]        - OperatorBrand._id (Mongo ObjectId string)
  * @param {string} [options.fleetId]        - Fleet.fleetId auto-generated field (e.g. "FL-001")
  * @param {string} [options.driverId]       - DriverProfile._id (Mongo ObjectId string)
  * @param {string} [options.documentType]   - e.g. "company-registration", "fitness-cert", "license"
+ * @param {string} [options.agentId]        - Agent._id (Mongo ObjectId string) — for agent_kyc
  * @param {string} [options.disputeType]    - e.g. "booking-mismatch", "verification-lag", "general"
  * @param {string} [options.transactionId]  - Transaction MongoDB _id for dispute uploads
  * @returns {string} - S3 key prefix (no trailing slash)
  */
-const buildS3Path = ({ type, ownerId, brandId, fleetId, driverId, documentType, disputeType, transactionId }) => {
+const buildS3Path = ({ type, ownerId, brandId, fleetId, driverId, agentId, documentType, disputeType, transactionId }) => {
     const ownerSegment = `owners/${sanitizeSegment(ownerId)}`;
 
     switch (type) {
@@ -154,6 +158,11 @@ const buildS3Path = ({ type, ownerId, brandId, fleetId, driverId, documentType, 
             // Driver docs are brand-scoped, not owner-scoped
             // brands/{brandId}/drivers/{driverId}/docs/{documentType}/
             return `brands/${sanitizeSegment(brandId)}/drivers/${sanitizeSegment(driverId)}/docs/${sanitizeSegment(documentType)}`;
+
+        case "agent_kyc":
+            // agents/{agentId}/kyc/{documentType}/
+            // documentType: "citizenship-front" | "citizenship-back" | "shop-photo" | "pan-card" | "business-registration"
+            return `agents/${sanitizeSegment(agentId)}/kyc/${sanitizeSegment(documentType)}`;
 
         case "dispute_proof":
             // disputes/{disputeType}/{transactionId}/

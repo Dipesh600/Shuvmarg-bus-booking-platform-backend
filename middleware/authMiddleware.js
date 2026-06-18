@@ -13,6 +13,13 @@ const authMiddleware = (req, res, next) => {
     const verifyAuthToken = jwt.verify(token, process.env.SECRET_KEY);
     req.userInfo = verifyAuthToken;
 
+    // === MULTI-ROLE BACKWARD COMPAT ===
+    // Legacy JWTs have `role` but no `activeRole`. Map for consistent downstream use.
+    if (req.userInfo.role && !req.userInfo.activeRole) {
+      req.userInfo.activeRole = req.userInfo.role;
+      req.userInfo.roles = req.userInfo.roles || [req.userInfo.role];
+    }
+
     next();
   } catch (e) {
     if (e.name === "TokenExpiredError") {

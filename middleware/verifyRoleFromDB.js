@@ -83,13 +83,15 @@ const verifyRoleFromDB = async (req, res, next) => {
             });
         }
 
-        // === ROLE DRIFT CHECK ===
-        // If the role in JWT doesn't match the DB, the token is stale
-        if (req.userInfo.role && req.userInfo.role !== user.role) {
+        // === ROLE DRIFT CHECK (multi-role aware) ===
+        // Verify the activeRole in this JWT is still in the user's roles array.
+        // This catches: role revoked by admin, stale JWTs after role removal.
+        const activeRole = req.userInfo.activeRole || req.userInfo.role;
+        if (activeRole && user.roles && !user.roles.includes(activeRole)) {
             return res.status(403).json({
                 success: false,
-                message: "Your role has been updated. Please login again to get a new token.",
-                errorCode: "ROLE_MISMATCH",
+                message: "Your role has been revoked. Please login again.",
+                errorCode: "ROLE_REVOKED",
             });
         }
 

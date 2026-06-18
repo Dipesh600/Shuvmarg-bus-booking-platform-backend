@@ -98,6 +98,7 @@ router.post("/getAgentDetails", adminMiddleware, agentController.getAgentsById);
 router.get("/getAllAgents", adminMiddleware, agentController.getAllAgents);
 router.get("/agentDashboard", adminMiddleware, agentController.getAgentDashboard);
 router.post("/makeUserAgent", adminMiddleware, agentController.makeUserAgent);
+router.patch("/finalizeAgentSetup", adminMiddleware, agentController.finalizeAgentSetup);
 router.patch("/agentKycStatus", adminMiddleware, agentController.updateAgentKyc);
 
 // Bus Owner
@@ -439,6 +440,13 @@ router.patch("/scratch-themes/:themeId",          adminMiddleware, scratchThemeC
 router.patch("/scratch-themes/:themeId/image",    adminMiddleware, scratchThemeCtrl.replaceThemeImage);
 router.patch("/scratch-themes/:themeId/toggle",   adminMiddleware, scratchThemeCtrl.toggleTheme);
 router.delete("/scratch-themes/:themeId",         adminMiddleware, scratchThemeCtrl.deleteTheme);
+
+// ─── SECURE DOCUMENT PROXY ─────────────────────────────────────────────────────
+// Streams private S3 objects through the server — the raw AWS presigned URL
+// (with credential key ID, bucket path, and signature) is NEVER sent to the browser.
+// Frontend calls: GET /api/admin/documents/view?key=owners/{id}/kyc/...
+const documentProxy = require("../../controllers/adminController/documentProxyController.js");
+router.get("/documents/view", adminMiddleware, documentProxy.viewDocument);
 
 module.exports = router;
 

@@ -1,41 +1,146 @@
 /**
  * utils/phoneGuard.js
- * 
- * Global phone uniqueness enforcement.
- * Checks whether a phone number is already registered as ANY entity
- * (passenger, busOwner, agent, conductor, driver) in the User collection.
- * 
- * Since ALL entity types share the single User collection with a `role` field,
- * the phone `unique: true` index on userModel handles DB-level enforcement.
- * This utility provides a clean, readable application-level check with
- * descriptive error messages.
+ *
+ * Role-aware phone registration checking for the multi-role identity system.
+ *
+ * DESIGN:
+ *   One phone = one User = many roles.
+ *   When a phone is "registered", it might only be registered for SOME roles.
+ *   A passenger can still register as an agent with the same phone.
+ *
+ * Phone normalization:
+ *   Nepal phones can arrive as 9803643115, +9779803643115, 9779803643115, or 09803643115.
+ *   normalizePhone() strips all these down to a consistent 10-digit local format.
+ *   All DB lookups search for BOTH the raw input AND the normalized form.
+ *
+ * Key functions:
+ *   - normalizePhone(phone) — strips country code, whitespace, dashes
+ *   - checkPhoneForRole(phone, targetRole) — the primary check
+ *   - isPhoneRegistered(phone) — legacy compat wrapper (still blocks all)
+ *   - phoneGuardMiddleware(targetRole) — Express middleware version
  */
 
 const User = require("../models/userModel.js");
 
 /**
- * Check if a phone number is already registered in the system.
- * 
+ * Normalize a Nepal phone number to a consistent local format.
+ *
+ * Handles these common input variants:
+ *   +9779803643115  →  9803643115
+ *   9779803643115   →  9803643115
+ *   09803643115     →  9803643115
+ *   9803643115      →  9803643115  (no change)
+ *   +977-980-364-3115 → 9803643115
+ *
+ * @param {string} phone - Raw phone input
+ * @returns {string} Normalized phone number
+ */
+const normalizePhone = (phone) => {
+    if (!phone) return phone;
+
+    // Remove all whitespace, dashes, parentheses
+    let cleaned = String(phone).replace(/[\s\-\(\)]/g, "");
+
+    // Strip +977 or 977 country code prefix (Nepal)
+    if (cleaned.startsWith("+977")) {
+        cleaned = cleaned.slice(4);
+    } else if (cleaned.startsWith("977") && cleaned.length > 10) {
+        cleaned = cleaned.slice(3);
+    }
+
+    // Strip leading 0 (trunk prefix)
+    if (cleaned.startsWith("0") && cleaned.length === 11) {
+        cleaned = cleaned.slice(1);
+    }
+
+    return cleaned;
+};
+
+/**
+ * Build a phone query that matches both raw and normalized forms.
+ * This catches records stored as "9803643115" when queried with "+9779803643115" and vice versa.
+ *
+ * @param {string} phone - Raw phone input
+ * @returns {Object} MongoDB query filter for phone matching
+ */
+const buildPhoneQuery = (phone) => {
+    const normalized = normalizePhone(phone);
+    const raw = String(phone).trim();
+
+    // If normalization didn't change anything, simple equality
+    if (normalized === raw) {
+        return { phone: raw, deletedAt: null };
+    }
+
+    // Search for EITHER the raw input or the normalized form
+    return {
+        phone: { $in: [raw, normalized] },
+        deletedAt: null,
+    };
+};
+
+/**
+ * Check phone registration status with role awareness.
+ *
  * @param {string} phone - The phone number to check
+ * @param {string} targetRole - The role the caller wants to register for
+ * @returns {Promise<{
+ *   exists: boolean,        // User record exists in DB
+ *   hasRole: boolean,       // User already has the targetRole
+ *   user: Object|null,      // User doc (lean) if exists — includes name for UX
+ * }>}
+ */
+const checkPhoneForRole = async (phone, targetRole) => {
+    const query = buildPhoneQuery(phone);
+    const user = await User.findOne(query)
+        .select("name role roles status phone")
+        .lean();
+
+    if (!user) return { exists: false, hasRole: false, user: null };
+
+    const roles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+
+    return {
+        exists: true,
+        hasRole: roles.includes(targetRole),
+        user,
+    };
+};
+
+/**
+ * Legacy wrapper — checks if phone is registered under ANY role.
+ * Used by passenger registration (which SHOULD block if phone exists at all,
+ * since passengers are always new-to-platform signups).
+ *
+ * @param {string} phone
  * @returns {Promise<{registered: boolean, role: string|null}>}
  */
 const isPhoneRegistered = async (phone) => {
-    const user = await User.findOne({ phone, deletedAt: null }).select("role status").lean();
+    const query = buildPhoneQuery(phone);
+    const user = await User.findOne(query)
+        .select("role status")
+        .lean();
     if (!user) return { registered: false, role: null };
     return { registered: true, role: user.role, status: user.status };
 };
 
 /**
- * Middleware-style guard that blocks registration if phone already exists.
- * Attach to any OTP/registration route as middleware.
- * 
- * @param {string} [allowedRole] - If provided, only blocks if the phone is 
- *   registered under a DIFFERENT role. Pass null to block all re-registration.
+ * Middleware-style guard for role-specific registration routes.
+ *
+ * Behavior depends on targetRole:
+ *   - If targetRole is "passenger": blocks if phone exists at all (new-to-platform only)
+ *   - If targetRole is "agent"/"busOwner"/etc: blocks only if phone already has that role
+ *     If phone exists with a DIFFERENT role, allows through (upgrade flow)
+ *
+ * Attaches `req.existingUser` if the phone belongs to an existing user (for upgrade flow).
+ * Also normalizes `req.body.phone` to the canonical form for consistent storage.
+ *
+ * @param {string} targetRole - The role being registered for
  */
-const phoneGuardMiddleware = (allowedRole = null) => {
+const phoneGuardMiddleware = (targetRole) => {
     return async (req, res, next) => {
         const phone = req.body?.phone;
-        
+
         if (!phone) {
             return res.status(400).json({
                 success: false,
@@ -43,23 +148,30 @@ const phoneGuardMiddleware = (allowedRole = null) => {
             });
         }
 
+        // Normalize the phone in the request body for consistent downstream storage
+        req.body.phone = normalizePhone(phone);
+
         try {
-            const { registered, role } = await isPhoneRegistered(phone);
+            const { exists, hasRole, user } = await checkPhoneForRole(phone, targetRole);
 
-            if (registered) {
-                // If allowedRole is set, only block if existing role is different
-                if (allowedRole && role === allowedRole) {
-                    return next(); // Same role — let the specific handler deal with it
-                }
+            if (!exists) {
+                // Phone is new — allow registration
+                return next();
+            }
 
+            if (hasRole) {
+                // Already registered for this specific role
                 return res.status(409).json({
                     success: false,
-                    message: "This phone number is already registered.",
-                    errorCode: "PHONE_ALREADY_REGISTERED",
+                    message: `This phone number is already registered as ${targetRole}.`,
+                    errorCode: "ROLE_ALREADY_REGISTERED",
                 });
             }
 
-            next();
+            // Phone exists but doesn't have this role — upgrade flow
+            // Attach existing user to request for downstream "Find-or-Upgrade" logic
+            req.existingUser = user;
+            return next();
         } catch (error) {
             console.error("Phone guard error:", error);
             return res.status(500).json({
@@ -70,4 +182,5 @@ const phoneGuardMiddleware = (allowedRole = null) => {
     };
 };
 
-module.exports = { isPhoneRegistered, phoneGuardMiddleware };
+module.exports = { normalizePhone, checkPhoneForRole, isPhoneRegistered, phoneGuardMiddleware };
+
