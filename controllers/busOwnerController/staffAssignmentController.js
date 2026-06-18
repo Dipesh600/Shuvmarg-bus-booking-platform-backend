@@ -19,7 +19,7 @@ const DriverProfile = require("../../models/driverProfileModel.js");
 const OperatorBrand = require("../../models/operatorBrandModel.js");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
-const { isPhoneRegistered } = require("../../utils/phoneGuard.js");
+const { checkPhoneForRole } = require("../../utils/phoneGuard.js");
 const { revokeAllUserTokens } = require("../../utils/tokenService.js");
 const sendSMS = require("../../handlers/sparro-otp.js");
 
@@ -65,61 +65,88 @@ const assignConductor = async (req, res) => {
             });
         }
 
-        // Global phone uniqueness check
-        const { registered, role } = await isPhoneRegistered(phone);
-        if (registered) {
+        // Role-aware phone check — only block if already a conductor
+        const { exists, hasRole, user: existingUser } = await checkPhoneForRole(phone, "conductor");
+
+        if (exists && hasRole) {
             return res.status(409).json({
                 success: false,
-                message: `This phone number is already registered as a ${role}.`,
-                errorCode: "PHONE_ALREADY_REGISTERED",
+                message: "This phone number is already registered as a conductor.",
+                errorCode: "ROLE_ALREADY_REGISTERED",
             });
         }
 
-        // Create User account with temp password
-        const tempPassword = generateTempPassword();
-        const hashedPassword = await bcrypt.hash(tempPassword, 12);
+        let savedUser;
 
-        const newUser = new User({
-            name,
-            phone,
-            password: hashedPassword,
-            role: "conductor",
-            status: "invited",
-            forcePasswordChange: true,
-            phoneVerified: false,
-        });
-        const savedUser = await newUser.save();
-
-        // Create ConductorProfile
-        const profile = new ConductorProfile({
-            brandId,
-            ownerId,
-            userId: savedUser._id,
-            fullName: name,
-            phone,
-            assignedBy: ownerId,
-        });
-        await profile.save();
-
-        // Send SMS invite
-        try {
-            await sendSMS(
-                phone,
-                `You've been assigned as conductor on Sumarg (${brand.name}). Login with Phone: ${phone} | Temp Password: ${tempPassword} — Change your password on first login.`
+        if (exists && existingUser) {
+            // === UPGRADE PATH: Add conductor role to existing user ===
+            savedUser = await User.findByIdAndUpdate(
+                existingUser._id,
+                {
+                    $addToSet: { roles: "conductor" },
+                    $set: {
+                        [`roleActivatedAt.conductor`]: new Date(),
+                        // Don't overwrite status — only set invited if currently active
+                        // so they know to activate conductor mode
+                    },
+                },
+                { new: true }
             );
-        } catch (smsErr) {
-            console.warn("[assignConductor] SMS failed (non-fatal):", smsErr.message);
+        } else {
+            // === NEW USER PATH ===
+            const tempPassword = generateTempPassword();
+            const hashedPassword = await bcrypt.hash(tempPassword, 12);
+
+            const newUser = new User({
+                name,
+                phone,
+                password: hashedPassword,
+                role: "conductor",
+                roles: ["conductor"],
+                status: "invited",
+                forcePasswordChange: true,
+                phoneVerified: false,
+                roleActivatedAt: { conductor: new Date() },
+            });
+            savedUser = await newUser.save();
+
+            // SMS invite with temp password (only for new users)
+            try {
+                await sendSMS(
+                    phone,
+                    `You've been assigned as conductor on Sumarg (${brand.name}). Login with Phone: ${phone} | Temp Password: ${tempPassword} — Change your password on first login.`
+                );
+            } catch (smsErr) {
+                console.warn("[assignConductor] SMS failed (non-fatal):", smsErr.message);
+            }
+        }
+
+        // Create ConductorProfile (if not already exists)
+        let profile = await ConductorProfile.findOne({ userId: savedUser._id, brandId });
+        if (!profile) {
+            profile = new ConductorProfile({
+                brandId,
+                ownerId,
+                userId: savedUser._id,
+                fullName: name,
+                phone,
+                assignedBy: ownerId,
+            });
+            await profile.save();
         }
 
         return res.status(201).json({
             success: true,
-            message: "Conductor assigned successfully. SMS invite sent.",
+            message: exists
+                ? `Conductor role added to existing user (${existingUser.name}). They can now access conductor features.`
+                : "Conductor assigned successfully. SMS invite sent.",
             data: {
                 userId: savedUser._id,
                 profileId: profile._id,
                 phone,
                 name,
                 brand: brand.name,
+                isUpgrade: !!exists,
             },
         });
     } catch (error) {
@@ -164,65 +191,88 @@ const assignDriver = async (req, res) => {
             });
         }
 
-        // Global phone uniqueness check
-        const { registered, role } = await isPhoneRegistered(phone);
-        if (registered) {
+        // Role-aware phone check — only block if already a driver
+        const { exists, hasRole, user: existingUser } = await checkPhoneForRole(phone, "driver");
+
+        if (exists && hasRole) {
             return res.status(409).json({
                 success: false,
-                message: `This phone number is already registered as a ${role}.`,
-                errorCode: "PHONE_ALREADY_REGISTERED",
+                message: "This phone number is already registered as a driver.",
+                errorCode: "ROLE_ALREADY_REGISTERED",
             });
         }
 
-        // Create User account with temp password
-        const tempPassword = generateTempPassword();
-        const hashedPassword = await bcrypt.hash(tempPassword, 12);
+        let savedUser;
 
-        const newUser = new User({
-            name,
-            phone,
-            password: hashedPassword,
-            role: "driver",
-            status: "invited",
-            forcePasswordChange: true,
-            phoneVerified: false,
-        });
-        const savedUser = await newUser.save();
-
-        // Create DriverProfile — link userId for future login
-        const profile = new DriverProfile({
-            brandId,
-            ownerId,
-            userId: savedUser._id,
-            fullName: name,
-            phone,
-            licenseNumber,
-            licenseType,
-            licenseExpiry: new Date(licenseExpiry),
-            createdBy: "OPERATOR",
-            approvalStatus: "PENDING",
-        });
-        await profile.save();
-
-        // Send SMS invite
-        try {
-            await sendSMS(
-                phone,
-                `You've been assigned as driver on Sumarg (${brand.name}). Login with Phone: ${phone} | Temp Password: ${tempPassword} — Change your password on first login.`
+        if (exists && existingUser) {
+            // === UPGRADE PATH: Add driver role to existing user ===
+            savedUser = await User.findByIdAndUpdate(
+                existingUser._id,
+                {
+                    $addToSet: { roles: "driver" },
+                    $set: { [`roleActivatedAt.driver`]: new Date() },
+                },
+                { new: true }
             );
-        } catch (smsErr) {
-            console.warn("[assignDriver] SMS failed (non-fatal):", smsErr.message);
+        } else {
+            // === NEW USER PATH ===
+            const tempPassword = generateTempPassword();
+            const hashedPassword = await bcrypt.hash(tempPassword, 12);
+
+            const newUser = new User({
+                name,
+                phone,
+                password: hashedPassword,
+                role: "driver",
+                roles: ["driver"],
+                status: "invited",
+                forcePasswordChange: true,
+                phoneVerified: false,
+                roleActivatedAt: { driver: new Date() },
+            });
+            savedUser = await newUser.save();
+
+            // SMS invite with temp password (only for new users)
+            try {
+                await sendSMS(
+                    phone,
+                    `You've been assigned as driver on Sumarg (${brand.name}). Login with Phone: ${phone} | Temp Password: ${tempPassword} — Change your password on first login.`
+                );
+            } catch (smsErr) {
+                console.warn("[assignDriver] SMS failed (non-fatal):", smsErr.message);
+            }
+        }
+
+        // Create DriverProfile (if not already exists for this brand)
+        let profile = await DriverProfile.findOne({ userId: savedUser._id, brandId });
+        if (!profile) {
+            profile = new DriverProfile({
+                brandId,
+                ownerId,
+                userId: savedUser._id,
+                fullName: name,
+                phone,
+                licenseNumber,
+                licenseType,
+                licenseExpiry: new Date(licenseExpiry),
+                createdBy: "OPERATOR",
+                approvalStatus: "PENDING",
+            });
+            await profile.save();
         }
 
         return res.status(201).json({
             success: true,
-            message: "Driver assigned successfully. SMS invite sent.",
+            message: exists
+                ? `Driver role added to existing user (${existingUser.name}). They can now access driver features.`
+                : "Driver assigned successfully. SMS invite sent.",
             data: {
                 userId: savedUser._id,
                 profileId: profile._id,
                 phone,
                 name,
                 brand: brand.name,
+                isUpgrade: !!exists,
             },
         });
     } catch (error) {

@@ -7,7 +7,7 @@ const emailManager = require("../../emailManager/emailManager.js");
 const generateOtpEmailContent = require("../../handlers/otp-template.js");
 const cloudinary = require("../../handlers/cloudinary.js");
 const sendOTP = require("../../handlers/sparro-otp.js");
-const { isPhoneRegistered } = require("../../utils/phoneGuard.js");
+const { isPhoneRegistered, normalizePhone } = require("../../utils/phoneGuard.js");
 const { createAndSendOTP, verifyOTPCode } = require("../../utils/otpHelper.js");
 const { validatePassword } = require("../../utils/passwordValidator.js");
 
@@ -182,10 +182,11 @@ const completeRegistration = async (req, res) => {
     const myReferralCode = await generateReferralCode();
 
     // Create new user with all information (email is optional)
+    // IMPORTANT: Never set email: null — use sparse index + omit the field entirely
     const newUser = new User({
       phone,
       name,
-      email: email || null, // Set email to null if not provided
+      ...(email ? { email: email.toLowerCase().trim() } : {}),
       address,
       password: hashedPassword,
       gender,
@@ -414,7 +415,32 @@ const login = async (req, res) => {
       });
     }
 
-    // === SUCCESS — reset counters, record login time ===
+    // === MULTI-ROLE: Determine activeRole from X-App-Source ===
+    const VALID_APP_SOURCES = ["passenger", "busOwner", "agent", "conductor", "driver"];
+    const appSource = (req.get("X-App-Source") || "").toLowerCase();
+    const requestedRole = VALID_APP_SOURCES.includes(appSource) ? appSource : null;
+
+    // Ensure user.roles is populated (backfill for old users)
+    const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+
+    // Determine the activeRole for this session
+    let activeRole;
+    if (requestedRole) {
+      // App sent X-App-Source — verify the user has this role
+      if (!userRoles.includes(requestedRole)) {
+        return res.status(403).json({
+          success: false,
+          message: `You don't have a ${requestedRole} account. Please register first.`,
+          errorCode: "ROLE_NOT_REGISTERED",
+        });
+      }
+      activeRole = requestedRole;
+    } else {
+      // No X-App-Source header — backward compat: use primary role
+      activeRole = user.role || "passenger";
+    }
+
+    // === SUCCESS — reset counters, record login time, backfill roles ===
     const loginUpdate = {
       $set: {
         failedLoginAttempts: 0,
@@ -423,34 +449,9 @@ const login = async (req, res) => {
       },
     };
 
-    // === CROSS-ROLE DETECTION ===
-    // When the passenger app sends X-App-Source: passenger and the user
-    // registered under a different role (e.g., busOwner), we add "passenger"
-    // to their roles array. This is additive-only and grants zero elevated
-    // privileges — passenger is the lowest-privilege role.
-    const VALID_APP_SOURCES = ["passenger", "busOwner", "agent", "conductor", "driver"];
-    const appSource = (req.get("X-App-Source") || "").toLowerCase();
-
-    if (
-      VALID_APP_SOURCES.includes(appSource) &&
-      user.role !== appSource &&
-      user.role !== "admin" &&
-      (!user.roles || !user.roles.includes(appSource))
-    ) {
-      loginUpdate.$addToSet = { roles: appSource };
-    }
-
-    // Also ensure roles array contains the primary role (backfill for
-    // users created before the roles field existed)
+    // Backfill: ensure roles array contains the primary role (for old users)
     if (!user.roles || user.roles.length === 0) {
-      if (!loginUpdate.$addToSet) {
-        loginUpdate.$set.roles = appSource && VALID_APP_SOURCES.includes(appSource)
-          ? [user.role, appSource].filter((v, i, a) => a.indexOf(v) === i)
-          : [user.role];
-      } else {
-        loginUpdate.$set.roles = [user.role];
-        // $addToSet will add the appSource on top of this
-      }
+      loginUpdate.$set.roles = [user.role];
     }
 
     await User.findByIdAndUpdate(user._id, loginUpdate);
@@ -458,11 +459,12 @@ const login = async (req, res) => {
     const userWithoutPassword = user.toObject();
     delete userWithoutPassword.password;
 
-    // Generate access + refresh token pair via token service
+    // Generate access + refresh token pair with activeRole context
     const { generateTokenPair } = require("../../utils/tokenService.js");
     const { accessToken, refreshToken } = await generateTokenPair(user, {
       deviceInfo: req.get("User-Agent") || null,
       ipAddress: req.ip || req.connection?.remoteAddress || null,
+      activeRole,
     });
 
     const responseData = {
@@ -470,9 +472,10 @@ const login = async (req, res) => {
       message: "Login successful",
       user: userWithoutPassword,
       accessToken,
+      activeRole,
     };
 
-    // Include refresh token only if generated (admin role gets none)
+    // Include refresh token only if generated
     if (refreshToken) {
       responseData.refreshToken = refreshToken;
     }
@@ -623,7 +626,7 @@ const resetPassword = async (req, res) => {
         .json({ status: false, message: "All fields are required." });
     }
 
-    const user = await User.findOne({ phone: emailOrPhone }).select(
+    const user = await User.findOne({ phone: normalizePhone(emailOrPhone) }).select(
       "+password"
     );
 
@@ -698,7 +701,7 @@ const resendOtp = async (req, res) => {
 
     // For PASSWORD_RESET resend, phone MUST exist in User table
     if (otpPurpose === "PASSWORD_RESET") {
-      const user = await User.findOne({ phone });
+      const user = await User.findOne({ phone: normalizePhone(phone) });
       if (!user) {
         // Don't reveal whether user exists
         return res.status(200).json({
@@ -1117,6 +1120,7 @@ const refreshAccessToken = async (req, res) => {
       USER_NOT_FOUND: { status: 401, message: "User not found. Please login again." },
       ACCOUNT_DEACTIVATED: { status: 403, message: "This account has been deactivated. Contact support." },
       ACCOUNT_BANNED: { status: 403, message: "Your account has been banned. Contact support." },
+      ROLE_REVOKED: { status: 403, message: "Your role has been revoked. Please login again." },
     };
 
     const mapped = errorMap[error.message];

@@ -4,8 +4,10 @@ const Booking = require("../../models/bookTicketModel");
 
 const raiseSettlement = async (req, res) => {
     try {
-        const userId = req.userInfo?.id;
-        const role = req.userInfo?.role;
+        // Admin requests come via adminMiddleware (req.adminInfo)
+        // BusOwner requests come via auth middleware (req.userInfo)
+        const isAdmin = !!req.adminInfo;
+        const userId = req.adminInfo?.id ?? req.userInfo?.id;
         if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
         const { tripIds, ownerId, brandId } = req.body;
@@ -17,7 +19,7 @@ const raiseSettlement = async (req, res) => {
             return res.status(400).json({ success: false, message: "brandId is required. Settlements are raised per brand." });
         }
 
-        const targetOwnerId = role === "admin" ? ownerId : userId;
+        const targetOwnerId = isAdmin ? ownerId : userId;
         if (!targetOwnerId) {
             return res.status(400).json({ success: false, message: "ownerId is required for admin" });
         }
@@ -95,7 +97,7 @@ const raiseSettlement = async (req, res) => {
             commissionRate,             // ← snapshot the rate at time of settlement
             netPayableAmount,
             status: "pending",
-            raisedBy: role === "admin" ? "ADMIN" : "OWNER"
+            raisedBy: isAdmin ? "ADMIN" : "OWNER"
         });
 
         return res.status(201).json({
@@ -140,9 +142,9 @@ const getMySettlements = async (req, res) => {
 const paySettlement = async (req, res) => {
 
     try {
-        const adminId = req.userInfo?.id;
-        const role = req.userInfo?.role;
-        if (role !== "admin") return res.status(403).json({ success: false, message: "Admin only" });
+        // paySettlement is admin-only — called via adminMiddleware
+        const adminId = req.adminInfo?.id;
+        if (!adminId) return res.status(403).json({ success: false, message: "Admin only" });
 
         const { settlementId, paymentMethod, paymentProof, remarks } = req.body;
 
