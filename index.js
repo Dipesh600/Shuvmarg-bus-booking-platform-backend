@@ -160,6 +160,82 @@ app.get("/health", async (req, res) => {
   });
 });
 
+// ── Root Status Page (open in browser to confirm backend is live) ─────────────
+app.get("/", async (req, res) => {
+  const mongoose = require("mongoose");
+  const dbStatus = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
+  const uptime   = Math.floor(process.uptime());
+  const mins     = Math.floor(uptime / 60);
+  const secs     = uptime % 60;
+  const dbColor  = dbStatus === "connected" ? "#D3D925" : "#ff4d4d";
+  const dbIcon   = dbStatus === "connected" ? "✓" : "✗";
+
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Shuvmarg API — Status</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#011a18;color:#F5F7F6;font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:rgba(0,86,78,0.35);border:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(14px);border-radius:24px;padding:48px;max-width:540px;width:100%;box-shadow:0 20px 60px rgba(0,86,78,0.4)}
+    .badge{display:inline-flex;align-items:center;gap:8px;background:rgba(211,217,37,0.15);border:1px solid rgba(211,217,37,0.3);border-radius:999px;padding:6px 16px;font-size:13px;font-weight:600;color:#D3D925;margin-bottom:32px}
+    .dot{width:8px;height:8px;background:#D3D925;border-radius:50%;animation:pulse 1.5s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+    h1{font-size:28px;font-weight:700;margin-bottom:8px}
+    .sub{color:#B7C7C3;font-size:15px;margin-bottom:36px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px}
+    .stat{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:20px}
+    .stat-label{font-size:12px;color:#B7C7C3;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px}
+    .stat-value{font-size:22px;font-weight:700}
+    .endpoints{background:rgba(0,0,0,0.2);border-radius:16px;padding:20px}
+    .endpoints h3{font-size:13px;color:#B7C7C3;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:16px}
+    .ep{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+    .ep:last-child{border-bottom:none}
+    .method{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(211,217,37,0.15);color:#D3D925}
+    .path{font-family:'JetBrains Mono',monospace;font-size:13px;color:#F5F7F6}
+    .ep-desc{font-size:12px;color:#B7C7C3;margin-left:auto}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge"><span class="dot"></span> Live & Running</div>
+    <h1>🚌 Shuvmarg API</h1>
+    <p class="sub">Bus booking backend — all systems operational</p>
+
+    <div class="grid">
+      <div class="stat">
+        <div class="stat-label">Database</div>
+        <div class="stat-value" style="color:${dbColor}">${dbIcon} ${dbStatus}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Uptime</div>
+        <div class="stat-value">${mins}m ${secs}s</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Environment</div>
+        <div class="stat-value" style="font-size:16px">${process.env.NODE_ENV || "development"}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Version</div>
+        <div class="stat-value" style="font-size:16px">v${process.env.npm_package_version || "1.0.0"}</div>
+      </div>
+    </div>
+
+    <div class="endpoints">
+      <h3>Key Endpoints</h3>
+      <div class="ep"><span class="method">GET</span><span class="path">/health</span><span class="ep-desc">JSON status</span></div>
+      <div class="ep"><span class="method">POST</span><span class="path">/api/auth/login</span><span class="ep-desc">Auth</span></div>
+      <div class="ep"><span class="method">GET</span><span class="path">/api/public/searchTrips</span><span class="ep-desc">Search</span></div>
+      <div class="ep"><span class="method">GET</span><span class="path">/api/public/routes</span><span class="ep-desc">Routes</span></div>
+    </div>
+  </div>
+</body>
+</html>`);
+});
+
 // Legacy test endpoint (keep for backward compat)
 app.get("/testing", (req, res) => {
   res.send("Welcome to the Sumarg Bus API – Your request was successful!");
