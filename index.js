@@ -36,6 +36,8 @@ const PORT = process.env.PORT || 7012;
 
 // ── CORS — MUST be first middleware before helmet / rate limiter ──────────────
 // Wildcard '*' conflicts with credentials:true, so we use a function-based origin.
+// Support comma-separated FRONTEND_URL for multiple deployed frontends
+// e.g. FRONTEND_URL="https://shuvmarg.vercel.app,https://shuvmarg-admin.vercel.app"
 const allowedOrigins = [
   "http://localhost:5173",   // Vite super admin dev
   "http://localhost:5174",   // Vite super admin dev (alt port)
@@ -44,7 +46,9 @@ const allowedOrigins = [
   "http://localhost:5177",   // Vite super admin dev (alt port)
   "http://localhost:3000",   // CRA fallback
   "http://localhost:4173",   // Vite preview
-  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+  ...(process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(",").map((u) => u.trim()).filter(Boolean)
+    : []),
 ];
 
 const corsOptions = {
