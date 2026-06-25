@@ -60,7 +60,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-App-Source"],
   optionsSuccessStatus: 200,   // Some browsers (IE11) choke on 204
 };
 

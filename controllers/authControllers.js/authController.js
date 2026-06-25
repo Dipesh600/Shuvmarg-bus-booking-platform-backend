@@ -45,11 +45,19 @@ const sendPhoneOTP = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Send OTP Error:", error);
+    if (error.message && error.message.startsWith("OTP_SEND_BLOCKED:")) {
+      const minutesLeft = parseInt(error.message.split(":")[1], 10) || 10;
+      return res.status(429).json({
+        success: false,
+        message: `Too many OTP requests. Please wait ${minutesLeft} minute(s) before trying again.`,
+        errorCode: "OTP_SEND_BLOCKED",
+        retryAfterMinutes: minutesLeft,
+      });
+    }
+    console.error("Send OTP Error:", error.message);
     return res.status(500).json({
       status: false,
-      message: "Failed to send OTP!",
-      error: error.message,
+      message: "Failed to send OTP. Please try again.",
     });
   }
 };
@@ -554,7 +562,11 @@ const requestPasswordReset = async (req, res) => {
     }
 
     const user = await User.findOne({
-      $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+      $or: [
+        { email: emailOrPhone },
+        { phone: normalizePhone(emailOrPhone) },
+        { phone: emailOrPhone },
+      ],
     });
 
     if (!user) {
@@ -572,11 +584,20 @@ const requestPasswordReset = async (req, res) => {
       message: "OTP sent to registered phone!",
     });
   } catch (err) {
-    console.error("requestPasswordReset error:", err);
-    if (err.message && err.message.includes('Sparrow SMS')) {
-      return res.status(502).json({ status: false, message: err.message });
+    if (err.message && err.message.startsWith("OTP_SEND_BLOCKED:")) {
+      const minutesLeft = parseInt(err.message.split(":")[1], 10) || 10;
+      return res.status(429).json({
+        success: false,
+        message: `Too many OTP requests. Please wait ${minutesLeft} minute(s) before trying again.`,
+        errorCode: "OTP_SEND_BLOCKED",
+        retryAfterMinutes: minutesLeft,
+      });
     }
-    res.status(500).json({ status: false, message: "Internal Server Error" });
+    console.error("requestPasswordReset error:", err.message);
+    if (err.message && err.message.includes('Sparrow SMS')) {
+      return res.status(502).json({ status: false, message: "SMS gateway error. Please try again." });
+    }
+    res.status(500).json({ status: false, message: "Failed to send OTP. Please try again." });
   }
 };
 // verify Otp For Reset
@@ -626,14 +647,19 @@ const resetPassword = async (req, res) => {
         .json({ status: false, message: "All fields are required." });
     }
 
-    const user = await User.findOne({ phone: normalizePhone(emailOrPhone) }).select(
-      "+password"
-    );
+    const user = await User.findOne({
+      $or: [
+        { phone: normalizePhone(emailOrPhone) },
+        { phone: emailOrPhone },
+        { email: emailOrPhone },
+      ],
+      deletedAt: null,
+    }).select("+password");
 
     if (!user) {
       return res
         .status(400)
-        .json({ status: false, message: "User not found." });
+        .json({ status: false, message: "No account found with this phone or email." });
     }
 
     // Verify OTP with purpose enforcement — mark as used on success
@@ -656,12 +682,16 @@ const resetPassword = async (req, res) => {
     user.password = hashedPassword;
     await user.save();
 
+    // Revoke all existing refresh tokens on password change (force re-login)
+    const { revokeAllUserTokens } = require("../../utils/tokenService.js");
+    await revokeAllUserTokens(user._id);
+
     return res
       .status(200)
-      .json({ status: true, message: "Password reset successful!" });
+      .json({ status: true, message: "Password reset successful. Please log in with your new password." });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ status: false, message: "Internal Server Error" });
+    console.error("resetPassword error:", err.message);
+    res.status(500).json({ status: false, message: "Failed to reset password. Please try again." });
   }
 };
 
@@ -720,10 +750,19 @@ const resendOtp = async (req, res) => {
       data: { expiresIn: result.expiresIn },
     });
   } catch (error) {
-    console.error("Resend OTP Error:", error);
+    if (error.message && error.message.startsWith("OTP_SEND_BLOCKED:")) {
+      const minutesLeft = parseInt(error.message.split(":")[1], 10) || 10;
+      return res.status(429).json({
+        success: false,
+        message: `Too many OTP requests. Please wait ${minutesLeft} minute(s) before trying again.`,
+        errorCode: "OTP_SEND_BLOCKED",
+        retryAfterMinutes: minutesLeft,
+      });
+    }
+    console.error("Resend OTP Error:", error.message);
     return res.status(500).json({
       success: false,
-      message: "Internal Server Error",
+      message: "Failed to resend OTP. Please try again.",
     });
   }
 };

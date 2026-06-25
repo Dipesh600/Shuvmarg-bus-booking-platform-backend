@@ -19,6 +19,8 @@ const busOwnerAuthRoutes = require("./authRoutes/busOwnerAuthRoutes.js");
 const agentAuthRoutes = require("./authRoutes/agentAuthRoutes.js");
 const activateAuthRoutes = require("./authRoutes/activateAuthRoutes.js");
 
+const partnerLeadRoutes = require("./partnerLeadRoutes.js");
+
 router.use("/api", userRoute);
 router.use("/api/ticket", ticketRoute);
 router.use("/api/busowner", busOwnerRoute);
@@ -32,6 +34,7 @@ router.use("/api/agent", agentRoute)
 router.use("/api/public", publicRoute)
 router.use("/api/payment", paymentRoutes)
 router.use("/api/conductor", conductorRoutes)
+router.use("/api", partnerLeadRoutes);
 
 // Entity-specific self-registration auth
 router.use("/api/auth/busowner", busOwnerAuthRoutes);
