@@ -1,18 +1,23 @@
 /**
  * models/PartnerLead.js
  *
- * Stores potential bus operator leads from two sources:
+ * Stores potential partner leads from multiple sources and entity types.
  *
+ * Entity Types:
+ *   'busOwner' — lead from the bus owner portal (operator)
+ *   'agent'    — lead from the agent partner portal
+ *
+ * Lead Types:
  *   'contact_form' — user filled the "Request Demo" / "Become a Partner" form
- *                    on the busowner website (name + phone + district provided).
+ *                    on the website (name + phone + district provided).
  *
- *   'otp_verified' — user started registration on the busowner portal, verified
+ *   'otp_verified' — user started registration on the portal, verified
  *                    their phone via OTP, but never completed full registration.
  *                    Only phone is guaranteed; name/district may be added later.
  *
  * Status lifecycle:
  *   new → contacted → converted
- *   'converted' is set automatically when the lead completes bus owner registration.
+ *   'converted' is set automatically when the lead completes registration.
  */
 
 "use strict";
@@ -40,6 +45,15 @@ const partnerLeadSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Which portal did this lead come from?
+    entityType: {
+      type: String,
+      enum: ["busOwner", "agent"],
+      required: true,
+      default: "busOwner",
+      index: true,
+    },
+
     leadType: {
       type: String,
       enum: ["contact_form", "otp_verified"],
@@ -59,7 +73,7 @@ const partnerLeadSchema = new mongoose.Schema(
       index: true,
     },
 
-    // For future multi-source tracking (e.g. 'web', 'mobile', 'agent')
+    // Which app/channel generated this lead
     source: {
       type: String,
       default: "web",
@@ -76,8 +90,8 @@ const partnerLeadSchema = new mongoose.Schema(
   }
 );
 
-// Prevent exact duplicate leads (same phone + same leadType)
-partnerLeadSchema.index({ phone: 1, leadType: 1 }, { unique: true });
+// Prevent exact duplicate leads (same phone + same leadType + same entityType)
+partnerLeadSchema.index({ phone: 1, leadType: 1, entityType: 1 }, { unique: true });
 
 const PartnerLead = mongoose.model("PartnerLead", partnerLeadSchema);
 

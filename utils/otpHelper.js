@@ -48,12 +48,14 @@ const safeCompare = (a, b) => {
  * Human-readable SMS prefix per OTP purpose.
  */
 const PREFIX_MAP = {
-  REGISTRATION:          "Your Shuv Marg Verification code is",
-  PASSWORD_RESET:        "Your Shuv Marg Password Reset code is",
-  PHONE_CHANGE:          "Your Shuv Marg Phone Change code is",
-  ACCOUNT_ACTIVATION:    "Your Shuv Marg Account Activation code is",
-  BUSOWNER_REGISTRATION: "Your Shuv Marg Operator Verification code is",
-  AGENT_REGISTRATION:    "Your Shuv Marg Agent Verification code is",
+  REGISTRATION:           "Your Shuv Marg Verification code is",
+  PASSWORD_RESET:         "Your Shuv Marg Password Reset code is",
+  PHONE_CHANGE:           "Your Shuv Marg Phone Change code is",
+  ACCOUNT_ACTIVATION:     "Your Shuv Marg Account Activation code is",
+  BUSOWNER_REGISTRATION:  "Your Shuv Marg Operator Verification code is",
+  BUSOWNER_PASSWORD_RESET:"Your Shuv Marg Operator Password Reset code is",
+  AGENT_REGISTRATION:     "Your Shuv Marg Agent Verification code is",
+  AGENT_PASSWORD_RESET:   "Your Shuv Marg Agent Password Reset code is",
 };
 
 /**

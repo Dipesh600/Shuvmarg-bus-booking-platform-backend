@@ -33,6 +33,7 @@ const otpSchema = new mongoose.Schema({
       "BUSOWNER_REGISTRATION",
       "BUSOWNER_PASSWORD_RESET",
       "AGENT_REGISTRATION",
+      "AGENT_PASSWORD_RESET",
     ],
     required: true,
   },

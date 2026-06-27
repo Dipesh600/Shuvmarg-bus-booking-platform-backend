@@ -150,15 +150,17 @@ const verifyOTP = async (req, res) => {
       });
     }
 
-    // ── Capture as otp_verified lead (fire-and-forget) ────────────────────────
+    // ── Capture as otp_verified busOwner lead (fire-and-forget) ──────────────
     // Upsert so we don't overwrite a contact_form lead that already exists for
     // this phone — we create a separate otp_verified record instead.
     PartnerLead.findOneAndUpdate(
-      { phone, leadType: "otp_verified" },
+      { phone, leadType: "otp_verified", entityType: "busOwner" },
       {
         phone,
         leadType: "otp_verified",
+        entityType: "busOwner",
         phoneVerified: true,
+        source: "busowner_app",
         $setOnInsert: { status: "new" },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -316,11 +318,11 @@ const register = async (req, res) => {
     const userObj = savedUser.toObject ? savedUser.toObject() : { ...savedUser };
     delete userObj.password;
 
-    // ── Mark any otp_verified lead as converted (fire-and-forget) ─────────────
+    // ── Mark any otp_verified busOwner lead as converted (fire-and-forget) ────
     const normalizedPhone = normalizePhone(savedUser.phone || phone);
     if (normalizedPhone) {
       PartnerLead.updateMany(
-        { phone: normalizedPhone, leadType: "otp_verified" },
+        { phone: normalizedPhone, leadType: "otp_verified", entityType: "busOwner" },
         { $set: { status: "converted" } }
       ).catch((err) => console.error("[PartnerLead convert - register] Non-fatal:", err.message));
     }
