@@ -89,6 +89,12 @@ const getAgentsById = async (req, res) => {
         const agentData = agent.toObject();
         agentData.documents = await resolveDocumentUrls(agent.documents);
 
+        // Embed resolved user data directly into agentDetails
+        // so the frontend can access agentDetails.user.name even if profile fetch fails
+        if (user) {
+            agentData.user = { _id: user._id, name: user.name, phone: user.phone, email: user.email };
+        }
+
         return res.status(200).json({
             success: true,
             message: "Agent details retrieved successfully!",
@@ -265,6 +271,13 @@ const updateAgentKyc = async (req, res) => {
         if (user && user.phone) {
             try {
                 let smsText = `Dear ${user.name || "Agent"}, your agent application status is ${statusText}.`;
+                if (applicationStatus === "APPROVED") {
+                    if (agent.agentType === "OPERATOR_LINKED") {
+                        smsText = `Welcome ${user.name || "Agent"}, your agent application is approved. Download the app and start selling tickets now! (Access via www.shuvmargagent.vercel.app/ for now)`;
+                    } else {
+                        smsText = `Dear ${user.name || "Agent"}, your agent application status is approved. You can start booking tickets now at www.shuvmargagent.vercel.app/`;
+                    }
+                }
                 if (invalidDocs.length > 0) {
                     const docNames = invalidDocs.map((d) => d.label).join(", ");
                     smsText += ` Documents needing attention: ${docNames}.`;
@@ -288,7 +301,7 @@ const updateAgentKyc = async (req, res) => {
                     : `Application status: ${statusText}.`;
 
             if (agent.user) {
-                await createLocalNotification(agent.user, "AGENT_APPLICATION_UPDATE", title, body, {
+                await createLocalNotification(agent.user, "AGENT_KYC_UPDATE", title, body, {
                     applicationStatus: statusText,
                 });
 
@@ -563,8 +576,8 @@ const finalizeAgentSetup = async (req, res) => {
                 try {
                     const welcomeSms =
                         `Welcome to Shuvmarg, ${agentUser.name || "Agent"}! ` +
-                        `Your agent account (${agent.agentId}) is ready. ` +
-                        `Download the Shuvmarg Partner App to start booking tickets for passengers.`;
+                        `Your agent account (${agent.agentId}) is approved. ` +
+                        `Start selling tickets now at www.shuvmargagent.vercel.app/`;
                     await sendOTP(agentUser.phone, welcomeSms);
                 } catch (smsErr) {
                     console.warn("[finalizeAgentSetup] SMS failed (non-fatal):", smsErr.message);
@@ -574,7 +587,7 @@ const finalizeAgentSetup = async (req, res) => {
             try {
                 await createLocalNotification(
                     agent.user,
-                    "AGENT_APPLICATION_UPDATE",
+                    "AGENT_KYC_UPDATE",
                     "Welcome to Shuvmarg!",
                     "Your agent account is ready. Download the Shuvmarg Partner App to get started.",
                     { applicationStatus: "APPROVED", agentId: agent.agentId }
@@ -609,37 +622,47 @@ const getAgentDashboard = async (req, res) => {
     try {
         const [
             totalAgents,
+            activeAgents,
             approvedAgents,
             pendingAgents,
             rejectedAgents,
             moreInfoAgents,
             suspendedAgents,
+            draftAgents,
             defaultAgents,
             operatorLinkedAgents,
         ] = await Promise.all([
+            // All Agent documents ever created (full historical count)
             Agent.countDocuments({}),
+            // "Registered" = submitted and in the system (excludes DRAFT & REJECTED)
+            Agent.countDocuments({ applicationStatus: { $in: ["APPROVED", "PENDING", "MORE_INFO", "SUSPENDED"] } }),
             Agent.countDocuments({ applicationStatus: "APPROVED" }),
             Agent.countDocuments({ applicationStatus: "PENDING" }),
             Agent.countDocuments({ applicationStatus: "REJECTED" }),
             Agent.countDocuments({ applicationStatus: "MORE_INFO" }),
             Agent.countDocuments({ applicationStatus: "SUSPENDED" }),
+            Agent.countDocuments({ applicationStatus: "DRAFT" }),
             Agent.countDocuments({ agentType: "DEFAULT" }),
             Agent.countDocuments({ agentType: "OPERATOR_LINKED" }),
         ]);
 
-        const approvedPercentage = totalAgents > 0
-            ? ((approvedAgents / totalAgents) * 100).toFixed(0)
+        const approvedPercentage = activeAgents > 0
+            ? ((approvedAgents / activeAgents) * 100).toFixed(0)
             : 0;
 
         return res.status(200).json({
             success: true,
             data: {
-                totalAgents,
-                approvedAgents: `${approvedAgents} (${approvedPercentage}% of total)`,
+                // "Registered" agents = submitted (not DRAFT/REJECTED)
+                totalAgents: activeAgents,
+                // Full breakdown for context
+                allTimeTotal: totalAgents,
+                approvedAgents: `${approvedAgents} (${approvedPercentage}% of registered)`,
                 pendingAgents,
                 rejectedAgents,
                 moreInfoAgents,
                 suspendedAgents,
+                draftAgents,
                 byType: {
                     default: defaultAgents,
                     operatorLinked: operatorLinkedAgents,

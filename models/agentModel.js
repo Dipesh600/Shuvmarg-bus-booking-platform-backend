@@ -52,7 +52,7 @@ const agentSchema = new mongoose.Schema(
                 "PENDING",      // Submitted, awaiting admin review
                 "MORE_INFO",    // Admin requested additional info/documents
                 "APPROVED",     // Approved and active
-                "REJECTED",     // Rejected (can reapply after 7 days unless permanent)
+                "REJECTED",     // Rejected (can reapply after 24 hours unless permanent)
                 "SUSPENDED",    // Temporarily suspended by admin
             ],
             default: "DRAFT",
@@ -99,6 +99,16 @@ const agentSchema = new mongoose.Schema(
 
         district: { type: String, default: null, trim: true },
         municipality: { type: String, default: null, trim: true },
+        placeName: { type: String, default: null, trim: true },
+
+        /* =======================
+           IDENTIFICATION NUMBERS
+           Stored as plain text — never used for financial purposes.
+        ======================= */
+
+        citizenshipNumber: { type: String, default: null, trim: true },
+        nationalIdNumber:  { type: String, default: null, trim: true },  // Optional — not all agents have this
+        panNumber:         { type: String, default: null, trim: true },
 
         /* =======================
            STEP 2: BUSINESS DETAILS
@@ -113,6 +123,7 @@ const agentSchema = new mongoose.Schema(
                 "ticket_counter",
                 "travel_agent",
                 "mobile_shop",
+                "hotel",
                 "individual",
                 "other",
             ],
@@ -142,6 +153,8 @@ const agentSchema = new mongoose.Schema(
                     enum: [
                         "citizenship_front",
                         "citizenship_back",
+                        "national_id_front",
+                        "national_id_back",
                         "shop_photo",
                         "pan_card",
                         "business_registration",
@@ -187,6 +200,7 @@ const agentSchema = new mongoose.Schema(
         ======================= */
 
         rejectionReason: { type: String, default: null },
+        rejectedAt: { type: Date, default: null },
 
         // Admin's specific request when status = MORE_INFO
         moreInfoRequest: { type: String, default: null },
@@ -197,6 +211,16 @@ const agentSchema = new mongoose.Schema(
 
         // Internal admin notes (not visible to agent)
         adminNotes: { type: String, default: null },
+
+        /* =======================
+           CONSENTS
+           Legal compliance — timestamps prove acceptance.
+        ======================= */
+
+        // Timestamp of T&C acceptance at application submit time
+        termsAcceptedAt:  { type: Date, default: null },
+        // Whether agent opted in to WhatsApp notifications
+        whatsappConsent:  { type: Boolean, default: false },
 
         /* =======================
            COMMISSION CONFIGURATION
@@ -249,7 +273,6 @@ const agentSchema = new mongoose.Schema(
             type: String,
             sparse: true,
             unique: true,
-            default: null,
         },
         // S3 key for pre-generated QR code image
         qrCodeUrl: { type: String, default: null },

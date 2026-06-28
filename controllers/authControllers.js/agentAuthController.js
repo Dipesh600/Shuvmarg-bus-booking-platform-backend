@@ -84,15 +84,25 @@ const sendOTP = async (req, res) => {
       });
     }
 
-    // Role-aware phone check — only block if already an agent
+    // Role-aware phone check — only block if already an agent WITH a complete Agent document.
+    // If the user has the "agent" role but no Agent doc, it means a previous registration
+    // attempt failed mid-way (orphaned state) — allow them to retry.
     const { exists, hasRole, user } = await checkPhoneForRole(phone, "agent");
 
     if (exists && hasRole) {
-      return res.status(409).json({
-        success: false,
-        message: "This mobile number is already registered as an agent.",
-        errorCode: "ROLE_ALREADY_REGISTERED",
-      });
+      // Check if this is an orphaned state (role flag set but Agent doc missing)
+      const agentDoc = await Agent.findOne({ user: user._id }).select("_id").lean();
+      if (agentDoc) {
+        // Fully registered agent — block and tell them to log in
+        return res.status(409).json({
+          success: false,
+          message: "This mobile number is already registered as an agent. Please log in instead.",
+          errorCode: "ROLE_ALREADY_REGISTERED",
+          hint: "login",
+        });
+      }
+      // No Agent doc — orphaned state, fall through and allow OTP
+      console.warn(`[Agent sendOTP] Orphaned agent role detected for phone ${phone} — allowing re-registration`);
     }
 
     // Block banned or deactivated accounts
@@ -181,6 +191,10 @@ const verifyOTP = async (req, res) => {
         : "Phone verified successfully. Complete your registration.",
       exists,
       userName: exists && user ? user.name : null,
+      // Tell the frontend what role(s) this phone already has so it can show a clear message
+      existingRoles: exists && user
+        ? (user.roles && user.roles.length > 0 ? user.roles : [user.role]).filter(Boolean)
+        : [],
     });
   } catch (error) {
     console.error("[Agent verifyOTP] Error:", error.message);
@@ -202,7 +216,7 @@ const verifyOTP = async (req, res) => {
 const register = async (req, res) => {
   try {
     const phone = normalizePhone(req.body.phone);
-    const { name, password, email, companyName, address } = req.body;
+    const { name, password, email } = req.body;
 
     if (!phone || !name) {
       const missing = !phone ? "Phone" : "Name";
@@ -232,26 +246,62 @@ const register = async (req, res) => {
       });
     }
 
-    // === FIND-OR-UPGRADE ===
+    // === FIND-OR-UPGRADE (with orphan repair) ===
     const { exists, hasRole, user: existingUser } = await checkPhoneForRole(phone, "agent");
 
     if (exists && hasRole) {
-      return res.status(409).json({
-        success: false,
-        message: "This mobile number is already registered as an agent.",
-        errorCode: "ROLE_ALREADY_REGISTERED",
-      });
+      // Check if this is an orphaned state — role in User.roles but no Agent doc
+      const agentDoc = await Agent.findOne({ user: existingUser._id }).select("_id").lean();
+      if (agentDoc) {
+        // Fully registered — block
+        return res.status(409).json({
+          success: false,
+          message: "This mobile number is already registered as an agent. Please log in instead.",
+          errorCode: "ROLE_ALREADY_REGISTERED",
+          hint: "login",
+        });
+      }
+      // No Agent doc — orphaned state: fall through to the upgrade/repair path below
+      // (existingUser is set, so the `if (exists && existingUser)` branch will handle it)
+      console.warn(`[Agent register] Repairing orphaned agent role for user ${existingUser._id}`);
     }
 
     let savedUser;
+    let isUpgradePath = false;
 
     if (exists && existingUser) {
       // === UPGRADE PATH: Existing user → add "agent" role ===
+      // We ALSO update the password to the new one the user typed during registration.
+      // This is intentional: if they don't remember their old password and set a new one,
+      // we honor that new password. OTP verification already proved phone ownership.
+      isUpgradePath = true;
+
+      if (!password) {
+        return res.status(400).json({
+          success: false,
+          message: "Password is required.",
+        });
+      }
+
+      const passwordCheck = validatePassword(password);
+      if (!passwordCheck.valid) {
+        return res.status(400).json({
+          success: false,
+          message: passwordCheck.errors[0],
+          errors: passwordCheck.errors,
+        });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 12);
+
       savedUser = await User.findByIdAndUpdate(
         existingUser._id,
         {
           $addToSet: { roles: "agent" },
-          $set: { "roleActivatedAt.agent": new Date() },
+          $set: {
+            "roleActivatedAt.agent": new Date(),
+            password: hashedPassword,   // ← replace password with the new one
+          },
         },
         { new: true }
       );
@@ -286,27 +336,33 @@ const register = async (req, res) => {
         password: hashedPassword,
         role: "agent",
         roles: ["agent"],
-        status: "active",         // Approval lives on Agent.verificationStatus, NOT User.status
+        status: "active",         // Approval lives on Agent.applicationStatus, NOT User.status
         phoneVerified: true,
         isVerified: false,
         roleActivatedAt: { agent: new Date() },
       };
       if (email) userData.email = email.toLowerCase().trim();
-      if (address) userData.address = address.trim();
 
       const newUser = new User(userData);
       savedUser = await newUser.save();
     }
 
-    // Create Agent KYC skeleton (always created for a new agent role)
-    const existingAgent = await Agent.findOne({ user: savedUser._id });
-    if (!existingAgent) {
-      const newAgent = new Agent({
-        user: savedUser._id,
-        agentCompanyName: companyName ? companyName.trim() : null,
-        verificationStatus: "pending",
-      });
-      await newAgent.save();
+    // Create Agent KYC skeleton — use upsert to handle concurrent/retry requests safely
+    const agentDoc = await Agent.findOneAndUpdate(
+      { user: savedUser._id },
+      {
+        $setOnInsert: {
+          user: savedUser._id,
+          applicationStatus: "DRAFT",
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    // findOneAndUpdate bypasses pre("save") middleware, so agentId won't be auto-generated.
+    // If the doc was just inserted and has no agentId, trigger a save() to generate it.
+    if (!agentDoc.agentId) {
+      await agentDoc.save();
     }
 
     // Issue tokens with activeRole: "agent"
@@ -331,25 +387,46 @@ const register = async (req, res) => {
 
     const responseData = {
       success: true,
-      message: exists
-        ? "Agent role added to your account. Submit KYC documents to activate."
-        : "Registration successful. Submit your KYC documents to activate your agent account.",
+      message: isUpgradePath
+        ? "Agent access added to your account. Your new password has been set."
+        : "Account created successfully. Complete your setup to start using Shuv Marg.",
       user: userObj,
       accessToken,
       activeRole: "agent",
-      isUpgrade: !!exists,
+      isUpgrade: isUpgradePath,
+      applicationStatus: "DRAFT",
     };
     if (refreshToken) responseData.refreshToken = refreshToken;
 
     return res.status(201).json(responseData);
   } catch (error) {
-    console.error("[Agent register] Error:", error.message);
+    console.error("[Agent register] Error:", error.message, error.stack?.split("\n")?.[1]);
 
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0];
+      const fieldLabel =
+        field === "phone" ? "Mobile number" :
+        field === "email" ? "Email address" :
+        field === "user"  ? "Phone number" :   // Agent.user unique — means they already have an agent account
+        field === "agentId" ? "Agent ID" :
+        null;
+
+      if (field === "user") {
+        // The user already has an Agent record — this is a race condition / retry.
+        // Safe to treat as success — tell them to proceed to setup.
+        return res.status(409).json({
+          success: false,
+          message: "An agent account for this phone number already exists. Please log in instead.",
+          errorCode: "AGENT_ALREADY_EXISTS",
+          hint: "login",
+        });
+      }
+
       return res.status(409).json({
         success: false,
-        message: `${field === "phone" ? "Mobile number" : field === "email" ? "Email" : "Value"} is already registered.`,
+        message: fieldLabel
+          ? `${fieldLabel} is already registered.`
+          : "This information is already registered with another account.",
       });
     }
 

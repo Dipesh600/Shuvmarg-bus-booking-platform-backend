@@ -30,10 +30,12 @@ const getUnifiedKycList = async (req, res) => {
         agents.forEach((agent) => {
             unifiedData.push({
                 agentId: agent.agentId,
-                companyname: agent.agentCompanyName || "N/A",
+                companyname: agent.businessName || agent.user?.name || agent.agentId || "N/A",
                 owner: agent.user?.name || "Unknown",
-                submitdate: agent.createdAt,
-                status: agent.verificationStatus,
+                location: [agent.municipality, agent.district].filter(Boolean).join(", "),
+                documents: agent.documents ? agent.documents.length : 0,
+                submitdate: agent.submittedAt || agent.createdAt,
+                status: agent.applicationStatus || "DRAFT",
                 kyctype: "agent",
                 data: agent,
             });

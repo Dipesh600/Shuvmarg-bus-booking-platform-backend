@@ -62,35 +62,48 @@ const saveApplicationDraft = async (req, res) => {
         }
 
         const {
-            // Step 1 — Personal
-            district, municipality,
+            // Step 1 — Location
+            district, municipality, placeName,
             // Step 2 — Business
             businessName, shopAddress, operationType,
             claimedMonthlyVolume, currentOperators, referralSource,
+            // Step 3 — Identification numbers
+            citizenshipNumber, nationalIdNumber, panNumber,
+            // Step 3 — Consents (saved on submit, but can be pre-saved)
+            whatsappConsent,
             // Step 4 — Settlement
             settlementMethod, bankName, bankAccountNumber, bankAccountName,
             esewaNumber, khaltiNumber,
         } = req.body;
 
-        // Step 1
-        if (district !== undefined) agent.district = district;
-        if (municipality !== undefined) agent.municipality = municipality;
+        // Step 1 — Location
+        if (district !== undefined)      agent.district      = district;
+        if (municipality !== undefined)  agent.municipality  = municipality;
+        if (placeName !== undefined)     agent.placeName     = placeName;
 
-        // Step 2
-        if (businessName !== undefined) agent.businessName = businessName;
-        if (shopAddress !== undefined) agent.shopAddress = shopAddress;
-        if (operationType !== undefined) agent.operationType = operationType;
+        // Step 2 — Business
+        if (businessName !== undefined)         agent.businessName         = businessName;
+        if (shopAddress !== undefined)          agent.shopAddress          = shopAddress;
+        if (operationType !== undefined)        agent.operationType        = operationType;
         if (claimedMonthlyVolume !== undefined) agent.claimedMonthlyVolume = claimedMonthlyVolume;
-        if (currentOperators !== undefined) agent.currentOperators = currentOperators;
-        if (referralSource !== undefined) agent.referralSource = referralSource;
+        if (currentOperators !== undefined)     agent.currentOperators     = currentOperators;
+        if (referralSource !== undefined)       agent.referralSource       = referralSource;
 
-        // Step 4
-        if (settlementMethod !== undefined) agent.settlementMethod = settlementMethod;
-        if (bankName !== undefined) agent.bankName = bankName;
-        if (bankAccountNumber !== undefined) agent.bankAccountNumber = bankAccountNumber;
-        if (bankAccountName !== undefined) agent.bankAccountName = bankAccountName;
-        if (esewaNumber !== undefined) agent.esewaNumber = esewaNumber;
-        if (khaltiNumber !== undefined) agent.khaltiNumber = khaltiNumber;
+        // Step 3 — Identification
+        if (citizenshipNumber !== undefined) agent.citizenshipNumber = citizenshipNumber;
+        if (nationalIdNumber !== undefined)  agent.nationalIdNumber  = nationalIdNumber;
+        if (panNumber !== undefined)         agent.panNumber         = panNumber;
+
+        // Consents
+        if (whatsappConsent !== undefined)   agent.whatsappConsent   = !!whatsappConsent;
+
+        // Step 4 — Settlement
+        if (settlementMethod !== undefined)    agent.settlementMethod    = settlementMethod;
+        if (bankName !== undefined)            agent.bankName            = bankName;
+        if (bankAccountNumber !== undefined)   agent.bankAccountNumber   = bankAccountNumber;
+        if (bankAccountName !== undefined)     agent.bankAccountName     = bankAccountName;
+        if (esewaNumber !== undefined)         agent.esewaNumber         = esewaNumber;
+        if (khaltiNumber !== undefined)        agent.khaltiNumber        = khaltiNumber;
 
         await agent.save();
 
@@ -141,6 +154,7 @@ const uploadDocument = async (req, res) => {
         const { documentType } = req.body;
         const validTypes = [
             "citizenship_front", "citizenship_back",
+            "national_id_front", "national_id_back",
             "shop_photo", "pan_card", "business_registration",
         ];
 
@@ -235,8 +249,10 @@ const uploadDocument = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/agent/application/submit
 //
-// Submit the application for admin review. Validates all 4 steps are complete.
+// Submit the application for admin review. Validates all required fields.
 // Transitions: DRAFT → PENDING, MORE_INFO → PENDING
+//
+// Reapply (REJECTED → PENDING): allowed after 24 hours from rejection.
 // ─────────────────────────────────────────────────────────────────────────────
 const submitApplication = async (req, res) => {
     try {
@@ -253,6 +269,34 @@ const submitApplication = async (req, res) => {
             });
         }
 
+        const { termsAccepted } = req.body;
+
+        // ── Status gate ────────────────────────────────────────────────────
+        if (agent.applicationStatus === "REJECTED") {
+            if (agent.isPermanentlyRejected) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Your application has been permanently rejected. Please contact support.",
+                    errorCode: "PERMANENTLY_REJECTED",
+                });
+            }
+            // 24-hour reapply window
+            const REAPPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+            if (agent.rejectedAt && (Date.now() - new Date(agent.rejectedAt).getTime()) < REAPPLY_WINDOW_MS) {
+                const hoursLeft = Math.ceil(
+                    (REAPPLY_WINDOW_MS - (Date.now() - new Date(agent.rejectedAt).getTime())) / 3600000
+                );
+                return res.status(429).json({
+                    success: false,
+                    message: `You can reapply after ${hoursLeft} hour(s).`,
+                    errorCode: "REAPPLY_TOO_SOON",
+                    hoursLeft,
+                });
+            }
+            // Reset to DRAFT so they can edit and resubmit
+            agent.applicationStatus = "DRAFT";
+        }
+
         if (!["DRAFT", "MORE_INFO"].includes(agent.applicationStatus)) {
             return res.status(400).json({
                 success: false,
@@ -260,37 +304,42 @@ const submitApplication = async (req, res) => {
             });
         }
 
+        // ── Terms acceptance ───────────────────────────────────────────────
+        if (!termsAccepted) {
+            return res.status(400).json({
+                success: false,
+                message: "You must accept the Terms and Conditions to submit your application.",
+            });
+        }
+
         // ── Validate completeness ──────────────────────────────────────────
         const errors = [];
 
-        // Step 1 — Personal
-        if (!agent.district) errors.push("District is required (Step 1).");
-        if (!agent.municipality) errors.push("Municipality is required (Step 1).");
+        // Step 1 — Location
+        if (!agent.district)      errors.push("District is required.");
+        if (!agent.municipality)  errors.push("Municipality is required.");
+        if (!agent.placeName)     errors.push("Place name is required.");
 
         // Step 2 — Business
-        if (!agent.shopAddress) errors.push("Shop/Office address is required (Step 2).");
-        if (!agent.operationType) errors.push("Operation type is required (Step 2).");
-
-        // Step 3 — Documents
-        const requiredDocs = ["citizenship_front", "citizenship_back"];
-        const uploadedTypes = agent.documents.map((d) => d.type);
-        for (const required of requiredDocs) {
-            if (!uploadedTypes.includes(required)) {
-                errors.push(`${required.replace(/_/g, " ")} document is required (Step 3).`);
-            }
+        if (!agent.operationType) errors.push("Agent type is required.");
+        if (!agent.shopAddress)   errors.push("Shop / Office address is required.");
+        // businessName is required for all types except individual
+        if (agent.operationType !== "individual" && !agent.businessName) {
+            errors.push("Business name is required for your agent type.");
         }
 
-        // Step 4 — Settlement
-        if (!agent.settlementMethod) {
-            errors.push("Settlement method is required (Step 4).");
-        } else if (agent.settlementMethod === "BANK") {
-            if (!agent.bankName) errors.push("Bank name is required (Step 4).");
-            if (!agent.bankAccountNumber) errors.push("Bank account number is required (Step 4).");
-            if (!agent.bankAccountName) errors.push("Account holder name is required (Step 4).");
-        } else if (agent.settlementMethod === "ESEWA") {
-            if (!agent.esewaNumber) errors.push("eSewa number is required (Step 4).");
-        } else if (agent.settlementMethod === "KHALTI") {
-            if (!agent.khaltiNumber) errors.push("Khalti number is required (Step 4).");
+        // Step 3 — Identification numbers
+        if (!agent.citizenshipNumber) errors.push("Citizenship number is required.");
+        if (!agent.panNumber)         errors.push("PAN number is required.");
+        // nationalIdNumber is optional — no validation
+
+        // Step 3 — Documents
+        const uploadedTypes = agent.documents.map((d) => d.type);
+        const requiredDocs = ["citizenship_front", "citizenship_back", "pan_card"];
+        for (const required of requiredDocs) {
+            if (!uploadedTypes.includes(required)) {
+                errors.push(`${required.replace(/_/g, " ")} document is required.`);
+            }
         }
 
         if (errors.length > 0) {
@@ -303,21 +352,19 @@ const submitApplication = async (req, res) => {
 
         // ── Submit ─────────────────────────────────────────────────────────
         agent.applicationStatus = "PENDING";
-        agent.submittedAt = new Date();
-        agent.rejectionReason = null;
-        agent.moreInfoRequest = null;
+        agent.submittedAt       = new Date();
+        agent.termsAcceptedAt   = new Date();
+        agent.rejectionReason   = null;
+        agent.moreInfoRequest   = null;
         agent.moreInfoRequestedAt = null;
 
         await agent.save();
 
-        logger.info("agent: application submitted", {
-            userId,
-            agentId: agent.agentId,
-        });
+        logger.info("agent: application submitted", { userId, agentId: agent.agentId });
 
         return res.status(200).json({
             success: true,
-            message: "Application submitted successfully! We'll review it within 2-3 business days.",
+            message: "Application submitted successfully! We'll review it within 2–3 business days.",
             data: {
                 agentId: agent.agentId,
                 applicationStatus: agent.applicationStatus,
@@ -333,7 +380,7 @@ const submitApplication = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/agent/application/status
 //
-// Returns the agent's complete application state — status, all 4 steps of data,
+// Returns the agent's complete application state — status, all steps of data,
 // document previews, and any admin feedback.
 // Used by both the application form (to restore draft) and the status screen.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -344,18 +391,30 @@ const getApplicationStatus = async (req, res) => {
             return res.status(401).json({ success: false, message: "Unauthorized." });
         }
 
-        const agent = await Agent.findOne({ user: userId }).lean();
+        const agent = await Agent.findOne({ user: userId }).populate("user", "name").lean();
 
         if (!agent) {
             return res.status(200).json({
                 success: true,
                 message: "No application started yet.",
-                data: { applicationStatus: null, hasApplication: false },
+                data: { applicationStatus: "DRAFT", hasApplication: false, userName: req.userInfo?.name || null },
             });
         }
 
         // Resolve document presigned URLs for display in the app
         const documentsWithUrls = await resolveDocumentUrls(agent.documents || []);
+
+        // Compute reapply eligibility for REJECTED agents
+        let canReapply = false;
+        let reapplyAvailableAt = null;
+        if (agent.applicationStatus === "REJECTED" && !agent.isPermanentlyRejected) {
+            const REAPPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+            const elapsed = agent.rejectedAt ? Date.now() - new Date(agent.rejectedAt).getTime() : Infinity;
+            canReapply = elapsed >= REAPPLY_WINDOW_MS;
+            if (!canReapply && agent.rejectedAt) {
+                reapplyAvailableAt = new Date(new Date(agent.rejectedAt).getTime() + REAPPLY_WINDOW_MS);
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -367,11 +426,13 @@ const getApplicationStatus = async (req, res) => {
                 agentType: agent.agentType,
                 submittedAt: agent.submittedAt,
                 approvedAt: agent.approvedAt,
+                userName: agent.user?.name ?? null,
 
-                // Step 1 — Personal
+                // Step 1 — Location
                 personal: {
                     district: agent.district,
                     municipality: agent.municipality,
+                    placeName: agent.placeName,
                 },
 
                 // Step 2 — Business
@@ -384,17 +445,20 @@ const getApplicationStatus = async (req, res) => {
                     referralSource: agent.referralSource,
                 },
 
+                // Step 3 — Identification
+                identification: {
+                    citizenshipNumber: agent.citizenshipNumber,
+                    nationalIdNumber: agent.nationalIdNumber,
+                    panNumber: agent.panNumber,
+                },
+
                 // Step 3 — Documents
                 documents: documentsWithUrls,
 
-                // Step 4 — Settlement
-                settlement: {
-                    settlementMethod: agent.settlementMethod,
-                    bankName: agent.bankName,
-                    bankAccountNumber: agent.bankAccountNumber,
-                    bankAccountName: agent.bankAccountName,
-                    esewaNumber: agent.esewaNumber,
-                    khaltiNumber: agent.khaltiNumber,
+                // Consents
+                consents: {
+                    termsAcceptedAt: agent.termsAcceptedAt,
+                    whatsappConsent: agent.whatsappConsent,
                 },
 
                 // Admin feedback
@@ -402,6 +466,10 @@ const getApplicationStatus = async (req, res) => {
                 moreInfoRequest: agent.moreInfoRequest,
                 moreInfoRequestedAt: agent.moreInfoRequestedAt,
                 isPermanentlyRejected: agent.isPermanentlyRejected,
+
+                // Reapply eligibility (only meaningful when REJECTED)
+                canReapply,
+                reapplyAvailableAt,
 
                 createdAt: agent.createdAt,
                 updatedAt: agent.updatedAt,
