@@ -8,9 +8,9 @@ const seedSuperAdmin = async () => {
     try {
         await dbConnection();
 
-        const email = process.env.SUPER_ADMIN_EMAIL || "superadmin@sumarg.com";
+        const email = process.env.SUPER_ADMIN_EMAIL || "superadmin@shuvmarg.com";
         const adminId = process.env.SUPER_ADMIN_ID || "SUMA-ADM-001";
-        const plainPassword = process.env.SUPER_ADMIN_PASSWORD || "SuperAdmin@123";
+        const plainPassword = process.env.SUPER_ADMIN_PASSWORD || "Divyanshi@123.";
 
         const existing = await SuperAdmin.findOne({
             $or: [{ email }, { adminId }],

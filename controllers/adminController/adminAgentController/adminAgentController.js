@@ -241,79 +241,83 @@ const updateAgentKyc = async (req, res) => {
 
         await agent.save();
 
-        // ── Notifications (best-effort) ────────────────────────────────────
-        const user = await User.findById(agent.user).select("name email phone");
-        const statusText = agent.applicationStatus || "DRAFT";
+        // ── Notifications — only fire when a final decision status is set ────
+        // Skip ALL notifications when admin is only verifying/rejecting individual
+        // documents (documentVerifications only, no applicationStatus change).
+        if (applicationStatus) {
+            const user = await User.findById(agent.user).select("name email phone");
+            const statusText = agent.applicationStatus || "DRAFT";
 
-        // Identify rejected documents for notification detail
-        const invalidDocs = agent.documents
-            .filter((d) => d.verified === false || d.rejectionReason)
-            .map((d) => ({
-                label: d.type.replace(/_/g, " "),
-                reason: d.rejectionReason || null,
-            }));
+            // Identify rejected documents for notification detail
+            const invalidDocs = agent.documents
+                .filter((d) => d.verified === false || d.rejectionReason)
+                .map((d) => ({
+                    label: d.type.replace(/_/g, " "),
+                    reason: d.rejectionReason || null,
+                }));
 
-        // Email notification
-        if (user && user.email) {
-            try {
-                const emailHtml = generateAgentStatusEmail(
-                    user.name,
-                    statusText,
-                    invalidDocs
-                );
-                await emailManager(user.email, "Agent Application Update", emailHtml);
-            } catch (emailErr) {
-                console.warn("[updateAgentKyc] Email failed (non-fatal):", emailErr.message);
+            // Email notification
+            if (user && user.email) {
+                try {
+                    const emailHtml = generateAgentStatusEmail(
+                        user.name,
+                        statusText,
+                        invalidDocs
+                    );
+                    await emailManager(user.email, "Agent Application Update", emailHtml);
+                } catch (emailErr) {
+                    console.warn("[updateAgentKyc] Email failed (non-fatal):", emailErr.message);
+                }
             }
-        }
 
-        // SMS notification
-        if (user && user.phone) {
+            // SMS notification
+            if (user && user.phone) {
+                try {
+                    let smsText = `Dear ${user.name || "Agent"}, your agent application status is ${statusText}.`;
+                    if (applicationStatus === "APPROVED") {
+                        if (agent.agentType === "OPERATOR_LINKED") {
+                            smsText = `Welcome ${user.name || "Agent"}, your agent application is approved. Download the app and start selling tickets now! (Access via www.shuvmargagent.vercel.app/ for now)`;
+                        } else {
+                            smsText = `Dear ${user.name || "Agent"}, your agent application status is approved. You can start booking tickets now at www.shuvmargagent.vercel.app/`;
+                        }
+                    }
+                    if (invalidDocs.length > 0) {
+                        const docNames = invalidDocs.map((d) => d.label).join(", ");
+                        smsText += ` Documents needing attention: ${docNames}.`;
+                    }
+                    await sendOTP(user.phone, smsText);
+                } catch (smsErr) {
+                    console.warn("[updateAgentKyc] SMS failed (non-fatal):", smsErr.message);
+                }
+            }
+
+            // Push notification (FCM + local)
             try {
-                let smsText = `Dear ${user.name || "Agent"}, your agent application status is ${statusText}.`;
-                if (applicationStatus === "APPROVED") {
-                    if (agent.agentType === "OPERATOR_LINKED") {
-                        smsText = `Welcome ${user.name || "Agent"}, your agent application is approved. Download the app and start selling tickets now! (Access via www.shuvmargagent.vercel.app/ for now)`;
-                    } else {
-                        smsText = `Dear ${user.name || "Agent"}, your agent application status is approved. You can start booking tickets now at www.shuvmargagent.vercel.app/`;
+                const title = "Agent Application Update";
+                const body =
+                    applicationStatus === "APPROVED"
+                        ? "Congratulations! Your agent application has been approved."
+                        : applicationStatus === "REJECTED"
+                        ? "Your agent application has been reviewed. Please check the app for details."
+                        : applicationStatus === "MORE_INFO"
+                        ? "We need additional information for your application. Please check the app."
+                        : `Application status: ${statusText}.`;
+
+                if (agent.user) {
+                    await createLocalNotification(agent.user, "AGENT_KYC_UPDATE", title, body, {
+                        applicationStatus: statusText,
+                    });
+
+                    const devices = await UserDeviceInfo.find({ userId: agent.user });
+                    const tokens = devices.map((d) => d.token).filter(Boolean);
+                    if (tokens.length > 0) {
+                        await notificationManager(tokens, title, body);
                     }
                 }
-                if (invalidDocs.length > 0) {
-                    const docNames = invalidDocs.map((d) => d.label).join(", ");
-                    smsText += ` Documents needing attention: ${docNames}.`;
-                }
-                await sendOTP(user.phone, smsText);
-            } catch (smsErr) {
-                console.warn("[updateAgentKyc] SMS failed (non-fatal):", smsErr.message);
+            } catch (notifyError) {
+                console.error("Agent notification error:", notifyError);
             }
-        }
-
-        // Push notification (FCM + local)
-        try {
-            const title = "Agent Application Update";
-            const body =
-                applicationStatus === "APPROVED"
-                    ? "Congratulations! Your agent application has been approved."
-                    : applicationStatus === "REJECTED"
-                    ? "Your agent application has been reviewed. Please check the app for details."
-                    : applicationStatus === "MORE_INFO"
-                    ? "We need additional information for your application. Please check the app."
-                    : `Application status: ${statusText}.`;
-
-            if (agent.user) {
-                await createLocalNotification(agent.user, "AGENT_KYC_UPDATE", title, body, {
-                    applicationStatus: statusText,
-                });
-
-                const devices = await UserDeviceInfo.find({ userId: agent.user });
-                const tokens = devices.map((d) => d.token).filter(Boolean);
-                if (tokens.length > 0) {
-                    await notificationManager(tokens, title, body);
-                }
-            }
-        } catch (notifyError) {
-            console.error("Agent notification error:", notifyError);
-        }
+        } // end: applicationStatus notification gate
 
         return res.status(200).json({
             success: true,

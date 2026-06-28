@@ -58,8 +58,7 @@ const setup2FA = async () => {
 
     // ── Generate QR code PNG ──────────────────────────────────────────────────
     const qrPath = path.join(
-      process.env.HOME || process.env.USERPROFILE || ".",
-      "Desktop",
+      process.cwd(),
       "sumarg_admin_2fa_qr.png"
     );
 
