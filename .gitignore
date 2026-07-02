@@ -50,3 +50,4 @@ docker-compose.override.yml
 # Testing
 jest-cache/
 .nyc_output/
+sumarg_admin_2fa_qr.png
