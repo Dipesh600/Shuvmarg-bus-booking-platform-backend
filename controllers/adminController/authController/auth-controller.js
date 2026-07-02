@@ -128,8 +128,6 @@ const login = async (req, res) => {
                 message: "Invalid credentials!",
             });
         }
-
-
         // ── 2FA Enforcement — always required, no bypass ──────────────────────
         if (!admin.twoFactorEnabled) {
             return res.status(403).json({

@@ -65,6 +65,7 @@ const viewDocument = async (req, res) => {
         const ALLOWED_PREFIXES = [
             "owners/",
             "brands/",
+            "agents/",      // Agent KYC documents
             "disputes/",
             "platform/",
             "agent_kyc/",
@@ -111,11 +112,21 @@ const viewDocument = async (req, res) => {
         s3Response.Body.pipe(res);
 
     } catch (error) {
+        // Log full error for debugging
+        console.error("[documentProxy] S3 error:", {
+            name: error.name,
+            code: error.Code,
+            message: error.message,
+            statusCode: error.$metadata?.httpStatusCode,
+            resolvedKey: req.query?.key?.substring(0, 100),
+        });
+
         // S3 NoSuchKey — the document doesn't exist
         if (error.name === "NoSuchKey" || error.$metadata?.httpStatusCode === 404) {
             return res.status(404).json({
                 success: false,
                 message: "Document not found. It may have been deleted or the key is incorrect.",
+                debug_key: req.query?.key?.substring(0, 100),
             });
         }
 

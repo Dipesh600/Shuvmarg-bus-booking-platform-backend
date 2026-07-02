@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Routes for Agent operations including KYC application, document handling, and agent dashboard.
+ * All routes require basic authentication and agent role verification.
+ */
+
 const express = require("express");
 const router = express.Router();
 const auth = require("../../middleware/authMiddleware.js");
@@ -7,17 +12,61 @@ const requireApprovedAgent = require("../../middleware/requireApprovedAgent.js")
 const agentcon = require("../../controllers/agentController/agentController.js");
 
 // ── Application Workflow ──────────────────────────────────────────────────────
-// Accessible to any authenticated user with the agent role.
-// These routes work in DRAFT / MORE_INFO status — no requireApprovedAgent here.
-router.post("/application/save",     auth, verifyRoleFromDB, agentMiddleware, agentcon.saveApplicationDraft);
+
+/**
+ * @route   POST /api/agent/application/save
+ * @desc    Save the agent application as a draft
+ * @access  Private (Agent role required, accessible in DRAFT or MORE_INFO status)
+ */
+router.post("/application/save", auth, verifyRoleFromDB, agentMiddleware, agentcon.saveApplicationDraft);
+
+/**
+ * @route   POST /api/agent/application/document
+ * @desc    Upload a KYC document for the agent application
+ * @access  Private (Agent role required, accessible in DRAFT or MORE_INFO status)
+ */
 router.post("/application/document", auth, verifyRoleFromDB, agentMiddleware, agentcon.uploadDocument);
-router.post("/application/submit",   auth, verifyRoleFromDB, agentMiddleware, agentcon.submitApplication);
-router.get("/application/status",    auth, verifyRoleFromDB, agentMiddleware, agentcon.getApplicationStatus);
+
+/**
+ * @route   POST /api/agent/application/submit
+ * @desc    Submit the completed agent application for admin review
+ * @access  Private (Agent role required, accessible in DRAFT or MORE_INFO status)
+ */
+router.post("/application/submit", auth, verifyRoleFromDB, agentMiddleware, agentcon.submitApplication);
+
+/**
+ * @route   GET /api/agent/application/status
+ * @desc    Retrieve the current status of the agent application (e.g. APPROVED, PENDING, DRAFT)
+ * @access  Private (Agent role required, accessible in any status)
+ */
+router.get("/application/status", auth, verifyRoleFromDB, agentMiddleware, agentcon.getApplicationStatus);
+
+// ── Document Proxy ─────────────────────────────────────────────────────────────
+
+const { viewDocument } = require("../../controllers/adminController/documentProxyController.js");
+
+/**
+ * @route   GET /api/agent/documents/view
+ * @desc    Stream S3 KYC documents to the browser. The raw S3 URL never reaches the client.
+ *          The key must be an object key stored in the agent's document record (fileKey field).
+ * @access  Private (Agent role required)
+ */
+router.get("/documents/view", auth, verifyRoleFromDB, agentMiddleware, viewDocument);
 
 // ── Profile & Dashboard ───────────────────────────────────────────────────────
-// APPROVED agents only — requireApprovedAgent enforces this at DB level.
-// agentMiddleware checks JWT role; requireApprovedAgent checks applicationStatus.
-router.get("/profile",   auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentcon.getProfile);
+
+/**
+ * @route   GET /api/agent/profile
+ * @desc    Retrieve the agent's profile details
+ * @access  Private (APPROVED agents only). Enforced by requireApprovedAgent.
+ */
+router.get("/profile", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentcon.getProfile);
+
+/**
+ * @route   GET /api/agent/dashboard
+ * @desc    Retrieve metrics and data for the agent dashboard
+ * @access  Private (APPROVED agents only). Enforced by requireApprovedAgent.
+ */
 router.get("/dashboard", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentcon.getDashboard);
 
 module.exports = router;

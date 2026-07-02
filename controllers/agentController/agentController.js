@@ -27,9 +27,12 @@ const resolveDocumentUrls = async (documents) => {
     return Promise.all(
         documents.map(async (doc) => {
             const docObj = doc.toObject ? doc.toObject() : { ...doc };
+            // Always expose fileKey so the frontend can build a server-proxy URL
+            // (the presigned URL is kept for legacy/fallback but should not be used directly)
             if (docObj.fileKey && !docObj.fileKey.startsWith("http")) {
                 docObj.previewUrl = await getPresignedUrl(docObj.fileKey);
             }
+            // fileKey is already on docObj — no need to add it again
             return docObj;
         })
     );
