@@ -8,21 +8,59 @@ const loginMapper = require('./login.mapper');
 const { generateTokenPair } = require('../../../../utils/tokenService');
 const AppError = require('../../../shared/errors/app-error');
 
+/**
+ * Validate presence of required login fields.
+ * Returns an AppError (not throws) so the controller shape is uniform.
+ */
+function validateInput(emailOrPhone, password) {
+  if (!emailOrPhone) {
+    return new AppError('Email or Phone is required!', 400, {
+      success: false, message: 'Email or Phone is required!',
+    });
+  }
+  if (!password) {
+    return new AppError('Password is required!', 400, {
+      success: false, message: 'Password is required!',
+    });
+  }
+  return null;
+}
+
 exports.authenticate = async ({ emailOrPhone, password, appSource, deviceInfo, ipAddress }) => {
-  const user = await loginRepository.findUserByEmailOrPhone(emailOrPhone);
+  // === INPUT VALIDATION ===
+  const validationError = validateInput(emailOrPhone, password);
+  if (validationError) throw validationError;
+
+  let user;
+  try {
+    user = await loginRepository.findUserByEmailOrPhone(emailOrPhone);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError('Internal Server Error', 500, {
+      success: false, message: 'Internal Server Error',
+    }, null, err);
+  }
 
   if (!user) {
     throw new AppError('Invalid credentials!', 401, { success: false, message: 'Invalid credentials!' });
   }
 
-  // === ACCOUNT STATUS CHECKS (Locks, bans, deleted, etc) ===
+  // === ACCOUNT STATUS CHECKS ===
   loginPolicy.verifyAccountStatus(user);
 
-  const isMatch = await bcrypt.compare(password, user.password);
+  // === PASSWORD CHECK ===
+  let isMatch;
+  try {
+    isMatch = await bcrypt.compare(password, user.password);
+  } catch (err) {
+    throw new AppError('Internal Server Error', 500, {
+      success: false, message: 'Internal Server Error',
+    }, null, err);
+  }
 
   if (!isMatch) {
     const MAX_ATTEMPTS = 5;
-    const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+    const LOCK_DURATION_MS = 15 * 60 * 1000;
 
     const updatedUser = await loginRepository.incrementFailedAttempts(user._id);
     const newFailedCount = updatedUser.failedLoginAttempts;
@@ -39,13 +77,20 @@ exports.authenticate = async ({ emailOrPhone, password, appSource, deviceInfo, i
     throw new AppError(message, 401, { success: false, message });
   }
 
-  // === FORCE PASSWORD CHANGE CHECK ===
+  // === FORCE PASSWORD CHANGE ===
   if (user.forcePasswordChange) {
-    const tempToken = jwt.sign(
-      { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE' },
-      process.env.SECRET_KEY,
-      { expiresIn: '15m' }
-    );
+    let tempToken;
+    try {
+      tempToken = jwt.sign(
+        { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE' },
+        process.env.SECRET_KEY,
+        { expiresIn: '15m' }
+      );
+    } catch (err) {
+      throw new AppError('Internal Server Error', 500, {
+        success: false, message: 'Internal Server Error',
+      }, null, err);
+    }
     return {
       statusCode: 200,
       responseBody: {
@@ -57,55 +102,33 @@ exports.authenticate = async ({ emailOrPhone, password, appSource, deviceInfo, i
     };
   }
 
-  // === MULTI-ROLE CHECK ===
-  const VALID_APP_SOURCES = ['passenger', 'busOwner', 'agent', 'conductor', 'driver'];
-  const requestedRole = VALID_APP_SOURCES.includes(appSource) ? appSource : null;
+  // === ROLE RESOLUTION (delegated to policy) ===
+  const activeRole = loginPolicy.resolveActiveRole(user, appSource);
 
-  const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
-
-  let activeRole;
-  if (requestedRole) {
-    if (!userRoles.includes(requestedRole)) {
-      throw new AppError(
-        `You don't have a ${requestedRole} account. Please register first.`,
-        403,
-        {
-          success: false,
-          message: `You don't have a ${requestedRole} account. Please register first.`,
-          errorCode: 'ROLE_NOT_REGISTERED',
-        }
-      );
-    }
-    activeRole = requestedRole;
-  } else {
-    activeRole = user.role || 'passenger';
-  }
-
-  // === SUCCESS — reset counters, record login time, backfill roles ===
+  // === SUCCESS — reset counters, record login time ===
   const loginUpdate = {
-    $set: {
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      lastLoginAt: new Date(),
-    },
+    $set: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
   };
-
   if (!user.roles || user.roles.length === 0) {
     loginUpdate.$set.roles = [user.role];
   }
-
   await loginRepository.recordSuccessfulLogin(user._id, loginUpdate);
 
-  // Generate tokens
-  const { accessToken, refreshToken } = await generateTokenPair(user, {
-    deviceInfo,
-    ipAddress,
-    activeRole,
-  });
+  // === TOKEN GENERATION ===
+  let tokens;
+  try {
+    tokens = await generateTokenPair(user, { deviceInfo, ipAddress, activeRole });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError('Internal Server Error', 500, {
+      success: false, message: 'Internal Server Error',
+    }, null, err);
+  }
+  const { accessToken, refreshToken } = tokens;
 
   return {
     statusCode: 200,
-    refreshToken, // The controller will extract this to set the cookie
+    refreshToken,
     responseBody: {
       success: true,
       message: 'Login successful',

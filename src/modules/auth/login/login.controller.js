@@ -5,15 +5,8 @@ const respond = require('../../../shared/http/respond');
 const loginService = require('./login.service');
 
 exports.login = asyncHandler(async (req, res) => {
+  // Controller: read request metadata only — no validation, no policy logic
   const { emailOrPhone, password } = req.body;
-
-  if (!emailOrPhone || !password) {
-    return respond(res, 400, {
-      success: false,
-      message: `${!emailOrPhone ? 'Email or Phone' : 'Password'} is required!`,
-    });
-  }
-
   const appSource = (req.get('X-App-Source') || '').toLowerCase();
   const deviceInfo = req.get('User-Agent') || null;
   const ipAddress = req.ip || req.connection?.remoteAddress || null;

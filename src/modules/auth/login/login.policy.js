@@ -83,3 +83,39 @@ exports.verifyAccountStatus = (user) => {
     );
   }
 };
+
+// Case-sensitive list — intentionally retains the busOwner case-sensitivity
+// bug: X-App-Source is lowercased before matching, so 'busowner' never matches
+// 'busOwner'. This preserves the existing contract pinned by auth-login-roles.test.js.
+const VALID_APP_SOURCES = ['passenger', 'busOwner', 'agent', 'conductor', 'driver'];
+
+/**
+ * Resolve the activeRole for a login request.
+ *
+ * @param {object} user      - Mongoose User document
+ * @param {string} appSource - Lowercased value of X-App-Source header (or '')
+ * @returns {string}         - The resolved activeRole
+ * @throws {AppError}        - 403 ROLE_NOT_REGISTERED when appSource is a valid
+ *                             role name but the user does not hold that role
+ */
+exports.resolveActiveRole = (user, appSource) => {
+  const requestedRole = VALID_APP_SOURCES.includes(appSource) ? appSource : null;
+  const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+
+  if (requestedRole) {
+    if (!userRoles.includes(requestedRole)) {
+      throw new AppError(
+        `You don't have a ${requestedRole} account. Please register first.`,
+        403,
+        {
+          success: false,
+          message: `You don't have a ${requestedRole} account. Please register first.`,
+          errorCode: 'ROLE_NOT_REGISTERED',
+        }
+      );
+    }
+    return requestedRole;
+  }
+
+  return user.role || 'passenger';
+};

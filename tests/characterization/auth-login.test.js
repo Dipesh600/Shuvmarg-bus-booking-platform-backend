@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../helpers/db');
 const app = require('../helpers/app');
 const User = require('../../models/userModel');
+const RefreshToken = require('../../models/refreshTokenModel');
 
 test('Auth: Login Characterization', async (t) => {
   let user;
@@ -85,6 +86,11 @@ test('Auth: Login Characterization', async (t) => {
     assert.ok(refreshCookie, 'refreshToken cookie must be set');
     assert.ok(refreshCookie.toLowerCase().includes('httponly'), 'cookie must be HttpOnly');
     assert.ok(refreshCookie.toLowerCase().includes('samesite=lax'), 'cookie must be SameSite=Lax');
+
+    // RefreshToken record persisted with correct activeRole (stable assertions only)
+    const stored = await RefreshToken.findOne({ userId: user._id });
+    assert.ok(stored, 'RefreshToken document must exist for user');
+    assert.equal(stored.activeRole, 'passenger', 'stored activeRole must be passenger');
   });
 
   await t.test('POST /api/login - Banned account', async () => {
