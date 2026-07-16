@@ -38,6 +38,8 @@ const {
   revokeRefreshToken,
   revokeAllUserTokens,
 } = require("../../utils/tokenService.js");
+const { otpFirstVerify, withMinimumLatency } = require("../../utils/enumGuard.js");
+const { issueVerificationToken, validateVerificationToken } = require("../../utils/verificationToken.js");
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -84,42 +86,40 @@ const sendOTP = async (req, res) => {
       });
     }
 
-    // Role-aware phone check — only block if already an agent WITH a complete Agent document.
-    // If the user has the "agent" role but no Agent doc, it means a previous registration
-    // attempt failed mid-way (orphaned state) — allow them to retry.
+    // Role-aware phone check — only block if already a fully-registered agent.
     const { exists, hasRole, user } = await checkPhoneForRole(phone, "agent");
 
     if (exists && hasRole) {
-      // Check if this is an orphaned state (role flag set but Agent doc missing)
+      // Check if fully registered (role flag AND Agent doc both present).
+      // If Agent doc is missing it is an orphaned state — allow OTP resend.
       const agentDoc = await Agent.findOne({ user: user._id }).select("_id").lean();
       if (agentDoc) {
-        // Fully registered agent — block and tell them to log in
-        return res.status(409).json({
-          success: false,
-          message: "This mobile number is already registered as an agent. Please log in instead.",
-          errorCode: "ROLE_ALREADY_REGISTERED",
-          hint: "login",
+        // ENUMERATION DEFENCE: do NOT return 409 ROLE_ALREADY_REGISTERED.
+        // A distinct error reveals this phone is a registered agent.
+        // Return the same neutral 200 as success. OTP not sent.
+        // The real gate is at /register which requires a valid consumed OTP.
+        return res.status(200).json({
+          success: true,
+          message: "If this number is eligible, a verification code has been sent.",
         });
       }
-      // No Agent doc — orphaned state, fall through and allow OTP
-      console.warn(`[Agent sendOTP] Orphaned agent role detected for phone ${phone} — allowing re-registration`);
+      // No Agent doc — orphaned state: fall through and allow OTP.
     }
 
-    // Block banned or deactivated accounts
     if (exists && user && (user.status === "banned" || user.status === "inactive")) {
-      return res.status(403).json({
-        success: false,
-        message: "This account has been suspended. Please contact support.",
-        errorCode: "ACCOUNT_SUSPENDED",
+      // ENUMERATION DEFENCE: do NOT return 403 ACCOUNT_SUSPENDED.
+      // Same neutral 200 — the banned account will be rejected at /register.
+      return res.status(200).json({
+        success: true,
+        message: "If this number is eligible, a verification code has been sent.",
       });
     }
 
-    const result = await createAndSendOTP(phone, "AGENT_REGISTRATION");
+    await createAndSendOTP(phone, "AGENT_REGISTRATION");
 
     return res.status(200).json({
       success: true,
-      message: "Verification code sent successfully.",
-      data: { phone, expiresIn: result.expiresIn },
+      message: "If this number is eligible, a verification code has been sent.",
     });
   } catch (error) {
     if (handleOtpSendBlockedError(error, res)) return;
@@ -157,13 +157,13 @@ const verifyOTP = async (req, res) => {
       return res.status(400).json({ success: false, message: result.error });
     }
 
-    // Race-condition guard — check role wasn't added between sendOTP and verifyOTP
+    // Race-condition guard — check role wasn't added between sendOTP and verifyOTP.
+    // ENUMERATION DEFENCE: use a generic 400 (not a 409) to avoid revealing role status.
     const { exists, hasRole, user } = await checkPhoneForRole(phone, "agent");
     if (exists && hasRole) {
-      return res.status(409).json({
+      return res.status(400).json({
         success: false,
-        message: "This mobile number is already registered as an agent.",
-        errorCode: "ROLE_ALREADY_REGISTERED",
+        message: "Phone verification could not be completed. Please start again.",
       });
     }
 
@@ -184,6 +184,12 @@ const verifyOTP = async (req, res) => {
     ).catch((err) => console.error("[PartnerLead upsert - agent verifyOTP] Non-fatal:", err.message));
     // ─────────────────────────────────────────────────────────────────────────
 
+    // Issue a signed verification token bound to this phone and purpose.
+    // The client MUST include this token in the registration request (Step 3).
+    // Without it, no other requester can complete registration for this phone
+    // even though the OTP record is now marked isUsed:true in MongoDB.
+    const verificationToken = issueVerificationToken(phone, "AGENT_REGISTRATION");
+
     return res.status(200).json({
       success: true,
       message: exists
@@ -195,6 +201,7 @@ const verifyOTP = async (req, res) => {
       existingRoles: exists && user
         ? (user.roles && user.roles.length > 0 ? user.roles : [user.role]).filter(Boolean)
         : [],
+      verificationToken,
     });
   } catch (error) {
     console.error("[Agent verifyOTP] Error:", error.message);
@@ -227,7 +234,19 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: "Name must be at least 3 characters." });
     }
 
-    // Verify OTP was completed (security check — prevents skipping the OTP step)
+    // AUTH-01.02: Validate verification token — proves this HTTP client was the one
+    // that successfully verified the OTP (Step 2). A second requester who knows only
+    // the phone number cannot complete registration without this signed token.
+    const { verificationToken } = req.body;
+    const tokenResult = validateVerificationToken(verificationToken, phone, "AGENT_REGISTRATION");
+    if (!tokenResult.valid) {
+      return res.status(400).json({
+        success: false,
+        message: tokenResult.error,
+      });
+    }
+
+    // Belt-and-suspenders: Verify OTP was completed
     const OTP = require("../../models/otpModel.js");
     const otpRecord = await OTP.findOne({ phone, purpose: "AGENT_REGISTRATION", isUsed: true });
     if (!otpRecord) {
@@ -576,14 +595,20 @@ const login = async (req, res) => {
       const MAX_ATTEMPTS = 5;
       const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
-      const newFailedCount = (user.failedLoginAttempts || 0) + 1;
-      const updatePayload = { $inc: { failedLoginAttempts: 1 } };
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        { $inc: { failedLoginAttempts: 1 } },
+        { new: true }
+      );
+
+      const newFailedCount = updatedUser.failedLoginAttempts;
 
       if (newFailedCount >= MAX_ATTEMPTS) {
-        updatePayload.$set = { lockedUntil: new Date(Date.now() + LOCK_DURATION_MS) };
+        await User.findByIdAndUpdate(
+          user._id,
+          { $set: { lockedUntil: new Date(Date.now() + LOCK_DURATION_MS) } }
+        );
       }
-
-      await User.findByIdAndUpdate(user._id, updatePayload);
 
       const remaining = MAX_ATTEMPTS - newFailedCount;
       const message = remaining > 0
@@ -728,6 +753,13 @@ const logout = async (req, res) => {
       sameSite: "Lax",
     });
 
+    // Increment tokenVersion so the current access token is immediately
+    // rejected by verifyRoleFromDB on its next use.
+    const userId = req.userInfo?.id;
+    if (userId) {
+      await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
+    }
+
     // Always return 200 — don't leak whether the token existed or not
     return res.status(200).json({ success: true, message: "Logged out successfully." });
   } catch (error) {
@@ -752,22 +784,20 @@ const requestPasswordReset = async (req, res) => {
       return res.status(400).json({ success: false, message: "Phone number is required." });
     }
 
-    const user = await User.findOne({ phone });
-    if (!user) {
-      // Vague — don't reveal whether the account exists
-      return res.status(200).json({ success: true, message: "If an account exists, OTP has been sent." });
-    }
-
-    const { hasRole } = await checkPhoneForRole(phone, "agent");
-    if (!hasRole) {
-      return res.status(200).json({ success: true, message: "If an account exists, OTP has been sent." });
-    }
-
-    await createAndSendOTP(user.phone, "AGENT_PASSWORD_RESET");
+    // ENUMERATION DEFENCE: always respond 200 with the same body whether
+    // or not the account exists or has the agent role.
+    // OTP is only dispatched for valid, active agent accounts.
+    await withMinimumLatency(async () => {
+      const user = await User.findOne({ phone });
+      if (!user) return;
+      const { hasRole } = await checkPhoneForRole(phone, "agent");
+      if (!hasRole) return;
+      await createAndSendOTP(user.phone, "AGENT_PASSWORD_RESET");
+    }, 600);
 
     return res.status(200).json({
       success: true,
-      message: "OTP sent to registered phone.",
+      message: "If an account exists, OTP has been sent.",
     });
   } catch (error) {
     if (handleOtpSendBlockedError(error, res)) return;
@@ -796,20 +826,26 @@ const verifyOtpForReset = async (req, res) => {
       return res.status(400).json({ success: false, message: "Verification code must be 6 digits." });
     }
 
-    const user = await User.findOne({ phone });
-    if (!user) {
-      return res.status(400).json({ success: false, message: "Invalid OTP or phone number." });
+    // ENUMERATION DEFENCE (otpFirstVerify): OTP is validated BEFORE the user
+    // record is looked up. If the OTP is wrong we stop immediately with a
+    // generic error — no DB lookup, no timing difference, no phone enumeration.
+    const { valid, user, error } = await otpFirstVerify(
+      phone,
+      cleanOtp,
+      "AGENT_PASSWORD_RESET",
+      false, // peek only — resetPassword will consume
+      verifyOTPCode,
+      (p) => User.findOne({ phone: p })
+    );
+
+    if (!valid) {
+      return res.status(400).json({ success: false, message: error });
     }
 
-    const { hasRole } = await checkPhoneForRole(phone, "agent");
-    if (!hasRole) {
-      return res.status(400).json({ success: false, message: "Invalid OTP or phone number." });
-    }
-
-    // Verify but do NOT mark as used (false = peek only)
-    const result = await verifyOTPCode(user.phone, cleanOtp, "AGENT_PASSWORD_RESET", false);
-    if (!result.valid) {
-      return res.status(400).json({ success: false, message: result.error });
+    // Post-OTP role check: the user exists (OTP proved it) but may not have agent role.
+    const roles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+    if (!roles.includes("agent")) {
+      return res.status(400).json({ success: false, message: "Invalid or expired verification code." });
     }
 
     return res.status(200).json({
@@ -874,6 +910,10 @@ const resetPassword = async (req, res) => {
 
     await user.save();
     await revokeAllUserTokens(user._id);
+
+    // Also increment tokenVersion to immediately invalidate any currently live
+    // access tokens — they will be rejected by verifyRoleFromDB on next use.
+    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } });
 
     return res.status(200).json({
       success: true,

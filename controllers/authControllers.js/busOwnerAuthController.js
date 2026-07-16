@@ -32,6 +32,8 @@ const { normalizePhone, checkPhoneForRole } = require("../../utils/phoneGuard.js
 const { createAndSendOTP, verifyOTPCode } = require("../../utils/otpHelper.js");
 const { validatePassword } = require("../../utils/passwordValidator.js");
 const { generateTokenPair, rotateRefreshToken, revokeRefreshToken, revokeAllUserTokens } = require("../../utils/tokenService.js");
+const { otpFirstVerify, withMinimumLatency } = require("../../utils/enumGuard.js");
+const { issueVerificationToken, validateVerificationToken } = require("../../utils/verificationToken.js");
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -82,28 +84,30 @@ const sendOTP = async (req, res) => {
     const { exists, hasRole, user } = await checkPhoneForRole(phone, "busOwner");
 
     if (exists && hasRole) {
-      return res.status(409).json({
-        success: false,
-        message: "This mobile number is already registered as a bus operator.",
-        errorCode: "ROLE_ALREADY_REGISTERED",
+      // ENUMERATION DEFENCE: do NOT return 409 ROLE_ALREADY_REGISTERED.
+      // A distinct error code tells an attacker this phone is a registered bus operator.
+      // Return the same neutral 200 as the success path. OTP is not sent.
+      // The real gate is at /register, which requires a valid consumed OTP.
+      return res.status(200).json({
+        success: true,
+        message: "If this number is eligible, a verification code has been sent.",
       });
     }
 
-    // Block banned or deactivated accounts
     if (exists && user && (user.status === "banned" || user.status === "inactive")) {
-      return res.status(403).json({
-        success: false,
-        message: "This account has been suspended. Please contact support.",
-        errorCode: "ACCOUNT_SUSPENDED",
+      // ENUMERATION DEFENCE: do NOT return 403 ACCOUNT_SUSPENDED.
+      // Same neutral 200 — the banned account will be rejected at /register.
+      return res.status(200).json({
+        success: true,
+        message: "If this number is eligible, a verification code has been sent.",
       });
     }
 
-    const result = await createAndSendOTP(phone, "BUSOWNER_REGISTRATION");
+    await createAndSendOTP(phone, "BUSOWNER_REGISTRATION");
 
     return res.status(200).json({
       success: true,
-      message: "Verification code sent successfully.",
-      data: { phone, expiresIn: result.expiresIn },
+      message: "If this number is eligible, a verification code has been sent.",
     });
   } catch (error) {
     if (handleOtpSendBlockedError(error, res)) return;
@@ -167,6 +171,12 @@ const verifyOTP = async (req, res) => {
     ).catch((err) => console.error("[PartnerLead upsert - verifyOTP] Non-fatal:", err.message));
     // ─────────────────────────────────────────────────────────────────────────
 
+    // Issue a signed verification token bound to this phone and purpose.
+    // The client MUST include this token in the registration request (Step 3).
+    // Without it, no other requester can complete registration for this phone
+    // even though the OTP record is now marked isUsed:true in MongoDB.
+    const verificationToken = issueVerificationToken(phone, "BUSOWNER_REGISTRATION");
+
     return res.status(200).json({
       success: true,
       message: exists
@@ -174,6 +184,7 @@ const verifyOTP = async (req, res) => {
         : "Phone verified successfully. Complete your registration.",
       exists,
       userName: exists && user ? user.name : null,
+      verificationToken,
     });
   } catch (error) {
     console.error("[BusOwner verifyOTP] Error:", error.message);
@@ -212,7 +223,19 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: "Company name must be at least 3 characters." });
     }
 
-    // Verify OTP was completed (security check — prevents skipping the OTP step)
+    // AUTH-01.02: Validate verification token — proves this HTTP client was the one
+    // that successfully verified the OTP (Step 2). A second requester who knows only
+    // the phone number cannot complete registration without this signed token.
+    const { verificationToken } = req.body;
+    const tokenResult = validateVerificationToken(verificationToken, phone, "BUSOWNER_REGISTRATION");
+    if (!tokenResult.valid) {
+      return res.status(400).json({
+        success: false,
+        message: tokenResult.error,
+      });
+    }
+
+    // Belt-and-suspenders: Verify OTP was completed
     const OTP = require("../../models/otpModel.js");
     const otpRecord = await OTP.findOne({ phone, purpose: "BUSOWNER_REGISTRATION", isUsed: true });
     if (!otpRecord) {
@@ -497,14 +520,20 @@ const login = async (req, res) => {
       const MAX_ATTEMPTS = 5;
       const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
-      const newFailedCount = (user.failedLoginAttempts || 0) + 1;
-      const updatePayload = { $inc: { failedLoginAttempts: 1 } };
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        { $inc: { failedLoginAttempts: 1 } },
+        { new: true }
+      );
+
+      const newFailedCount = updatedUser.failedLoginAttempts;
 
       if (newFailedCount >= MAX_ATTEMPTS) {
-        updatePayload.$set = { lockedUntil: new Date(Date.now() + LOCK_DURATION_MS) };
+        await User.findByIdAndUpdate(
+          user._id,
+          { $set: { lockedUntil: new Date(Date.now() + LOCK_DURATION_MS) } }
+        );
       }
-
-      await User.findByIdAndUpdate(user._id, updatePayload);
 
       const remaining = MAX_ATTEMPTS - newFailedCount;
       const message = remaining > 0
@@ -578,22 +607,20 @@ const requestPasswordReset = async (req, res) => {
       return res.status(400).json({ success: false, message: "Phone number is required." });
     }
 
-    const user = await User.findOne({ phone });
-    if (!user) {
-      return res.status(200).json({ success: true, message: "If an account exists, OTP has been sent." });
-    }
-
-    // Role-aware phone check - ensure they are a busOwner
-    const { hasRole } = await checkPhoneForRole(phone, "busOwner");
-    if (!hasRole) {
-      return res.status(200).json({ success: true, message: "If an account exists, OTP has been sent." }); // vague
-    }
-
-    await createAndSendOTP(user.phone, "BUSOWNER_PASSWORD_RESET");
+    // ENUMERATION DEFENCE: always respond 200 with the same body whether
+    // or not the account exists or has the busOwner role.
+    // OTP is only dispatched for valid, active busOwner accounts.
+    await withMinimumLatency(async () => {
+      const user = await User.findOne({ phone });
+      if (!user) return;
+      const { hasRole } = await checkPhoneForRole(phone, "busOwner");
+      if (!hasRole) return;
+      await createAndSendOTP(user.phone, "BUSOWNER_PASSWORD_RESET");
+    }, 600);
 
     return res.status(200).json({
       success: true,
-      message: "OTP sent to registered phone!",
+      message: "If an account exists, OTP has been sent.",
     });
   } catch (error) {
     if (handleOtpSendBlockedError(error, res)) return;
@@ -622,21 +649,28 @@ const verifyOtpForReset = async (req, res) => {
       return res.status(400).json({ success: false, message: "Verification code must be 6 digits." });
     }
 
-    const user = await User.findOne({ phone });
+    // ENUMERATION DEFENCE (otpFirstVerify): OTP is validated BEFORE the user
+    // record is looked up. If the OTP is wrong we stop immediately with a
+    // generic error — no DB lookup, no timing difference, no phone enumeration.
+    const { valid, user, error } = await otpFirstVerify(
+      phone,
+      cleanOtp,
+      "BUSOWNER_PASSWORD_RESET",
+      false, // peek only — resetPassword will consume
+      verifyOTPCode,
+      (p) => User.findOne({ phone: p })
+    );
 
-    // FINDING-02 equivalent: return vague error to prevent account enumeration
-    if (!user) {
-      return res.status(400).json({ success: false, message: "Invalid OTP or phone number." });
+    if (!valid) {
+      return res.status(400).json({ success: false, message: error });
     }
 
-    const { hasRole } = await checkPhoneForRole(phone, "busOwner");
-    if (!hasRole) {
-      return res.status(400).json({ success: false, message: "Invalid OTP or phone number." });
-    }
-
-    const result = await verifyOTPCode(user.phone, cleanOtp, "BUSOWNER_PASSWORD_RESET", false);
-    if (!result.valid) {
-      return res.status(400).json({ success: false, message: result.error });
+    // Post-OTP role check: the user exists (OTP proved it) but may not have busOwner role.
+    // Using `user` from otpFirstVerify — no extra DB round-trip.
+    const roles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+    if (!roles.includes("busOwner")) {
+      // Return the same generic error — don't reveal the role mismatch.
+      return res.status(400).json({ success: false, message: "Invalid or expired verification code." });
     }
 
     return res.status(200).json({
@@ -702,6 +736,10 @@ const resetPassword = async (req, res) => {
 
     await user.save();
     await revokeAllUserTokens(user._id);
+
+    // Also increment tokenVersion to immediately invalidate any currently live
+    // access tokens — they will be rejected by verifyRoleFromDB on next use.
+    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } });
 
     return res.status(200).json({
       success: true,
@@ -841,6 +879,14 @@ const logout = async (req, res) => {
       secure: process.env.NODE_ENV === "production",
       sameSite: "Lax",
     });
+
+    // Increment tokenVersion so the current access token is immediately
+    // rejected by verifyRoleFromDB on its next use.
+    const userId = req.userInfo?.id;
+    if (userId) {
+      const User = require("../../models/userModel.js");
+      await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
+    }
 
     // Always return 200 — don't leak whether the token existed or not
     return res.status(200).json({ success: true, message: "Logged out successfully." });

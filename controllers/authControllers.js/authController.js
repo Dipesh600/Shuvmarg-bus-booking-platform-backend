@@ -9,7 +9,9 @@ const cloudinary = require("../../handlers/cloudinary.js");
 const sendOTP = require("../../handlers/sparro-otp.js");
 const { isPhoneRegistered, normalizePhone } = require("../../utils/phoneGuard.js");
 const { createAndSendOTP, verifyOTPCode } = require("../../utils/otpHelper.js");
+const { issueVerificationToken, validateVerificationToken } = require("../../utils/verificationToken.js");
 const { validatePassword } = require("../../utils/passwordValidator.js");
+const { otpFirstVerify, withMinimumLatency } = require("../../utils/enumGuard.js");
 
 // Step 1: Send OTP for phone verification
 const sendPhoneOTP = async (req, res) => {
@@ -23,26 +25,27 @@ const sendPhoneOTP = async (req, res) => {
       });
     }
 
-    // GLOBAL phone uniqueness check — blocks if phone exists under ANY role
     const { registered } = await isPhoneRegistered(phone);
+
     if (registered) {
-      return res.status(409).json({
-        success: false,
-        message: "This phone number is already registered.",
-        errorCode: "PHONE_ALREADY_REGISTERED",
+      // ENUMERATION DEFENCE: do NOT return a 409 PHONE_ALREADY_REGISTERED here.
+      // A distinct error code tells an attacker the phone belongs to a Shuvmarg user.
+      // Instead we return the exact same 200 success response as the non-registered path.
+      // The OTP is simply not sent — no SMS wasted.
+      // The real gate against creating duplicate accounts is the /completeRegistration
+      // step which requires a valid, consumed OTP before writing any record.
+      return res.status(200).json({
+        status: true,
+        message: "If this number is eligible, a verification code has been sent.",
       });
     }
 
-    // Use centralized OTP helper — 6-digit, crypto-secure, with purpose
     const result = await createAndSendOTP(phone, "REGISTRATION");
 
     return res.status(200).json({
       status: true,
-      message: "OTP sent successfully!",
-      data: {
-        phone,
-        expiresIn: result.expiresIn,
-      },
+      message: "If this number is eligible, a verification code has been sent.",
+      data: { expiresIn: result.expiresIn },
     });
   } catch (error) {
     if (error.message && error.message.startsWith("OTP_SEND_BLOCKED:")) {
@@ -74,8 +77,17 @@ const verifyPhoneOTP = async (req, res) => {
       });
     }
 
+    // Sanitize OTP input — digits only, exactly 6 characters (FINDING-05)
+    const cleanOtp = String(otp).replace(/\D/g, "");
+    if (cleanOtp.length !== 6) {
+      return res.status(400).json({
+        status: false,
+        message: "OTP must be a 6-digit code.",
+      });
+    }
+
     // Verify OTP with purpose enforcement and constant-time comparison
-    const result = await verifyOTPCode(phone, otp, "REGISTRATION");
+    const result = await verifyOTPCode(phone, cleanOtp, "REGISTRATION");
     if (!result.valid) {
       return res.status(400).json({
         status: false,
@@ -84,19 +96,27 @@ const verifyPhoneOTP = async (req, res) => {
     }
 
     // Double-check phone isn't registered (race condition guard)
+    // ENUMERATION DEFENCE: use a generic 400 regardless of reason so we don't
+    // disclose whether the number is registered vs. the OTP was for a different phone.
     const { registered } = await isPhoneRegistered(phone);
     if (registered) {
-      return res.status(409).json({
+      return res.status(400).json({
         status: false,
-        message: "This phone number is already registered.",
-        errorCode: "PHONE_ALREADY_REGISTERED",
+        message: "Phone verification could not be completed. Please start again.",
       });
     }
+
+    // Issue a signed verification token bound to this phone and purpose.
+    // The client MUST include this token in the registration request (Step 3).
+    // Without it, no other requester can complete registration for this phone
+    // even though the OTP record is now marked isUsed:true in MongoDB.
+    const verificationToken = issueVerificationToken(phone, "REGISTRATION");
 
     return res.status(200).json({
       status: true,
       message:
         "Phone verified successfully! Please complete your registration.",
+      verificationToken,
     });
   } catch (error) {
     console.error("Verify OTP Error:", error);
@@ -111,7 +131,7 @@ const verifyPhoneOTP = async (req, res) => {
 // Step 3: Complete user registration
 const completeRegistration = async (req, res) => {
   try {
-    const { phone, name, email, address, password, gender, referralCode } =
+    const { phone, name, email, address, password, gender, referralCode, verificationToken } =
       req.body;
 
     if (!phone || !name || !password || !address || !gender) {
@@ -131,7 +151,18 @@ const completeRegistration = async (req, res) => {
       });
     }
 
-    // SECURITY CHECK: Verify that this phone went through REGISTRATION OTP verification
+    // AUTH-01.02: Validate verification token — proves this HTTP client was the one
+    // that successfully verified the OTP (Step 2). A second requester who knows only
+    // the phone number cannot complete registration without this signed token.
+    const tokenResult = validateVerificationToken(verificationToken, phone, "REGISTRATION");
+    if (!tokenResult.valid) {
+      return res.status(400).json({
+        status: false,
+        message: tokenResult.error,
+      });
+    }
+
+    // Belt-and-suspenders: Verify that this phone went through REGISTRATION OTP verification
     const otpRecord = await OTP.findOne({ phone, purpose: "REGISTRATION", isUsed: true });
     if (!otpRecord) {
       return res.status(400).json({
@@ -389,14 +420,20 @@ const login = async (req, res) => {
       const MAX_ATTEMPTS = 5;
       const LOCK_DURATION_MS = 15 * 60 * 1000;  // 15 minutes
 
-      const newFailedCount = (user.failedLoginAttempts || 0) + 1;
-      const updateData = { $inc: { failedLoginAttempts: 1 } };
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        { $inc: { failedLoginAttempts: 1 } },
+        { new: true }
+      );
+
+      const newFailedCount = updatedUser.failedLoginAttempts;
 
       if (newFailedCount >= MAX_ATTEMPTS) {
-        updateData.$set = { lockedUntil: new Date(Date.now() + LOCK_DURATION_MS) };
+        await User.findByIdAndUpdate(
+          user._id,
+          { $set: { lockedUntil: new Date(Date.now() + LOCK_DURATION_MS) } }
+        );
       }
-
-      await User.findByIdAndUpdate(user._id, updateData);
 
       const remaining = MAX_ATTEMPTS - newFailedCount;
       const message = remaining > 0
@@ -483,9 +520,14 @@ const login = async (req, res) => {
       activeRole,
     };
 
-    // Include refresh token only if generated
+    // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
     if (refreshToken) {
-      responseData.refreshToken = refreshToken;
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
     }
 
     return res.status(200).json(responseData);
@@ -495,61 +537,7 @@ const login = async (req, res) => {
   }
 };
 // OTP Verification (Legacy - for existing users)
-const verifyOtp = async (req, res) => {
-  try {
-    const { emailOrPhone, otp } = req.body;
 
-    if (!emailOrPhone || !otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Email/Phone and OTP are required!",
-      });
-    }
-
-    const user = await User.findOne({
-      $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found!",
-      });
-    }
-
-    if (user.isVerified) {
-      return res.status(400).json({
-        success: false,
-        message: "User already verified.",
-      });
-    }
-
-    // For legacy users who might still have OTP in User table
-    // This function is kept for backward compatibility
-    if (user.otp && user.otp === otp) {
-      user.isVerified = true;
-      user.otp = null;
-      user.otpExpiry = null;
-      await user.save();
-
-      return res.status(200).json({
-        success: true,
-        message: "OTP Verified Successfully!",
-      });
-    }
-
-    return res.status(400).json({
-      success: false,
-      message: "Invalid OTP or OTP not found.",
-    });
-  } catch (error) {
-    console.error("OTP Verification Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
-  }
-};
 // Request Password Reset
 const requestPasswordReset = async (req, res) => {
   try {
@@ -569,19 +557,19 @@ const requestPasswordReset = async (req, res) => {
       ],
     });
 
-    if (!user) {
-      // Don't reveal whether user exists — vague response
-      return res
-        .status(200)
-        .json({ status: true, message: "If an account exists, OTP has been sent." });
-    }
+    // ENUMERATION DEFENCE: always respond 200 with the same body whether
+    // or not the account exists. OTP is only dispatched for real accounts.
+    // This eliminates the timing and response-code side-channel.
+    await withMinimumLatency(async () => {
+      if (!user) return; // Account not found — do nothing (no SMS, no error)
 
-    // Use centralized OTP helper with PASSWORD_RESET purpose
-    await createAndSendOTP(user.phone, "PASSWORD_RESET");
+      // Use centralized OTP helper with PASSWORD_RESET purpose
+      await createAndSendOTP(user.phone, "PASSWORD_RESET");
+    }, 600);
 
     return res.status(200).json({
       status: true,
-      message: "OTP sent to registered phone!",
+      message: "If an account exists, OTP has been sent.",
     });
   } catch (err) {
     if (err.message && err.message.startsWith("OTP_SEND_BLOCKED:")) {
@@ -611,20 +599,30 @@ const verifyOtpForReset = async (req, res) => {
         .json({ status: false, message: "Phone/Email and OTP are required!" });
     }
 
-    const user = await User.findOne({
-      $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
-    });
-
-    if (!user) {
-      return res
-        .status(404)
-        .json({ status: false, message: "User not found." });
+    // Sanitize OTP input — digits only, exactly 6 characters (FINDING-05)
+    const cleanOtp = String(otp).replace(/\D/g, "");
+    if (cleanOtp.length !== 6) {
+      return res.status(400).json({ status: false, message: "OTP must be a 6-digit code." });
     }
 
-    // Verify with purpose enforcement — do NOT mark used yet (resetPassword will do that)
-    const result = await verifyOTPCode(user.phone, otp, "PASSWORD_RESET", false);
-    if (!result.valid) {
-      return res.status(400).json({ status: false, message: result.error });
+    // ENUMERATION DEFENCE (otpFirstVerify): the OTP is checked BEFORE the user
+    // record is looked up.  If the OTP is wrong we return immediately with a
+    // generic error — no DB lookup, no timing difference, no enumeration.
+    const lookupPhone = normalizePhone(emailOrPhone) || emailOrPhone;
+    const { valid, user, error } = await otpFirstVerify(
+      lookupPhone,
+      cleanOtp,
+      "PASSWORD_RESET",
+      false, // do NOT consume — resetPassword will do that
+      verifyOTPCode,
+      (p) => User.findOne({
+        $or: [{ phone: p }, { email: emailOrPhone }],
+        deletedAt: null,
+      })
+    );
+
+    if (!valid) {
+      return res.status(400).json({ status: false, message: error });
     }
 
     return res.status(200).json({
@@ -647,6 +645,21 @@ const resetPassword = async (req, res) => {
         .json({ status: false, message: "All fields are required." });
     }
 
+    // Sanitize OTP input — digits only
+    const cleanOtp = String(otp).replace(/\D/g, "");
+    if (cleanOtp.length !== 6) {
+      return res.status(400).json({ status: false, message: "Verification code must be 6 digits." });
+    }
+
+    // FINDING-03: Verify and consume the OTP FIRST (before user lookup) so the OTP
+    // is always invalidated regardless of whether the user record is found.
+    // We normalize the phone here; verifyOTPCode will look up by { phone, purpose }.
+    const lookupPhone = normalizePhone(emailOrPhone) || emailOrPhone;
+    const otpResult = await verifyOTPCode(lookupPhone, cleanOtp, "PASSWORD_RESET", true);
+    if (!otpResult.valid) {
+      return res.status(400).json({ status: false, message: otpResult.error });
+    }
+
     const user = await User.findOne({
       $or: [
         { phone: normalizePhone(emailOrPhone) },
@@ -657,15 +670,10 @@ const resetPassword = async (req, res) => {
     }).select("+password");
 
     if (!user) {
+      // OTP already consumed above — no replay risk
       return res
         .status(400)
         .json({ status: false, message: "No account found with this phone or email." });
-    }
-
-    // Verify OTP with purpose enforcement — mark as used on success
-    const result = await verifyOTPCode(user.phone, otp, "PASSWORD_RESET", true);
-    if (!result.valid) {
-      return res.status(400).json({ status: false, message: result.error });
     }
 
     // Validate new password strength
@@ -682,9 +690,13 @@ const resetPassword = async (req, res) => {
     user.password = hashedPassword;
     await user.save();
 
-    // Revoke all existing refresh tokens on password change (force re-login)
+    // Revoke all existing refresh tokens on password change (force re-login everywhere)
     const { revokeAllUserTokens } = require("../../utils/tokenService.js");
     await revokeAllUserTokens(user._id);
+
+    // Also increment tokenVersion to immediately invalidate any currently live
+    // access tokens — they will be rejected by verifyRoleFromDB on next use.
+    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } });
 
     return res
       .status(200)
@@ -1040,9 +1052,55 @@ const updatePassword = async (req, res) => {
     // Verify old password
     const isOldPasswordValid = await bcrypt.compare(oldPassword, user.password);
     if (!isOldPasswordValid) {
-      return res.status(400).json({
-        status: false,
-        message: "Current password is incorrect",
+      const MAX_ATTEMPTS = 5;
+      const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+      // Single atomic aggregation pipeline update:
+      // - Always increments failedLoginAttempts by 1
+      // - Conditionally sets lockedUntil and increments tokenVersion
+      //   when the NEW count (after increment) reaches MAX_ATTEMPTS.
+      // No second round-trip, no race window.
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        [
+          {
+            $set: {
+              failedLoginAttempts: { $add: ["$failedLoginAttempts", 1] },
+              lockedUntil: {
+                $cond: {
+                  if: { $gte: [{ $add: ["$failedLoginAttempts", 1] }, MAX_ATTEMPTS] },
+                  then: new Date(Date.now() + LOCK_DURATION_MS),
+                  else: "$lockedUntil",
+                },
+              },
+              tokenVersion: {
+                $cond: {
+                  if: { $gte: [{ $add: ["$failedLoginAttempts", 1] }, MAX_ATTEMPTS] },
+                  then: { $add: ["$tokenVersion", 1] },
+                  else: "$tokenVersion",
+                },
+              },
+            },
+          },
+        ],
+        { new: true }
+      );
+
+      const newFailedCount = updatedUser.failedLoginAttempts;
+      const remaining = MAX_ATTEMPTS - newFailedCount;
+      const message =
+        remaining > 0
+          ? `Current password is incorrect. ${remaining} attempt(s) remaining.`
+          : "Too many failed attempts. Account locked for 15 minutes and all sessions revoked.";
+
+      return res.status(401).json({ success: false, message });
+    }
+
+
+    // Clear failed attempts on successful password verification
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await User.findByIdAndUpdate(user._id, {
+        $set: { failedLoginAttempts: 0, lockedUntil: null }
       });
     }
 
@@ -1128,7 +1186,7 @@ const getUserDetail = async (req, res) => {
 // Refresh Token — issue new access token using a valid refresh token
 const refreshAccessToken = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
     if (!refreshToken) {
       return res.status(400).json({
@@ -1144,11 +1202,20 @@ const refreshAccessToken = async (req, res) => {
       ipAddress: req.ip || req.connection?.remoteAddress || null,
     });
 
+    if (result.refreshToken) {
+      res.cookie("refreshToken", result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      });
+    }
+
+    // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
     return res.status(200).json({
       success: true,
       message: "Token refreshed successfully.",
       accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
     });
   } catch (error) {
     console.error("Refresh Token Error:", error.message);
@@ -1174,10 +1241,21 @@ const refreshAccessToken = async (req, res) => {
 // Logout — revoke the refresh token (true server-side logout)
 const logout = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax",
+    });
 
     if (!refreshToken) {
-      // Even without a refresh token, client should clear local tokens
+      // Even without a refresh token, client should clear local tokens.
+      // Still bump tokenVersion so any copied access token also dies.
+      const userId = req.userInfo?.id;
+      if (userId) {
+        await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
+      }
       return res.status(200).json({
         success: true,
         message: "Logged out successfully.",
@@ -1186,6 +1264,13 @@ const logout = async (req, res) => {
 
     const { revokeRefreshToken } = require("../../utils/tokenService.js");
     await revokeRefreshToken(refreshToken);
+
+    // Increment tokenVersion so the current access token is immediately
+    // rejected by verifyRoleFromDB on its next use.
+    const userId = req.userInfo?.id;
+    if (userId) {
+      await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
+    }
 
     return res.status(200).json({
       success: true,
@@ -1274,14 +1359,26 @@ const changeForcePassword = async (req, res) => {
     user.phoneVerified = true;
     await user.save();
 
+    // Revoke all prior sessions before issuing new credentials (FINDING-08)
+    const { generateTokenPair, revokeAllUserTokens } = require("../../utils/tokenService.js");
+    await revokeAllUserTokens(user._id);
+
+    // Increment tokenVersion BEFORE minting the new token pair.
+    // This invalidates the FORCE_PASSWORD_CHANGE temp token and any other
+    // access tokens in the wild. The new access token will carry version+1
+    // and will therefore be the only valid one.
+    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } });
+
+    // Re-fetch so the new tokenVersion is baked into the access token payload
+    const freshUser = await User.findById(user._id);
+
     // Generate full token pair now
-    const { generateTokenPair } = require("../../utils/tokenService.js");
-    const { accessToken, refreshToken } = await generateTokenPair(user, {
+    const { accessToken, refreshToken } = await generateTokenPair(freshUser, {
       deviceInfo: req.get("User-Agent") || null,
       ipAddress: req.ip || req.connection?.remoteAddress || null,
     });
 
-    const userWithoutPassword = user.toObject();
+    const userWithoutPassword = freshUser.toObject();
     delete userWithoutPassword.password;
 
     const responseData = {
@@ -1291,8 +1388,14 @@ const changeForcePassword = async (req, res) => {
       accessToken,
     };
 
+    // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
     if (refreshToken) {
-      responseData.refreshToken = refreshToken;
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
     }
 
     return res.status(200).json(responseData);
@@ -1310,7 +1413,7 @@ module.exports = {
   verifyPhoneOTP,
   completeRegistration,
   login,
-  verifyOtp,
+
   requestPasswordReset,
   verifyOtpForReset,
   resetPassword,
