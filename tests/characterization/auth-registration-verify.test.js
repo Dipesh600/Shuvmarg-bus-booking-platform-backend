@@ -2,20 +2,21 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 
 const db = require('../helpers/db');
 const app = require('../helpers/app');
-const User = require('../../models/userModel');
 const OTP = require('../../models/otpModel');
-const otpHelper = require('../../utils/otpHelper');
+const User = require('../../models/userModel');
 
-// Utility: create a consumed REGISTRATION OTP record for a phone
-async function seedUsedOtp(phone) {
-  const hash = otpHelper.generateOtpCode; // just used for the record
+// Seed a valid OTP using HMAC the same way otpHelper does
+async function seedValidOtp(phone, rawCode) {
+  const hash = crypto.createHmac('sha256', process.env.SECRET_KEY).update(rawCode).digest('hex');
   await OTP.findOneAndUpdate(
     { phone, purpose: 'REGISTRATION' },
-    { otp: 'stub-hash', otpExpiry: new Date(Date.now() + 300000), isUsed: true, attempts: 0, sendCount: 1, maxAttempts: 5 },
+    { otp: hash, otpExpiry: new Date(Date.now() + 300000),
+      isUsed: false, attempts: 0, sendCount: 1, maxAttempts: 5 },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 }
@@ -25,70 +26,99 @@ test('Auth Registration: verifyPhoneOTP', async (t) => {
   t.after(async () => await db.disconnect());
   t.beforeEach(async () => await db.clearAll());
 
-  await t.test('POST /api/verifyPhoneOTP - missing phone → 400', async () => {
+  await t.test('missing phone → 400 exact body', async () => {
     const res = await request(app).post('/api/verifyPhoneOTP').send({ otp: '123456' });
     assert.equal(res.status, 400);
     assert.equal(res.body.status, false);
-    assert.match(res.body.message, /required/i);
+    assert.equal(res.body.message, 'Phone number and OTP are required!');
   });
 
-  await t.test('POST /api/verifyPhoneOTP - missing otp → 400', async () => {
+  await t.test('missing OTP → 400 exact body', async () => {
     const res = await request(app).post('/api/verifyPhoneOTP').send({ phone: '9800000010' });
     assert.equal(res.status, 400);
     assert.equal(res.body.status, false);
-    assert.match(res.body.message, /required/i);
+    assert.equal(res.body.message, 'Phone number and OTP are required!');
   });
 
-  await t.test('POST /api/verifyPhoneOTP - non-6-digit OTP → 400', async () => {
+  await t.test('non-6-digit OTP → 400 exact message', async () => {
     const res = await request(app).post('/api/verifyPhoneOTP').send({ phone: '9800000010', otp: '12345' });
     assert.equal(res.status, 400);
     assert.equal(res.body.status, false);
     assert.equal(res.body.message, 'OTP must be a 6-digit code.');
   });
 
-  await t.test('POST /api/verifyPhoneOTP - no OTP record → 400', async () => {
+  await t.test('OTP with non-digits stripped → accepted as valid length when 6 remain', async () => {
+    const phone = '9800000060';
+    const rawCode = '999777';
+    await seedValidOtp(phone, rawCode);
+    // Send with dashes — should sanitize to 999777
+    const res = await request(app).post('/api/verifyPhoneOTP').send({ phone, otp: '99-97-77' });
+    // Only check that it does NOT 400 with "must be 6-digit" — sanitization worked
+    assert.notEqual(res.body.message, 'OTP must be a 6-digit code.');
+  });
+
+  await t.test('no OTP record → 400', async () => {
     const res = await request(app).post('/api/verifyPhoneOTP').send({ phone: '9800000010', otp: '123456' });
     assert.equal(res.status, 400);
     assert.equal(res.body.status, false);
     assert.ok(res.body.message);
   });
 
-  await t.test('POST /api/verifyPhoneOTP - success → 200 + verificationToken', async () => {
+  await t.test('success → 200 + verificationToken string + exact message', async () => {
     const phone = '9800000011';
-    // Use the real createAndSendOTP to seed proper OTP, then verify it
-    const orig = require('../../utils/otpHelper');
-    const realSend = orig.createAndSendOTP;
-    let capturedCode;
-
-    // Intercept the real OTP creation to capture the code
-    orig.createAndSendOTP = async (p, purpose) => {
-      const crypto = require('crypto');
-      capturedCode = String(crypto.randomInt(100000, 999999));
-      const result = await realSend.call(orig, p, purpose);
-      return result;
-    };
-
-    // We need to directly seed a known OTP; use manual seeding instead
-    orig.createAndSendOTP = realSend; // restore
-
-    // Seed a valid known OTP manually
-    const crypto = require('crypto');
-    const rawOtp = '999888';
-    const hmac = require('crypto').createHmac('sha256', process.env.SECRET_KEY).update(rawOtp).digest('hex');
-    await OTP.findOneAndUpdate(
-      { phone, purpose: 'REGISTRATION' },
-      { otp: hmac, otpExpiry: new Date(Date.now() + 300000), isUsed: false, attempts: 0, sendCount: 1, maxAttempts: 5 },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-
-    const res = await request(app).post('/api/verifyPhoneOTP').send({ phone, otp: '999888' });
+    const rawCode = '999888';
+    await seedValidOtp(phone, rawCode);
+    const res = await request(app).post('/api/verifyPhoneOTP').send({ phone, otp: rawCode });
     assert.equal(res.status, 200);
     assert.equal(res.body.status, true);
+    assert.equal(res.body.message, 'Phone verified successfully! Please complete your registration.');
     assert.ok(typeof res.body.verificationToken === 'string');
-    assert.match(res.body.message, /verified/i);
+  });
 
-    // OTP record must now be consumed
-    const otpRecord = await OTP.findOne({ phone, purpose: 'REGISTRATION' });
-    assert.equal(otpRecord.isUsed, true);
+  await t.test('OTP record becomes isUsed:true after success', async () => {
+    const phone = '9800000012';
+    const rawCode = '777666';
+    await seedValidOtp(phone, rawCode);
+    await request(app).post('/api/verifyPhoneOTP').send({ phone, otp: rawCode });
+    const record = await OTP.findOne({ phone, purpose: 'REGISTRATION' });
+    assert.equal(record.isUsed, true);
+  });
+
+  await t.test('verificationToken decode: phone and purpose match', async () => {
+    const phone = '9800000013';
+    const rawCode = '555444';
+    await seedValidOtp(phone, rawCode);
+    const res = await request(app).post('/api/verifyPhoneOTP').send({ phone, otp: rawCode });
+    assert.equal(res.status, 200);
+    const decoded = jwt.decode(res.body.verificationToken);
+    assert.equal(decoded.phone, phone);
+    assert.equal(decoded.purpose, 'REGISTRATION');
+  });
+
+  await t.test('already-registered phone → 400 with generic failure message', async () => {
+    const phone = '9800000014';
+    await User.create({ phone, name: 'Reg', address: 'Y', gender: 'male', password: 'hashedpwd!!!',
+      phoneVerified: true, isVerified: true, roles: ['passenger'], referralCode: 'SHUV-TST14' });
+    await seedValidOtp(phone, '888777');
+    const res = await request(app).post('/api/verifyPhoneOTP').send({ phone, otp: '888777' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.status, false);
+    assert.match(res.body.message, /could not be completed/i);
+  });
+
+  await t.test('unexpected dependency failure → legacy 500 exact body shape', async () => {
+    const otpHelper = require('../../utils/otpHelper');
+    const orig = otpHelper.verifyOTPCode;
+    otpHelper.verifyOTPCode = async () => { throw new Error('crash'); };
+    try {
+      const phone = '9800000015';
+      await seedValidOtp(phone, '111222');
+      const res = await request(app).post('/api/verifyPhoneOTP').send({ phone, otp: '111222' });
+      assert.equal(res.status, 500);
+      assert.equal(res.body.status, false);
+      assert.ok(res.body.message.startsWith('Failed to verify OTP'));
+    } finally {
+      otpHelper.verifyOTPCode = orig;
+    }
   });
 });

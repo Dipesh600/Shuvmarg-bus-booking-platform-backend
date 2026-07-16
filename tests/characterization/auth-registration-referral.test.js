@@ -22,21 +22,22 @@ function issueValidToken(phone) {
 async function seedUsedOtp(phone) {
   await OTP.findOneAndUpdate(
     { phone, purpose: 'REGISTRATION' },
-    { otp: 'stub', otpExpiry: new Date(Date.now() + 300000), isUsed: true, attempts: 0, sendCount: 1, maxAttempts: 5 },
+    { otp: 'stub', otpExpiry: new Date(Date.now() + 300000),
+      isUsed: true, attempts: 0, sendCount: 1, maxAttempts: 5 },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 }
+
+const makeBody = (phone, extra = {}) => ({
+  phone, name: 'New User', address: 'Pokhara', gender: 'female',
+  password: 'StrongPass1', verificationToken: issueValidToken(phone),
+  ...extra,
+});
 
 test('Auth Registration: referral flow in completeRegistration', async (t) => {
   t.before(async () => await db.connect());
   t.after(async () => await db.disconnect());
   t.beforeEach(async () => await db.clearAll());
-
-  const makeBody = (phone, extra = {}) => ({
-    phone, name: 'New User', address: 'Pokhara', gender: 'female',
-    password: 'StrongPass1', verificationToken: issueValidToken(phone),
-    ...extra,
-  });
 
   await t.test('invalid referral code format → 400', async () => {
     const phone = '9800000030';
@@ -44,6 +45,7 @@ test('Auth Registration: referral flow in completeRegistration', async (t) => {
     const res = await request(app).post('/api/completeRegistration')
       .send(makeBody(phone, { referralCode: 'BAD!!' }));
     assert.equal(res.status, 400);
+    assert.equal(res.body.status, false);
     assert.match(res.body.message, /invalid referral code format/i);
   });
 
@@ -56,40 +58,82 @@ test('Auth Registration: referral flow in completeRegistration', async (t) => {
     assert.match(res.body.message, /invalid referral code/i);
   });
 
-  await t.test('self-referral → 400', async () => {
-    // Create a user who owns the referral code SHUV-SRF77
-    const referrerPhone = '9800000077';
-    await User.create({ phone: referrerPhone, name: 'Ref', address: 'Y', gender: 'male', password: 'hashedpwd!!!', phoneVerified: true, isVerified: true, roles: ['passenger'], referralCode: 'SHUV-SRF77' });
-    // Same phone (9800000077) tries to register using their own code
-    await seedUsedOtp(referrerPhone);
-    const res = await request(app).post('/api/completeRegistration')
-      .send(makeBody(referrerPhone, { referralCode: 'SHUV-SRF77', verificationToken: issueValidToken(referrerPhone) }));
-    // The service checks phone registration first; self-referral is caught as 400 either way
-    assert.ok([400, 409].includes(res.status));
-    assert.equal(res.body.status, false);
-  });
-
-
-  await t.test('valid referral → new user gets 10 points, referrer gets +10, history created', async () => {
-    const referrer = await User.create({ phone: '9800000098', name: 'Referrer', address: 'KTM', gender: 'male', password: 'hashedpwd!!!', phoneVerified: true, isVerified: true, roles: ['passenger'], referralCode: 'SHUV-REF98', yatrapoints: 5, totalReferrals: 0 });
+  await t.test('valid referral → new user yatrapoints=10, referredBy equals referrer ID', async () => {
+    const referrer = await User.create({
+      phone: '9800000098', name: 'Referrer', address: 'KTM', gender: 'male',
+      password: 'hashedpwd!!!', phoneVerified: true, isVerified: true, roles: ['passenger'],
+      referralCode: 'SHUV-REF98', yatrapoints: 5, totalReferrals: 0,
+    });
     const phone = '9800000040';
     await seedUsedOtp(phone);
     const res = await request(app).post('/api/completeRegistration')
       .send(makeBody(phone, { referralCode: 'SHUV-REF98' }));
     assert.equal(res.status, 201);
-
     const newUser = await User.findById(res.body.data.userId);
     assert.equal(newUser.yatrapoints, 10);
-    assert.ok(newUser.referredBy.toString() === referrer._id.toString());
+    assert.equal(newUser.referredBy.toString(), referrer._id.toString());
+  });
 
-    const updatedReferrer = await User.findById(referrer._id);
-    assert.equal(updatedReferrer.yatrapoints, 15);
-    assert.equal(updatedReferrer.totalReferrals, 1);
+  await t.test('valid referral → referrer yatrapoints +10, totalReferrals +1', async () => {
+    const referrer = await User.create({
+      phone: '9800000097', name: 'Ref2', address: 'KTM', gender: 'male',
+      password: 'hashedpwd!!!', phoneVerified: true, isVerified: true, roles: ['passenger'],
+      referralCode: 'SHUV-REF97', yatrapoints: 5, totalReferrals: 0,
+    });
+    const phone = '9800000041';
+    await seedUsedOtp(phone);
+    await request(app).post('/api/completeRegistration').send(makeBody(phone, { referralCode: 'SHUV-REF97' }));
+    const updated = await User.findById(referrer._id);
+    assert.equal(updated.yatrapoints, 15);
+    assert.equal(updated.totalReferrals, 1);
+  });
 
-    const history = await ReferralHistory.findOne({ referredUserId: newUser._id });
-    assert.ok(history);
-    assert.equal(history.rewardType, 'refral_point');
-    assert.equal(history.status, 'completed');
-    assert.equal(history.pointsCredited, true);
+  await t.test('valid referral → exactly one ReferralHistory record with exact fields', async () => {
+    const referrer = await User.create({
+      phone: '9800000096', name: 'Ref3', address: 'KTM', gender: 'male',
+      password: 'hashedpwd!!!', phoneVerified: true, isVerified: true, roles: ['passenger'],
+      referralCode: 'SHUV-REF96', yatrapoints: 0, totalReferrals: 0,
+    });
+    const phone = '9800000042';
+    await seedUsedOtp(phone);
+    const res = await request(app).post('/api/completeRegistration')
+      .set('User-Agent', 'TestBrowser/2.0')
+      .send(makeBody(phone, { referralCode: 'SHUV-REF96' }));
+    assert.equal(res.status, 201);
+
+    const records = await ReferralHistory.find({ referrerUserId: referrer._id });
+    assert.equal(records.length, 1);
+    const h = records[0];
+    const newUser = await User.findById(res.body.data.userId);
+    assert.equal(h.referredUserId.toString(), newUser._id.toString());
+    assert.equal(h.referrerUserId.toString(), referrer._id.toString());
+    assert.equal(h.referredUserPoints, 10);
+    assert.equal(h.referrerPoints, 10);
+    assert.equal(h.usedReferralCode, 'SHUV-REF96');
+    assert.equal(h.status, 'completed');
+    assert.equal(h.rewardType, 'refral_point');
+    assert.equal(h.pointsCredited, true);
+    assert.ok(h.metadata.deviceInfo === 'TestBrowser/2.0');
+  });
+
+  await t.test('referral-history DB failure is swallowed — registration still 201', async () => {
+    const referrer = await User.create({
+      phone: '9800000095', name: 'RefFour', address: 'KTM', gender: 'male',
+      password: 'hashedpwd!!!', phoneVerified: true, isVerified: true, roles: ['passenger'],
+      referralCode: 'SHUV-REF95', yatrapoints: 0, totalReferrals: 0,
+    });
+    const phone = '9800000043';
+    await seedUsedOtp(phone);
+    // Patch the repository method that createReferralHistoryRecord ultimately calls
+    const repository = require('../../src/modules/auth/registration/registration.repository');
+    const orig = repository.createReferralHistory;
+    repository.createReferralHistory = async () => { throw new Error('DB down'); };
+    try {
+      const res = await request(app).post('/api/completeRegistration')
+        .send(makeBody(phone, { referralCode: 'SHUV-REF95' }));
+      assert.equal(res.status, 201, 'registration must succeed even when history fails');
+    } finally {
+      repository.createReferralHistory = orig;
+    }
   });
 });

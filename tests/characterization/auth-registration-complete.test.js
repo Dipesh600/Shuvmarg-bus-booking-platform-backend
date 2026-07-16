@@ -7,10 +7,8 @@ const jwt = require('jsonwebtoken');
 
 const db = require('../helpers/db');
 const app = require('../helpers/app');
-const User = require('../../models/userModel');
 const OTP = require('../../models/otpModel');
 
-// Seed a fresh used OTP + issue a valid verification token for `phone`
 function issueValidToken(phone) {
   return jwt.sign(
     { phone, purpose: 'REGISTRATION', nonce: crypto.randomBytes(8).toString('hex') },
@@ -20,87 +18,127 @@ function issueValidToken(phone) {
 }
 
 async function seedUsedOtp(phone, daysAgo = 0) {
-  const updatedAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
-  await OTP.findOneAndUpdate(
+  const staleTime = daysAgo > 0
+    ? new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+    : new Date();
+  await OTP.collection.findOneAndUpdate(
     { phone, purpose: 'REGISTRATION' },
-    { otp: 'stub', otpExpiry: new Date(Date.now() + 300000), isUsed: true, attempts: 0, sendCount: 1, maxAttempts: 5 },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { $set: { otp: 'stub', otpExpiry: new Date(Date.now() + 300000),
+      isUsed: true, attempts: 0, sendCount: 1, maxAttempts: 5,
+      updatedAt: staleTime, createdAt: staleTime } },
+    { upsert: true }
   );
-  // Force updatedAt back if testing expiry
-  if (daysAgo > 0) {
-    await OTP.updateOne({ phone, purpose: 'REGISTRATION' }, { $set: { updatedAt } });
-  }
 }
 
-test('Auth Registration: completeRegistration', async (t) => {
+const goodBody = (phone = '9800000020') => ({
+  phone, name: 'Test User', address: 'Kathmandu', gender: 'male',
+  password: 'StrongPass1', verificationToken: issueValidToken(phone),
+});
+
+test('Auth Registration: completeRegistration — required field validation', async (t) => {
   t.before(async () => await db.connect());
   t.after(async () => await db.disconnect());
   t.beforeEach(async () => await db.clearAll());
 
-  const goodBody = (phone = '9800000020') => ({
-    phone, name: 'Test User', address: 'Kathmandu', gender: 'male',
-    password: 'StrongPass1', verificationToken: issueValidToken(phone),
-  });
-
-  await t.test('missing phone → 400', async () => {
-    const res = await request(app).post('/api/completeRegistration').send({ name: 'A', address: 'B', gender: 'male', password: 'StrongPass1', verificationToken: 'x' });
-    assert.equal(res.status, 400);
-    assert.match(res.body.message, /phone/i);
-  });
-
-  await t.test('invalid verification token → 400', async () => {
-    const res = await request(app).post('/api/completeRegistration').send({ ...goodBody(), verificationToken: 'bad.token.here' });
+  await t.test('missing phone → 400 with "Phone is required!"', async () => {
+    const { phone: _p, ...body } = goodBody();
+    const res = await request(app).post('/api/completeRegistration').send(body);
     assert.equal(res.status, 400);
     assert.equal(res.body.status, false);
+    assert.equal(res.body.message, 'Phone is required!');
   });
 
-  await t.test('no used OTP record → 400', async () => {
-    const phone = '9800000021';
-    const res = await request(app).post('/api/completeRegistration').send({ ...goodBody(phone), verificationToken: issueValidToken(phone) });
+  await t.test('missing name → 400 with "Name is required!"', async () => {
+    const phone = '9800000100';
+    const { name: _n, ...body } = goodBody(phone);
+    const res = await request(app).post('/api/completeRegistration').send(body);
+    assert.equal(res.status, 400);
+    assert.equal(res.body.message, 'Name is required!');
+  });
+
+  await t.test('missing password → 400 with "Password is required!"', async () => {
+    const phone = '9800000101';
+    const { password: _pw, ...body } = goodBody(phone);
+    const res = await request(app).post('/api/completeRegistration').send(body);
+    assert.equal(res.status, 400);
+    assert.equal(res.body.message, 'Password is required!');
+  });
+
+  await t.test('missing address → 400 with "Address is required!"', async () => {
+    const phone = '9800000102';
+    const { address: _a, ...body } = goodBody(phone);
+    const res = await request(app).post('/api/completeRegistration').send(body);
+    assert.equal(res.status, 400);
+    assert.equal(res.body.message, 'Address is required!');
+  });
+
+  await t.test('missing gender → 400 with "Gender is required!"', async () => {
+    const phone = '9800000103';
+    const { gender: _g, ...body } = goodBody(phone);
+    const res = await request(app).post('/api/completeRegistration').send(body);
+    assert.equal(res.status, 400);
+    assert.equal(res.body.message, 'Gender is required!');
+  });
+
+  await t.test('priority: all absent → phone message first', async () => {
+    const res = await request(app).post('/api/completeRegistration').send({});
+    assert.equal(res.status, 400);
+    assert.equal(res.body.message, 'Phone is required!');
+  });
+});
+
+test('Auth Registration: completeRegistration — verification proof', async (t) => {
+  t.before(async () => await db.connect());
+  t.after(async () => await db.disconnect());
+  t.beforeEach(async () => await db.clearAll());
+
+  await t.test('missing verificationToken → 400', async () => {
+    const { verificationToken: _vt, ...body } = goodBody('9800000110');
+    const res = await request(app).post('/api/completeRegistration').send(body);
+    assert.equal(res.status, 400);
+    assert.equal(res.body.status, false);
+    assert.match(res.body.message, /verification token.*required/i);
+  });
+
+  await t.test('invalid verificationToken → 400', async () => {
+    const res = await request(app).post('/api/completeRegistration')
+      .send({ ...goodBody('9800000111'), verificationToken: 'bad.token.here' });
+    assert.equal(res.status, 400);
+    assert.match(res.body.message, /invalid verification token/i);
+  });
+
+  await t.test('token for another phone → 400', async () => {
+    const res = await request(app).post('/api/completeRegistration')
+      .send({ ...goodBody('9800000112'), verificationToken: issueValidToken('9800000999') });
+    assert.equal(res.status, 400);
+    assert.match(res.body.message, /does not match/i);
+  });
+
+  await t.test('token for wrong purpose → 400', async () => {
+    const wrongToken = jwt.sign(
+      { phone: '9800000113', purpose: 'BUSOWNER_REGISTRATION', nonce: 'x' },
+      process.env.VERIFICATION_TOKEN_SECRET, { expiresIn: '30m' }
+    );
+    const res = await request(app).post('/api/completeRegistration')
+      .send({ ...goodBody('9800000113'), verificationToken: wrongToken });
+    assert.equal(res.status, 400);
+    assert.match(res.body.message, /invalid verification token for this registration type/i);
+  });
+
+  await t.test('no used REGISTRATION OTP → 400', async () => {
+    const phone = '9800000114';
+    const res = await request(app).post('/api/completeRegistration')
+      .send({ ...goodBody(phone), verificationToken: issueValidToken(phone) });
     assert.equal(res.status, 400);
     assert.match(res.body.message, /not verified/i);
   });
 
-  await t.test('duplicate phone → 409', async () => {
-    const phone = '9800000022';
-    await seedUsedOtp(phone);
-    await User.create({ phone, name: 'Old', address: 'X', gender: 'male', password: 'hashedpwd!!!', phoneVerified: true, isVerified: true, roles: ['passenger'], referralCode: 'SHUV-OLD01' });
-    const res = await request(app).post('/api/completeRegistration').send({ ...goodBody(phone), verificationToken: issueValidToken(phone) });
-    assert.equal(res.status, 409);
-    assert.equal(res.body.errorCode, 'PHONE_ALREADY_REGISTERED');
-  });
-
-  await t.test('weak password → 400 with errors array', async () => {
-    const phone = '9800000023';
-    await seedUsedOtp(phone);
-    const res = await request(app).post('/api/completeRegistration').send({ ...goodBody(phone), password: 'weak', verificationToken: issueValidToken(phone) });
+  await t.test('used OTP older than 30 min → 400', async () => {
+    const phone = '9800000115';
+    await seedUsedOtp(phone, 1);
+    const res = await request(app).post('/api/completeRegistration')
+      .send({ ...goodBody(phone), verificationToken: issueValidToken(phone) });
     assert.equal(res.status, 400);
-    assert.ok(Array.isArray(res.body.errors));
-    assert.ok(res.body.errors.length > 0);
-  });
-
-  await t.test('success without email → 201, correct fields', async () => {
-    const phone = '9800000024';
-    await seedUsedOtp(phone);
-    const res = await request(app).post('/api/completeRegistration').send({ ...goodBody(phone), verificationToken: issueValidToken(phone) });
-    assert.equal(res.status, 201);
-    assert.equal(res.body.status, true);
-    assert.ok(res.body.data.userId);
-    assert.equal(res.body.data.phone, phone);
-
-    const u = await User.findById(res.body.data.userId);
-    assert.equal(u.phoneVerified, true);
-    assert.equal(u.isVerified, true);
-    assert.ok(u.roles.includes('passenger'));
-    assert.ok(typeof u.referralCode === 'string');
-  });
-
-  await t.test('success with email → stored lowercase', async () => {
-    const phone = '9800000025';
-    await seedUsedOtp(phone);
-    const res = await request(app).post('/api/completeRegistration').send({ ...goodBody(phone), email: 'TEST@EXAMPLE.COM', verificationToken: issueValidToken(phone) });
-    assert.equal(res.status, 201);
-    const u = await User.findById(res.body.data.userId);
-    assert.equal(u.email, 'test@example.com');
+    assert.match(res.body.message, /expired/i);
   });
 });

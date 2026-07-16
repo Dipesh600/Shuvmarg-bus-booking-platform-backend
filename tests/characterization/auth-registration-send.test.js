@@ -8,68 +8,92 @@ const app = require('../helpers/app');
 const User = require('../../models/userModel');
 const OTP = require('../../models/otpModel');
 
-// Stub Sparrow SMS so no real HTTP calls are made
-const sparro = require('../../handlers/sparro-otp');
-const _originalSend = sparro;
+const patchMethod = (obj, key, fn) => {
+  const orig = obj[key];
+  obj[key] = fn;
+  return () => { obj[key] = orig; };
+};
 
 test('Auth Registration: sendPhoneOTP', async (t) => {
   t.before(async () => await db.connect());
   t.after(async () => await db.disconnect());
   t.beforeEach(async () => await db.clearAll());
 
-  await t.test('POST /api/sendPhoneOTP - missing phone → 400 from middleware', async () => {
+  await t.test('missing phone → 400 exact body', async () => {
     const res = await request(app).post('/api/sendPhoneOTP').send({});
     assert.equal(res.status, 400);
-    assert.ok(res.body.message);
+    assert.equal(res.body.success, false);
+    assert.equal(res.body.message, 'Phone number is required.');
   });
 
-  await t.test('POST /api/sendPhoneOTP - already-registered phone → generic 200, no data field', async () => {
+  await t.test('registered phone → exact generic 200, no data field', async () => {
     await User.create({
       phone: '9800000001', name: 'Existing', address: 'KTM', gender: 'male',
       password: 'hashedpwd!!!', phoneVerified: true, isVerified: true, roles: ['passenger'],
       referralCode: 'SHUV-EXI01',
     });
-
-
-    // Stub SMS to prevent real network call
     const otpHelper = require('../../utils/otpHelper');
-    const orig = otpHelper.createAndSendOTP;
-    otpHelper.createAndSendOTP = async () => ({ success: true, expiresIn: '5 minutes' });
-
-    const res = await request(app).post('/api/sendPhoneOTP').send({ phone: '9800000001' });
-    otpHelper.createAndSendOTP = orig;
-
-    assert.equal(res.status, 200);
-    assert.equal(res.body.status, true);
-    assert.ok(res.body.message.includes('eligible'));
-    assert.equal(res.body.data, undefined); // no data — enumeration defence
+    let sendCalled = false;
+    const restore = patchMethod(otpHelper, 'createAndSendOTP', async () => { sendCalled = true; });
+    try {
+      const res = await request(app).post('/api/sendPhoneOTP').send({ phone: '9800000001' });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.status, true);
+      assert.match(res.body.message, /eligible/);
+      assert.equal(res.body.data, undefined);
+      assert.equal(sendCalled, false);
+    } finally { restore(); }
   });
 
-  await t.test('POST /api/sendPhoneOTP - OTP_SEND_BLOCKED → 429', async () => {
-    // Seed a blocked OTP record
+  await t.test('OTP_SEND_BLOCKED → 429 exact body', async () => {
     await OTP.create({
       phone: '9800000002', purpose: 'REGISTRATION',
       otp: 'hash', otpExpiry: new Date(Date.now() + 300000),
       blockedUntil: new Date(Date.now() + 600000), sendCount: 3,
     });
-
     const res = await request(app).post('/api/sendPhoneOTP').send({ phone: '9800000002' });
     assert.equal(res.status, 429);
     assert.equal(res.body.success, false);
+    assert.ok(res.body.message.includes('Too many OTP requests'));
     assert.equal(res.body.errorCode, 'OTP_SEND_BLOCKED');
     assert.ok(typeof res.body.retryAfterMinutes === 'number');
   });
 
-  await t.test('POST /api/sendPhoneOTP - new phone, OTP sent → 200 with expiresIn', async () => {
+  await t.test('unregistered phone → purpose REGISTRATION passed to createAndSendOTP', async () => {
     const otpHelper = require('../../utils/otpHelper');
-    const orig = otpHelper.createAndSendOTP;
-    otpHelper.createAndSendOTP = async () => ({ success: true, expiresIn: '5 minutes' });
+    let capturedPurpose;
+    const restore = patchMethod(otpHelper, 'createAndSendOTP',
+      async (_phone, purpose) => { capturedPurpose = purpose; return { expiresIn: '5 minutes' }; }
+    );
+    try {
+      await request(app).post('/api/sendPhoneOTP').send({ phone: '9800009990' });
+      assert.equal(capturedPurpose, 'REGISTRATION');
+    } finally { restore(); }
+  });
 
-    const res = await request(app).post('/api/sendPhoneOTP').send({ phone: '9800009999' });
-    otpHelper.createAndSendOTP = orig;
+  await t.test('new phone, OTP sent → 200 with expiresIn in data', async () => {
+    const otpHelper = require('../../utils/otpHelper');
+    const restore = patchMethod(otpHelper, 'createAndSendOTP',
+      async () => ({ success: true, expiresIn: '5 minutes' })
+    );
+    try {
+      const res = await request(app).post('/api/sendPhoneOTP').send({ phone: '9800009999' });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.status, true);
+      assert.equal(res.body.data.expiresIn, '5 minutes');
+    } finally { restore(); }
+  });
 
-    assert.equal(res.status, 200);
-    assert.equal(res.body.status, true);
-    assert.equal(res.body.data.expiresIn, '5 minutes');
+  await t.test('unexpected failure → exact legacy 500 body', async () => {
+    const otpHelper = require('../../utils/otpHelper');
+    const restore = patchMethod(otpHelper, 'createAndSendOTP',
+      async () => { throw new Error('crash'); }
+    );
+    try {
+      const res = await request(app).post('/api/sendPhoneOTP').send({ phone: '9800009998' });
+      assert.equal(res.status, 500);
+      assert.equal(res.body.status, false);
+      assert.equal(res.body.message, 'Failed to send OTP. Please try again.');
+    } finally { restore(); }
   });
 });
