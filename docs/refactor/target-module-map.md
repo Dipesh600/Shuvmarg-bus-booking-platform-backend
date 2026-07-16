@@ -52,33 +52,32 @@ src/
 
 ### `shared`
 
+> **Constraint:** This layer must import **zero domain Mongoose models**. Any utility that imports a model belongs in the domain module that owns that model, not here.
+
 **Owns:**
 - Async error handler wrapper (`asyncHandler`)
 - Unified response formatter (`respond(res, status, body)`)
-- OTP generation and verification (`utils/otpHelper.js` → move here)
-- Token issue / verify / rotate (`utils/tokenService.js` → move here)
-- Phone normalization and guard (`utils/phoneGuard.js` → move here)
-- Anti-enumeration primitives (`utils/enumGuard.js` → move here)
 - Password validator (`utils/passwordValidator.js` → move here)
-- Verification token (`utils/verificationToken.js` → move here)
 - Logger (`utils/logger.js` → move here)
 - S3 service (`services/s3Service.js` → move here)
 - File processor (`services/fileProcessor.js` → move here)
-- Email transport (`emailManager/emailManager.js` + `handlers/*.js` → move here)
-- OTP rate limiter (`middleware/otpRateLimiter.js` → move here)
 - Request logger middleware (`middleware/requestLogger.js` → move here)
 - DB connection (`db/db.js` → move here)
+- Email transport (`emailManager/emailManager.js` + `handlers/*.js` → move here)
+
+**Does NOT own** (these import domain models — moved to their respective domain modules):
+- `utils/otpHelper.js` → `auth/otp` (imports `otpModel`)
+- `utils/tokenService.js` → `auth/sessions` (imports `refreshTokenModel`)
+- `utils/phoneGuard.js` → `auth/registration` or `users/identity` (imports `userModel`, `agentModel`, `busOwnerModel`)
+- `utils/enumGuard.js` → `auth/otp` (OTP purpose enum)
+- `utils/verificationToken.js` → `auth/otp` (verification token lifecycle)
+- `middleware/otpRateLimiter.js` → `auth/otp`
 
 **Collections owned:** None (infrastructure only)
 
 **Existing files:**
 ```
-utils/otpHelper.js
-utils/tokenService.js
-utils/phoneGuard.js
-utils/enumGuard.js
 utils/passwordValidator.js
-utils/verificationToken.js
 utils/logger.js
 utils/server.js
 services/s3Service.js
@@ -91,12 +90,11 @@ handlers/agentStatusEmailTemp.js
 handlers/busOwnerStatusEmailTemp.js
 handlers/passwordGenerator.js
 handlers/referralCodeGenerator.js
-middleware/otpRateLimiter.js
 middleware/requestLogger.js
 db/db.js
 ```
 
-**Public operations:** `sendOTP`, `verifyOTPCode`, `issueTokenPair`, `refreshAccessToken`, `revokeRefreshToken`, `asyncHandler`, `respond`
+**Public operations:** `asyncHandler`, `respond`, `hashPassword`, `validatePasswordStrength`
 
 **Depends on:** Nothing internal
 
@@ -111,10 +109,38 @@ db/db.js
 - Passenger login
 - Passenger password reset
 - Force password change
-- Token refresh / logout
 - Auth middleware (JWT verification)
 - Role-from-DB middleware
 - Account activation (invite flow)
+
+**Sub-modules:**
+
+#### `auth/sessions`
+Owns token issue, refresh-token rotation, and logout. Files that were `utils/tokenService.js` live here because they import `refreshTokenModel` (a domain model). One file per use case:
+```
+src/modules/auth/sessions/user.refresh.js
+src/modules/auth/sessions/user.logout.js
+src/modules/auth/sessions/tokenService.js  (← from utils/tokenService.js)
+```
+
+#### `auth/otp`
+Owns OTP generation, verification, rate limiting, purpose enums, and verification tokens. Files live here because they import `otpModel`:
+```
+src/modules/auth/otp/otpHelper.js          (← from utils/otpHelper.js)
+src/modules/auth/otp/otpRateLimiter.js     (← from middleware/otpRateLimiter.js)
+src/modules/auth/otp/enumGuard.js          (← from utils/enumGuard.js)
+src/modules/auth/otp/verificationToken.js  (← from utils/verificationToken.js)
+```
+
+#### `auth/registration`
+Owns phone-registration guard, OTP-based registration handlers, and account activation. `phoneGuard.js` lives here (not in shared) because it queries `userModel`, `agentModel`, and `busOwnerModel`:
+```
+src/modules/auth/registration/phoneGuard.js           (← from utils/phoneGuard.js)
+src/modules/auth/registration/user.sendPhoneOTP.js
+src/modules/auth/registration/user.verifyPhoneOTP.js
+src/modules/auth/registration/user.completeRegistration.js
+src/modules/auth/registration/user.resendOTP.js
+```
 
 **Collections owned:** `otps`, `refreshtokens` (primary owner)
 
@@ -131,7 +157,7 @@ models/otpModel.js
 models/refreshTokenModel.js
 ```
 
-**Public operations:** `requireAuth`, `requireRoleFromDB`, `issueTokensForUser`
+**Public operations:** `requireAuth`, `requireRoleFromDB`
 
 **Depends on:** `shared`
 

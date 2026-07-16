@@ -3,16 +3,19 @@
 **Commit:** `df5a7f2`  
 **Generated:** 2026-07-16
 
-> Each item below represents one pull request against `dev`. No PR should attempt the complete backend refactor.  
-> All PRs during the refactor must: (a) keep existing API paths unchanged, (b) keep collection/field names unchanged, (c) pass CI before merge.
+> Each item below represents one pull request against **`dev`**. No PR should attempt the complete backend refactor.  
+> All PRs during the refactor must: (a) keep existing API paths unchanged, (b) keep collection/field names unchanged, (c) pass CI before merge.  
+> **Rule:** No utility file may be relocated before the characterization tests required by its consuming PR are passing.
 
 ---
 
-## PR-0 — Shared Foundation (This document's parent)
+## PR-0 — Baseline Documentation
 
 **Scope:** Create the `docs/refactor/` documentation suite, `config/refactor-file-size-baseline.json`, and update `.gitignore`.
 
 **Files affected:** `docs/refactor/*.md`, `config/refactor-file-size-baseline.json`, `.gitignore`
+
+**Target branch:** `dev`
 
 **Tests required first:** None (documentation only)
 
@@ -26,69 +29,115 @@
 
 ---
 
-## PR-1 — Shared Infrastructure Package
+## PR-1 — Test and CI Foundation
 
-**Scope:** Extract all pure utility functions into a stable shared layer. Move files without changing their exports or internal logic. Every consumer `require()` path is updated to point at the new location.
+**Scope:** Wire the test runner, write the first characterization tests, and add the GitHub Actions gate. No production code is moved or altered. This PR must land before any `require()` paths change.
 
-**Files to move:**
+**Files affected:**
 ```
-utils/logger.js             → src/shared/logger.js
-utils/server.js             → src/shared/server.js
-utils/passwordValidator.js  → src/shared/passwordValidator.js
-middleware/requestLogger.js → src/shared/requestLogger.js
-db/db.js                    → src/shared/db.js
-```
-
-**Files NOT moved yet** (have active coupling — move in later PRs):
-```
-utils/otpHelper.js         (depends on otpModel — move with PR-3)
-utils/tokenService.js      (depends on refreshTokenModel — move with PR-2)
-utils/phoneGuard.js        (depends on userModel — move with PR-2)
-utils/enumGuard.js         (move with PR-3)
-utils/verificationToken.js (move with PR-3)
-emailManager/emailManager.js + handlers/ (move with PR-20)
+package.json                         (add jest, supertest, mongodb-memory-server as devDependencies)
+.github/workflows/test.yml           (new — CI gate on dev branch)
+tests/characterization/auth.test.js  (new — POST /api/login 200/401, POST /api/refresh, POST /api/logout)
+tests/characterization/search.test.js (new — POST /api/public/searchTrips happy path)
 ```
 
-**Tests required first:** None (pure infrastructure — no business logic)
+**Target branch:** `dev`
 
-**API contracts unchanged:** Yes
+**Tests required first:** None (this PR IS the tests)
 
-**Risks:** Low — updating require paths can introduce typos
+**API contracts unchanged:** Yes — no production code touched
 
-**Rollback:** Revert the file moves; all old paths are known
+**Risks:** Low — only devDependencies and test files added
+
+**Rollback:** Revert package.json and delete test files
 
 **Complexity:** Small
 
 ---
 
-## PR-2 — Auth Middleware and Token Service
+## PR-2 — Shared HTTP and Error Foundation
 
-**Scope:** Extract `tokenService`, `authMiddleware`, and `verifyRoleFromDB` as a self-contained auth layer. No controller splitting yet — only move the middleware files and token utilities.
+**Scope:** Add `asyncHandler` (async error wrapper) and a unified `respond(res, status, body)` helper as a new `src/shared/` layer. These files have **zero Mongoose model imports** — they are safe to create without prior tests.
 
 **Files affected:**
 ```
-utils/tokenService.js         → src/shared/tokenService.js
-middleware/authMiddleware.js  → src/shared/authMiddleware.js
-middleware/verifyRoleFromDB.js → src/shared/verifyRoleFromDB.js
-middleware/adminMiddleware.js  → src/shared/adminMiddleware.js
+src/shared/asyncHandler.js  (new — wraps async route handlers; no model imports)
+src/shared/respond.js       (new — standardises JSON response shape; no model imports)
 ```
 
-**All route files updated** to `require` from new paths.
+**Target branch:** `dev`
+
+**Tests required first:** None (pure functions with no dependencies)
+
+**API contracts unchanged:** Yes — no existing file is moved or modified
+
+**Risks:** Low — additive only; existing controllers are not yet updated to use these helpers
+
+**Rollback:** Delete the two new files
+
+**Complexity:** Small
+
+---
+
+## PR-3 — User Login: Characterize then Extract
+
+**Scope:** Two steps in one PR:
+1. Add a characterization test for `POST /api/login` (must pass before the move).
+2. Extract the `login` handler from `authController.js` into its own single-use-case file.
+
+No broad `loginController.js` that bundles multiple operations — one file, one use case.
+
+**Files affected:**
+```
+tests/characterization/auth.test.js              (add login cases if not already covered by PR-1)
+controllers/authControllers.js/authController.js (remove login handler)
+src/modules/auth/user.login.js                   (new — single use case: POST /api/login)
+routes/userRoutes/userRoutes.js                  (update require to new path)
+```
+
+**Target branch:** `dev`
 
 **Tests required first:**
-- Characterization test: `POST /api/login` returns 200 with valid credentials
-- Characterization test: protected route returns 401 without token
-- Characterization test: protected route returns 401 with expired token
+- `POST /api/login` → 200 with valid credentials
+- `POST /api/login` → 401 with wrong password
+- `POST /api/login` → rate limited after 10 attempts
+
+**API contracts unchanged:** `POST /api/login` must return identical response shape
+
+**Risks:** Medium — login is the most used endpoint
+
+**Rollback:** Revert controller require in userRoutes
+
+**Complexity:** Small
+
+---
+
+## PR-4 — Session and Token Lifecycle
+
+**Scope:** Extract `refreshAccessToken` and `logout` from `authController.js`. Token issue and refresh-token rotation code belongs under `auth/sessions`, not in a shared utility. These handlers depend on `refreshTokenModel` and must stay within the auth module boundary.
+
+**Files affected:**
+```
+controllers/authControllers.js/authController.js  (remove refresh + logout handlers)
+src/modules/auth/sessions/user.refresh.js         (new — single use case: POST /api/refresh)
+src/modules/auth/sessions/user.logout.js          (new — single use case: POST /api/logout)
+routes/userRoutes/userRoutes.js                   (update requires)
+```
+
+**Target branch:** `dev`
+
+**Tests required first:**
+- `POST /api/refresh` returns new access token with valid refresh token
+- `POST /api/refresh` returns 401 with expired refresh token
+- `POST /api/logout` returns 200; subsequent `POST /api/refresh` returns 401
 
 **API contracts unchanged:** Yes
 
-**Security findings related:** AUTH-01, NF-01, NF-04 (existing fixes already in place — must not regress)
+**Risks:** Medium — token rotation failure logs out all users
 
-**Risks:** Medium — authMiddleware is used on almost every route; a wrong require path breaks all protected endpoints
+**Rollback:** Revert requires in userRoutes
 
-**Rollback:** Revert require paths to original utils/middleware paths
-
-**Complexity:** Medium
+**Complexity:** Small
 
 ---
 
@@ -149,44 +198,29 @@ routes/userRoutes/userRoutes.js                   (update require)
 
 ---
 
-## PR-5 — Session and Token Lifecycle
+## PR-5 — User Registration: Characterize then Extract
 
-**Scope:** Extract `refreshAccessToken` and `logout` from `authController.js`.
+**Scope:** Extract the 3-step registration flow from `authController.js`. Phone-registration guard (`phoneGuard.js`) belongs under `auth/registration` (or `users/identity`) — it depends on `userModel`, `agentModel`, and `busOwnerModel` and must not be placed in the infrastructure shared layer which has zero model imports.
 
-**Files affected:**
-```
-controllers/authControllers.js/authController.js  (remove refresh/logout)
-src/modules/auth/sessionController.js             (new)
-routes/userRoutes/userRoutes.js                   (update require)
-```
-
-**Tests required first:**
-- `POST /api/refresh` returns new access token
-- `POST /api/logout` returns 200, subsequent refresh fails
-
-**API contracts unchanged:** Yes
-
-**Risks:** Low
-
-**Complexity:** Small
-
----
-
-## PR-6 — Registration and OTP Flow
-
-**Scope:** Extract `sendPhoneOTP`, `verifyPhoneOTP`, `completeRegistration`, and `resendOtp` from `authController.js`.
+Each extracted handler is one file, one use case:
 
 **Files affected:**
 ```
 controllers/authControllers.js/authController.js  (remove registration handlers)
-src/modules/auth/registrationController.js         (new)
+src/modules/auth/registration/user.sendPhoneOTP.js      (new)
+src/modules/auth/registration/user.verifyPhoneOTP.js    (new)
+src/modules/auth/registration/user.completeRegistration.js (new)
+src/modules/auth/registration/user.resendOTP.js         (new)
 routes/userRoutes/userRoutes.js
 ```
+
+**Target branch:** `dev`
 
 **Tests required first:**
 - Full registration flow: sendOTP → verifyOTP → complete (happy path)
 - Duplicate phone blocked
 - OTP expiry rejected
+- OTP purpose mismatch rejected
 
 **API contracts unchanged:** Yes — all three POST paths unchanged
 
@@ -198,16 +232,51 @@ routes/userRoutes/userRoutes.js
 
 ---
 
-## PR-7 — Password Recovery Flow
+## PR-6 — OTP Infrastructure Extraction
 
-**Scope:** Extract `requestPasswordReset`, `verifyOtpForReset`, `resetPassword` from `authController.js`.
+**Scope:** Move OTP generation and verification logic into `src/modules/auth/otp/`. OTP code belongs under `auth/otp` — not in the shared infrastructure layer, because `otpHelper.js` imports `otpModel` (a domain Mongoose model). Shared infrastructure must import no domain models.
 
 **Files affected:**
 ```
-controllers/authControllers.js/authController.js  (remove password reset handlers)
-src/modules/auth/passwordResetController.js        (new)
+utils/otpHelper.js          → src/modules/auth/otp/otpHelper.js
+middleware/otpRateLimiter.js → src/modules/auth/otp/otpRateLimiter.js
+utils/enumGuard.js          → src/modules/auth/otp/enumGuard.js
+utils/verificationToken.js  → src/modules/auth/otp/verificationToken.js
+```
+
+**All callers** (authController, agentAuthController, busOwnerAuthController) updated.
+
+**Target branch:** `dev`
+
+**Tests required first:**
+- OTP flow end-to-end (sendOTP → verifyOTP)
+- Rate limiter blocks after threshold
+- OTP purpose mismatch rejected
+
+**API contracts unchanged:** Yes
+
+**Risks:** Medium — OTP is used across three auth flows
+
+**Rollback:** Revert require paths
+
+**Complexity:** Small
+
+---
+
+## PR-7 — Password Recovery Flow
+
+**Scope:** Extract `requestPasswordReset`, `verifyOtpForReset`, `resetPassword` from `authController.js`. Each handler gets its own file.
+
+**Files affected:**
+```
+controllers/authControllers.js/authController.js          (remove password reset handlers)
+src/modules/auth/password/user.requestPasswordReset.js    (new)
+src/modules/auth/password/user.verifyOtpForReset.js       (new)
+src/modules/auth/password/user.resetPassword.js           (new)
 routes/userRoutes/userRoutes.js
 ```
+
+**Target branch:** `dev`
 
 **Tests required first:**
 - Reset flow: requestReset → verifyOTP → resetPassword (happy path)
@@ -224,11 +293,19 @@ routes/userRoutes/userRoutes.js
 
 ## PR-8 — User Profile and Force Password Change
 
-**Scope:** Extract `getUserDetail`, `updateProfile`, `UpdateProfilePic`, `updatePassword`, `changeForcePassword`.
+**Scope:** Extract `getUserDetail`, `updateProfile`, `UpdateProfilePic`, `updatePassword`, `changeForcePassword`. Phone uniqueness guard (`phoneGuard.js`) stays inside `auth/registration` or `users/identity` — not in shared infrastructure. `authController.js` should be empty or near-empty after PRs 3–8.
 
-**Files:** Remaining auth controller → `src/modules/users/profileController.js`
+**Files affected:**
+```
+controllers/authControllers.js/authController.js   (extract remaining profile handlers)
+src/modules/users/profile/user.getProfile.js       (new)
+src/modules/users/profile/user.updateProfile.js    (new)
+src/modules/users/profile/user.updatePassword.js   (new)
+src/modules/users/profile/user.changeForcePassword.js (new)
+routes/userRoutes/userRoutes.js
+```
 
-`authController.js` should now be empty or near-empty after PRs 4–8.
+**Target branch:** `dev`
 
 **Tests required first:**
 - `GET /api/getUserDetail` returns correct user shape
@@ -244,18 +321,27 @@ routes/userRoutes/userRoutes.js
 
 ## PR-9 — Admin Authentication and MFA
 
-**Scope:** Isolate admin auth into `src/modules/admin/auth/adminAuthController.js`. No changes to `adminMiddleware`.
+**Scope:** Isolate admin auth into `src/modules/admin/auth/`. One file per use case. This must not be confused with any `User` model role-check flow — admin auth uses the dedicated `SuperAdmin` collection exclusively.
 
 **Files affected:**
 ```
-controllers/adminController/authController/auth-controller.js → move to src/modules/admin/auth/
+controllers/adminController/authController/auth-controller.js  → split into:
+  src/modules/admin/auth/admin.login.js          (new — POST /api/admin/auth/login)
+  src/modules/admin/auth/admin.verifyMfa.js      (new — POST /api/admin/auth/verify-2fa)
+  src/modules/admin/auth/admin.setupMfa.js       (new — POST /api/admin/auth/setup-2fa)
+  src/modules/admin/auth/admin.refresh.js        (new — POST /api/admin/auth/refresh)
+  src/modules/admin/auth/admin.logout.js         (new — POST /api/admin/auth/logout)
+  src/modules/admin/auth/admin.changePassword.js (new — POST /api/admin/auth/change-password)
 routes/adminRoutes/adminRoutes.js  (admin auth portion)
 ```
 
+**Target branch:** `dev`
+
 **Tests required first:**
-- Admin login → 200 with valid credentials
-- Admin login with 2FA → mfaRequired response
-- verify-2fa → full JWT on valid TOTP
+- Admin login → 200 with valid credentials, 30-min JWT issued
+- Admin login with 2FA → `mfaRequired` response + tempToken
+- `verify-2fa` → full JWT on valid TOTP
+- Protected admin route → 401 without admin token
 
 **API contracts unchanged:** All `/api/admin/auth/*` paths unchanged
 
@@ -271,17 +357,23 @@ routes/adminRoutes/adminRoutes.js  (admin auth portion)
 
 ## PR-10 — Agent Onboarding (Auth + KYC)
 
-**Scope:** Split `agentAuthController.js` (986 lines) into separate handlers following the same pattern as PRs 4–8.
+**Scope:** Split `agentAuthController.js` (986 lines) into separate single-use-case handlers following the same pattern as PRs 3–8.
 
 **Files affected:**
 ```
-controllers/authControllers.js/agentAuthController.js  (decompose into ≤4 files)
-src/modules/agents/auth/agentLoginController.js
-src/modules/agents/auth/agentRegistrationController.js
-src/modules/agents/auth/agentPasswordResetController.js
-src/modules/agents/auth/agentSessionController.js
+controllers/authControllers.js/agentAuthController.js  (decompose)
+src/modules/agents/auth/agent.login.js
+src/modules/agents/auth/agent.sendOTP.js
+src/modules/agents/auth/agent.verifyOTP.js
+src/modules/agents/auth/agent.register.js
+src/modules/agents/auth/agent.logout.js
+src/modules/agents/auth/agent.refresh.js
+src/modules/agents/auth/agent.requestPasswordReset.js
+src/modules/agents/auth/agent.resetPassword.js
 routes/authRoutes/agentAuthRoutes.js
 ```
+
+**Target branch:** `dev`
 
 **Tests required first:**
 - Agent registration flow end-to-end
@@ -300,14 +392,23 @@ routes/authRoutes/agentAuthRoutes.js
 
 ## PR-11 — Bus Owner Onboarding (Auth + KYC)
 
-**Scope:** Same split as PR-10 but for `busOwnerAuthController.js` (914 lines).
+**Scope:** Same single-use-case split as PR-10 but for `busOwnerAuthController.js` (914 lines).
 
 **Files affected:**
 ```
 controllers/authControllers.js/busOwnerAuthController.js  (decompose)
-src/modules/operators/auth/
+src/modules/operators/auth/operator.login.js
+src/modules/operators/auth/operator.sendOTP.js
+src/modules/operators/auth/operator.verifyOTP.js
+src/modules/operators/auth/operator.register.js
+src/modules/operators/auth/operator.logout.js
+src/modules/operators/auth/operator.refresh.js
+src/modules/operators/auth/operator.requestPasswordReset.js
+src/modules/operators/auth/operator.resetPassword.js
 routes/authRoutes/busOwnerAuthRoutes.js
 ```
+
+**Target branch:** `dev`
 
 **Tests required first:** Bus owner registration + login flow
 
@@ -633,30 +734,30 @@ routes/adminRoutes/
 
 ## Sequence Summary
 
-| PR | Name | Complexity | Risk | Dependency |
-|---|---|---|---|---|
-| PR-0 | Docs baseline | Small | None | — |
-| PR-1 | Shared infrastructure | Small | Low | — |
-| PR-2 | Auth middleware + token | Medium | Medium | PR-1 |
-| PR-3 | OTP + phone guard utilities | Small | Low | PR-2 |
-| PR-4 | User login | Small | Medium | PR-3 |
-| PR-5 | Session / token lifecycle | Small | Low | PR-4 |
-| PR-6 | Registration + OTP | Medium | High | PR-5 |
-| PR-7 | Password recovery | Small | Medium | PR-6 |
-| PR-8 | User profile | Small | Low | PR-7 |
-| PR-9 | Admin auth + MFA | Medium | High | PR-2 |
-| PR-10 | Agent onboarding | Large | High | PR-3 |
-| PR-11 | Bus owner onboarding | Large | High | PR-3 |
-| PR-12 | KYC review | Medium | Medium | PR-10, PR-11 |
-| PR-13 | Fleets + amenities | Medium | Medium | PR-11 |
-| PR-14 | Stops + routes | Large | Medium | PR-13 |
-| PR-15 | Trips + schedules + cron | Large | High | PR-14 |
-| PR-16 | Seat holds | Medium | High | PR-15 |
-| PR-17 | Bookings | Large | Critical | PR-16 |
-| PR-18 | Payments + ticket confirm | Large | Critical | PR-17 |
-| PR-19 | Cancellations + refunds | Medium | High | PR-18 |
-| PR-20 | Wallet + ledger | Large | High | PR-19 |
-| PR-21 | Coupons + referrals | Medium | Medium | PR-20 |
-| PR-22 | Settlements | Small | Medium | PR-20 |
-| PR-23 | Notifications + audit | Large | Medium | All |
-| PR-24 | Admin sub-router split | Medium | Medium | All |
+| PR | Name | Target | Complexity | Risk | Dependency |
+|---|---|---|---|---|---|
+| PR-0 | Docs baseline | `dev` | Small | None | — |
+| PR-1 | Test and CI foundation | `dev` | Small | Low | — |
+| PR-2 | Shared HTTP/error foundation | `dev` | Small | Low | — |
+| PR-3 | User login: characterize + extract | `dev` | Small | Medium | PR-1 |
+| PR-4 | Session and token lifecycle | `dev` | Small | Medium | PR-3 |
+| PR-5 | Registration: characterize + extract | `dev` | Medium | High | PR-4 |
+| PR-6 | OTP infrastructure extraction | `dev` | Small | Medium | PR-5 |
+| PR-7 | Password recovery flow | `dev` | Small | Medium | PR-6 |
+| PR-8 | User profile | `dev` | Small | Low | PR-7 |
+| PR-9 | Admin auth + MFA (SuperAdmin model) | `dev` | Medium | High | PR-1 |
+| PR-10 | Agent onboarding | `dev` | Large | High | PR-6 |
+| PR-11 | Bus owner onboarding | `dev` | Large | High | PR-6 |
+| PR-12 | KYC review | `dev` | Medium | Medium | PR-10, PR-11 |
+| PR-13 | Fleets + amenities | `dev` | Medium | Medium | PR-11 |
+| PR-14 | Stops + routes | `dev` | Large | Medium | PR-13 |
+| PR-15 | Trips + schedules + cron | `dev` | Large | High | PR-14 |
+| PR-16 | Seat holds | `dev` | Medium | High | PR-15 |
+| PR-17 | Bookings | `dev` | Large | Critical | PR-16 |
+| PR-18 | Payments + ticket confirm | `dev` | Large | Critical | PR-17 |
+| PR-19 | Cancellations + refunds | `dev` | Medium | High | PR-18 |
+| PR-20 | Wallet + ledger | `dev` | Large | High | PR-19 |
+| PR-21 | Coupons + referrals | `dev` | Medium | Medium | PR-20 |
+| PR-22 | Settlements | `dev` | Small | Medium | PR-20 |
+| PR-23 | Notifications + audit | `dev` | Large | Medium | All |
+| PR-24 | Admin sub-router split | `dev` | Medium | Medium | All |

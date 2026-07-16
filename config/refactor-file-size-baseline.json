@@ -6,7 +6,8 @@
     "command": "find . -type f \\( -name '*.js' -o -name '*.cjs' -o -name '*.mjs' \\) -not -path './node_modules/*' -not -path './coverage/*' -not -path './dist/*' -not -path './build/*' -print0 | xargs -0 wc -l | sort -nr",
     "totalSourceFiles": 221,
     "totalLines": 46842,
-    "filesAtOrOver150": 90
+    "filesOver150": 89,
+    "_note_filesOver150": "Violation = strictly over 150 lines (151+). Exactly 150 is compliant."
   },
   "controllers/ticketController/ticketController.js": 2109,
   "controllers/authControllers.js/authController.js": 1428,
@@ -98,5 +99,8 @@
   "controllers/authControllers.js/activateAccountController.js": 161,
   "models/busOwnerModel.js": 154,
   "controllers/adminController/busOwnerController/boardingPointController.js": 153,
-  "controllers/busOwnerController/fareRuleController.js": 150
+  "_boundary150": {
+    "_note": "These files are exactly 150 lines — compliant but on the boundary. Any addition makes them a violation.",
+    "controllers/busOwnerController/fareRuleController.js": 150
+  }
 }

@@ -30,7 +30,7 @@
 | Refresh token rotation works | `POST /api/refresh` | ✅ |
 | Logout revokes session | `POST /api/logout` | ✅ |
 | `verifyRoleFromDB` blocks stale tokens | Any protected route | ✅ |
-| Admin JWT has 8h expiry | `POST /api/admin/auth/login` | ✅ |
+| Admin JWT has 30-min expiry (dedicated SuperAdmin model, not User model) | `POST /api/admin/auth/login` | ✅ |
 | `forcePasswordChange` detection | `POST /api/changeForcePassword` | ✅ |
 | Token service unit tests (inline) | N/A — inline assertions | Partial |
 

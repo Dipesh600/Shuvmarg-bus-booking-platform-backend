@@ -21,12 +21,14 @@ find . \
 |---|---|
 | Total source files measured | 221 |
 | Total lines (all files) | 46,842 |
-| Files **≥ 150 lines** | 90 |
+| Files **over 150 lines** | 89 |
 | Files **≥ 300 lines** | 44 |
 | Files **≥ 500 lines** | 22 |
 | Files **≥ 1,000 lines** | 4 |
 
 > ⚠️ These numbers were verified by running the `find | wc -l` command directly in the worktree. They are ground truth.
+>
+> **Policy:** a hand-written source file is a violation if it is **over 150 lines** (i.e. 151+). Exactly 150 lines is compliant.
 
 ---
 
@@ -67,7 +69,7 @@ find . \
 
 ---
 
-## Files 31–90 (150–394 lines)
+## Files 31–89 (151–394 lines)
 
 | Rank | Lines | File | Category | Risk |
 |---|---|---|---|---|
@@ -131,7 +133,16 @@ find . \
 | 88 | 161 | `controllers/authControllers.js/activateAccountController.js` | Controller | Low |
 | 89 | 154 | `models/busOwnerModel.js` | Model | Low |
 | 90 | 153 | `controllers/adminController/busOwnerController/boardingPointController.js` | Controller | Low |
-| 90 | 150 | `controllers/busOwnerController/fareRuleController.js` | Controller | Low |
+
+---
+
+## Boundary Files — Exactly 150 Lines (Compliant)
+
+These files are **not violations**. They sit at the policy boundary and should be monitored: any future addition of a single line makes them violations.
+
+| Lines | File | Category |
+|---|---|---|
+| 150 | `controllers/busOwnerController/fareRuleController.js` | Controller |
 
 ---
 
@@ -156,9 +167,12 @@ Two script files (`scripts/migrate-to-sm-ledger.js` at 179 lines, `scripts/backf
 
 ## Priority Extraction Order
 
-1. **Shared foundation** — `utils/tokenService.js`, `utils/otpHelper.js`, `utils/phoneGuard.js`, `utils/enumGuard.js` — must be stable before anything moves
-2. **Auth split** — `authController.js` (1,428) — split into: `loginController`, `registrationController`, `passwordResetController`, `sessionController`
-3. **Ticket god-object** — `ticketController.js` (2,109) — the single most dangerous file; extract `seat-holds`, `cancellations`, `search` first
-4. **Payment controller** — `paymentBookingController.js` (1,154) — extract `prepareBooking`, `confirmBooking`, `verifyBooking` into dedicated services
-5. **Agent + bus owner auth** — `agentAuthController.js` (986) + `busOwnerAuthController.js` (914) — same split pattern as user auth
-6. **Schedule service** — `scheduleService.js` (898) — extract burst-generation logic from the cron dispatcher
+> ⚠️ No utility file may be moved before the characterization tests required by its consuming PR are passing. Moving `require()` paths without a test gate is invisible to CI.
+
+1. **Test and CI foundation** (PR-1) — wire Jest + mongodb-memory-server + GitHub Actions; write the first characterization tests for login/refresh/logout before any file moves
+2. **HTTP and error foundation** (PR-2) — add `asyncHandler` wrapper and unified `respond()` helper; these have no Mongoose imports and need no prior tests
+3. **User login extraction** (PR-3) — characterize `POST /api/login` first, then extract the login handler into its own file
+4. **Session and token lifecycle** (PR-4) — after login is extracted, extract refresh and logout
+5. **Auth controller progressively reduced** — registration, password reset, profile each in separate PRs (PR-5 onwards)
+6. **Ticket god-object** — `ticketController.js` (2,109 lines) — the most complex extraction; start only after auth PRs are settled and booking/payment characterization tests exist
+7. **Payment controller** — `paymentBookingController.js` (1,154 lines) — extract `prepareBooking`, `confirmBooking`, `verifyBooking` only after eSewa integration tests are in place

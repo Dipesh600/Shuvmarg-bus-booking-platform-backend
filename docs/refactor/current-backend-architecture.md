@@ -256,20 +256,22 @@ controllers/adminController/busOwnerController/adminBusOwnerController.js (860 l
 
 ## 7. Admin Authentication and MFA
 
+> **Important distinction:** The admin authentication system uses a **dedicated `SuperAdmin` Mongoose model** — entirely separate from the passenger `User` model. A `User` document with `role: "admin"` does **not** grant admin portal access; it is handled by `authMiddleware` + `verifyRoleFromDB` only. The `adminMiddleware` exclusively reads the `SuperAdmin` collection and is not involved in passenger auth at all.
+
 **Route file:** `routes/adminRoutes/adminRoutes.js` (466 lines — all admin routes in one file)  
 **Controller:** `controllers/adminController/authController/auth-controller.js` (255 lines)
 
 ```
 POST /api/admin/auth/login
-  → load SuperAdmin by email
+  → load SuperAdmin by email (SuperAdmin model, NOT User model)
   → verify bcrypt password
   → if 2FA enabled: return { mfaRequired: true, tempToken }
-  → if no 2FA: issue full access JWT (8h) + refresh token
+  → if no 2FA: issue full access JWT (30 min) + refresh token
 
 POST /api/admin/auth/verify-2fa
   → validate tempToken (purpose="MFA_PENDING")
   → verify TOTP code via speakeasy
-  → issue full access JWT (8h) + refresh token
+  → issue full access JWT (30 min) + refresh token
 
 POST /api/admin/auth/setup-2fa       (first-time only)
 POST /api/admin/auth/refresh
@@ -278,6 +280,7 @@ POST /api/admin/auth/change-password
 ```
 
 All other admin routes use `adminMiddleware` (not `auth` + `verifyRoleFromDB`).
+
 
 ---
 
