@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authCoontroller = require("../../controllers/authControllers.js/authController.js");
 const loginModule = require("../../src/modules/auth/login");
+const registrationModule = require("../../src/modules/auth/registration");
 const sessionController = require("../../src/modules/auth/session/index.js");
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
@@ -38,9 +39,9 @@ const passwordChangeLimiter = rateLimit({
 
 // ── PUBLIC AUTH ROUTES (no JWT needed) ────────────────────────────────────────
 // New three-step registration process
-router.post("/sendPhoneOTP",       otpRateLimiter, authCoontroller.sendPhoneOTP);    // ← OTP rate limit
-router.post("/verifyPhoneOTP",     otpVerifyLimiter, authCoontroller.verifyPhoneOTP); // ← phone-keyed verify limit
-router.post("/completeRegistration", authCoontroller.completeRegistration);
+router.post("/sendPhoneOTP",       otpRateLimiter, registrationModule.sendPhoneOTP);    // ← OTP rate limit
+router.post("/verifyPhoneOTP",     otpVerifyLimiter, registrationModule.verifyPhoneOTP); // ← phone-keyed verify limit
+router.post("/completeRegistration", registrationModule.completeRegistration);
 
 router.post("/login",              loginLimiter, loginModule.login);              // ← Login rate limit
 // SECURITY: /verifyOtp (legacy) removed — no brute-force limit, plain === comparison, no purpose enforcement.
