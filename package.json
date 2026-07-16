@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "test:auth": "node --test tests/characterization/auth-login.test.js tests/characterization/auth-session.test.js",
+    "test:auth": "node --test tests/characterization/auth-login.test.js tests/characterization/auth-login-security.test.js tests/characterization/auth-login-roles.test.js tests/characterization/auth-session.test.js tests/unit/auth/login-service.test.js",
     "check:filesize": "node tools/check-file-size.js",
     "start": "node --no-deprecation index.js",
     "dev": "nodemon index.js",

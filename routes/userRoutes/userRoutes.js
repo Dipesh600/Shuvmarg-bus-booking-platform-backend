@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const authCoontroller = require("../../controllers/authControllers.js/authController.js");
+const loginModule = require("../../src/modules/auth/login");
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
@@ -40,7 +41,7 @@ router.post("/sendPhoneOTP",       otpRateLimiter, authCoontroller.sendPhoneOTP)
 router.post("/verifyPhoneOTP",     otpVerifyLimiter, authCoontroller.verifyPhoneOTP); // ← phone-keyed verify limit
 router.post("/completeRegistration", authCoontroller.completeRegistration);
 
-router.post("/login",              loginLimiter, authCoontroller.login);              // ← Login rate limit
+router.post("/login",              loginLimiter, loginModule.login);              // ← Login rate limit
 // SECURITY: /verifyOtp (legacy) removed — no brute-force limit, plain === comparison, no purpose enforcement.
 // Use verifyPhoneOTP for registration OTP verification.
 router.post("/requestPasswordReset", otpRateLimiter, authCoontroller.requestPasswordReset); // ← OTP rate limit
