@@ -95,4 +95,24 @@ test('Auth: Refresh Characterization', async (t) => {
     assert.equal(reuseRes.body.success, false);
     assert.equal(reuseRes.body.message, 'Invalid or revoked refresh token. Please login again.');
   });
+
+  await t.test('POST /api/refresh - Body token fallback', async () => {
+    const res = await request(app)
+      .post('/api/refresh')
+      .send({ refreshToken: validRefreshToken });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.accessToken);
+  });
+
+  await t.test('POST /api/refresh - Cookie takes precedence over body', async () => {
+    // Body carries a garbage token; cookie carries the real one.
+    const res = await request(app)
+      .post('/api/refresh')
+      .set('Cookie', [`refreshToken=${validRefreshToken}`])
+      .send({ refreshToken: 'wrong-body-token' });
+    assert.equal(res.status, 200, 'cookie token should win and refresh successfully');
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.accessToken);
+  });
 });

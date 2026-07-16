@@ -77,4 +77,29 @@ test('Auth: Logout Characterization', async (t) => {
     const userAfter = await User.findById(user._id);
     assert.equal(userAfter.tokenVersion || 0, beforeTokenVersion);
   });
+
+  await t.test('POST /api/logout - Body token fallback returns success', async () => {
+    const res = await request(app)
+      .post('/api/logout')
+      .send({ refreshToken: validRefreshToken });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.message, 'Logged out successfully.');
+  });
+
+  await t.test('POST /api/logout - Cookie takes precedence over body token', async () => {
+    // Body has a bad token; cookie has the real one — both should still result in 200
+    const res = await request(app)
+      .post('/api/logout')
+      .set('Cookie', [`refreshToken=${validRefreshToken}`])
+      .send({ refreshToken: 'bad-body-token' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+
+    // The real token from cookie should now be revoked
+    const reuseRes = await request(app)
+      .post('/api/refresh')
+      .set('Cookie', [`refreshToken=${validRefreshToken}`]);
+    assert.equal(reuseRes.status, 401);
+  });
 });

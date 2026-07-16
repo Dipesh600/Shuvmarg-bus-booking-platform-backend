@@ -27,18 +27,16 @@ const logout = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
   const userId = req.userInfo?.id;
 
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Lax',
+  });
+
   const result = await sessionService.logoutSession({
     refreshToken,
     userId,
   });
-
-  if (result.clearCookie) {
-    res.clearCookie(result.clearCookie, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'Lax',
-    });
-  }
 
   return respond(res, result.statusCode, result.responseBody);
 });

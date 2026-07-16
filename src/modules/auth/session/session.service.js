@@ -48,7 +48,6 @@ const logoutSession = async (input) => {
   
   return {
     statusCode: 200,
-    clearCookie: 'refreshToken',
     responseBody: {
       success: true,
       message: 'Logged out successfully.',

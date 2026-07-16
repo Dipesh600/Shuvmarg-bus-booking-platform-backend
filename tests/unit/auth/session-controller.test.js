@@ -1,3 +1,4 @@
+'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
 const { mock } = require('node:test');
@@ -33,19 +34,12 @@ test('Auth: Session Controller', async (t) => {
 
   await t.test('refreshAccessToken - success via cookie', async () => {
     req.cookies.refreshToken = 'cookie-token';
-    req.get.mock.mockImplementation((header) => {
-      if (header === 'User-Agent') return 'test-agent';
-      return null;
-    });
+    req.get.mock.mockImplementation((h) => (h === 'User-Agent' ? 'test-agent' : null));
 
     sessionService.refreshSession.mock.mockImplementation(() => Promise.resolve({
       statusCode: 200,
       refreshToken: 'new-refresh-token',
-      responseBody: {
-        success: true,
-        message: 'Token refreshed successfully.',
-        accessToken: 'new-access-token',
-      }
+      responseBody: { success: true, message: 'Token refreshed successfully.', accessToken: 'new-access-token' },
     }));
 
     await sessionController.refreshAccessToken(req, res, next);
@@ -56,11 +50,9 @@ test('Auth: Session Controller', async (t) => {
       deviceInfo: 'test-agent',
       ipAddress: '127.0.0.1',
     });
-
     assert.equal(res.cookie.mock.callCount(), 1);
     assert.equal(res.cookie.mock.calls[0].arguments[0], 'refreshToken');
     assert.equal(res.cookie.mock.calls[0].arguments[1], 'new-refresh-token');
-
     assert.equal(res.status.mock.callCount(), 1);
     assert.equal(res.status.mock.calls[0].arguments[0], 200);
     assert.deepEqual(res.json.mock.calls[0].arguments[0], {
@@ -87,15 +79,12 @@ test('Auth: Session Controller', async (t) => {
 
     sessionService.logoutSession.mock.mockImplementation(() => Promise.resolve({
       statusCode: 200,
-      clearCookie: 'refreshToken',
-      responseBody: {
-        success: true,
-        message: 'Logged out successfully.',
-      }
+      responseBody: { success: true, message: 'Logged out successfully.' },
     }));
 
     await sessionController.logout(req, res, next);
 
+    // clearCookie is called unconditionally (before service)
     assert.equal(res.clearCookie.mock.callCount(), 1);
     assert.equal(res.clearCookie.mock.calls[0].arguments[0], 'refreshToken');
 
@@ -104,7 +93,6 @@ test('Auth: Session Controller', async (t) => {
       refreshToken: 'logout-token',
       userId: 'user-123',
     });
-
     assert.equal(res.status.mock.callCount(), 1);
     assert.equal(res.status.mock.calls[0].arguments[0], 200);
     assert.deepEqual(res.json.mock.calls[0].arguments[0], {
@@ -112,5 +100,31 @@ test('Auth: Session Controller', async (t) => {
       message: 'Logged out successfully.',
     });
     assert.equal(next.mock.callCount(), 0);
+  });
+
+  await t.test('logout - clearCookie is called before logoutSession', async () => {
+    const callOrder = [];
+    res.clearCookie.mock.mockImplementation(() => { callOrder.push('clearCookie'); });
+    sessionService.logoutSession.mock.mockImplementation(() => {
+      callOrder.push('logoutSession');
+      return Promise.resolve({ statusCode: 200, responseBody: { success: true, message: 'Logged out successfully.' } });
+    });
+
+    await sessionController.logout(req, res, next);
+
+    assert.deepEqual(callOrder, ['clearCookie', 'logoutSession'],
+      'clearCookie must be called before logoutSession');
+  });
+
+  await t.test('logout - cookie cleared even without a token', async () => {
+    sessionService.logoutSession.mock.mockImplementation(() => Promise.resolve({
+      statusCode: 200,
+      responseBody: { success: true, message: 'Logged out successfully.' },
+    }));
+
+    await sessionController.logout(req, res, next);
+
+    assert.equal(res.clearCookie.mock.callCount(), 1);
+    assert.equal(res.clearCookie.mock.calls[0].arguments[0], 'refreshToken');
   });
 });
