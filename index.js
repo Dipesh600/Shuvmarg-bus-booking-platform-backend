@@ -109,8 +109,6 @@ app.use((req, res, next) => {
   next();
 });
 
-
-
 // ── Rate Limiting ─────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,  // 15 minutes
@@ -142,7 +140,6 @@ app.use(fileUpload({
   limits: { fileSize: 20 * 1024 * 1024 },  // 20 MB max per file
   abortOnLimit: true,
 }));
-
 // ── Structured HTTP Logging ───────────────────────────────────────────────────
 app.use(requestLogger);
 
@@ -245,12 +242,6 @@ app.get("/testing", (req, res) => {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use(indexRoute);
-
-// ── Cron Jobs ─────────────────────────────────────────────────────────────────
-setupTripGeneratorCron();
-setupFleetDocumentExpiryCron();
-setupReconciliationCron();
-
 // ── Global Error Handler ──────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   const isDevelopment = process.env.NODE_ENV === "development";
@@ -270,4 +261,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-startServer(app, PORT);
+if (require.main === module) {
+  setupTripGeneratorCron();
+  setupFleetDocumentExpiryCron();
+  setupReconciliationCron();
+  startServer(app, PORT);
+}
+
+module.exports = app;
