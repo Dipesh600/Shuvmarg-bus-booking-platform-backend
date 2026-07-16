@@ -19,6 +19,7 @@ const rateLimit = require("express-rate-limit");
 const router = express.Router();
 const busOwnerAuth = require("../../controllers/authControllers.js/busOwnerAuthController.js");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
+const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
 
 // Strict rate limiter for login attempts — 10 attempts per 15 minutes per IP
 const loginRateLimiter = rateLimit({
@@ -36,7 +37,7 @@ const loginRateLimiter = rateLimit({
 
 // 3-step self-registration
 router.post("/sendOTP",   otpRateLimiter, busOwnerAuth.sendOTP);
-router.post("/verifyOTP", busOwnerAuth.verifyOTP);
+router.post("/verifyOTP", otpVerifyLimiter, busOwnerAuth.verifyOTP);     // ← phone-keyed verify limit
 router.post("/register",  busOwnerAuth.register);
 router.post("/resendOTP", otpRateLimiter, busOwnerAuth.resendOTP);
 
@@ -45,8 +46,8 @@ router.post("/login", loginRateLimiter, busOwnerAuth.login);
 
 // Password Reset (Bus Owner specific)
 router.post("/requestPasswordReset", otpRateLimiter, busOwnerAuth.requestPasswordReset);
-router.post("/verifyOtpForReset", busOwnerAuth.verifyOtpForReset);
-router.post("/resetPassword", busOwnerAuth.resetPassword);
+router.post("/verifyOtpForReset", otpVerifyLimiter, busOwnerAuth.verifyOtpForReset); // ← phone-keyed verify limit
+router.post("/resetPassword",     otpVerifyLimiter, busOwnerAuth.resetPassword);      // ← phone-keyed verify limit
 router.post("/resendOtpForReset", otpRateLimiter, busOwnerAuth.resendOtpForReset);
 
 // Session management (no JWT required — these operate on refresh tokens)

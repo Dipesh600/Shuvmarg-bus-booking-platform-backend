@@ -7,6 +7,7 @@ const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralC
 const userCouponController = require("../../controllers/couponController/userCouponController.js");
 const recordCouponUsageController = require("../../controllers/couponController/recordCouponUsageController.js");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
+const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
 const rateLimit = require("express-rate-limit");
 
 // Strict rate limiter for login attempts (per IP — 10 per 15 min)
@@ -21,14 +22,15 @@ const loginLimiter = rateLimit({
 // ── PUBLIC AUTH ROUTES (no JWT needed) ────────────────────────────────────────
 // New three-step registration process
 router.post("/sendPhoneOTP",       otpRateLimiter, authCoontroller.sendPhoneOTP);    // ← OTP rate limit
-router.post("/verifyPhoneOTP",     authCoontroller.verifyPhoneOTP);
+router.post("/verifyPhoneOTP",     otpVerifyLimiter, authCoontroller.verifyPhoneOTP); // ← phone-keyed verify limit
 router.post("/completeRegistration", authCoontroller.completeRegistration);
 
 router.post("/login",              loginLimiter, authCoontroller.login);              // ← Login rate limit
-router.post("/verifyOtp",          authCoontroller.verifyOtp);
+// SECURITY: /verifyOtp (legacy) removed — no brute-force limit, plain === comparison, no purpose enforcement.
+// Use verifyPhoneOTP for registration OTP verification.
 router.post("/requestPasswordReset", otpRateLimiter, authCoontroller.requestPasswordReset); // ← OTP rate limit
-router.post("/verifyOtpForReset",  authCoontroller.verifyOtpForReset);
-router.post("/resetPassword",      authCoontroller.resetPassword);
+router.post("/verifyOtpForReset",  otpVerifyLimiter, authCoontroller.verifyOtpForReset); // ← phone-keyed verify limit
+router.post("/resetPassword",      otpVerifyLimiter, authCoontroller.resetPassword);    // ← phone-keyed verify limit
 router.post("/resendOtp",          otpRateLimiter, authCoontroller.resendOtp);        // ← OTP rate limit
 
 // Token management (refresh, logout, force password change)
@@ -73,31 +75,36 @@ router.get(
 router.get(
   "/coupons/available",
   auth,
+  verifyRoleFromDB,
   userCouponController.getAvailableCoupons
 );
-router.post("/coupons/validate", auth, userCouponController.validateCoupon);
+router.post("/coupons/validate", auth, verifyRoleFromDB, userCouponController.validateCoupon);
 router.get(
   "/coupons/usage-history",
   auth,
+  verifyRoleFromDB,
   userCouponController.getMyCouponUsage
 );
-router.get("/coupons/best", auth, userCouponController.getBestCoupon);
-router.get("/coupons/search", auth, userCouponController.searchCoupons);
+router.get("/coupons/best", auth, verifyRoleFromDB, userCouponController.getBestCoupon);
+router.get("/coupons/search", auth, verifyRoleFromDB, userCouponController.searchCoupons);
 
 // Coupon Usage Tracking Routes
 router.post(
   "/coupons/record-usage",
   auth,
+  verifyRoleFromDB,
   recordCouponUsageController.recordCouponUsage
 );
 router.get(
   "/coupons/check-usage",
   auth,
+  verifyRoleFromDB,
   recordCouponUsageController.checkCouponUsage
 );
 router.get(
   "/coupons/my-used-coupons",
   auth,
+  verifyRoleFromDB,
   recordCouponUsageController.getUserUsedCoupons
 );
 

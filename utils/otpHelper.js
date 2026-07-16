@@ -126,10 +126,31 @@ const createAndSendOTP = async (phone, purpose, customPrefix = null) => {
 
 /**
  * Verify an OTP for a given phone and purpose.
- * Returns a detailed result object — never throws for expected failures.
  *
- * On brute-force exhaustion: sets `blockedUntil` to prevent sending a new OTP
- * immediately (forces the attacker to wait before trying again).
+ * SECURITY — RACE CONDITION FIX (HIGH severity):
+ *
+ * Previous implementation used a read → check → separate save pattern:
+ *   1. findOne()  → reads attempts = N
+ *   2. N < max?   → yes, proceed
+ *   3. incrementAttempts() → this.attempts += 1; this.save()
+ *
+ * Under parallel requests, all goroutines read the same N and all pass
+ * the check, allowing substantially more than maxAttempts wrong guesses.
+ *
+ * Fix: ALL state mutations now use atomic findOneAndUpdate with a
+ * conditional filter that enforces the constraint at the database level:
+ *
+ *   Attempt increment:
+ *     filter: { phone, purpose, isUsed: false, attempts: { $lt: maxAttempts }, otpExpiry: { $gt: now } }
+ *     update: { $inc: { attempts: 1 } }
+ *
+ *   Mark as used:
+ *     filter: { phone, purpose, isUsed: false, otpExpiry: { $gt: now } }
+ *     update: { $set: { isUsed: true } }
+ *
+ * MongoDB guarantees these are atomic. Concurrent requests racing on the
+ * same document: only those that find the document in the valid state win.
+ * Subsequent requests get null back and fail safely.
  *
  * @param {string} phone
  * @param {string} otp - The code submitted by the user
@@ -138,6 +159,10 @@ const createAndSendOTP = async (phone, purpose, customPrefix = null) => {
  * @returns {Promise<{ valid: boolean, error: string|null }>}
  */
 const verifyOTPCode = async (phone, otp, purpose, markUsed = true) => {
+  const now = new Date();
+
+  // ── Step 1: Lightweight initial read for human-readable error messages ─────
+  // This read is informational only. The security gates are the atomic updates below.
   const otpRecord = await OTP.findOne({ phone, purpose });
 
   if (!otpRecord) {
@@ -152,28 +177,82 @@ const verifyOTPCode = async (phone, otp, purpose, markUsed = true) => {
     return { valid: false, error: "OTP has expired. Please request a new code." };
   }
 
+  // Inform the caller if attempts are already exhausted (informational — not the gate)
   if (otpRecord.attempts >= otpRecord.maxAttempts) {
-    // Enforce a send block so attacker can't immediately request a fresh OTP
-    if (!otpRecord.isBlocked()) {
-      otpRecord.blockedUntil = new Date(Date.now() + BLOCK_DURATION_MS);
-      await otpRecord.save();
-    }
+    // Atomically set the send block so attacker cannot immediately request a fresh OTP
+    await OTP.findOneAndUpdate(
+      { phone, purpose, $or: [{ blockedUntil: null }, { blockedUntil: { $lt: now } }] },
+      { $set: { blockedUntil: new Date(Date.now() + BLOCK_DURATION_MS) } }
+    );
     return { valid: false, error: "Maximum attempts exceeded. Please wait before requesting a new code." };
   }
 
-  // Constant-time comparison
-  if (!safeCompare(String(otpRecord.otp), String(otp))) {
-    await otpRecord.incrementAttempts();
-    const remaining = otpRecord.maxAttempts - otpRecord.attempts;
+  // ── Step 2: Constant-time comparison (timing-safe) ────────────────────────
+  const codeMatches = safeCompare(String(otpRecord.otp), String(otp));
+
+  if (!codeMatches) {
+    // ── ATOMIC increment — the real security gate ─────────────────────────────
+    // The filter enforces the constraint at the DB level in a single operation.
+    // Concurrent requests are serialized by MongoDB; once attempts reaches
+    // maxAttempts the filter stops matching and all subsequent attempts return null.
+    const updated = await OTP.findOneAndUpdate(
+      {
+        phone,
+        purpose,
+        isUsed: false,
+        otpExpiry: { $gt: now },
+        attempts: { $lt: otpRecord.maxAttempts },   // ← atomic guard (this IS the cap)
+      },
+      { $inc: { attempts: 1 } },
+      { new: true }
+    );
+
+    if (!updated) {
+      // Document no longer matches — either expired, already used, or maxAttempts
+      // was just hit by a concurrent request. Apply the send block and refuse.
+      await OTP.findOneAndUpdate(
+        { phone, purpose, $or: [{ blockedUntil: null }, { blockedUntil: { $lt: now } }] },
+        { $set: { blockedUntil: new Date(Date.now() + BLOCK_DURATION_MS) } }
+      );
+      return { valid: false, error: "Maximum attempts exceeded. Please wait before requesting a new code." };
+    }
+
+    // Apply send-block when this was the final allowed attempt
+    if (updated.attempts >= updated.maxAttempts) {
+      await OTP.findOneAndUpdate(
+        { phone, purpose, $or: [{ blockedUntil: null }, { blockedUntil: { $lt: now } }] },
+        { $set: { blockedUntil: new Date(Date.now() + BLOCK_DURATION_MS) } }
+      );
+    }
+
+    const remaining = updated.maxAttempts - updated.attempts;
     return {
       valid: false,
-      error: `Incorrect OTP. ${remaining} attempt(s) remaining.`,
+      error: remaining > 0
+        ? `Incorrect OTP. ${remaining} attempt(s) remaining.`
+        : "Maximum attempts exceeded. Please wait before requesting a new code.",
     };
   }
 
-  // ✅ Success
+  // ── Step 3: Correct code — atomically mark as used ────────────────────────
   if (markUsed) {
-    await otpRecord.markAsUsed();
+    // Single atomic operation: only succeeds if still unused and unexpired.
+    // Prevents a race where two concurrent correct-OTP requests both mark success.
+    const consumed = await OTP.findOneAndUpdate(
+      {
+        phone,
+        purpose,
+        isUsed: false,            // ← atomic guard: only one request can win
+        otpExpiry: { $gt: now },
+      },
+      { $set: { isUsed: true } },
+      { new: true }
+    );
+
+    if (!consumed) {
+      // A concurrent request already consumed this OTP
+      return { valid: false, error: "This OTP has already been used. Please request a new code." };
+    }
   }
 
   return { valid: true, error: null };
@@ -187,3 +266,4 @@ module.exports = {
   OTP_EXPIRY_MINUTES,
   MAX_OTP_SENDS,
 };
+
