@@ -4,6 +4,7 @@ const authCoontroller = require("../../controllers/authControllers.js/authContro
 const loginModule = require("../../src/modules/auth/login");
 const registrationModule = require("../../src/modules/auth/registration");
 const sessionController = require("../../src/modules/auth/session/index.js");
+const passwordResetModule = require("../../src/modules/auth/password-reset");
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
@@ -46,9 +47,9 @@ router.post("/completeRegistration", registrationModule.completeRegistration);
 router.post("/login",              loginLimiter, loginModule.login);              // ← Login rate limit
 // SECURITY: /verifyOtp (legacy) removed — no brute-force limit, plain === comparison, no purpose enforcement.
 // Use verifyPhoneOTP for registration OTP verification.
-router.post("/requestPasswordReset", otpRateLimiter, authCoontroller.requestPasswordReset); // ← OTP rate limit
-router.post("/verifyOtpForReset",  otpVerifyLimiter, authCoontroller.verifyOtpForReset); // ← phone-keyed verify limit
-router.post("/resetPassword",      otpVerifyLimiter, authCoontroller.resetPassword);    // ← phone-keyed verify limit
+router.post("/requestPasswordReset", otpRateLimiter, passwordResetModule.requestPasswordReset); // ← OTP rate limit
+router.post("/verifyOtpForReset",  otpVerifyLimiter, passwordResetModule.verifyOtpForReset); // ← phone-keyed verify limit
+router.post("/resetPassword",      otpVerifyLimiter, passwordResetModule.resetPassword);    // ← phone-keyed verify limit
 router.post("/resendOtp",          otpRateLimiter, authCoontroller.resendOtp);        // ← OTP rate limit
 
 // Token management (refresh, logout, force password change)
