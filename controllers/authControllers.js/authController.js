@@ -974,108 +974,6 @@ const getUserDetail = async (req, res) => {
   }
 };
 
-// Refresh Token — issue new access token using a valid refresh token
-const refreshAccessToken = async (req, res) => {
-  try {
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
-
-    if (!refreshToken) {
-      return res.status(400).json({
-        success: false,
-        message: "Refresh token is required.",
-      });
-    }
-
-    const { rotateRefreshToken } = require("../../utils/tokenService.js");
-
-    const result = await rotateRefreshToken(refreshToken, {
-      deviceInfo: req.get("User-Agent") || null,
-      ipAddress: req.ip || req.connection?.remoteAddress || null,
-    });
-
-    if (result.refreshToken) {
-      res.cookie("refreshToken", result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "Lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-      });
-    }
-
-    // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
-    return res.status(200).json({
-      success: true,
-      message: "Token refreshed successfully.",
-      accessToken: result.accessToken,
-    });
-  } catch (error) {
-    console.error("Refresh Token Error:", error.message);
-
-    const errorMap = {
-      INVALID_REFRESH_TOKEN: { status: 401, message: "Invalid or revoked refresh token. Please login again." },
-      REFRESH_TOKEN_EXPIRED: { status: 401, message: "Refresh token expired. Please login again." },
-      USER_NOT_FOUND: { status: 401, message: "User not found. Please login again." },
-      ACCOUNT_DEACTIVATED: { status: 403, message: "This account has been deactivated. Contact support." },
-      ACCOUNT_BANNED: { status: 403, message: "Your account has been banned. Contact support." },
-      ROLE_REVOKED: { status: 403, message: "Your role has been revoked. Please login again." },
-    };
-
-    const mapped = errorMap[error.message];
-    if (mapped) {
-      return res.status(mapped.status).json({ success: false, message: mapped.message });
-    }
-
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
-};
-
-// Logout — revoke the refresh token (true server-side logout)
-const logout = async (req, res) => {
-  try {
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
-
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Lax",
-    });
-
-    if (!refreshToken) {
-      // Even without a refresh token, client should clear local tokens.
-      // Still bump tokenVersion so any copied access token also dies.
-      const userId = req.userInfo?.id;
-      if (userId) {
-        await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
-      }
-      return res.status(200).json({
-        success: true,
-        message: "Logged out successfully.",
-      });
-    }
-
-    const { revokeRefreshToken } = require("../../utils/tokenService.js");
-    await revokeRefreshToken(refreshToken);
-
-    // Increment tokenVersion so the current access token is immediately
-    // rejected by verifyRoleFromDB on its next use.
-    const userId = req.userInfo?.id;
-    if (userId) {
-      await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Logged out successfully.",
-    });
-  } catch (error) {
-    console.error("Logout Error:", error);
-    // Don't fail logout — always return success to the client
-    return res.status(200).json({
-      success: true,
-      message: "Logged out successfully.",
-    });
-  }
-};
 
 // Change Forced Password — for admin-generated temp credentials
 const changeForcePassword = async (req, res) => {
@@ -1212,7 +1110,5 @@ module.exports = {
   updateProfile,
   updatePassword,
   getUserDetail,
-  refreshAccessToken,
-  logout,
   changeForcePassword,
 };
