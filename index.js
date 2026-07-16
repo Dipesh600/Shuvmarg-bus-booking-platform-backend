@@ -21,6 +21,7 @@ const fs           = require("fs");
 const path         = require("path");
 
 const logger        = require("./utils/logger.js");
+const errorHandler  = require("./src/shared/http/error-handler.js");
 const requestLogger = require("./middleware/requestLogger.js");
 const indexRoute    = require("./routes/indexRoute.js");
 const startServer   = require("./utils/server.js");
@@ -243,23 +244,7 @@ app.get("/testing", (req, res) => {
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use(indexRoute);
 // ── Global Error Handler ──────────────────────────────────────────────────────
-app.use((err, req, res, next) => {
-  const isDevelopment = process.env.NODE_ENV === "development";
-
-  logger.error("Unhandled server error", {
-    requestId: req.requestId,
-    error: err.message,
-    stack: isDevelopment ? err.stack : undefined,
-    path: req.originalUrl,
-    method: req.method,
-  });
-
-  res.status(500).json({
-    status: false,
-    message: "An unexpected server error occurred. Please try again later.",
-    error: isDevelopment ? err.message : undefined,
-  });
-});
+app.use(errorHandler);
 
 if (require.main === module) {
   setupTripGeneratorCron();
