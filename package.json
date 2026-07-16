@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "node --test $(find tests -name '*.test.js')",
+    "test": "node --test",
     "test:auth": "node --test tests/characterization/auth-login.test.js tests/characterization/auth-session.test.js",
-    "check:filesize": "node scripts/check-file-size.js",
+    "check:filesize": "node tools/check-file-size.js",
     "start": "node --no-deprecation index.js",
     "dev": "nodemon index.js",
     "generate-referral-codes": "node scripts/generateReferralCodesForExistingUsers.js",

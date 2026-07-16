@@ -8,9 +8,9 @@ process.env.SPARROW_SMS_TOKEN = 'test-stub';
 process.env.CLOUDINARY_NAME = 'test';
 process.env.CLOUDINARY_API_KEY = 'test';
 process.env.CLOUDINARY_SECRET_KEY = 'test';
-process.env.FCM_PROJECT_ID = 'test';
-process.env.FCM_CLIENT_EMAIL = 'test';
-process.env.FCM_PRIVATE_KEY = 'test';
+process.env.FCM_PROJECT_ID = '';
+process.env.FCM_CLIENT_EMAIL = '';
+process.env.FCM_PRIVATE_KEY = '';
 
 const app = require('../../index');
 

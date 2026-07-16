@@ -1,7 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
-const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const db = require('../helpers/db');
@@ -13,8 +12,11 @@ test('Auth: Login Characterization', async (t) => {
   const password = 'TestPassword123!';
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  t.before(async () => {
-    await db.connect();
+  t.before(async () => await db.connect());
+  t.after(async () => await db.disconnect());
+
+  t.beforeEach(async () => {
+    await User.deleteMany({});
     user = await User.create({
       first_name: 'Test',
       last_name: 'User',
@@ -24,10 +26,6 @@ test('Auth: Login Characterization', async (t) => {
       roles: ['passenger'],
       activeRole: 'passenger'
     });
-  });
-
-  t.after(async () => {
-    await db.disconnect();
   });
 
   await t.test('POST /api/login - Missing credentials', async () => {
@@ -62,7 +60,6 @@ test('Auth: Login Characterization', async (t) => {
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
     assert.ok(res.body.accessToken);
-    // Refresh token should be in cookie
     const cookies = res.headers['set-cookie'] || [];
     assert.ok(cookies.some(cookie => cookie.includes('refreshToken=')));
   });
@@ -74,17 +71,29 @@ test('Auth: Login Characterization', async (t) => {
       password: password,
     });
     assert.equal(res.status, 403);
+    assert.equal(res.body.success, false);
     assert.equal(res.body.errorCode, 'ACCOUNT_BANNED');
   });
 
+  await t.test('POST /api/login - Invited account', async () => {
+    await User.findByIdAndUpdate(user._id, { status: 'invited' });
+    const res = await request(app).post('/api/login').send({
+      emailOrPhone: '9800000000',
+      password: password,
+    });
+    assert.equal(res.status, 403);
+    assert.equal(res.body.success, false);
+    assert.equal(res.body.errorCode, 'ACCOUNT_NOT_ACTIVATED');
+  });
+
   await t.test('POST /api/login - forcePasswordChange', async () => {
-    // Reset status to active and set forcePasswordChange
-    await User.findByIdAndUpdate(user._id, { status: 'active', forcePasswordChange: true });
+    await User.findByIdAndUpdate(user._id, { forcePasswordChange: true });
     const res = await request(app).post('/api/login').send({
       emailOrPhone: '9800000000',
       password: password,
     });
     assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
     assert.equal(res.body.forcePasswordChange, true);
     assert.ok(res.body.tempToken);
   });
