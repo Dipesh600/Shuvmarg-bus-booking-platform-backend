@@ -6,6 +6,7 @@ const otpHelper = require('../../../../utils/otpHelper');
 const repository = require('./password-reset.repository');
 const policy = require('./password-reset.policy');
 const errors = require('./password-reset.errors');
+const AppError = require('../../../shared/errors/app-error');
 
 /**
  * Preserves the exact legacy requestPasswordReset behavior.
@@ -34,7 +35,7 @@ const requestPasswordReset = async ({ emailOrPhone }) => {
       responseBody: { status: true, message: 'If an account exists, OTP has been sent.' },
     };
   } catch (err) {
-    if (err.statusCode) throw err; // policy error — re-throw as-is
+    if (err instanceof AppError) throw err;
     throw errors.mapRequestError(err);
   }
 };

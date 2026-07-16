@@ -33,6 +33,19 @@ test('Unit: verifyResetOtp service', async (t) => {
     } catch (e) { assert.equal(e.statusCode, 400); assert.equal(e.responseBody.message, 'OTP must be a 6-digit code.'); }
   });
 
+  await t.test('OTP sanitation strips non-digits', async () => {
+    const origFirst = enumGuard.otpFirstVerify;
+    let capturedOtp;
+    enumGuard.otpFirstVerify = async (ph, otp, purpose, markUsed, vFn, lFn) => {
+      capturedOtp = otp;
+      return { valid: false };
+    };
+    try {
+      try { await service.verifyResetOtp({ emailOrPhone: '9800004402', otp: '12-34-56  ' }); } catch(e) {}
+      assert.equal(capturedOtp, '123456');
+    } finally { enumGuard.otpFirstVerify = origFirst; }
+  });
+
   await t.test('PASSWORD_RESET purpose passed to otpFirstVerify', async () => {
     const origFirst = enumGuard.otpFirstVerify;
     let capturedPurpose, capturedMarkUsed;
@@ -41,7 +54,7 @@ test('Unit: verifyResetOtp service', async (t) => {
       return { valid: false };
     };
     try {
-      const result = await service.verifyResetOtp({ emailOrPhone: '9800004403', otp: '123456' });
+      try { await service.verifyResetOtp({ emailOrPhone: '9800004403', otp: '123456' }); } catch(e) {}
       assert.equal(capturedPurpose, 'PASSWORD_RESET');
       assert.equal(capturedMarkUsed, false);
     } finally { enumGuard.otpFirstVerify = origFirst; }
@@ -57,7 +70,7 @@ test('Unit: verifyResetOtp service', async (t) => {
     const origLookup = repository.findActiveAfterOtpVerification;
     repository.findActiveAfterOtpVerification = async () => { lookupCalled = true; return null; };
     try {
-      await service.verifyResetOtp({ emailOrPhone: '9800004404', otp: '111222' });
+      try { await service.verifyResetOtp({ emailOrPhone: '9800004404', otp: '111222' }); } catch(e) {}
       assert.equal(lookupCalled, false);
     } finally {
       enumGuard.otpFirstVerify = origFirst;
@@ -69,9 +82,11 @@ test('Unit: verifyResetOtp service', async (t) => {
     const origFirst = enumGuard.otpFirstVerify;
     enumGuard.otpFirstVerify = async () => ({ valid: false });
     try {
-      const result = await service.verifyResetOtp({ emailOrPhone: '9800004405', otp: '222333' });
-      assert.equal(result.statusCode, 400);
-      assert.equal(result.responseBody.message, 'Invalid or expired verification code.');
+      await service.verifyResetOtp({ emailOrPhone: '9800004405', otp: '222333' });
+      assert.fail();
+    } catch(e) {
+      assert.equal(e.statusCode, 400);
+      assert.equal(e.responseBody.message, 'Invalid or expired verification code.');
     } finally { enumGuard.otpFirstVerify = origFirst; }
   });
 

@@ -13,16 +13,8 @@ const tokenService = require('../../../utils/tokenService');
 
 const GOOD_PW = 'NewPass1';
 
-const stubOtpValid = () => {
-  const orig = otpHelper.verifyOTPCode;
-  otpHelper.verifyOTPCode = async () => ({ valid: true });
-  return () => { otpHelper.verifyOTPCode = orig; };
-};
-const stubFindUser = (user = { _id: 'uid' }) => {
-  const orig = repository.findActiveForPasswordReset;
-  repository.findActiveForPasswordReset = async () => user;
-  return () => { repository.findActiveForPasswordReset = orig; };
-};
+const stubOtpValid = () => { const orig = otpHelper.verifyOTPCode; otpHelper.verifyOTPCode = async () => ({ valid: true }); return () => { otpHelper.verifyOTPCode = orig; }; };
+const stubFindUser = (user = { _id: 'uid' }) => { const orig = repository.findActiveForPasswordReset; repository.findActiveForPasswordReset = async () => user; return () => { repository.findActiveForPasswordReset = orig; }; };
 const stubSaveRevoke = () => {
   const origSave = repository.savePassword;
   const origRev = tokenService.revokeAllUserTokens;
@@ -48,6 +40,17 @@ test('Unit: resetPassword service', async (t) => {
     catch (e) { assert.equal(e.statusCode, 400); assert.equal(e.responseBody.message, 'Verification code must be 6 digits.'); }
   });
 
+  await t.test('OTP sanitation strips non-digits', async () => {
+    const orig = otpHelper.verifyOTPCode;
+    let capturedOtp;
+    otpHelper.verifyOTPCode = async (p, o, purpose, markUsed) => {
+      capturedOtp = o; return { valid: false, error: 'bad' };
+    };
+    try { await service.resetPassword({ emailOrPhone: '9800005501', otp: ' 12-34-56 ', newPassword: GOOD_PW }); } catch (_) {}
+    finally { otpHelper.verifyOTPCode = orig; }
+    assert.equal(capturedOtp, '123456');
+  });
+
   await t.test('OTP verified with PURPOSE PASSWORD_RESET and markUsed=true', async () => {
     const orig = otpHelper.verifyOTPCode;
     let capturedPurpose, capturedMarkUsed;
@@ -64,7 +67,9 @@ test('Unit: resetPassword service', async (t) => {
     const orig = otpHelper.verifyOTPCode;
     otpHelper.verifyOTPCode = async () => ({ valid: false, error: 'Expired.' });
     try {
-      const r = await service.resetPassword({ emailOrPhone: '9800005502', otp: '123456', newPassword: GOOD_PW });
+      await service.resetPassword({ emailOrPhone: '9800005502', otp: '123456', newPassword: GOOD_PW });
+      assert.fail();
+    } catch(r) {
       assert.equal(r.statusCode, 400); assert.equal(r.responseBody.message, 'Expired.');
     } finally { otpHelper.verifyOTPCode = orig; }
   });
@@ -75,7 +80,7 @@ test('Unit: resetPassword service', async (t) => {
     let lookupCalled = false;
     otpHelper.verifyOTPCode = async () => ({ valid: false, error: 'bad' });
     repository.findActiveForPasswordReset = async () => { lookupCalled = true; return null; };
-    try { await service.resetPassword({ emailOrPhone: '9800005503', otp: '123456', newPassword: GOOD_PW }); }
+    try { try { await service.resetPassword({ emailOrPhone: '9800005503', otp: '123456', newPassword: GOOD_PW }); } catch(e) {} }
     finally { otpHelper.verifyOTPCode = origVerify; repository.findActiveForPasswordReset = origFind; }
     assert.equal(lookupCalled, false);
   });
@@ -85,7 +90,9 @@ test('Unit: resetPassword service', async (t) => {
     const origFind = repository.findActiveForPasswordReset;
     repository.findActiveForPasswordReset = async () => null;
     try {
-      const r = await service.resetPassword({ emailOrPhone: '9800005504', otp: '123456', newPassword: GOOD_PW });
+      await service.resetPassword({ emailOrPhone: '9800005504', otp: '123456', newPassword: GOOD_PW });
+      assert.fail();
+    } catch(r) {
       assert.equal(r.statusCode, 400); assert.equal(r.responseBody.message, 'No account found with this phone or email.');
     } finally { restoreVerify(); repository.findActiveForPasswordReset = origFind; }
   });
@@ -94,7 +101,9 @@ test('Unit: resetPassword service', async (t) => {
     const restoreVerify = stubOtpValid();
     const restoreFind = stubFindUser();
     try {
-      const r = await service.resetPassword({ emailOrPhone: '9800005505', otp: '123456', newPassword: 'weak' });
+      await service.resetPassword({ emailOrPhone: '9800005505', otp: '123456', newPassword: 'weak' });
+      assert.fail();
+    } catch(r) {
       assert.equal(r.statusCode, 400);
     } finally { restoreVerify(); restoreFind(); }
   });

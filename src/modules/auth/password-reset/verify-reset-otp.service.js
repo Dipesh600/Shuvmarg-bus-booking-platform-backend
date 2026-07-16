@@ -6,6 +6,7 @@ const otpHelper = require('../../../../utils/otpHelper');
 const repository = require('./password-reset.repository');
 const policy = require('./password-reset.policy');
 const errors = require('./password-reset.errors');
+const AppError = require('../../../shared/errors/app-error');
 
 /**
  * Preserves the exact legacy verifyOtpForReset behavior.
@@ -40,10 +41,7 @@ const verifyResetOtp = async ({ emailOrPhone, otp }) => {
     );
 
     if (!valid) {
-      return {
-        statusCode: 400,
-        responseBody: { status: false, message: 'Invalid or expired verification code.' },
-      };
+      throw new AppError('Invalid OTP', 400, { status: false, message: 'Invalid or expired verification code.' });
     }
 
     return {
@@ -51,9 +49,9 @@ const verifyResetOtp = async ({ emailOrPhone, otp }) => {
       responseBody: { status: true, message: 'OTP verified. Proceed to reset password.' },
     };
   } catch (err) {
-    if (err.statusCode) throw err;
+    if (err instanceof AppError) throw err;
     console.error(err);
-    throw errors.verifyInternalError();
+    throw errors.verifyInternalError(err);
   }
 };
 

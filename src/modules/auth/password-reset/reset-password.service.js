@@ -8,6 +8,7 @@ const passwordValidator = require('../../../../utils/passwordValidator');
 const repository = require('./password-reset.repository');
 const policy = require('./password-reset.policy');
 const errors = require('./password-reset.errors');
+const AppError = require('../../../shared/errors/app-error');
 
 /**
  * Preserves the exact legacy resetPassword behavior.
@@ -40,24 +41,18 @@ const resetPassword = async ({ emailOrPhone, otp, newPassword }) => {
     const otpResult = await otpHelper.verifyOTPCode(                                  // 4
       lookupPhone, cleanOtp, 'PASSWORD_RESET', true
     );
-    if (!otpResult.valid) {                                                            // 5
-      return { statusCode: 400, responseBody: { status: false, message: otpResult.error } };
+    if (!otpResult.valid) {                                                           
+      throw new AppError('Invalid OTP', 400, { status: false, message: otpResult.error || 'Invalid OTP' });
     }
 
-    const user = await repository.findActiveForPasswordReset(emailOrPhone, normalizedPhone); // 6
-    if (!user) {                                                                       // 7
-      return {
-        statusCode: 400,
-        responseBody: { status: false, message: 'No account found with this phone or email.' },
-      };
+    const user = await repository.findActiveForPasswordReset(lookupPhone);
+    if (!user) {
+      throw new AppError('Not Found', 400, { status: false, message: 'No account found with this phone or email.' });
     }
 
-    const passwordCheck = passwordValidator.validatePassword(newPassword);             // 8
+    const passwordCheck = passwordValidator.validatePassword(newPassword);             
     if (!passwordCheck.valid) {
-      return {
-        statusCode: 400,
-        responseBody: { status: false, message: passwordCheck.errors[0], errors: passwordCheck.errors },
-      };
+      throw new AppError('Invalid Password', 400, { status: false, errors: passwordCheck.errors });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);                        // 9
@@ -73,9 +68,9 @@ const resetPassword = async ({ emailOrPhone, otp, newPassword }) => {
       },
     };
   } catch (err) {
-    if (err.statusCode) throw err;
-    console.error('resetPassword error:', err.message);
-    throw errors.resetFailError();
+    if (err instanceof AppError) throw err;
+    console.error(err);
+    throw errors.resetFailError(err);
   }
 };
 
