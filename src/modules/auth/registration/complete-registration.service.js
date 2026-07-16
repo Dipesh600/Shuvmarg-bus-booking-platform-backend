@@ -9,15 +9,66 @@ const mapper = require('./registration.mapper');
 const policy = require('./registration.policy');
 const { toLegacyCompleteRegError } = require('./registration.errors');
 
-/**
- * Complete-registration orchestrator.
- *
- * Preserves the exact operation order and response contracts from
- * authController.completeRegistration.
- *
- * @param {object} input
- * @returns {Promise<{ statusCode: number, responseBody: object }>}
- */
+// ─── Private helpers (steps 3-4, 5-6, 8-9, 10-11, 13) ───────────────────────
+
+const _assertOtpProof = async (phone) => {
+  const otpRecord = await repository.findUsedRegistrationOtp(phone);
+  if (!otpRecord) {
+    throw new AppError('Phone not verified', 400, {
+      status: false,
+      message: 'Phone number not verified. Please complete OTP verification first.',
+    });
+  }
+  policy.validateOtpAge(otpRecord); // step 4
+};
+
+const _assertUniqueness = async (phone, email) => {
+  const { registered } = await repository.isPhoneRegistered(phone);
+  if (registered) {
+    throw new AppError('Phone already registered', 409, {
+      status: false,
+      message: 'This phone number is already registered.',
+      errorCode: 'PHONE_ALREADY_REGISTERED',
+    });
+  }
+  if (email) {
+    const emailExists = await repository.findUserByEmail(email);
+    if (emailExists) {
+      throw new AppError('Email already exists', 400, {
+        status: false,
+        message: 'Email already exists!',
+      });
+    }
+  }
+};
+
+const _hashAndBuild = async (fields, password) => {
+  policy.validatePasswordStrength(password); // step 7
+  const hashedPassword = await bcrypt.hash(password, 12); // step 8
+  const myReferralCode = await referralCodeGenerator.generateReferralCode(); // step 9
+  return policy.buildPassengerData(fields, hashedPassword, myReferralCode);
+};
+
+const _resolveReferral = async (referralCode, phone, userData) => {
+  if (!referralCode) return null;
+  const resolution = await referralService.resolveReferral(referralCode, phone, repository);
+  userData.referredBy = resolution.referredBy; // step 10
+  userData.yatrapoints = resolution.yatrapoints;
+  await referralService.applyReferrerReward(resolution.referrerUser, repository); // step 11
+  return resolution;
+};
+
+const _recordHistory = async (referralCode, resolution, savedUserId, ipAddress, deviceInfo) => {
+  if (!referralCode || !resolution) return;
+  await referralService.createReferralHistoryRecord( // step 13 – best-effort
+    { referredUserId: savedUserId, referrerUserId: resolution.referredBy,
+      referralCode, ipAddress, deviceInfo },
+    repository
+  );
+};
+
+// ─── Orchestrator ─────────────────────────────────────────────────────────────
+
 const completeRegistration = async (input) => {
   const {
     phone, name, email, address, password, gender,
@@ -25,80 +76,18 @@ const completeRegistration = async (input) => {
   } = input;
 
   try {
-    // 1-2. Field and proof validation (throws AppError on failure)
-    policy.validateRequiredFields({ phone, name, password, address, gender });
-    policy.validateVerificationProof(token, phone);
-
-    // 3. Belt-and-suspenders: used OTP record must exist
-    const otpRecord = await repository.findUsedRegistrationOtp(phone);
-    if (!otpRecord) {
-      throw new AppError('Phone not verified', 400, {
-        status: false,
-        message: 'Phone number not verified. Please complete OTP verification first.',
-      });
-    }
-
-    // 4. OTP must be fresh
-    policy.validateOtpAge(otpRecord);
-
-    // 5. Global phone uniqueness check
-    const { registered } = await repository.isPhoneRegistered(phone);
-    if (registered) {
-      throw new AppError('Phone already registered', 409, {
-        status: false,
-        message: 'This phone number is already registered.',
-        errorCode: 'PHONE_ALREADY_REGISTERED',
-      });
-    }
-
-    // 6. Optional email uniqueness
-    if (email) {
-      const emailExists = await repository.findUserByEmail(email);
-      if (emailExists) {
-        throw new AppError('Email already exists', 400, {
-          status: false,
-          message: 'Email already exists!',
-        });
-      }
-    }
-
-    // 7. Password strength
-    policy.validatePasswordStrength(password);
-
-    // 8. Hash password (cost 12)
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // 9. Generate referral code for new user
-    const myReferralCode = await referralCodeGenerator.generateReferralCode();
-
-    // 10. Optional incoming referral resolution
-    let referralResolution = null;
-    if (referralCode) {
-      referralResolution = await referralService.resolveReferral(referralCode, phone, repository);
-    }
-
-    // 11. Build user document and apply referral if present
-    const userData = policy.buildPassengerData({ phone, name, email, address, gender }, hashedPassword, myReferralCode);
-    if (referralResolution) {
-      userData.referredBy = referralResolution.referredBy;
-      userData.yatrapoints = referralResolution.yatrapoints;
-      await referralService.applyReferrerReward(referralResolution.referrerUser, repository);
-    }
-
-    // 12. Persist new passenger
-    const savedUser = await repository.createPassenger(userData);
-
-    // 13. Best-effort referral history
-    if (referralCode && referralResolution) {
-      await referralService.createReferralHistoryRecord(
-        { referredUserId: savedUser._id, referrerUserId: referralResolution.referredBy,
-          referralCode, ipAddress, deviceInfo },
-        repository
-      );
-    }
-
-    // 14. Success response
-    return mapper.toCompleteRegistrationSuccess(savedUser);
+    policy.validateRequiredFields({ phone, name, password, address, gender }); // 1
+    policy.validateVerificationProof(token, phone);                            // 2
+    await _assertOtpProof(phone);                                              // 3-4
+    await _assertUniqueness(phone, email);                                     // 5-6
+    const userData = await _hashAndBuild(                                      // 7-9
+      { phone, name, email, address, gender }, password
+    );
+    const resolution = await _resolveReferral(referralCode, phone, userData); // 10-11
+    const savedUser = await repository.createPassenger(userData);              // 12
+    await _recordHistory(referralCode, resolution, savedUser._id,              // 13
+      ipAddress, deviceInfo);
+    return mapper.toCompleteRegistrationSuccess(savedUser);                    // 14
   } catch (error) {
     throw toLegacyCompleteRegError(error);
   }

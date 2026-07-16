@@ -114,6 +114,10 @@ test('Auth Registration: referral flow in completeRegistration', async (t) => {
     assert.equal(h.rewardType, 'refral_point');
     assert.equal(h.pointsCredited, true);
     assert.ok(h.metadata.deviceInfo === 'TestBrowser/2.0');
+    assert.ok(
+      h.metadata.ipAddress === '::ffff:127.0.0.1' || h.metadata.ipAddress === '127.0.0.1',
+      `expected loopback IP, got: ${h.metadata.ipAddress}`
+    );
   });
 
   await t.test('referral-history DB failure is swallowed — registration still 201', async () => {

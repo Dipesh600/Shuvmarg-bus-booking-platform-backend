@@ -47,14 +47,25 @@ test('Auth Registration: verifyPhoneOTP', async (t) => {
     assert.equal(res.body.message, 'OTP must be a 6-digit code.');
   });
 
-  await t.test('OTP with non-digits stripped → accepted as valid length when 6 remain', async () => {
-    const phone = '9800000060';
-    const rawCode = '999777';
-    await seedValidOtp(phone, rawCode);
-    // Send with dashes — should sanitize to 999777
-    const res = await request(app).post('/api/verifyPhoneOTP').send({ phone, otp: '99-97-77' });
-    // Only check that it does NOT 400 with "must be 6-digit" — sanitization worked
-    assert.notEqual(res.body.message, 'OTP must be a 6-digit code.');
+  await t.test('OTP sanitization: "99-97-77" is stripped to "999777" before verifyOTPCode', async () => {
+    const otpHelper = require('../../utils/otpHelper');
+    let capturedOtp, capturedPurpose;
+    const orig = otpHelper.verifyOTPCode;
+    otpHelper.verifyOTPCode = async (ph, otp, purpose) => {
+      capturedOtp = otp;
+      capturedPurpose = purpose;
+      return orig(ph, otp, purpose);
+    };
+    try {
+      const phone = '9800000060';
+      const rawCode = '999777';
+      await seedValidOtp(phone, rawCode);
+      await request(app).post('/api/verifyPhoneOTP').send({ phone, otp: '99-97-77' });
+      assert.equal(capturedOtp, '999777');
+      assert.equal(capturedPurpose, 'REGISTRATION');
+    } finally {
+      otpHelper.verifyOTPCode = orig;
+    }
   });
 
   await t.test('no OTP record → 400', async () => {
@@ -106,7 +117,7 @@ test('Auth Registration: verifyPhoneOTP', async (t) => {
     assert.match(res.body.message, /could not be completed/i);
   });
 
-  await t.test('unexpected dependency failure → legacy 500 exact body shape', async () => {
+  await t.test('unexpected dependency failure → exact legacy 500 body', async () => {
     const otpHelper = require('../../utils/otpHelper');
     const orig = otpHelper.verifyOTPCode;
     otpHelper.verifyOTPCode = async () => { throw new Error('crash'); };
@@ -116,7 +127,8 @@ test('Auth Registration: verifyPhoneOTP', async (t) => {
       const res = await request(app).post('/api/verifyPhoneOTP').send({ phone, otp: '111222' });
       assert.equal(res.status, 500);
       assert.equal(res.body.status, false);
-      assert.ok(res.body.message.startsWith('Failed to verify OTP'));
+      assert.equal(res.body.message, 'Failed to verify OTP!');
+      assert.equal(res.body.error, 'crash');
     } finally {
       otpHelper.verifyOTPCode = orig;
     }
