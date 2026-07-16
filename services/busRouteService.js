@@ -1,5 +1,4 @@
 const Route = require("../models/busRouteModel.js");
-const BusOwner = require("../models/busOwnerModel.js");
 
 // NOTE: Ownership verification (BusOwner KYC approved) is enforced by the
 // busRouteModel pre-save hook — not here. Do not add service-level auth checks.
@@ -130,7 +129,6 @@ const deleteBusRoute = async (routeId, ownerId = null) => {
 };
 
 module.exports = {
-    isBusOwnerVerified,
     createBusRoute,
     getBusRoutesByOwnerId,
     getAllGlobalRoutes,
