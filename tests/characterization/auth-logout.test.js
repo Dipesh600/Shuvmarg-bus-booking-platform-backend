@@ -78,13 +78,21 @@ test('Auth: Logout Characterization', async (t) => {
     assert.equal(userAfter.tokenVersion || 0, beforeTokenVersion);
   });
 
-  await t.test('POST /api/logout - Body token fallback returns success', async () => {
-    const res = await request(app)
+  await t.test('POST /api/logout - Body token fallback actually revokes the token', async () => {
+    const logoutRes = await request(app)
       .post('/api/logout')
       .send({ refreshToken: validRefreshToken });
-    assert.equal(res.status, 200);
-    assert.equal(res.body.success, true);
-    assert.equal(res.body.message, 'Logged out successfully.');
+    assert.equal(logoutRes.status, 200);
+    assert.equal(logoutRes.body.success, true);
+    assert.equal(logoutRes.body.message, 'Logged out successfully.');
+
+    // Prove the body token was consumed — it must no longer be refreshable
+    const refreshRes = await request(app)
+      .post('/api/refresh')
+      .set('Cookie', [`refreshToken=${validRefreshToken}`]);
+    assert.equal(refreshRes.status, 401);
+    assert.equal(refreshRes.body.success, false);
+    assert.equal(refreshRes.body.message, 'Invalid or revoked refresh token. Please login again.');
   });
 
   await t.test('POST /api/logout - Cookie takes precedence over body token', async () => {

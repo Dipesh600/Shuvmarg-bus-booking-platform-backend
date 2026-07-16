@@ -8,7 +8,7 @@ const db = require('../helpers/db');
 const app = require('../helpers/app');
 const User = require('../../models/userModel');
 
-test('Auth: Logout Characterization 2', async (t) => {
+test('Auth: Logout Contract Characterization', async (t) => {
   let user;
   let validRefreshToken;
   const password = 'TestPassword123!';
@@ -21,7 +21,7 @@ test('Auth: Logout Characterization 2', async (t) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     user = await User.create({
       first_name: 'Test',
-      last_name: 'Logout2',
+      last_name: 'Contract',
       phone: '9855555555',
       password: hashedPassword,
       status: 'active',
@@ -48,9 +48,7 @@ test('Auth: Logout Characterization 2', async (t) => {
   });
 
   await t.test('POST /api/logout - Already-revoked token returns success response', async () => {
-    // First logout revokes it
     await request(app).post('/api/logout').set('Cookie', [`refreshToken=${validRefreshToken}`]);
-    // Second logout with same token should still succeed
     const res = await request(app)
       .post('/api/logout')
       .set('Cookie', [`refreshToken=${validRefreshToken}`]);
@@ -82,6 +80,23 @@ test('Auth: Logout Characterization 2', async (t) => {
     const cleared = cookies.find(c => c.includes('refreshToken='));
     assert.ok(cleared.toLowerCase().includes('samesite=lax'),
       `cookie must include SameSite=Lax; got: ${cleared}`);
+  });
+
+  await t.test('POST /api/logout - Body token fallback actually revokes the token', async () => {
+    // Logout with token in body only (no cookie)
+    const logoutRes = await request(app)
+      .post('/api/logout')
+      .send({ refreshToken: validRefreshToken });
+    assert.equal(logoutRes.status, 200);
+    assert.equal(logoutRes.body.success, true);
+
+    // Prove the token was consumed — it must no longer be refreshable
+    const refreshRes = await request(app)
+      .post('/api/refresh')
+      .set('Cookie', [`refreshToken=${validRefreshToken}`]);
+    assert.equal(refreshRes.status, 401);
+    assert.equal(refreshRes.body.success, false);
+    assert.equal(refreshRes.body.message, 'Invalid or revoked refresh token. Please login again.');
   });
 
   await t.test('POST /api/logout - Revoked token cannot refresh', async () => {
