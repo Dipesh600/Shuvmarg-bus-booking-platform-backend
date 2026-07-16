@@ -338,7 +338,15 @@ const register = async (req, res) => {
       activeRole: "busOwner",
       isUpgrade: !!exists,
     };
-    if (refreshToken) responseData.refreshToken = refreshToken;
+    // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
+    if (refreshToken) {
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    }
 
     return res.status(201).json(responseData);
   } catch (error) {
@@ -544,7 +552,15 @@ const login = async (req, res) => {
       accessToken,
       activeRole: "busOwner",
     };
-    if (refreshToken) responseData.refreshToken = refreshToken;
+    // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
+    if (refreshToken) {
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    }
 
     return res.status(200).json(responseData);
   } catch (error) {
@@ -601,17 +617,24 @@ const verifyOtpForReset = async (req, res) => {
       return res.status(400).json({ success: false, message: "Phone and OTP are required!" });
     }
 
+    const cleanOtp = String(otp).replace(/\D/g, "");
+    if (cleanOtp.length !== 6) {
+      return res.status(400).json({ success: false, message: "Verification code must be 6 digits." });
+    }
+
     const user = await User.findOne({ phone });
+
+    // FINDING-02 equivalent: return vague error to prevent account enumeration
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found." });
+      return res.status(400).json({ success: false, message: "Invalid OTP or phone number." });
     }
 
     const { hasRole } = await checkPhoneForRole(phone, "busOwner");
     if (!hasRole) {
-      return res.status(404).json({ success: false, message: "User not found." });
+      return res.status(400).json({ success: false, message: "Invalid OTP or phone number." });
     }
 
-    const result = await verifyOTPCode(user.phone, otp, "BUSOWNER_PASSWORD_RESET", false);
+    const result = await verifyOTPCode(user.phone, cleanOtp, "BUSOWNER_PASSWORD_RESET", false);
     if (!result.valid) {
       return res.status(400).json({ success: false, message: result.error });
     }
@@ -638,18 +661,23 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: "Phone, OTP, and new password are required." });
     }
 
+    const cleanOtp = String(otp).replace(/\D/g, "");
+    if (cleanOtp.length !== 6) {
+      return res.status(400).json({ success: false, message: "Verification code must be 6 digits." });
+    }
+
     const user = await User.findOne({ phone });
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found." });
+      return res.status(400).json({ success: false, message: "Invalid OTP or phone number." });
     }
 
     const { hasRole } = await checkPhoneForRole(phone, "busOwner");
     if (!hasRole) {
-      return res.status(404).json({ success: false, message: "User not found." });
+      return res.status(400).json({ success: false, message: "Invalid OTP or phone number." });
     }
 
     // Verify AND mark as used
-    const result = await verifyOTPCode(user.phone, otp, "BUSOWNER_PASSWORD_RESET", true);
+    const result = await verifyOTPCode(user.phone, cleanOtp, "BUSOWNER_PASSWORD_RESET", true);
     if (!result.valid) {
       return res.status(400).json({ success: false, message: result.error });
     }
@@ -746,10 +774,11 @@ const resendOtpForReset = async (req, res) => {
  */
 const refresh = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    // NEW-FINDING-01: Cookie-first, body as fallback (supports both web credentials:include and Flutter body-based)
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
     if (!refreshToken) {
-      return res.status(400).json({ success: false, message: "Refresh token is required." });
+      return res.status(401).json({ success: false, message: "Session expired. Please sign in again." });
     }
 
     const { accessToken, refreshToken: newRefreshToken } = await rotateRefreshToken(refreshToken, {
@@ -757,11 +786,20 @@ const refresh = async (req, res) => {
       ipAddress: req.ip || null,
     });
 
+    // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
+    if (newRefreshToken) {
+      res.cookie("refreshToken", newRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Token refreshed successfully.",
       accessToken,
-      refreshToken: newRefreshToken,
     });
   } catch (error) {
     const message =
@@ -786,20 +824,29 @@ const refresh = async (req, res) => {
  * Revokes the refresh token for the current device.
  * The access token is short-lived (15 min) and will expire naturally.
  *
- * Body: { refreshToken: string }
+ * Reads refresh token from httpOnly cookie (web) or request body (Flutter).
  */
 const logout = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    // NEW-FINDING-01: Cookie-first, body as fallback
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
     if (refreshToken) {
       await revokeRefreshToken(refreshToken);
     }
 
+    // Clear the httpOnly cookie regardless of whether a token was found
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax",
+    });
+
     // Always return 200 — don't leak whether the token existed or not
     return res.status(200).json({ success: true, message: "Logged out successfully." });
   } catch (error) {
     console.error("[BusOwner logout] Error:", error.message);
+    res.clearCookie("refreshToken", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "Lax" });
     // Still return 200 — logout should never fail from the user's perspective
     return res.status(200).json({ success: true, message: "Logged out successfully." });
   }

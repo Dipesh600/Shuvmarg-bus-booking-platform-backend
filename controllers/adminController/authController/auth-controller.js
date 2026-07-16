@@ -89,9 +89,9 @@ const login = async (req, res) => {
 
 
         if (!admin) {
-            return res.status(404).json({
+            return res.status(401).json({
                 success: false,
-                message: "Admin not found!",
+                message: "Invalid credentials!",
             });
         }
 
@@ -154,7 +154,7 @@ const login = async (req, res) => {
             secret: admin.twoFactorSecret,
             encoding: "base32",
             token: otp,
-            window: 1,  // allow 30s drift
+            window: 1,  // allow 30s drift (±1 window = 90s total)
         });
 
         if (!isOtpValid) {
@@ -164,10 +164,21 @@ const login = async (req, res) => {
             });
         }
 
+        // NEW-FINDING-04: Replay protection — reject a TOTP code that was already used within this 90s window.
+        // TOTP window counter = floor(epoch_seconds / 30). We record the last accepted window so the same
+        // 6-digit code cannot be submitted twice before it expires.
+        const currentWindow = Math.floor(Date.now() / 1000 / 30);
+        if (admin.lastOtpWindowUsed && admin.lastOtpWindowUsed >= currentWindow) {
+            return res.status(401).json({
+                success: false,
+                message: "OTP already used. Please wait for the next code.",
+            });
+        }
 
         admin.loginAttempts = 0;
         admin.accountLocked = false;
         admin.lastLoginAt = new Date();
+        admin.lastOtpWindowUsed = currentWindow;  // Record window to block replay
         await admin.save();
 
 
