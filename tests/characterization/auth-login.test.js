@@ -28,10 +28,18 @@ test('Auth: Login Characterization', async (t) => {
     });
   });
 
-  await t.test('POST /api/login - Missing credentials', async () => {
-    const res = await request(app).post('/api/login').send({});
+  await t.test('POST /api/login - Missing emailOrPhone', async () => {
+    const res = await request(app).post('/api/login').send({ password: 'x' });
     assert.equal(res.status, 400);
     assert.equal(res.body.success, false);
+    assert.equal(res.body.message, 'Email or Phone is required!');
+  });
+
+  await t.test('POST /api/login - Missing password', async () => {
+    const res = await request(app).post('/api/login').send({ emailOrPhone: '9800000000' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.success, false);
+    assert.equal(res.body.message, 'Password is required!');
   });
 
   await t.test('POST /api/login - Unknown account', async () => {
@@ -41,6 +49,7 @@ test('Auth: Login Characterization', async (t) => {
     });
     assert.equal(res.status, 401);
     assert.equal(res.body.success, false);
+    assert.equal(res.body.message, 'Invalid credentials!');
   });
 
   await t.test('POST /api/login - Wrong password', async () => {
@@ -50,6 +59,8 @@ test('Auth: Login Characterization', async (t) => {
     });
     assert.equal(res.status, 401);
     assert.equal(res.body.success, false);
+    // First wrong attempt: 4 remaining
+    assert.equal(res.body.message, 'Invalid credentials! 4 attempt(s) remaining.');
   });
 
   await t.test('POST /api/login - Valid credentials', async () => {
@@ -85,6 +96,7 @@ test('Auth: Login Characterization', async (t) => {
     assert.equal(res.status, 403);
     assert.equal(res.body.success, false);
     assert.equal(res.body.errorCode, 'ACCOUNT_BANNED');
+    assert.equal(res.body.message, 'Your account has been banned.');
   });
 
   await t.test('POST /api/login - Invited account', async () => {
@@ -98,7 +110,7 @@ test('Auth: Login Characterization', async (t) => {
     assert.equal(res.body.errorCode, 'ACCOUNT_NOT_ACTIVATED');
   });
 
-  await t.test('POST /api/login - forcePasswordChange', async () => {
+  await t.test('POST /api/login - forcePasswordChange: no accessToken, has tempToken', async () => {
     await User.findByIdAndUpdate(user._id, { forcePasswordChange: true });
     const res = await request(app).post('/api/login').send({
       emailOrPhone: '9800000000',
@@ -107,6 +119,8 @@ test('Auth: Login Characterization', async (t) => {
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
     assert.equal(res.body.forcePasswordChange, true);
-    assert.ok(res.body.tempToken);
+    assert.ok(res.body.tempToken, 'tempToken must be present');
+    assert.equal(res.body.accessToken, undefined, 'accessToken must be absent');
+    assert.equal(res.body.message, 'You must change your temporary password before proceeding.');
   });
 });
