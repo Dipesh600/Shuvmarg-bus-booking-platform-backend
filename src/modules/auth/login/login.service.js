@@ -8,10 +8,21 @@ const loginMapper = require('./login.mapper');
 const { generateTokenPair } = require('../../../../utils/tokenService');
 const AppError = require('../../../shared/errors/app-error');
 
-/**
- * Validate presence of required login fields.
- * Returns an AppError (not throws) so the controller shape is uniform.
- */
+// ─── Error boundary ──────────────────────────────────────────────────────────
+
+const toLegacyInternalError = (error) => {
+  if (error instanceof AppError) return error;
+  return new AppError(
+    'Internal Server Error',
+    500,
+    { success: false, message: 'Internal Server Error' },
+    null,
+    error
+  );
+};
+
+// ─── Input validation ────────────────────────────────────────────────────────
+
 function validateInput(emailOrPhone, password) {
   if (!emailOrPhone) {
     return new AppError('Email or Phone is required!', 400, {
@@ -26,37 +37,23 @@ function validateInput(emailOrPhone, password) {
   return null;
 }
 
-exports.authenticate = async ({ emailOrPhone, password, appSource, deviceInfo, ipAddress }) => {
-  // === INPUT VALIDATION ===
+// ─── Authentication flow ─────────────────────────────────────────────────────
+
+const runAuthentication = async ({ emailOrPhone, password, appSource, deviceInfo, ipAddress }) => {
   const validationError = validateInput(emailOrPhone, password);
   if (validationError) throw validationError;
 
-  let user;
-  try {
-    user = await loginRepository.findUserByEmailOrPhone(emailOrPhone);
-  } catch (err) {
-    if (err instanceof AppError) throw err;
-    throw new AppError('Internal Server Error', 500, {
-      success: false, message: 'Internal Server Error',
-    }, null, err);
-  }
+  const user = await loginRepository.findUserByEmailOrPhone(emailOrPhone);
 
   if (!user) {
-    throw new AppError('Invalid credentials!', 401, { success: false, message: 'Invalid credentials!' });
+    throw new AppError('Invalid credentials!', 401, {
+      success: false, message: 'Invalid credentials!',
+    });
   }
 
-  // === ACCOUNT STATUS CHECKS ===
   loginPolicy.verifyAccountStatus(user);
 
-  // === PASSWORD CHECK ===
-  let isMatch;
-  try {
-    isMatch = await bcrypt.compare(password, user.password);
-  } catch (err) {
-    throw new AppError('Internal Server Error', 500, {
-      success: false, message: 'Internal Server Error',
-    }, null, err);
-  }
+  const isMatch = await bcrypt.compare(password, user.password);
 
   if (!isMatch) {
     const MAX_ATTEMPTS = 5;
@@ -77,20 +74,12 @@ exports.authenticate = async ({ emailOrPhone, password, appSource, deviceInfo, i
     throw new AppError(message, 401, { success: false, message });
   }
 
-  // === FORCE PASSWORD CHANGE ===
   if (user.forcePasswordChange) {
-    let tempToken;
-    try {
-      tempToken = jwt.sign(
-        { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE' },
-        process.env.SECRET_KEY,
-        { expiresIn: '15m' }
-      );
-    } catch (err) {
-      throw new AppError('Internal Server Error', 500, {
-        success: false, message: 'Internal Server Error',
-      }, null, err);
-    }
+    const tempToken = jwt.sign(
+      { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE' },
+      process.env.SECRET_KEY,
+      { expiresIn: '15m' }
+    );
     return {
       statusCode: 200,
       responseBody: {
@@ -102,10 +91,8 @@ exports.authenticate = async ({ emailOrPhone, password, appSource, deviceInfo, i
     };
   }
 
-  // === ROLE RESOLUTION (delegated to policy) ===
   const activeRole = loginPolicy.resolveActiveRole(user, appSource);
 
-  // === SUCCESS — reset counters, record login time ===
   const loginUpdate = {
     $set: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
   };
@@ -114,17 +101,9 @@ exports.authenticate = async ({ emailOrPhone, password, appSource, deviceInfo, i
   }
   await loginRepository.recordSuccessfulLogin(user._id, loginUpdate);
 
-  // === TOKEN GENERATION ===
-  let tokens;
-  try {
-    tokens = await generateTokenPair(user, { deviceInfo, ipAddress, activeRole });
-  } catch (err) {
-    if (err instanceof AppError) throw err;
-    throw new AppError('Internal Server Error', 500, {
-      success: false, message: 'Internal Server Error',
-    }, null, err);
-  }
-  const { accessToken, refreshToken } = tokens;
+  const { accessToken, refreshToken } = await generateTokenPair(user, {
+    deviceInfo, ipAddress, activeRole,
+  });
 
   return {
     statusCode: 200,
@@ -137,4 +116,14 @@ exports.authenticate = async ({ emailOrPhone, password, appSource, deviceInfo, i
       activeRole,
     },
   };
+};
+
+// ─── Public export with error boundary ───────────────────────────────────────
+
+exports.authenticate = async (input) => {
+  try {
+    return await runAuthentication(input);
+  } catch (error) {
+    throw toLegacyInternalError(error);
+  }
 };

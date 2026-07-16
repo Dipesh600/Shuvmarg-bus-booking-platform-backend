@@ -2,30 +2,52 @@
 /**
  * Unit tests for login.service.js
  *
- * Tests validate the service layer in isolation using in-process monkey-patching.
- * No real DB connection is needed — the repository is patched before each case.
+ * Tests run in-process using monkey-patching — no real DB connection needed.
+ * Each patch() call returns a dedicated restore function so patches never bleed.
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const bcrypt = require('bcryptjs');
 
 const loginService = require('../../../src/modules/auth/login/login.service');
 const loginRepository = require('../../../src/modules/auth/login/login.repository');
 const AppError = require('../../../src/shared/errors/app-error');
 
-// ─── helper: store original and restore after test ───────────────────────────
-let _original;
-function patchRepo(method, impl) {
-  _original = loginRepository[method];
-  loginRepository[method] = impl;
-}
-function restoreRepo(method) {
-  loginRepository[method] = _original;
-  _original = undefined;
+// ─── Patch helper — returns its own restore function ─────────────────────────
+
+function patch(target, method, impl) {
+  const original = target[method];
+  target[method] = impl;
+  return () => { target[method] = original; };
 }
 
-// ─── missing-field validation lives in the service ───────────────────────────
+// ─── Minimal valid-user fixture ───────────────────────────────────────────────
 
-test('Service: authenticate — missing emailOrPhone throws 400 AppError', async () => {
+const PLAIN_PW = 'TestPassword123!';
+let hashedPw;  // populated once at module load, synchronously safe for tests
+
+// bcrypt is async — obtain the hash before any test runs
+const hashReady = bcrypt.hash(PLAIN_PW, 1).then(h => { hashedPw = h; });
+
+function makeUser(overrides = {}) {
+  return {
+    _id: 'user-id-001',
+    phone: '9800000000',
+    get password() { return hashedPw; },
+    status: 'active',
+    role: 'passenger',
+    roles: ['passenger'],
+    deletedAt: null,
+    lockedUntil: null,
+    forcePasswordChange: false,
+    ...overrides,
+  };
+}
+
+// ─── Input validation ─────────────────────────────────────────────────────────
+
+test('Service: missing emailOrPhone → AppError 400', async () => {
+  await hashReady;
   const err = await loginService
     .authenticate({ emailOrPhone: '', password: 'x', appSource: '', deviceInfo: null, ipAddress: null })
     .catch(e => e);
@@ -35,7 +57,8 @@ test('Service: authenticate — missing emailOrPhone throws 400 AppError', async
   assert.deepEqual(err.responseBody, { success: false, message: 'Email or Phone is required!' });
 });
 
-test('Service: authenticate — missing password throws 400 AppError', async () => {
+test('Service: missing password → AppError 400', async () => {
+  await hashReady;
   const err = await loginService
     .authenticate({ emailOrPhone: '9800000000', password: '', appSource: '', deviceInfo: null, ipAddress: null })
     .catch(e => e);
@@ -45,26 +68,47 @@ test('Service: authenticate — missing password throws 400 AppError', async () 
   assert.deepEqual(err.responseBody, { success: false, message: 'Password is required!' });
 });
 
-// ─── unexpected repository rejection → wrapped AppError(500) ─────────────────
+// ─── Early-stage failure (lookup) ────────────────────────────────────────────
 
-test('Service: authenticate — unexpected repository error wraps to AppError 500', async () => {
+test('Service: repo lookup explosion → AppError 500 with .cause', async () => {
+  await hashReady;
   const boom = new Error('DB exploded');
-
-  patchRepo('findUserByEmailOrPhone', async () => { throw boom; });
+  const restore = patch(loginRepository, 'findUserByEmailOrPhone', async () => { throw boom; });
 
   try {
     const err = await loginService
-      .authenticate({ emailOrPhone: '9800000000', password: 'pw', appSource: '', deviceInfo: null, ipAddress: null })
+      .authenticate({ emailOrPhone: '9800000000', password: PLAIN_PW, appSource: '', deviceInfo: null, ipAddress: null })
       .catch(e => e);
 
-    assert.ok(err instanceof AppError, 'result must be an AppError');
+    assert.ok(err instanceof AppError, 'must be AppError');
     assert.equal(err.statusCode, 500);
-    assert.deepEqual(err.responseBody, {
-      success: false,
-      message: 'Internal Server Error',
-    });
-    assert.equal(err.cause, boom, 'original error must be stored as .cause');
+    assert.deepEqual(err.responseBody, { success: false, message: 'Internal Server Error' });
+    assert.equal(err.cause, boom);
   } finally {
-    restoreRepo('findUserByEmailOrPhone');
+    restore();
+  }
+});
+
+// ─── Late-stage failure (recordSuccessfulLogin) ───────────────────────────────
+
+test('Service: recordSuccessfulLogin explosion → AppError 500 with .cause', async () => {
+  await hashReady;
+  const boom = new Error('write failed');
+
+  const restoreLookup = patch(loginRepository, 'findUserByEmailOrPhone', async () => makeUser());
+  const restoreRecord = patch(loginRepository, 'recordSuccessfulLogin', async () => { throw boom; });
+
+  try {
+    const err = await loginService
+      .authenticate({ emailOrPhone: '9800000000', password: PLAIN_PW, appSource: '', deviceInfo: null, ipAddress: null })
+      .catch(e => e);
+
+    assert.ok(err instanceof AppError, 'must be AppError');
+    assert.equal(err.statusCode, 500);
+    assert.deepEqual(err.responseBody, { success: false, message: 'Internal Server Error' });
+    assert.equal(err.cause, boom, 'original error must be retained as .cause');
+  } finally {
+    restoreLookup();
+    restoreRecord();
   }
 });
