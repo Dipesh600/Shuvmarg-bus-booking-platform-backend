@@ -6,7 +6,7 @@
     "command": "find . -type f \\( -name '*.js' -o -name '*.cjs' -o -name '*.mjs' \\) -not -path './node_modules/*' -not -path './coverage/*' -not -path './dist/*' -not -path './build/*' -print0 | xargs -0 wc -l | sort -nr",
     "totalSourceFiles": 221,
     "totalLines": 46842,
-    "filesOver150": 89,
+    "filesOver150": 90,
     "_note_filesOver150": "Violation = strictly over 150 lines (151+). Exactly 150 is compliant."
   },
   "controllers/ticketController/ticketController.js": 2109,

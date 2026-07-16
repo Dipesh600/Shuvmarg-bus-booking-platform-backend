@@ -21,7 +21,7 @@ find . \
 |---|---|
 | Total source files measured | 221 |
 | Total lines (all files) | 46,842 |
-| Files **over 150 lines** | 89 |
+| Files **over 150 lines** | 90 |
 | Files **≥ 300 lines** | 44 |
 | Files **≥ 500 lines** | 22 |
 | Files **≥ 1,000 lines** | 4 |
@@ -69,7 +69,7 @@ find . \
 
 ---
 
-## Files 31–89 (151–394 lines)
+## Files 31–90 (151–394 lines)
 
 | Rank | Lines | File | Category | Risk |
 |---|---|---|---|---|

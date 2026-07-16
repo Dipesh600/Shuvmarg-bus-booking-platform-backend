@@ -13,7 +13,7 @@
 
 **Scope:** Create the `docs/refactor/` documentation suite, `config/refactor-file-size-baseline.json`, and update `.gitignore`.
 
-**Files affected:** `docs/refactor/*.md`, `config/refactor-file-size-baseline.json`, `.gitignore`
+**Files affected:** `docs/refactor/*.md`, `config/refactor-file-size-baseline.json`
 
 **Target branch:** `dev`
 
@@ -138,65 +138,6 @@ routes/userRoutes/userRoutes.js                   (update requires)
 **Rollback:** Revert requires in userRoutes
 
 **Complexity:** Small
-
----
-
-## PR-3 — OTP and Phone Guard Utilities
-
-**Scope:** Move OTP helper, phone guard, enumGuard, and verificationToken into shared. No logic changes.
-
-**Files affected:**
-```
-utils/otpHelper.js          → src/shared/otpHelper.js
-utils/phoneGuard.js         → src/shared/phoneGuard.js
-utils/enumGuard.js          → src/shared/enumGuard.js
-utils/verificationToken.js  → src/shared/verificationToken.js
-middleware/otpRateLimiter.js → src/shared/otpRateLimiter.js
-middleware/checkRole.js      → src/shared/checkRole.js
-middleware/autoGenerateReferralCode.js → src/shared/autoGenerateReferralCode.js
-middleware/requireApprovedAgent.js     → src/shared/requireApprovedAgent.js
-middleware/requireApprovedBusOwner.js  → src/shared/requireApprovedBusOwner.js
-```
-
-**Tests required first:**
-- Characterization test: OTP flow end-to-end (sendOTP → verifyOTP)
-- Characterization test: Rate limiter blocks after threshold
-
-**API contracts unchanged:** Yes
-
-**Risks:** Low — utilities with well-defined inputs/outputs
-
-**Rollback:** Revert require paths
-
-**Complexity:** Small
-
----
-
-## PR-4 — User Login Flow (Extract from authController)
-
-**Scope:** Extract the `login` handler from `authController.js` into its own file `src/modules/auth/loginController.js`. No logic changes. The route still calls the same function through the same path.
-
-**Files affected:**
-```
-controllers/authControllers.js/authController.js  (remove login handler)
-src/modules/auth/loginController.js               (new — extracted login handler)
-routes/userRoutes/userRoutes.js                   (update require)
-```
-
-**Tests required first:**
-- `POST /api/login` → 200 with valid credentials
-- `POST /api/login` → 401 with wrong password
-- `POST /api/login` → rate limited after 10 attempts
-
-**API contracts unchanged:** `POST /api/login` must return identical response shape
-
-**Risks:** Medium — login is the most used endpoint
-
-**Rollback:** Revert controller require in userRoutes
-
-**Complexity:** Small
-
----
 
 ## PR-5 — User Registration: Characterize then Extract
 
