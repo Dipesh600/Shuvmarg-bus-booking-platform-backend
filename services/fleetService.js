@@ -45,16 +45,9 @@ const createFleet = async (ownerId, fleetData, files, createdBy = "BUS_OWNER") =
         throw new Error("Missing required fleet fields.");
     }
 
-    // ── VERIFICATION GUARD ─────────────────────────────────────────
-    // A fleet can only be created under a fully KYC-approved bus owner.
-    const busOwnerKyc = await BusOwner.findOne({ user: ownerId }).select("verificationStatus").lean();
-    if (!busOwnerKyc) throw new Error("Bus owner KYC profile not found.");
-    if (busOwnerKyc.verificationStatus !== "approved") {
-        throw new Error(
-            `Bus owner KYC is not approved (current status: ${busOwnerKyc.verificationStatus}). ` +
-            `Fleets can only be registered after the bus owner's KYC is approved.`
-        );
-    }
+    // NOTE: KYC approval (BusOwner.verificationStatus === "approved") is
+    // enforced by the fleetModel pre-save hook — the single canonical
+    // enforcement point for this constraint.
 
     // Parse seatConfig JSON if sent as a string (multipart/form-data)
     let seatConfig = null;
@@ -382,9 +375,55 @@ const updateFleetDetails = async (fleetId, updateData, files, ownerId = null) =>
         throw new Error("Fleet not found or unauthorized.");
     }
 
+    // ── MASS-ASSIGNMENT GUARD: Whitelist — bus-owner callers only ────────────
+    // The service is called from two places:
+    //   ownerId !== null  → bus owner PATCH /updateFleet (untrusted user input)
+    //   ownerId === null  → admin update (trusted, elevated context)
+    //
+    // For bus-owner callers we replace the incoming updateData with an object
+    // built from a strict set of allowed keys. Any field not on this list —
+    // including approvalStatus, status, approvedBy, approvedAt, rejectedBy,
+    // rejectedAt, rejectionReason, ownerId, documentReviews, and fleetId —
+    // is silently discarded before reaching MongoDB.
+    //
+    // This is a whitelist, NOT a blocklist. Adding a new sensitive field to the
+    // schema does not require a code change here to stay safe; only fields
+    // explicitly listed below can ever be written by a bus owner.
+    if (ownerId) {
+        const OWNER_PERMITTED_FIELDS = new Set([
+            "busName",
+            "busNumber",
+            "busType",
+            "vehicleType",
+            "registrationYear",
+            "totalSeats",
+            "seatConfig",
+            "fleetImages",
+            "fleetDocuments",
+            "amenityIds",
+            "corridorId",
+            "setupComplete",
+            "brandId",
+            "fleetGroupId",
+        ]);
+
+        const sanitized = {};
+        for (const key of Object.keys(updateData)) {
+            if (OWNER_PERMITTED_FIELDS.has(key)) {
+                sanitized[key] = updateData[key];
+            }
+        }
+        // Replace updateData in-place so all downstream logic (image upload,
+        // busNumber uniqueness, seatConfig parsing) continues to work correctly.
+        Object.keys(updateData).forEach(k => delete updateData[k]);
+        Object.assign(updateData, sanitized);
+    }
+
     // ── KYC LOCKDOWN: Prevent structural modifications on APPROVED fleets ────
+    // Belt-and-suspenders for both owner and admin callers: once a fleet is
+    // approved, its identity fields are frozen. These deletes still apply for
+    // admin callers who might accidentally include these fields.
     if (fleet.approvalStatus === "APPROVED") {
-        // Prevent changes to critical fields. If they are in the update payload, remove them.
         delete updateData.busNumber;
         delete updateData.vehicleType;
         delete updateData.registrationYear;
