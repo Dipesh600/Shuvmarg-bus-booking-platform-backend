@@ -16,7 +16,7 @@ test('Auth: Login Characterization', async (t) => {
   t.after(async () => await db.disconnect());
 
   t.beforeEach(async () => {
-    await User.deleteMany({});
+    await db.clearAll();
     user = await User.create({
       first_name: 'Test',
       last_name: 'User',
@@ -59,9 +59,21 @@ test('Auth: Login Characterization', async (t) => {
     });
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
+    assert.equal(res.body.message, 'Login successful');
+    assert.equal(res.body.activeRole, 'passenger');
     assert.ok(res.body.accessToken);
+
+    // user object: phone matches, no password field, no refreshToken in body
+    assert.equal(res.body.user.phone, '9800000000');
+    assert.equal(res.body.user.password, undefined);
+    assert.equal(res.body.refreshToken, undefined);
+
+    // refresh token delivered only via httpOnly cookie
     const cookies = res.headers['set-cookie'] || [];
-    assert.ok(cookies.some(cookie => cookie.includes('refreshToken=')));
+    const refreshCookie = cookies.find(c => c.includes('refreshToken='));
+    assert.ok(refreshCookie, 'refreshToken cookie must be set');
+    assert.ok(refreshCookie.toLowerCase().includes('httponly'), 'cookie must be HttpOnly');
+    assert.ok(refreshCookie.toLowerCase().includes('samesite=lax'), 'cookie must be SameSite=Lax');
   });
 
   await t.test('POST /api/login - Banned account', async () => {

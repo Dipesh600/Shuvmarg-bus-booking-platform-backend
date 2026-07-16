@@ -18,7 +18,7 @@ test('Auth: Session Characterization', async (t) => {
   t.after(async () => await db.disconnect());
 
   t.beforeEach(async () => {
-    await User.deleteMany({});
+    await db.clearAll();
     user = await User.create({
       first_name: 'Test',
       last_name: 'Session',
@@ -33,7 +33,7 @@ test('Auth: Session Characterization', async (t) => {
       emailOrPhone: '9822222222',
       password: password,
     });
-    
+
     validAccessToken = loginRes.body.accessToken;
     const cookies = loginRes.headers['set-cookie'] || [];
     validRefreshToken = cookies.find(c => c.includes('refreshToken=')).split(';')[0].split('=')[1];
@@ -61,13 +61,17 @@ test('Auth: Session Characterization', async (t) => {
     const res = await request(app).post('/api/refresh').set('Cookie', [`refreshToken=${validRefreshToken}`]);
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
+    assert.equal(res.body.message, 'Token refreshed successfully.');
     assert.ok(res.body.accessToken);
-    
+    assert.equal(res.body.refreshToken, undefined, 'refreshToken must not appear in body');
+
     const cookies = res.headers['set-cookie'] || [];
-    const newRefreshCookie = cookies.find(c => c.includes('refreshToken='));
-    assert.ok(newRefreshCookie);
-    
-    // Test reuse of the original token
+    const rotatedCookie = cookies.find(c => c.includes('refreshToken='));
+    assert.ok(rotatedCookie, 'rotated refreshToken cookie must be set');
+    assert.ok(rotatedCookie.toLowerCase().includes('httponly'), 'rotated cookie must be HttpOnly');
+    assert.ok(rotatedCookie.toLowerCase().includes('samesite=lax'), 'rotated cookie must be SameSite=Lax');
+
+    // reuse of original token must be rejected
     const reuseRes = await request(app).post('/api/refresh').set('Cookie', [`refreshToken=${validRefreshToken}`]);
     assert.equal(reuseRes.status, 401);
     assert.equal(reuseRes.body.success, false);
@@ -77,7 +81,7 @@ test('Auth: Session Characterization', async (t) => {
     const res = await request(app).post('/api/logout').set('Cookie', [`refreshToken=${validRefreshToken}`]);
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
-    
+
     const reuseRes = await request(app).post('/api/refresh').set('Cookie', [`refreshToken=${validRefreshToken}`]);
     assert.equal(reuseRes.status, 401);
     assert.equal(reuseRes.body.success, false);
