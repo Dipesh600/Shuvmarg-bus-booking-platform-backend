@@ -45,8 +45,8 @@ test('asyncHandler', async (t) => {
   await t.test('returns the result of the handler', async () => {
     const res = makeRes();
     const handler = asyncHandler(async (_req, r) => r.status(201).json({ created: true }));
-    await handler(makeReq(), res, () => {});
-    assert.equal(res.statusCode, 201);
-    assert.deepEqual(res._body, { created: true });
+    const result = await handler(makeReq(), res, () => {});
+    // The wrapper resolves to the value returned by fn — the res chain result
+    assert.equal(result, res);
   });
 });

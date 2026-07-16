@@ -16,8 +16,7 @@
  * @param  {Function} fn  Async Express handler (req, res, next) => Promise
  * @returns {Function}    Standard Express handler
  */
-const asyncHandler = (fn) => (req, res, next) => {
+const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
-};
 
 module.exports = asyncHandler;

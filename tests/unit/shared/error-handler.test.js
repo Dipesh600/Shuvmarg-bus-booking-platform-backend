@@ -96,24 +96,21 @@ test('errorHandler', async (t) => {
     assert.equal('errorCode' in res.body, false);
   });
 
-  await t.test('headersSent — delegates to next without sending a response', async () => {
-    let nextCalledWithError = false;
+  await t.test('headersSent — delegates error to next without writing a response', () => {
     const err = new Error('late error');
-    const app = express();
-    app.get('/test', (_req, res, next) => {
-      res.status(200).json({ partial: true });
-      // Simulate already-sent headers then throw
-      next(err);
-    });
-    app.use((e, req, res, next) => {
-      if (res.headersSent) {
-        nextCalledWithError = true;
-        return next(e); // delegate
-      }
-      errorHandler(e, req, res, next);
-    });
-    await request(app).get('/test');
-    assert.ok(nextCalledWithError);
+    let forwarded;
+    const req = { requestId: undefined, originalUrl: '/test', path: '/test', method: 'GET' };
+    const res = {
+      headersSent: true,
+      // Fail the test immediately if errorHandler tries to write a response
+      status() { throw new Error('errorHandler must not call res.status when headersSent'); },
+      json()   { throw new Error('errorHandler must not call res.json when headersSent');  },
+    };
+    const next = (e) => { forwarded = e; };
+
+    errorHandler(err, req, res, next);
+
+    assert.equal(forwarded, err);
   });
 
   await t.test('requestId from req is logged (smoke test — no throw)', async () => {
