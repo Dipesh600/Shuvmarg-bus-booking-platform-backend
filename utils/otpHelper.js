@@ -22,6 +22,30 @@ const MAX_OTP_SENDS = 3;       // max OTP sends per phone+purpose per window
 const BLOCK_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
+ * Fail fast at module load time if the required HMAC secret is absent.
+ * A missing SECRET_KEY would silently compute OTP hashes with a known
+ * string — any developer with repo access could pre-compute the entire
+ * 6-digit keyspace offline.
+ */
+const OTP_HMAC_SECRET = process.env.SECRET_KEY;
+if (!OTP_HMAC_SECRET) {
+  throw new Error(
+    "[otpHelper] SECRET_KEY environment variable is required for OTP HMAC but is not set. " +
+    "Set it in your .env file and restart the server."
+  );
+}
+
+/**
+ * Generate a keyed HMAC for an OTP.
+ * Prevents offline brute-forcing of the 6-digit keyspace if the DB is compromised.
+ * @param {string} otp
+ * @returns {string} 64-character hex string
+ */
+const hashOTP = (otp) =>
+  crypto.createHmac("sha256", OTP_HMAC_SECRET).update(String(otp)).digest("hex");
+
+
+/**
  * Generate a cryptographically secure 6-digit OTP.
  * @returns {string}
  */
@@ -98,11 +122,13 @@ const createAndSendOTP = async (phone, purpose, customPrefix = null) => {
     }
   }
 
+  const hashedOtp = hashOTP(otpCode);
+
   // Upsert: reset OTP, attempts, and expiry — but preserve/update send-rate fields
   await OTP.findOneAndUpdate(
     { phone, purpose },
     {
-      otp: otpCode,
+      otp: hashedOtp,
       otpExpiry,
       isUsed: false,
       attempts: 0,
@@ -188,7 +214,9 @@ const verifyOTPCode = async (phone, otp, purpose, markUsed = true) => {
   }
 
   // ── Step 2: Constant-time comparison (timing-safe) ────────────────────────
-  const codeMatches = safeCompare(String(otpRecord.otp), String(otp));
+  // Hash the incoming OTP using the same secret before comparing it to the DB value
+  const hashedInput = hashOTP(otp);
+  const codeMatches = safeCompare(String(otpRecord.otp), String(hashedInput));
 
   if (!codeMatches) {
     // ── ATOMIC increment — the real security gate ─────────────────────────────

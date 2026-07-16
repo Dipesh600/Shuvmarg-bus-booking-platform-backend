@@ -21,13 +21,17 @@ const busOwnerAuth = require("../../controllers/authControllers.js/busOwnerAuthC
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
 
-// Strict rate limiter for login attempts — 10 attempts per 15 minutes per IP
+// Strict rate limiter for login attempts — 10 attempts per 15 minutes per account
 const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
+  keyGenerator: (req) => {
+    const identifier = req.body?.phone || req.body?.emailOrPhone || req.ip;
+    return String(identifier).replace(/\s+/g, "").toLowerCase();
+  },
   message: {
     success: false,
-    message: "Too many login attempts from this device. Please wait 15 minutes.",
+    message: "Too many login attempts for this account. Please wait 15 minutes.",
     errorCode: "LOGIN_RATE_LIMIT_EXCEEDED",
   },
   standardHeaders: true,

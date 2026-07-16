@@ -1,10 +1,8 @@
 const Route = require("../models/busRouteModel.js");
 const BusOwner = require("../models/busOwnerModel.js");
 
-const isBusOwnerVerified = async (userId) => {
-    const busOwner = await BusOwner.findOne({ user: userId });
-    return busOwner && busOwner.verificationStatus === "approved";
-};
+// NOTE: Ownership verification (BusOwner KYC approved) is enforced by the
+// busRouteModel pre-save hook — not here. Do not add service-level auth checks.
 
 const createBusRoute = async (ownerId, data) => {
     const { 

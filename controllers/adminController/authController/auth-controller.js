@@ -193,6 +193,7 @@ const login = async (req, res) => {
                 adminId: admin.adminId,
                 email: admin.email,
                 role: admin.role,
+                purpose: "access",
             },
             process.env.SECRET_KEY,
             { expiresIn: "30m" }  // Short-lived: admin sessions expire in 30 minutes

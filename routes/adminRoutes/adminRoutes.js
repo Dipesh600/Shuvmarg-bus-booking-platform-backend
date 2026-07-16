@@ -40,6 +40,7 @@ const fleetWorkstation     = require("../../controllers/adminController/fleetWor
 const tripOverviewCtrl     = require("../../controllers/adminController/tripOverviewController.js");
 const adminWalletCtrl      = require("../../controllers/adminController/walletController/adminWalletController.js");
 const transactionCtrl      = require("../../controllers/adminController/transactionController/transactionController.js");
+const routeDiscoveryCtrl   = require("../../controllers/adminController/routeDiscoveryController.js");
 // Auth Routes
 router.post("/auth/login",   authController.login);
 router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);
@@ -98,6 +99,19 @@ router.post("/getAgentDetails", adminMiddleware, agentController.getAgentsById);
 router.get("/getAllAgents", adminMiddleware, agentController.getAllAgents);
 router.get("/agentDashboard", adminMiddleware, agentController.getAgentDashboard);
 router.post("/makeUserAgent", adminMiddleware, agentController.makeUserAgent);
+
+// Route Discovery Routes
+router.post("/registry/discovery", adminMiddleware, routeDiscoveryCtrl.createSession);
+router.get("/registry/discovery", adminMiddleware, routeDiscoveryCtrl.listSessions);
+router.get("/registry/discovery/:id", adminMiddleware, routeDiscoveryCtrl.getSession);
+router.patch("/registry/discovery/:id/select-route", adminMiddleware, routeDiscoveryCtrl.selectRoute);
+router.patch("/registry/discovery/:id/stops/:stopId", adminMiddleware, routeDiscoveryCtrl.patchStop);
+router.patch("/registry/discovery/:id/approve", adminMiddleware, routeDiscoveryCtrl.approveSession);
+router.patch("/registry/discovery/:id/reject", adminMiddleware, routeDiscoveryCtrl.rejectSession);
+router.post("/registry/discovery/:id/publish", adminMiddleware, routeDiscoveryCtrl.publishSession);
+router.patch("/registry/discovery/:id/route-options", adminMiddleware, routeDiscoveryCtrl.setRouteOptions);
+router.patch("/registry/discovery/:id/discovered-stops", adminMiddleware, routeDiscoveryCtrl.setDiscoveredStops);
+router.patch("/registry/discovery/:id/refine-stops", adminMiddleware, routeDiscoveryCtrl.refineStopsWithLLM);
 router.patch("/finalizeAgentSetup", adminMiddleware, agentController.finalizeAgentSetup);
 router.patch("/agentKycStatus", adminMiddleware, agentController.updateAgentKyc);
 

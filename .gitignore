@@ -51,3 +51,19 @@ docker-compose.override.yml
 jest-cache/
 .nyc_output/
 sumarg_admin_2fa_qr.png
+
+# Local-only debug and one-off scripts (never commit these)
+test_*.js
+test_*.mjs
+test-*.js
+query_*.js
+generate_token.js
+bypass-middleware.js
+check_stops.js
+fix_stops.js
+scratch/
+fleet_error_debug.log
+*.debug.log
+
+# One-off migration and seeder scripts (local use only)
+scripts/

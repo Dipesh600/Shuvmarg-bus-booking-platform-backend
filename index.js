@@ -16,6 +16,7 @@ const helmet       = require("helmet");
 const rateLimit    = require("express-rate-limit");
 const fileUpload   = require("express-fileupload");
 const mongoSanitize = require("express-mongo-sanitize");
+const cookieParser = require("cookie-parser");
 const fs           = require("fs");
 const path         = require("path");
 
@@ -136,6 +137,7 @@ app.use("/api/public/searchTrips", searchLimiter);
 // ── Body Parsing ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(cookieParser());
 app.use(fileUpload({
   limits: { fileSize: 20 * 1024 * 1024 },  // 20 MB max per file
   abortOnLimit: true,

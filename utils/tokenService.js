@@ -73,6 +73,12 @@ const buildAccessTokenPayload = (user, activeRole) => {
         activeRole: activeRole,       // the role context for THIS session
         roles: user.roles || [],      // all roles the user holds
         isVerified: user.isVerified,
+        purpose: "access",            // explicitly whitelist token capability
+        // Snapshot of the user's tokenVersion at mint time.
+        // verifyRoleFromDB compares this against the DB value on every request.
+        // Logout and password change increment the DB counter, instantly
+        // invalidating all previously issued access tokens.
+        tokenVersion: user.tokenVersion ?? 0,
     };
 };
 

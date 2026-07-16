@@ -10,11 +10,26 @@ const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
 const rateLimit = require("express-rate-limit");
 
-// Strict rate limiter for login attempts (per IP — 10 per 15 min)
+// Strict rate limiter for login attempts (per account — 10 per 15 min)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: { success: false, message: "Too many login attempts. Please wait 15 minutes." },
+  keyGenerator: (req) => {
+    const identifier = req.body?.phone || req.body?.emailOrPhone || req.ip;
+    return String(identifier).replace(/\s+/g, "").toLowerCase();
+  },
+  message: { success: false, message: "Too many login attempts. Please wait 15 minutes.", errorCode: "LOGIN_RATE_LIMIT" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+});
+
+// Strict rate limiter for password changes (5 per 15 min per account)
+const passwordChangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => `${req.ip}_${req.userInfo?.id || ''}`,
+  message: { success: false, message: "Too many password change attempts. Please wait 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -58,7 +73,7 @@ router.patch(
 );
 
 // Update Password
-router.put("/updatePassword", auth, verifyRoleFromDB, authCoontroller.updatePassword);
+router.put("/updatePassword", auth, passwordChangeLimiter, verifyRoleFromDB, authCoontroller.updatePassword);
 
 // Get User Detail
 router.get("/getUserDetail", auth, verifyRoleFromDB, authCoontroller.getUserDetail);

@@ -21,7 +21,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { createAndSendOTP, verifyOTPCode } = require("../../utils/otpHelper.js");
 const { validatePassword } = require("../../utils/passwordValidator.js");
-const { generateTokenPair } = require("../../utils/tokenService.js");
+const { generateTokenPair, revokeAllUserTokens } = require("../../utils/tokenService.js");
 
 /**
  * POST /api/auth/activate/sendOTP
@@ -117,6 +117,9 @@ const activateAccount = async (req, res) => {
         user.isVerified = true;
         await user.save();
 
+        // Revoke all prior sessions before issuing new credentials (FINDING-07)
+        await revokeAllUserTokens(user._id);
+
         // Generate full token pair
         const { accessToken, refreshToken } = await generateTokenPair(user, {
             deviceInfo: req.get("User-Agent") || null,
@@ -132,7 +135,15 @@ const activateAccount = async (req, res) => {
             user: userWithoutPassword,
             accessToken,
         };
-        if (refreshToken) responseData.refreshToken = refreshToken;
+        // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
+        if (refreshToken) {
+            res.cookie("refreshToken", refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "Lax",
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+            });
+        }
 
         return res.status(200).json(responseData);
     } catch (error) {

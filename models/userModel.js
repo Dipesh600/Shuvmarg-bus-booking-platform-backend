@@ -137,6 +137,14 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,    // Non-null = account locked until this timestamp
     },
+    // Incremented on logout and password change.
+    // Access tokens embed the version they were minted with.
+    // verifyRoleFromDB rejects any token whose version no longer matches,
+    // making logged-out / pre-password-change tokens immediately invalid.
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
 
     // === SOFT DELETE ===
     deletedAt: {

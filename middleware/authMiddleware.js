@@ -5,12 +5,23 @@ const authMiddleware = (req, res, next) => {
     const token = authHeader && authHeader.split(" ")[1];
     // console.log(token);
     if (!token) {
-      return res.status(400).json({
+      return res.status(401).json({
         status: false,
         message: "Authorization header is missing or invalid",
       });
     }
     const verifyAuthToken = jwt.verify(token, process.env.SECRET_KEY);
+    
+    // SECURITY: Enforce strict token purpose. Normal API access requires an "access" token.
+    // This rejects temporary tokens (e.g., FORCE_PASSWORD_CHANGE) from normal routes.
+    if (verifyAuthToken.purpose !== "access") {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid token purpose. Expected an access token.",
+        errorCode: "INVALID_TOKEN_PURPOSE",
+      });
+    }
+
     req.userInfo = verifyAuthToken;
 
     // === MULTI-ROLE BACKWARD COMPAT ===

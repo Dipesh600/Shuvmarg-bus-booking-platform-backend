@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { busOwnerMiddleware } = require("../../middleware/checkRole.js");
+const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner.js");
 const busOwnerCon = require("../../controllers/busOwnerController/busOwnerController.js");
 const busOwnerRouteCon = require("../../controllers/busOwnerController/busOwnerRouteController.js");
 const tripCon = require("../../controllers/busOwnerController/busTripController.js");
@@ -15,6 +16,10 @@ router.use(auth, verifyRoleFromDB, busOwnerMiddleware);
 
 router.post("/submitBusOwnerKyc", busOwnerCon.submitBusOwnerKyc);
 router.get("/myBusOwnerKycStatus", busOwnerCon.getMyBusOwnerKycStatus);
+
+// ── REQUIRE APPROVED KYC FOR ALL ROUTES BELOW ─────────────────────────────────
+router.use(requireApprovedBusOwner);
+
 router.post("/submitFleetForVerification", busOwnerCon.submitFleetForVerification);
 router.get("/myFleets", busOwnerCon.getMyFleets);
 router.post("/getFleetById", busOwnerCon.getFleetById);

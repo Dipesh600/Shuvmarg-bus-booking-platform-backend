@@ -27,7 +27,7 @@ async function sendOTP(phone, message) {
 
   try {
     const response = await axios.post(
-      "http://api.sparrowsms.com/v2/sms/",
+      "https://api.sparrowsms.com/v2/sms/",
       payload,
       {
         headers: {
