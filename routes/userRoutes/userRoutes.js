@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authCoontroller = require("../../controllers/authControllers.js/authController.js");
 const loginModule = require("../../src/modules/auth/login");
+const sessionController = require("../../src/modules/auth/session/index.js");
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
@@ -50,8 +51,8 @@ router.post("/resetPassword",      otpVerifyLimiter, authCoontroller.resetPasswo
 router.post("/resendOtp",          otpRateLimiter, authCoontroller.resendOtp);        // ← OTP rate limit
 
 // Token management (refresh, logout, force password change)
-router.post("/refresh",            authCoontroller.refreshAccessToken);               // ← No auth needed (uses refresh token)
-router.post("/logout",             authCoontroller.logout);                            // ← No auth needed (uses refresh token)
+router.post("/refresh",            sessionController.refreshAccessToken);               // ← No auth needed (uses refresh token)
+router.post("/logout",             sessionController.logout);                            // ← No auth needed (uses refresh token)
 router.post("/changeForcePassword", authCoontroller.changeForcePassword);              // ← Uses temp token
 
 // ── PROTECTED ROUTES (JWT + DB verification) ─────────────────────────────────
