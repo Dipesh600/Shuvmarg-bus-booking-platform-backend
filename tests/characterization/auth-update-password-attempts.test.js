@@ -78,6 +78,8 @@ test('Auth: updatePassword failed-attempt characterization', async (t) => {
 
   await t.test('fifth wrong attempt locks account and increments tokenVersion once', async () => {
     const u = await user(4, 8);
+    const pair = await tokenService.generateTokenPair(u);
+    const hash = tokenService.hashToken(pair.refreshToken);
     const before = Date.now();
     const res = await wrong(u);
     const after = Date.now();
@@ -91,5 +93,9 @@ test('Auth: updatePassword failed-attempt characterization', async (t) => {
     assert.equal(stored.tokenVersion, 9);
     assert.ok(stored.lockedUntil.getTime() >= before + 15 * 60 * 1000 - 1000);
     assert.ok(stored.lockedUntil.getTime() <= after + 15 * 60 * 1000 + 1000);
+    assert.ok(
+      await RefreshToken.findOne({ tokenHash: hash }),
+      'legacy flow must not revoke refresh tokens on lock',
+    );
   });
 });
