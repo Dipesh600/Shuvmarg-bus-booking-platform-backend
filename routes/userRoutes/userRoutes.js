@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const authCoontroller = require("../../controllers/authControllers.js/authController.js");
 const loginModule = require("../../src/modules/auth/login");
 const registrationModule = require("../../src/modules/auth/registration");
 const sessionController = require("../../src/modules/auth/session/index.js");
@@ -8,6 +7,7 @@ const passwordResetModule = require("../../src/modules/auth/password-reset");
 const otpResendModule = require("../../src/modules/auth/otp-resend");
 const forcePasswordModule = require("../../src/modules/auth/force-password");
 const updatePasswordModule = require("../../src/modules/auth/update-password");
+const profileModule = require("../../src/modules/auth/profile");
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
@@ -70,7 +70,7 @@ router.put(
   auth,
   verifyRoleFromDB,
   autoGenerateReferralCode,
-  authCoontroller.UpdateProfilePic
+  profileModule.updateProfilePicture
 );
 
 // Update User Profile (name, address, gender, and optionally profile picture)
@@ -79,14 +79,14 @@ router.patch(
   auth,
   verifyRoleFromDB,
   autoGenerateReferralCode,
-  authCoontroller.updateProfile
+  profileModule.updateProfile
 );
 
 // Update Password
 router.put("/updatePassword", auth, passwordChangeLimiter, verifyRoleFromDB, updatePasswordModule.updatePassword);
 
 // Get User Detail
-router.get("/getUserDetail", auth, verifyRoleFromDB, authCoontroller.getUserDetail);
+router.get("/getUserDetail", auth, verifyRoleFromDB, profileModule.getUserDetail);
 
 // Coupon Routes
 router.get(
