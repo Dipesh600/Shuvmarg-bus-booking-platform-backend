@@ -6,6 +6,7 @@ const registrationModule = require("../../src/modules/auth/registration");
 const sessionController = require("../../src/modules/auth/session/index.js");
 const passwordResetModule = require("../../src/modules/auth/password-reset");
 const otpResendModule = require("../../src/modules/auth/otp-resend");
+const forcePasswordModule = require("../../src/modules/auth/force-password");
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
@@ -56,7 +57,10 @@ router.post("/resendOtp",          otpRateLimiter, otpResendModule.resendOtp);  
 // Token management (refresh, logout, force password change)
 router.post("/refresh",            sessionController.refreshAccessToken);               // ← No auth needed (uses refresh token)
 router.post("/logout",             sessionController.logout);                            // ← No auth needed (uses refresh token)
-router.post("/changeForcePassword", authCoontroller.changeForcePassword);              // ← Uses temp token
+router.post(
+  "/changeForcePassword",
+  forcePasswordModule.changeForcePassword
+);
 
 // ── PROTECTED ROUTES (JWT + DB verification) ─────────────────────────────────
 // Update Profile picture

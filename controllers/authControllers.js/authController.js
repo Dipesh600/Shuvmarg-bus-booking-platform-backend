@@ -1,11 +1,9 @@
 const User = require("../../models/userModel.js");
 const OTP = require("../../models/otpModel.js");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const emailManager = require("../../emailManager/emailManager.js");
 const generateOtpEmailContent = require("../../handlers/otp-template.js");
 const cloudinary = require("../../handlers/cloudinary.js");
-const { verifyOTPCode } = require("../../utils/otpHelper.js");
 const { validatePassword } = require("../../utils/passwordValidator.js");
 
 // Change Profile Picture
@@ -414,132 +412,9 @@ const getUserDetail = async (req, res) => {
 };
 
 
-// Change Forced Password — for admin-generated temp credentials
-const changeForcePassword = async (req, res) => {
-  try {
-    const { tempToken, newPassword, phone, otp } = req.body;
-
-    if (!tempToken || !newPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Temp token and new password are required.",
-      });
-    }
-
-    // Verify the temp token
-    let decoded;
-    try {
-      decoded = jwt.verify(tempToken, process.env.SECRET_KEY);
-    } catch (err) {
-      return res.status(401).json({
-        success: false,
-        message: "Temp token is invalid or expired. Please login again.",
-      });
-    }
-
-    if (decoded.purpose !== "FORCE_PASSWORD_CHANGE") {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid token purpose.",
-      });
-    }
-
-    // Validate new password strength
-    const passwordCheck = validatePassword(newPassword);
-    if (!passwordCheck.valid) {
-      return res.status(400).json({
-        success: false,
-        message: passwordCheck.errors[0],
-        errors: passwordCheck.errors,
-      });
-    }
-
-    // If phone + OTP provided, verify phone ownership
-    if (phone && otp) {
-      const otpResult = await verifyOTPCode(phone, otp, "ACCOUNT_ACTIVATION");
-      if (!otpResult.valid) {
-        return res.status(400).json({
-          success: false,
-          message: otpResult.error,
-        });
-      }
-    }
-
-    const user = await User.findById(decoded.id).select("+password");
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found.",
-      });
-    }
-
-    if (!user.forcePasswordChange) {
-      return res.status(400).json({
-        success: false,
-        message: "Password change is not required for this account.",
-      });
-    }
-
-    // Hash and save new password
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
-    user.password = hashedPassword;
-    user.forcePasswordChange = false;
-    user.phoneVerified = true;
-    await user.save();
-
-    // Revoke all prior sessions before issuing new credentials (FINDING-08)
-    const { generateTokenPair, revokeAllUserTokens } = require("../../utils/tokenService.js");
-    await revokeAllUserTokens(user._id);
-
-    // Increment tokenVersion BEFORE minting the new token pair.
-    // This invalidates the FORCE_PASSWORD_CHANGE temp token and any other
-    // access tokens in the wild. The new access token will carry version+1
-    // and will therefore be the only valid one.
-    await User.findByIdAndUpdate(user._id, { $inc: { tokenVersion: 1 } });
-
-    // Re-fetch so the new tokenVersion is baked into the access token payload
-    const freshUser = await User.findById(user._id);
-
-    // Generate full token pair now
-    const { accessToken, refreshToken } = await generateTokenPair(freshUser, {
-      deviceInfo: req.get("User-Agent") || null,
-      ipAddress: req.ip || req.connection?.remoteAddress || null,
-    });
-
-    const userWithoutPassword = freshUser.toObject();
-    delete userWithoutPassword.password;
-
-    const responseData = {
-      success: true,
-      message: "Password changed successfully. Welcome!",
-      user: userWithoutPassword,
-      accessToken,
-    };
-
-    // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
-    if (refreshToken) {
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "Lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
-    }
-
-    return res.status(200).json(responseData);
-  } catch (error) {
-    console.error("Change Force Password Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-    });
-  }
-};
-
 module.exports = {
   UpdateProfilePic,
   updateProfile,
   updatePassword,
   getUserDetail,
-  changeForcePassword,
 };
