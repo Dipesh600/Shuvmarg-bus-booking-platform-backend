@@ -1,14 +1,11 @@
 'use strict';
 
-require('../helpers/app');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 const app = require('../helpers/app');
 const db = require('../helpers/db');
 const User = require('../../models/userModel');
-const OTP = require('../../models/otpModel');
-const crypto = require('crypto');
 
 const HASHED_PW = '$2a$12$aaaaaaaaaaaaaaaaaaaaaa.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 
@@ -19,6 +16,15 @@ test('Auth: requestPasswordReset', async (t) => {
   await db.connect();
   t.after(() => db.disconnect());
   t.beforeEach(() => db.clearAll());
+
+  await t.test('empty body -> exact middleware 400', async () => {
+    const res = await request(app).post('/api/requestPasswordReset').send({});
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, {
+      success: false,
+      message: 'Phone number is required.',
+    });
+  });
 
   await t.test('unknown account → exact generic 200', async () => {
     const otpHelper = require('../../utils/otpHelper');
@@ -86,8 +92,13 @@ test('Auth: requestPasswordReset', async (t) => {
     otpHelper.createAndSendOTP = async () => { throw new Error('OTP_SEND_BLOCKED:5'); };
     try {
       const res = await request(app).post('/api/requestPasswordReset').send({ emailOrPhone: '9800000094' });
-      assert.equal(res.status, 429); assert.equal(res.body.success, false);
-      assert.equal(res.body.errorCode, 'OTP_SEND_BLOCKED'); assert.equal(res.body.retryAfterMinutes, 5);
+      assert.equal(res.status, 429);
+      assert.deepEqual(res.body, {
+        success: false,
+        message: 'Too many OTP requests. Please wait 5 minute(s) before trying again.',
+        errorCode: 'OTP_SEND_BLOCKED',
+        retryAfterMinutes: 5,
+      });
     } finally { otpHelper.createAndSendOTP = orig; }
   });
 

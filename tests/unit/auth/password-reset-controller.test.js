@@ -3,16 +3,12 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-// Load env before service imports
 process.env.SECRET_KEY = 'test-only-secret-32chars-minimum!!';
-process.env.VERIFICATION_TOKEN_SECRET = 'test-only-verification-secret!!';
-process.env.NODE_ENV = 'test';
-process.env.SPARROW_SMS_TOKEN = 'test-stub';
 
 const requestPwdResetSvc = require('../../../src/modules/auth/password-reset/request-password-reset.service');
 const verifyResetOtpSvc = require('../../../src/modules/auth/password-reset/verify-reset-otp.service');
 const resetPasswordSvc = require('../../../src/modules/auth/password-reset/reset-password.service');
-const asyncHandler = require('../../../src/shared/http/async-handler');
+const AppError = require('../../../src/shared/errors/app-error');
 const controller = require('../../../src/modules/auth/password-reset/password-reset.controller');
 
 const mockRes = () => {
@@ -24,7 +20,6 @@ const mockRes = () => {
 
 test('Unit: password-reset controller', async (t) => {
   await t.test('requestPasswordReset — exact fields forwarded and statusCode+body used', async () => {
-    const requestPwdResetSvc = require('../../../src/modules/auth/password-reset/request-password-reset.service');
     const orig = requestPwdResetSvc.requestPasswordReset;
     let captured;
     requestPwdResetSvc.requestPasswordReset = async (input) => { captured = input; return { statusCode: 200, responseBody: { ok: true } }; };
@@ -39,24 +34,22 @@ test('Unit: password-reset controller', async (t) => {
   });
 
   await t.test('verifyOtpForReset — exact fields forwarded', async () => {
-    const svc = require('../../../src/modules/auth/password-reset/verify-reset-otp.service');
-    const orig = svc.verifyResetOtp;
+    const orig = verifyResetOtpSvc.verifyResetOtp;
     let captured;
-    svc.verifyResetOtp = async (input) => { captured = input; return { statusCode: 200, responseBody: {} }; };
+    verifyResetOtpSvc.verifyResetOtp = async (input) => { captured = input; return { statusCode: 200, responseBody: {} }; };
     try {
       const req = { body: { emailOrPhone: 'ph', otp: '123456' } };
       const res = mockRes();
       await controller.verifyOtpForReset(req, res, () => {});
       assert.equal(captured.emailOrPhone, 'ph');
       assert.equal(captured.otp, '123456');
-    } finally { svc.verifyResetOtp = orig; }
+    } finally { verifyResetOtpSvc.verifyResetOtp = orig; }
   });
 
   await t.test('resetPassword — exact fields forwarded', async () => {
-    const svc = require('../../../src/modules/auth/password-reset/reset-password.service');
-    const orig = svc.resetPassword;
+    const orig = resetPasswordSvc.resetPassword;
     let captured;
-    svc.resetPassword = async (input) => { captured = input; return { statusCode: 200, responseBody: {} }; };
+    resetPasswordSvc.resetPassword = async (input) => { captured = input; return { statusCode: 200, responseBody: {} }; };
     try {
       const req = { body: { emailOrPhone: 'ph2', otp: '654321', newPassword: 'NewPass1' } };
       const res = mockRes();
@@ -64,18 +57,34 @@ test('Unit: password-reset controller', async (t) => {
       assert.equal(captured.emailOrPhone, 'ph2');
       assert.equal(captured.otp, '654321');
       assert.equal(captured.newPassword, 'NewPass1');
-    } finally { svc.resetPassword = orig; }
+    } finally { resetPasswordSvc.resetPassword = orig; }
   });
 
-  await t.test('rejected service reaches next via asyncHandler', async () => {
-    const svc = require('../../../src/modules/auth/password-reset/request-password-reset.service');
-    const orig = svc.requestPasswordReset;
-    svc.requestPasswordReset = async () => { throw new Error('boom'); };
+  await t.test('AppError reaches next unchanged', async () => {
+    const orig = requestPwdResetSvc.requestPasswordReset;
+    const expected = new AppError('Expected', 400, { status: false, message: 'Expected error' });
+    requestPwdResetSvc.requestPasswordReset = async () => { throw expected; };
     try {
       let nextErr;
-      const req = { body: { emailOrPhone: 'x' } };
-      await controller.requestPasswordReset(req, mockRes(), (e) => { nextErr = e; });
-      assert.ok(nextErr instanceof Error);
-    } finally { svc.requestPasswordReset = orig; }
+      const res = mockRes();
+      await controller.requestPasswordReset({ body: { emailOrPhone: 'x' } }, res, (e) => { nextErr = e; });
+      assert.equal(nextErr, expected);
+      assert.equal(res._status, null);
+      assert.equal(res._body, null);
+    } finally { requestPwdResetSvc.requestPasswordReset = orig; }
+  });
+
+  await t.test('unexpected Error reaches next unchanged', async () => {
+    const orig = requestPwdResetSvc.requestPasswordReset;
+    const expected = new Error('boom');
+    requestPwdResetSvc.requestPasswordReset = async () => { throw expected; };
+    try {
+      let nextErr;
+      const res = mockRes();
+      await controller.requestPasswordReset({ body: { emailOrPhone: 'x' } }, res, (e) => { nextErr = e; });
+      assert.equal(nextErr, expected);
+      assert.equal(res._status, null);
+      assert.equal(res._body, null);
+    } finally { requestPwdResetSvc.requestPasswordReset = orig; }
   });
 });

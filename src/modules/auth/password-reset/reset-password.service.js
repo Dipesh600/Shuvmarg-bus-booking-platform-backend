@@ -45,14 +45,21 @@ const resetPassword = async ({ emailOrPhone, otp, newPassword }) => {
       throw new AppError('Invalid OTP', 400, { status: false, message: otpResult.error || 'Invalid OTP' });
     }
 
-    const user = await repository.findActiveForPasswordReset(lookupPhone);
+    const user = await repository.findActiveForPasswordReset(
+      emailOrPhone,
+      normalizedPhone
+    );
     if (!user) {
       throw new AppError('Not Found', 400, { status: false, message: 'No account found with this phone or email.' });
     }
 
     const passwordCheck = passwordValidator.validatePassword(newPassword);             
     if (!passwordCheck.valid) {
-      throw new AppError('Invalid Password', 400, { status: false, errors: passwordCheck.errors });
+      throw new AppError('Invalid Password', 400, {
+        status: false,
+        message: passwordCheck.errors[0],
+        errors: passwordCheck.errors,
+      });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);                        // 9
