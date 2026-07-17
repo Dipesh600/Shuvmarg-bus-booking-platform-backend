@@ -7,6 +7,7 @@ const sessionController = require("../../src/modules/auth/session/index.js");
 const passwordResetModule = require("../../src/modules/auth/password-reset");
 const otpResendModule = require("../../src/modules/auth/otp-resend");
 const forcePasswordModule = require("../../src/modules/auth/force-password");
+const updatePasswordModule = require("../../src/modules/auth/update-password");
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
@@ -82,7 +83,7 @@ router.patch(
 );
 
 // Update Password
-router.put("/updatePassword", auth, passwordChangeLimiter, verifyRoleFromDB, authCoontroller.updatePassword);
+router.put("/updatePassword", auth, passwordChangeLimiter, verifyRoleFromDB, updatePasswordModule.updatePassword);
 
 // Get User Detail
 router.get("/getUserDetail", auth, verifyRoleFromDB, authCoontroller.getUserDetail);
