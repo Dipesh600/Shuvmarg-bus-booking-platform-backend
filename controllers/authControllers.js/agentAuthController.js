@@ -34,8 +34,6 @@ const { createAndSendOTP, verifyOTPCode }   = require("../../utils/otpHelper.js"
 const { validatePassword }                   = require("../../utils/passwordValidator.js");
 const {
   generateTokenPair,
-  rotateRefreshToken,
-  revokeRefreshToken,
   revokeAllUserTokens,
 } = require("../../utils/tokenService.js");
 const { otpFirstVerify, withMinimumLatency } = require("../../utils/enumGuard.js");
@@ -673,102 +671,6 @@ const login = async (req, res) => {
   }
 };
 
-// ── Token Management ──────────────────────────────────────────────────────────
-
-/**
- * POST /api/auth/agent/refresh
- *
- * Exchanges a valid refresh token for a new access + refresh token pair.
- * Uses token rotation — the old refresh token is deleted (single-use).
- *
- * Body: { refreshToken: string }
- */
-const refresh = async (req, res) => {
-  try {
-    // NEW-FINDING-01: Cookie-first, body as fallback (supports both web credentials:include and Flutter body-based)
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
-
-    if (!refreshToken) {
-      return res.status(401).json({ success: false, message: "Session expired. Please sign in again." });
-    }
-
-    const { accessToken, refreshToken: newRefreshToken } = await rotateRefreshToken(refreshToken, {
-      deviceInfo: req.headers["user-agent"] || null,
-      ipAddress: req.ip || null,
-    });
-
-    // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
-    if (newRefreshToken) {
-      res.cookie("refreshToken", newRefreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "Lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Token refreshed successfully.",
-      accessToken,
-    });
-  } catch (error) {
-    const message =
-      error.message === "INVALID_REFRESH_TOKEN" ? "Session expired. Please sign in again." :
-      error.message === "REFRESH_TOKEN_EXPIRED"  ? "Session expired. Please sign in again." :
-      error.message === "ACCOUNT_BANNED"         ? "Your account has been suspended." :
-      error.message === "ROLE_REVOKED"           ? "Access revoked. Please contact support." :
-      "Session could not be renewed. Please sign in again.";
-
-    const status =
-      error.message === "ACCOUNT_BANNED" ? 403 :
-      error.message === "ROLE_REVOKED"   ? 403 : 401;
-
-    console.error("[Agent refresh] Error:", error.message);
-    return res.status(status).json({ success: false, message });
-  }
-};
-
-/**
- * POST /api/auth/agent/logout
- *
- * Revokes the refresh token for the current device.
- * The access token is short-lived and will expire naturally.
- *
- * Reads refresh token from httpOnly cookie (web) or request body (Flutter).
- */
-const logout = async (req, res) => {
-  try {
-    // NEW-FINDING-01: Cookie-first, body as fallback
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
-
-    if (refreshToken) {
-      await revokeRefreshToken(refreshToken);
-    }
-
-    // Clear the httpOnly cookie regardless of whether a token was found
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Lax",
-    });
-
-    // Increment tokenVersion so the current access token is immediately
-    // rejected by verifyRoleFromDB on its next use.
-    const userId = req.userInfo?.id;
-    if (userId) {
-      await User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } });
-    }
-
-    // Always return 200 — don't leak whether the token existed or not
-    return res.status(200).json({ success: true, message: "Logged out successfully." });
-  } catch (error) {
-    console.error("[Agent logout] Error:", error.message);
-    res.clearCookie("refreshToken", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "Lax" });
-    return res.status(200).json({ success: true, message: "Logged out." }); // Always succeed for logout
-  }
-};
-
 // ── Password Reset Flow ───────────────────────────────────────────────────────
 
 /**
@@ -977,8 +879,6 @@ module.exports = {
   register,
   resendOTP,
   login,
-  refresh,
-  logout,
   requestPasswordReset,
   verifyOtpForReset,
   resetPassword,

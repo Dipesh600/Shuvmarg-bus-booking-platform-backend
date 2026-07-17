@@ -13,6 +13,7 @@ const express = require("express");
 const router  = express.Router();
 const rateLimit = require("express-rate-limit");
 const agentAuth     = require("../../controllers/authControllers.js/agentAuthController.js");
+const agentSession  = require("../../src/modules/agent/auth/session");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
 
@@ -40,8 +41,8 @@ router.post("/resendOTP",  otpRateLimiter, agentAuth.resendOTP);
 router.post("/login", loginRateLimiter, agentAuth.login);
 
 // ── Token management ──────────────────────────────────────────────────────────
-router.post("/refresh", agentAuth.refresh);
-router.post("/logout",  agentAuth.logout);
+router.post("/refresh", agentSession.refresh);
+router.post("/logout",  agentSession.logout);
 
 // ── Password reset (3-step, mirrors registration flow) ───────────────────────
 router.post("/requestPasswordReset", otpRateLimiter, agentAuth.requestPasswordReset);
