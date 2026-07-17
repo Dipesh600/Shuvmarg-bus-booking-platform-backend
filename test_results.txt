@@ -1,0 +1,1619 @@
+
+> buss-booking-system@1.0.0 test
+> node --test
+
+TAP version 13
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-login-roles.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-login-roles.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-login-roles.test.js
+not ok 1 - tests/characterization/auth-login-roles.test.js
+  ---
+  duration_ms: 1827.745709
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-login-roles.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-login-security.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-login-security.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-login-security.test.js
+not ok 2 - tests/characterization/auth-login-security.test.js
+  ---
+  duration_ms: 1880.337792
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-login-security.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-login.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-login.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-login.test.js
+not ok 3 - tests/characterization/auth-login.test.js
+  ---
+  duration_ms: 1888.455083
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-login.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-logout-contract.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-logout-contract.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-logout-contract.test.js
+not ok 4 - tests/characterization/auth-logout-contract.test.js
+  ---
+  duration_ms: 1853.312875
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-logout-contract.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-logout.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-logout.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-logout.test.js
+not ok 5 - tests/characterization/auth-logout.test.js
+  ---
+  duration_ms: 1804.126542
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-logout.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-password-reset-complete.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-password-reset-complete.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-password-reset-complete.test.js
+not ok 6 - tests/characterization/auth-password-reset-complete.test.js
+  ---
+  duration_ms: 1593.629917
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-password-reset-complete.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-password-reset-request.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-password-reset-request.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-password-reset-request.test.js
+not ok 7 - tests/characterization/auth-password-reset-request.test.js
+  ---
+  duration_ms: 1552.696291
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-password-reset-request.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-password-reset-verify.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-password-reset-verify.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-password-reset-verify.test.js
+not ok 8 - tests/characterization/auth-password-reset-verify.test.js
+  ---
+  duration_ms: 1561.8655
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-password-reset-verify.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-refresh-rotation.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-refresh-rotation.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-refresh-rotation.test.js
+not ok 9 - tests/characterization/auth-refresh-rotation.test.js
+  ---
+  duration_ms: 1798.802667
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-refresh-rotation.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-refresh.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-refresh.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-refresh.test.js
+not ok 10 - tests/characterization/auth-refresh.test.js
+  ---
+  duration_ms: 1682.290458
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-refresh.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-complete-success.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-complete-success.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-registration-complete-success.test.js
+not ok 11 - tests/characterization/auth-registration-complete-success.test.js
+  ---
+  duration_ms: 1682.169084
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-complete-success.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-complete.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-complete.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-registration-complete.test.js
+not ok 12 - tests/characterization/auth-registration-complete.test.js
+  ---
+  duration_ms: 1583.791375
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-complete.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-referral.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-referral.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-registration-referral.test.js
+not ok 13 - tests/characterization/auth-registration-referral.test.js
+  ---
+  duration_ms: 1598.598791
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-referral.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-send.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-send.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-registration-send.test.js
+not ok 14 - tests/characterization/auth-registration-send.test.js
+  ---
+  duration_ms: 1643.922125
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-send.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-uniqueness.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-uniqueness.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-registration-uniqueness.test.js
+not ok 15 - tests/characterization/auth-registration-uniqueness.test.js
+  ---
+  duration_ms: 1411.506167
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-uniqueness.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-verify.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-verify.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-registration-verify.test.js
+not ok 16 - tests/characterization/auth-registration-verify.test.js
+  ---
+  duration_ms: 1347.020334
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-registration-verify.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-user-detail.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/password-reset.controller.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/userRoutes/userRoutes.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/routes/indexRoute.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/index.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/helpers/app.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-user-detail.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/characterization/auth-user-detail.test.js
+not ok 17 - tests/characterization/auth-user-detail.test.js
+  ---
+  duration_ms: 1327.205666
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/characterization/auth-user-detail.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Unit: completeRegistration service
+    # Subtest: missing required field → AppError 400
+    ok 1 - missing required field → AppError 400
+      ---
+      duration_ms: 4.290542
+      type: 'test'
+      ...
+    # Subtest: invalid verification token → AppError 400
+    ok 2 - invalid verification token → AppError 400
+      ---
+      duration_ms: 2.310125
+      type: 'test'
+      ...
+    # Subtest: no used OTP record → AppError 400
+    ok 3 - no used OTP record → AppError 400
+      ---
+      duration_ms: 17.345583
+      type: 'test'
+      ...
+    # Subtest: bcrypt called with cost 12
+    ok 4 - bcrypt called with cost 12
+      ---
+      duration_ms: 44.013625
+      type: 'test'
+      ...
+    # Subtest: email absent → no email property on saved user data
+    ok 5 - email absent → no email property on saved user data
+      ---
+      duration_ms: 806.571667
+      type: 'test'
+      ...
+    # Subtest: ordering: applyReferrerReward completes before createPassenger
+    ok 6 - ordering: applyReferrerReward completes before createPassenger
+      ---
+      duration_ms: 629.258125
+      type: 'test'
+      ...
+    1..6
+ok 18 - Unit: completeRegistration service
+  ---
+  duration_ms: 1505.87975
+  type: 'test'
+  ...
+# Subtest: Service: missing emailOrPhone → AppError 400
+ok 19 - Service: missing emailOrPhone → AppError 400
+  ---
+  duration_ms: 46.511792
+  type: 'test'
+  ...
+# Subtest: Service: missing password → AppError 400
+ok 20 - Service: missing password → AppError 400
+  ---
+  duration_ms: 0.349417
+  type: 'test'
+  ...
+# Subtest: Service: repo lookup explosion → AppError 500 with .cause
+ok 21 - Service: repo lookup explosion → AppError 500 with .cause
+  ---
+  duration_ms: 0.272667
+  type: 'test'
+  ...
+# Subtest: Service: recordSuccessfulLogin explosion → AppError 500 with .cause
+ok 22 - Service: recordSuccessfulLogin explosion → AppError 500 with .cause
+  ---
+  duration_ms: 8.45575
+  type: 'test'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/password-reset-controller.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/password-reset-controller.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/unit/auth/password-reset-controller.test.js
+not ok 20 - tests/unit/auth/password-reset-controller.test.js
+  ---
+  duration_ms: 688.553958
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/password-reset-controller.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: Unit: registration controller — sendPhoneOTP
+    # Subtest: forwards phone and statusCode+responseBody unchanged
+    ok 1 - forwards phone and statusCode+responseBody unchanged
+      ---
+      duration_ms: 1.857083
+      type: 'test'
+      ...
+    # Subtest: service rejection reaches next via asyncHandler
+    ok 2 - service rejection reaches next via asyncHandler
+      ---
+      duration_ms: 0.275958
+      type: 'test'
+      ...
+    1..2
+ok 24 - Unit: registration controller — sendPhoneOTP
+  ---
+  duration_ms: 3.306125
+  type: 'test'
+  ...
+# Subtest: Unit: registration controller — verifyPhoneOTP
+    # Subtest: forwards phone and otp; passes statusCode+responseBody unchanged
+    ok 1 - forwards phone and otp; passes statusCode+responseBody unchanged
+      ---
+      duration_ms: 0.398917
+      type: 'test'
+      ...
+    # Subtest: service rejection reaches next
+    ok 2 - service rejection reaches next
+      ---
+      duration_ms: 0.202375
+      type: 'test'
+      ...
+    1..2
+ok 25 - Unit: registration controller — verifyPhoneOTP
+  ---
+  duration_ms: 0.962708
+  type: 'test'
+  ...
+# Subtest: Unit: registration controller — completeRegistration
+    # Subtest: forwards all body fields, ip, user-agent; passes statusCode+responseBody
+    ok 1 - forwards all body fields, ip, user-agent; passes statusCode+responseBody
+      ---
+      duration_ms: 0.349833
+      type: 'test'
+      ...
+    # Subtest: falls back to req.connection.remoteAddress when req.ip is falsy
+    ok 2 - falls back to req.connection.remoteAddress when req.ip is falsy
+      ---
+      duration_ms: 0.51625
+      type: 'test'
+      ...
+    # Subtest: service rejection reaches next
+    ok 3 - service rejection reaches next
+      ---
+      duration_ms: 0.487791
+      type: 'test'
+      ...
+    1..3
+ok 26 - Unit: registration controller — completeRegistration
+  ---
+  duration_ms: 9.089
+  type: 'test'
+  ...
+# Error creating referral history: Error: DB down
+#     at Object.createReferralHistory (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/registration-referral-service.test.js:64:72)
+#     at Object.createReferralHistoryRecord (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/registration/referral.service.js:56:22)
+#     at /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/registration-referral-service.test.js:67:23
+#     at waitForActual (node:assert:552:21)
+#     at Function.doesNotReject (node:assert:707:39)
+#     at TestContext.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/registration-referral-service.test.js:66:18)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.start (node:internal/test_runner/test:944:17)
+#     at TestContext.test (node:internal/test_runner/test:373:20)
+# Subtest: Unit: referral.service
+    # Subtest: invalid format → AppError 400
+    ok 1 - invalid format → AppError 400
+      ---
+      duration_ms: 1.719417
+      type: 'test'
+      ...
+    # Subtest: unknown code → AppError 400
+    ok 2 - unknown code → AppError 400
+      ---
+      duration_ms: 0.462042
+      type: 'test'
+      ...
+    # Subtest: self-referral → AppError 400
+    ok 3 - self-referral → AppError 400
+      ---
+      duration_ms: 0.449291
+      type: 'test'
+      ...
+    # Subtest: valid code → returns referredBy, yatrapoints=10, referrerUser
+    ok 4 - valid code → returns referredBy, yatrapoints=10, referrerUser
+      ---
+      duration_ms: 0.17475
+      type: 'test'
+      ...
+    # Subtest: createReferralHistoryRecord swallows failures
+    ok 5 - createReferralHistoryRecord swallows failures
+      ---
+      duration_ms: 6.008959
+      type: 'test'
+      ...
+    # Subtest: applyReferrerReward increments totalReferrals and yatrapoints then saves
+    ok 6 - applyReferrerReward increments totalReferrals and yatrapoints then saves
+      ---
+      duration_ms: 0.371
+      type: 'test'
+      ...
+    1..6
+ok 27 - Unit: referral.service
+  ---
+  duration_ms: 11.271083
+  type: 'test'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/request-password-reset-service.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/request-password-reset.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/request-password-reset-service.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/unit/auth/request-password-reset-service.test.js
+not ok 23 - tests/unit/auth/request-password-reset-service.test.js
+  ---
+  duration_ms: 553.155833
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/request-password-reset-service.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/reset-password.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/reset-password-service.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/reset-password.service.js:11:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/reset-password.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/reset-password-service.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/unit/auth/reset-password-service.test.js
+not ok 24 - tests/unit/auth/reset-password-service.test.js
+  ---
+  duration_ms: 647.011708
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/reset-password-service.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Send OTP Error: Phone number is required
+# Send OTP Error: Some DB error
+# Subtest: Unit: sendPhoneOTP service
+    # Subtest: missing phone → AppError 400
+    ok 1 - missing phone → AppError 400
+      ---
+      duration_ms: 4.37775
+      type: 'test'
+      ...
+    # Subtest: registered phone → generic 200, no data, createAndSendOTP NOT called
+    ok 2 - registered phone → generic 200, no data, createAndSendOTP NOT called
+      ---
+      duration_ms: 0.495833
+      type: 'test'
+      ...
+    # Subtest: OTP_SEND_BLOCKED → AppError 429
+    ok 3 - OTP_SEND_BLOCKED → AppError 429
+      ---
+      duration_ms: 0.626625
+      type: 'test'
+      ...
+    # Subtest: unknown failure → legacy 500 AppError
+    ok 4 - unknown failure → legacy 500 AppError
+      ---
+      duration_ms: 1.869334
+      type: 'test'
+      ...
+    # Subtest: success → statusCode 200 with expiresIn
+    ok 5 - success → statusCode 200 with expiresIn
+      ---
+      duration_ms: 0.817625
+      type: 'test'
+      ...
+    1..5
+ok 30 - Unit: sendPhoneOTP service
+  ---
+  duration_ms: 10.195708
+  type: 'test'
+  ...
+# Subtest: Auth: Session Controller
+    # Subtest: refreshAccessToken - success via cookie
+    ok 1 - refreshAccessToken - success via cookie
+      ---
+      duration_ms: 5.987458
+      type: 'test'
+      ...
+    # Subtest: refreshAccessToken - error calls next
+    ok 2 - refreshAccessToken - error calls next
+      ---
+      duration_ms: 0.819791
+      type: 'test'
+      ...
+    # Subtest: logout - success with refresh token and userId
+    ok 3 - logout - success with refresh token and userId
+      ---
+      duration_ms: 1.084167
+      type: 'test'
+      ...
+    # Subtest: logout - clearCookie is called before logoutSession
+    ok 4 - logout - clearCookie is called before logoutSession
+      ---
+      duration_ms: 0.692292
+      type: 'test'
+      ...
+    # Subtest: logout - cookie cleared even without a token
+    ok 5 - logout - cookie cleared even without a token
+      ---
+      duration_ms: 0.517041
+      type: 'test'
+      ...
+    1..5
+ok 31 - Auth: Session Controller
+  ---
+  duration_ms: 11.892375
+  type: 'test'
+  ...
+# Subtest: Auth: Session Service – logout
+    # Subtest: logoutSession – without token returns 200
+    ok 1 - logoutSession – without token returns 200
+      ---
+      duration_ms: 1.181417
+      type: 'test'
+      ...
+    # Subtest: logoutSession – with token calls revokeRefreshToken
+    ok 2 - logoutSession – with token calls revokeRefreshToken
+      ---
+      duration_ms: 0.286458
+      type: 'test'
+      ...
+    # Subtest: logoutSession – with userId calls incrementTokenVersion
+    ok 3 - logoutSession – with userId calls incrementTokenVersion
+      ---
+      duration_ms: 0.476584
+      type: 'test'
+      ...
+    # Subtest: logoutSession – successful incrementTokenVersion still returns 200
+    ok 4 - logoutSession – successful incrementTokenVersion still returns 200
+      ---
+      duration_ms: 0.48025
+      type: 'test'
+      ...
+    # Subtest: logoutSession – revoke failure still returns 200
+    ok 5 - logoutSession – revoke failure still returns 200
+      ---
+      duration_ms: 4.3705
+      type: 'test'
+      ...
+    # Subtest: logoutSession – repository failure still returns 200
+    ok 6 - logoutSession – repository failure still returns 200
+      ---
+      duration_ms: 0.401125
+      type: 'test'
+      ...
+    # Subtest: logoutSession – increment not attempted after revoke failure
+    ok 7 - logoutSession – increment not attempted after revoke failure
+      ---
+      duration_ms: 0.371292
+      type: 'test'
+      ...
+    1..7
+ok 32 - Auth: Session Service – logout
+  ---
+  duration_ms: 10.150792
+  type: 'test'
+  ...
+# Subtest: Auth: Session Service – refresh
+    # Subtest: refreshSession – missing refresh token → AppError 400
+    ok 1 - refreshSession – missing refresh token → AppError 400
+      ---
+      duration_ms: 2.212167
+      type: 'test'
+      ...
+    # Subtest: refreshSession – success returns tokens and 200
+    ok 2 - refreshSession – success returns tokens and 200
+      ---
+      duration_ms: 0.279625
+      type: 'test'
+      ...
+    # Subtest: refreshSession – INVALID_REFRESH_TOKEN → AppError 401
+    ok 3 - refreshSession – INVALID_REFRESH_TOKEN → AppError 401
+      ---
+      duration_ms: 0.582083
+      type: 'test'
+      ...
+    # Subtest: refreshSession – REFRESH_TOKEN_EXPIRED → AppError 401
+    ok 4 - refreshSession – REFRESH_TOKEN_EXPIRED → AppError 401
+      ---
+      duration_ms: 0.469
+      type: 'test'
+      ...
+    # Subtest: refreshSession – USER_NOT_FOUND → AppError 401
+    ok 5 - refreshSession – USER_NOT_FOUND → AppError 401
+      ---
+      duration_ms: 0.66075
+      type: 'test'
+      ...
+    # Subtest: refreshSession – ACCOUNT_DEACTIVATED → AppError 403
+    ok 6 - refreshSession – ACCOUNT_DEACTIVATED → AppError 403
+      ---
+      duration_ms: 0.271625
+      type: 'test'
+      ...
+    # Subtest: refreshSession – ACCOUNT_BANNED → AppError 403
+    ok 7 - refreshSession – ACCOUNT_BANNED → AppError 403
+      ---
+      duration_ms: 0.332625
+      type: 'test'
+      ...
+    # Subtest: refreshSession – ROLE_REVOKED → AppError 403
+    ok 8 - refreshSession – ROLE_REVOKED → AppError 403
+      ---
+      duration_ms: 0.203875
+      type: 'test'
+      ...
+    # Subtest: refreshSession – unknown error → legacy 500 AppError with cause
+    ok 9 - refreshSession – unknown error → legacy 500 AppError with cause
+      ---
+      duration_ms: 0.499958
+      type: 'test'
+      ...
+    1..9
+ok 33 - Auth: Session Service – refresh
+  ---
+  duration_ms: 9.056333
+  type: 'test'
+  ...
+# Subtest: Unit: verifyPhoneOTP service
+    # Subtest: missing phone → AppError 400
+    ok 1 - missing phone → AppError 400
+      ---
+      duration_ms: 1.732083
+      type: 'test'
+      ...
+    # Subtest: missing otp → AppError 400
+    ok 2 - missing otp → AppError 400
+      ---
+      duration_ms: 0.348958
+      type: 'test'
+      ...
+    # Subtest: non-6-digit OTP → AppError 400
+    ok 3 - non-6-digit OTP → AppError 400
+      ---
+      duration_ms: 0.470833
+      type: 'test'
+      ...
+    # Subtest: invalid OTP result → AppError 400 with service error message
+    ok 4 - invalid OTP result → AppError 400 with service error message
+      ---
+      duration_ms: 0.575916
+      type: 'test'
+      ...
+    # Subtest: race condition: phone registered after OTP → AppError 400
+    ok 5 - race condition: phone registered after OTP → AppError 400
+      ---
+      duration_ms: 0.837291
+      type: 'test'
+      ...
+    # Subtest: success → statusCode 200 + verificationToken string
+    ok 6 - success → statusCode 200 + verificationToken string
+      ---
+      duration_ms: 4.384167
+      type: 'test'
+      ...
+    1..6
+ok 34 - Unit: verifyPhoneOTP service
+  ---
+  duration_ms: 10.93775
+  type: 'test'
+  ...
+# node:internal/modules/cjs/loader:1404
+#   throw err;
+#   ^
+# Error: Cannot find module '../../../../shared/errors/app-error'
+# Require stack:
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/verify-reset-otp.service.js
+# - /Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/verify-reset-otp-service.test.js
+#     at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)
+#     at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)
+#     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)
+#     at Function._load (node:internal/modules/cjs/loader:1211:37)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Module.require (node:internal/modules/cjs/loader:1487:12)
+#     at require (node:internal/modules/helpers:135:16)
+#     at Object.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/verify-reset-otp.service.js:9:18)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14) {
+#   code: 'MODULE_NOT_FOUND',
+#   requireStack: [
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/src/modules/auth/password-reset/verify-reset-otp.service.js',
+#     '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/verify-reset-otp-service.test.js'
+#   ]
+# }
+# Node.js v22.15.1
+# Subtest: tests/unit/auth/verify-reset-otp-service.test.js
+not ok 30 - tests/unit/auth/verify-reset-otp-service.test.js
+  ---
+  duration_ms: 528.490708
+  type: 'test'
+  location: '/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/auth/verify-reset-otp-service.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: AppError
+    # Subtest: sets statusCode and message
+    ok 1 - sets statusCode and message
+      ---
+      duration_ms: 0.651291
+      type: 'test'
+      ...
+    # Subtest: is an instance of Error
+    ok 2 - is an instance of Error
+      ---
+      duration_ms: 0.290292
+      type: 'test'
+      ...
+    # Subtest: isOperational is always true
+    ok 3 - isOperational is always true
+      ---
+      duration_ms: 0.122625
+      type: 'test'
+      ...
+    # Subtest: name is AppError
+    ok 4 - name is AppError
+      ---
+      duration_ms: 0.120125
+      type: 'test'
+      ...
+    # Subtest: defaults statusCode to 500 when not supplied
+    ok 5 - defaults statusCode to 500 when not supplied
+      ---
+      duration_ms: 0.2395
+      type: 'test'
+      ...
+    # Subtest: optional responseBody is stored exactly
+    ok 6 - optional responseBody is stored exactly
+      ---
+      duration_ms: 0.789667
+      type: 'test'
+      ...
+    # Subtest: responseBody defaults to null when not supplied
+    ok 7 - responseBody defaults to null when not supplied
+      ---
+      duration_ms: 0.153541
+      type: 'test'
+      ...
+    # Subtest: optional errorCode is stored
+    ok 8 - optional errorCode is stored
+      ---
+      duration_ms: 6.522
+      type: 'test'
+      ...
+    # Subtest: errorCode defaults to null when not supplied
+    ok 9 - errorCode defaults to null when not supplied
+      ---
+      duration_ms: 0.498708
+      type: 'test'
+      ...
+    # Subtest: optional cause is stored
+    ok 10 - optional cause is stored
+      ---
+      duration_ms: 0.345083
+      type: 'test'
+      ...
+    # Subtest: cause defaults to null when not supplied
+    ok 11 - cause defaults to null when not supplied
+      ---
+      duration_ms: 0.124875
+      type: 'test'
+      ...
+    # Subtest: has a stack trace
+    ok 12 - has a stack trace
+      ---
+      duration_ms: 0.278333
+      type: 'test'
+      ...
+    1..12
+ok 36 - AppError
+  ---
+  duration_ms: 13.579542
+  type: 'test'
+  ...
+# Subtest: asyncHandler
+    # Subtest: passes req/res/next to the wrapped handler
+    ok 1 - passes req/res/next to the wrapped handler
+      ---
+      duration_ms: 1.039625
+      type: 'test'
+      ...
+    # Subtest: does not call next when handler resolves successfully
+    ok 2 - does not call next when handler resolves successfully
+      ---
+      duration_ms: 0.379833
+      type: 'test'
+      ...
+    # Subtest: forwards rejection to next(error)
+    ok 3 - forwards rejection to next(error)
+      ---
+      duration_ms: 0.2355
+      type: 'test'
+      ...
+    # Subtest: returns the result of the handler
+    ok 4 - returns the result of the handler
+      ---
+      duration_ms: 0.17675
+      type: 'test'
+      ...
+    1..4
+ok 37 - asyncHandler
+  ---
+  duration_ms: 3.272958
+  type: 'test'
+  ...
+# 2026-07-17 04:47:42 [31merror[39m: [31mUnhandled server error[39m {"service":"shuvmarg-api","env":"development","error":"internal","path":"/test","method":"GET"}
+# Subtest: errorHandler
+    # Subtest: unknown error — production — returns exact generic 500 body
+    ok 1 - unknown error — production — returns exact generic 500 body
+      ---
+      duration_ms: 21.013333
+      type: 'test'
+      ...
+# 2026-07-17 04:47:42 [31merror[39m: [31mUnhandled server error[39m
+# Error: dev detail
+#     at TestContext.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/shared/error-handler.test.js:59:28)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.start (node:internal/test_runner/test:944:17)
+#     at TestContext.test (node:internal/test_runner/test:373:20)
+#     at TestContext.<anonymous> (/Users/dipeshchaudhary/Downloads/Shuvmarg/shuvmarg_backend_refactor/tests/unit/shared/error-handler.test.js:58:11)
+#     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3) {"service":"shuvmarg-api","env":"development","error":"dev detail","path":"/test","method":"GET"}
+    # Subtest: unknown error — development — includes error.message
+    ok 2 - unknown error — development — includes error.message
+      ---
+      duration_ms: 5.260792
+      type: 'test'
+      ...
+# 2026-07-17 04:47:42 [31merror[39m: [31mUnhandled server error[39m {"service":"shuvmarg-api","env":"development","error":"secret","path":"/test","method":"GET"}
+    # Subtest: unknown error — production — does not include error field
+    ok 3 - unknown error — production — does not include error field
+      ---
+      duration_ms: 5.088916
+      type: 'test'
+      ...
+# 2026-07-17 04:47:42 [31merror[39m: [31mUnhandled server error[39m {"service":"shuvmarg-api","env":"development","error":"forbidden","path":"/test","method":"GET"}
+    # Subtest: AppError — custom statusCode is used
+    ok 4 - AppError — custom statusCode is used
+      ---
+      duration_ms: 6.591875
+      type: 'test'
+      ...
+# 2026-07-17 04:47:42 [31merror[39m: [31mUnhandled server error[39m {"service":"shuvmarg-api","env":"development","error":"msg","path":"/test","method":"GET"}
+    # Subtest: AppError — responseBody is returned exactly
+    ok 5 - AppError — responseBody is returned exactly
+      ---
+      duration_ms: 4.258125
+      type: 'test'
+      ...
+# 2026-07-17 04:47:42 [31merror[39m: [31mUnhandled server error[39m {"service":"shuvmarg-api","env":"development","error":"banned","path":"/test","method":"GET"}
+    # Subtest: AppError — errorCode included when provided
+    ok 6 - AppError — errorCode included when provided
+      ---
+      duration_ms: 3.00025
+      type: 'test'
+      ...
+# 2026-07-17 04:47:42 [31merror[39m: [31mUnhandled server error[39m {"service":"shuvmarg-api","env":"development","error":"forbidden","path":"/test","method":"GET"}
+    # Subtest: AppError — errorCode absent when not provided
+    ok 7 - AppError — errorCode absent when not provided
+      ---
+      duration_ms: 2.313791
+      type: 'test'
+      ...
+    # Subtest: headersSent — delegates error to next without writing a response
+    ok 8 - headersSent — delegates error to next without writing a response
+      ---
+      duration_ms: 0.335375
+      type: 'test'
+      ...
+# 2026-07-17 04:47:42 [31merror[39m: [test-id-123] [31mUnhandled server error[39m {"service":"shuvmarg-api","env":"development","error":"log smoke","path":"/test","method":"GET"}
+    # Subtest: requestId from req is logged (smoke test — no throw)
+    ok 9 - requestId from req is logged (smoke test — no throw)
+      ---
+      duration_ms: 2.6995
+      type: 'test'
+      ...
+    1..9
+ok 38 - errorHandler
+  ---
+  duration_ms: 53.178834
+  type: 'test'
+  ...
+# Subtest: respond
+    # Subtest: sets the HTTP status code
+    ok 1 - sets the HTTP status code
+      ---
+      duration_ms: 0.835125
+      type: 'test'
+      ...
+    # Subtest: sets the response body exactly
+    ok 2 - sets the response body exactly
+      ---
+      duration_ms: 0.8445
+      type: 'test'
+      ...
+    # Subtest: does not inject extra fields
+    ok 3 - does not inject extra fields
+      ---
+      duration_ms: 0.422459
+      type: 'test'
+      ...
+    # Subtest: passes a 404 status through unchanged
+    ok 4 - passes a 404 status through unchanged
+      ---
+      duration_ms: 0.146417
+      type: 'test'
+      ...
+    # Subtest: passes a 500 status through unchanged
+    ok 5 - passes a 500 status through unchanged
+      ---
+      duration_ms: 0.14725
+      type: 'test'
+      ...
+    # Subtest: preserves legacy status:false shape without renaming
+    ok 6 - preserves legacy status:false shape without renaming
+      ---
+      duration_ms: 0.277417
+      type: 'test'
+      ...
+    1..6
+ok 39 - respond
+  ---
+  duration_ms: 4.661167
+  type: 'test'
+  ...
+1..39
+# tests 121
+# suites 0
+# pass 100
+# fail 21
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5689.513292

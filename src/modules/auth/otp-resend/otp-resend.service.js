@@ -46,30 +46,22 @@ const handlePasswordReset = async (phone) => {
 
 /**
  * Send OTP and build the success response.
+ * No error mapping here — caller owns the try/catch.
  *
  * @param {string} phone - raw submitted phone
  * @param {string} otpPurpose - resolved purpose
- * @returns {{ statusCode, responseBody }}
+ * @returns {Promise<{ statusCode, responseBody }>}
  */
 const sendOtpAndRespond = async (phone, otpPurpose) => {
-  try {
-    const result = await otpHelper.createAndSendOTP(phone, otpPurpose);
-    return {
-      statusCode: 200,
-      responseBody: {
-        success: true,
-        message: 'New OTP sent successfully!',
-        data: { expiresIn: result.expiresIn },
-      },
-    };
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    if (error.message && error.message.startsWith('OTP_SEND_BLOCKED:')) {
-      const minutesLeft = parseInt(error.message.split(':')[1], 10) || 10;
-      throw errors.otpBlockedError(minutesLeft);
-    }
-    throw errors.resendFailedError(error);
-  }
+  const result = await otpHelper.createAndSendOTP(phone, otpPurpose);
+  return {
+    statusCode: 200,
+    responseBody: {
+      success: true,
+      message: 'New OTP sent successfully!',
+      data: { expiresIn: result.expiresIn },
+    },
+  };
 };
 
 /**
@@ -83,24 +75,39 @@ const sendOtpAndRespond = async (phone, otpPurpose) => {
  *   5. Call createAndSendOTP
  *   6. Map successful response / error
  *
+ * Error mapping covers the entire orchestration so that failures in
+ * isPhoneRegistered, normalizePhone, findPasswordResetUser, or
+ * createAndSendOTP all produce the correct endpoint-specific responses.
+ *
  * @param {{ phone: string, purpose: string|undefined }} input
  * @returns {Promise<{ statusCode: number, responseBody: object }>}
  */
 const resendOtp = async ({ phone, purpose }) => {
-  policy.requirePhone(phone);
-  const otpPurpose = policy.resolvePurpose(purpose);
+  try {
+    policy.requirePhone(phone);
+    const otpPurpose = policy.resolvePurpose(purpose);
 
-  if (otpPurpose === 'REGISTRATION') {
-    await handleRegistration(phone);
+    if (otpPurpose === 'REGISTRATION') {
+      await handleRegistration(phone);
+    }
+
+    if (otpPurpose === 'PASSWORD_RESET') {
+      const check = await handlePasswordReset(phone);
+      if (check && check.earlyReturn) return check.earlyReturn;
+    }
+
+    // ACCOUNT_ACTIVATION: no account precondition — proceed directly
+    return await sendOtpAndRespond(phone, otpPurpose);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+
+    if (error.message && error.message.startsWith('OTP_SEND_BLOCKED:')) {
+      const minutesLeft = parseInt(error.message.split(':')[1], 10) || 10;
+      throw errors.otpBlockedError(minutesLeft);
+    }
+
+    throw errors.resendFailedError(error);
   }
-
-  if (otpPurpose === 'PASSWORD_RESET') {
-    const check = await handlePasswordReset(phone);
-    if (check && check.earlyReturn) return check.earlyReturn;
-  }
-
-  // ACCOUNT_ACTIVATION: no account precondition — proceed directly
-  return sendOtpAndRespond(phone, otpPurpose);
 };
 
 module.exports = { resendOtp };

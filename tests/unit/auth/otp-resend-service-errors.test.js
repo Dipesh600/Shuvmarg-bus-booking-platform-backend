@@ -91,17 +91,28 @@ test('Unit: OTP Resend Service – ACCOUNT_ACTIVATION, success & errors', async 
     } finally { restoreAll(r); }
   });
 
-  await t.test('unknown errors → exact legacy 500 AppError, internal message not exposed', async () => {
+  await t.test('unknown errors → exact legacy 500 AppError body, internal message not exposed', async () => {
     const r = [];
     patch(phoneGuard, 'isPhoneRegistered', async () => ({ registered: false }), r);
     patch(otpHelper, 'createAndSendOTP', async () => { throw new Error('DB exploded'); }, r);
     try {
       await assert.rejects(
         () => service.resendOtp({ phone: '9800003060', purpose: 'REGISTRATION' }),
-        (e) => e instanceof AppError && e.statusCode === 500 &&
-          e.responseBody.message === 'Failed to resend OTP. Please try again.' &&
-          e.responseBody.success === false
+        (e) => {
+          assert.ok(e instanceof AppError, 'must be AppError');
+          assert.equal(e.statusCode, 500);
+          assert.deepEqual(e.responseBody, {
+            success: false,
+            message: 'Failed to resend OTP. Please try again.',
+          });
+          assert.ok(
+            !JSON.stringify(e.responseBody).includes('DB exploded'),
+            'internal error message must not be exposed',
+          );
+          return true;
+        }
       );
     } finally { restoreAll(r); }
   });
 });
+

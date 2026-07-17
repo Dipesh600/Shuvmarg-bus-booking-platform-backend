@@ -3,6 +3,9 @@
 /**
  * AppError factories for the resendOtp endpoint.
  * All errors flow through asyncHandler → global error handler.
+ *
+ * Purpose validation (invalid purpose → 400) is owned by otp-resend.policy.js
+ * and is not duplicated here.
  */
 const AppError = require('../../../shared/errors/app-error');
 
@@ -11,12 +14,6 @@ const registeredPhoneError = () =>
     success: false,
     message: 'This phone number is already registered.',
     errorCode: 'PHONE_ALREADY_REGISTERED',
-  });
-
-const invalidPurposeError = () =>
-  new AppError('Invalid OTP purpose', 400, {
-    success: false,
-    message: 'Invalid OTP purpose.',
   });
 
 const otpBlockedError = (minutesLeft) =>
@@ -35,7 +32,6 @@ const resendFailedError = (cause) =>
 
 module.exports = {
   registeredPhoneError,
-  invalidPurposeError,
   otpBlockedError,
   resendFailedError,
 };
