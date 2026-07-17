@@ -5,6 +5,7 @@ const loginModule = require("../../src/modules/auth/login");
 const registrationModule = require("../../src/modules/auth/registration");
 const sessionController = require("../../src/modules/auth/session/index.js");
 const passwordResetModule = require("../../src/modules/auth/password-reset");
+const otpResendModule = require("../../src/modules/auth/otp-resend");
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
@@ -50,7 +51,7 @@ router.post("/login",              loginLimiter, loginModule.login);            
 router.post("/requestPasswordReset", otpRateLimiter, passwordResetModule.requestPasswordReset); // ← OTP rate limit
 router.post("/verifyOtpForReset",  otpVerifyLimiter, passwordResetModule.verifyOtpForReset); // ← phone-keyed verify limit
 router.post("/resetPassword",      otpVerifyLimiter, passwordResetModule.resetPassword);    // ← phone-keyed verify limit
-router.post("/resendOtp",          otpRateLimiter, authCoontroller.resendOtp);        // ← OTP rate limit
+router.post("/resendOtp",          otpRateLimiter, otpResendModule.resendOtp);        // ← OTP rate limit
 
 // Token management (refresh, logout, force password change)
 router.post("/refresh",            sessionController.refreshAccessToken);               // ← No auth needed (uses refresh token)

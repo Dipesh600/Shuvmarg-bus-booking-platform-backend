@@ -10,7 +10,7 @@
     "_note_filesOver150": "Violation = strictly over 150 lines (151+). Exactly 150 is compliant."
   },
   "controllers/ticketController/ticketController.js": 2109,
-  "controllers/authControllers.js/authController.js": 619,
+  "controllers/authControllers.js/authController.js": 545,
   "controllers/ticketController/paymentBookingController.js": 1154,
   "services/routeDiscoveryService.js": 1108,
   "controllers/authControllers.js/agentAuthController.js": 986,

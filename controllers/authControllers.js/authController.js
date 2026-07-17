@@ -5,82 +5,9 @@ const jwt = require("jsonwebtoken");
 const emailManager = require("../../emailManager/emailManager.js");
 const generateOtpEmailContent = require("../../handlers/otp-template.js");
 const cloudinary = require("../../handlers/cloudinary.js");
-const { isPhoneRegistered, normalizePhone } = require("../../utils/phoneGuard.js");
-const { createAndSendOTP, verifyOTPCode } = require("../../utils/otpHelper.js");
+const { verifyOTPCode } = require("../../utils/otpHelper.js");
 const { validatePassword } = require("../../utils/passwordValidator.js");
 
-
-// Resend OTP — works for both registration (phone not in DB) and password reset (phone in DB)
-const resendOtp = async (req, res) => {
-  try {
-    const { phone, purpose } = req.body;
-
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone number is required!",
-      });
-    }
-
-    // Validate purpose
-    const validPurposes = ["REGISTRATION", "PASSWORD_RESET", "ACCOUNT_ACTIVATION"];
-    const otpPurpose = purpose || "REGISTRATION";
-    if (!validPurposes.includes(otpPurpose)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid OTP purpose.",
-      });
-    }
-
-    // For REGISTRATION resend, phone must NOT exist in User table
-    if (otpPurpose === "REGISTRATION") {
-      const { registered } = await isPhoneRegistered(phone);
-      if (registered) {
-        return res.status(409).json({
-          success: false,
-          message: "This phone number is already registered.",
-          errorCode: "PHONE_ALREADY_REGISTERED",
-        });
-      }
-    }
-
-    // For PASSWORD_RESET resend, phone MUST exist in User table
-    if (otpPurpose === "PASSWORD_RESET") {
-      const user = await User.findOne({ phone: normalizePhone(phone) });
-      if (!user) {
-        // Don't reveal whether user exists
-        return res.status(200).json({
-          success: true,
-          message: "If an account exists, a new OTP has been sent.",
-        });
-      }
-    }
-
-    // Use centralized OTP helper
-    const result = await createAndSendOTP(phone, otpPurpose);
-
-    return res.status(200).json({
-      success: true,
-      message: "New OTP sent successfully!",
-      data: { expiresIn: result.expiresIn },
-    });
-  } catch (error) {
-    if (error.message && error.message.startsWith("OTP_SEND_BLOCKED:")) {
-      const minutesLeft = parseInt(error.message.split(":")[1], 10) || 10;
-      return res.status(429).json({
-        success: false,
-        message: `Too many OTP requests. Please wait ${minutesLeft} minute(s) before trying again.`,
-        errorCode: "OTP_SEND_BLOCKED",
-        retryAfterMinutes: minutesLeft,
-      });
-    }
-    console.error("Resend OTP Error:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to resend OTP. Please try again.",
-    });
-  }
-};
 // Change Profile Picture
 const UpdateProfilePic = async (req, res) => {
   try {
@@ -610,7 +537,6 @@ const changeForcePassword = async (req, res) => {
 };
 
 module.exports = {
-  resendOtp,
   UpdateProfilePic,
   updateProfile,
   updatePassword,
