@@ -1,10 +1,8 @@
 const User = require("../../models/userModel.js");
 const OTP = require("../../models/otpModel.js");
-const bcrypt = require("bcryptjs");
 const emailManager = require("../../emailManager/emailManager.js");
 const generateOtpEmailContent = require("../../handlers/otp-template.js");
 const cloudinary = require("../../handlers/cloudinary.js");
-const { validatePassword } = require("../../utils/passwordValidator.js");
 
 // Change Profile Picture
 const UpdateProfilePic = async (req, res) => {
@@ -237,136 +235,6 @@ const updateProfile = async (req, res) => {
   }
 };
 
-// Update Password
-const updatePassword = async (req, res) => {
-  try {
-    const userId = req.userInfo?.id;
-    if (!userId) {
-      return res.status(401).json({
-        status: false,
-        message: "Unauthorized: User not authenticated",
-      });
-    }
-
-    const { oldPassword, newPassword } = req.body;
-
-    // Validate required fields
-    if (!oldPassword || !newPassword) {
-      return res.status(400).json({
-        status: false,
-        message: "Both old password and new password are required",
-      });
-    }
-
-    // Validate new password strength
-    const passwordCheck = validatePassword(newPassword);
-    if (!passwordCheck.valid) {
-      return res.status(400).json({
-        status: false,
-        message: passwordCheck.errors[0],
-        errors: passwordCheck.errors,
-      });
-    }
-
-    // Find user with password field included
-    const user = await User.findById(userId).select("+password");
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    // Verify old password
-    const isOldPasswordValid = await bcrypt.compare(oldPassword, user.password);
-    if (!isOldPasswordValid) {
-      const MAX_ATTEMPTS = 5;
-      const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
-
-      // Single atomic aggregation pipeline update:
-      // - Always increments failedLoginAttempts by 1
-      // - Conditionally sets lockedUntil and increments tokenVersion
-      //   when the NEW count (after increment) reaches MAX_ATTEMPTS.
-      // No second round-trip, no race window.
-      const updatedUser = await User.findByIdAndUpdate(
-        user._id,
-        [
-          {
-            $set: {
-              failedLoginAttempts: { $add: ["$failedLoginAttempts", 1] },
-              lockedUntil: {
-                $cond: {
-                  if: { $gte: [{ $add: ["$failedLoginAttempts", 1] }, MAX_ATTEMPTS] },
-                  then: new Date(Date.now() + LOCK_DURATION_MS),
-                  else: "$lockedUntil",
-                },
-              },
-              tokenVersion: {
-                $cond: {
-                  if: { $gte: [{ $add: ["$failedLoginAttempts", 1] }, MAX_ATTEMPTS] },
-                  then: { $add: ["$tokenVersion", 1] },
-                  else: "$tokenVersion",
-                },
-              },
-            },
-          },
-        ],
-        { new: true }
-      );
-
-      const newFailedCount = updatedUser.failedLoginAttempts;
-      const remaining = MAX_ATTEMPTS - newFailedCount;
-      const message =
-        remaining > 0
-          ? `Current password is incorrect. ${remaining} attempt(s) remaining.`
-          : "Too many failed attempts. Account locked for 15 minutes and all sessions revoked.";
-
-      return res.status(401).json({ success: false, message });
-    }
-
-
-    // Clear failed attempts on successful password verification
-    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
-      await User.findByIdAndUpdate(user._id, {
-        $set: { failedLoginAttempts: 0, lockedUntil: null }
-      });
-    }
-
-    // Check if new password is different from old password
-    const isSamePassword = await bcrypt.compare(newPassword, user.password);
-    if (isSamePassword) {
-      return res.status(400).json({
-        status: false,
-        message: "New password must be different from current password",
-      });
-    }
-
-    // Hash new password
-    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
-
-    // Update password in database
-    await User.findByIdAndUpdate(userId, {
-      password: hashedNewPassword,
-    });
-
-    // Revoke ALL refresh tokens — forces re-login on all devices
-    const { revokeAllUserTokens } = require("../../utils/tokenService.js");
-    await revokeAllUserTokens(userId);
-
-    return res.status(200).json({
-      status: true,
-      message: "Password updated successfully! Please login again on all devices.",
-    });
-
-  } catch (error) {
-    console.error("Update Password Error:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Internal server error",
-    });
-  }
-};
-
 // Get User Detail
 const getUserDetail = async (req, res) => {
   try {
@@ -415,6 +283,5 @@ const getUserDetail = async (req, res) => {
 module.exports = {
   UpdateProfilePic,
   updateProfile,
-  updatePassword,
   getUserDetail,
 };
