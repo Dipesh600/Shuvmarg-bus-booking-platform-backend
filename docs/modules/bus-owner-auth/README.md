@@ -34,7 +34,7 @@ These contracts are bus-owner-specific. Do not assume they match [general authen
 ## Verification references
 
 - Base branch: `dev`
-- Verified commit: `73bd387aa0cc9f79154c6b6a24071f68be9b09bd`
+- Verified commit: `c2dbc49bad53e52d85713a0696bfc79cfb912e79`
 - Mount: `routes/indexRoute.js`
 - Routes: `routes/authRoutes/busOwnerAuthRoutes.js`
 - Entry point: `src/modules/bus-owner/auth/session/index.js`
