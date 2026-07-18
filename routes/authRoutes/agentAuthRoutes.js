@@ -12,10 +12,10 @@
 const express = require("express");
 const router  = express.Router();
 const rateLimit = require("express-rate-limit");
-const agentAuth     = require("../../controllers/authControllers.js/agentAuthController.js");
 const agentSession  = require("../../src/modules/agent/auth/session");
 const agentLogin    = require("../../src/modules/agent/auth/login");
 const agentRegistration = require("../../src/modules/agent/auth/registration");
+const agentPasswordReset = require("../../src/modules/agent/auth/password-reset");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
 
@@ -46,10 +46,10 @@ router.post("/login", loginRateLimiter, agentLogin.login);
 router.post("/refresh", agentSession.refresh);
 router.post("/logout",  agentSession.logout);
 
-// ── Password reset (3-step, mirrors registration flow) ───────────────────────
-router.post("/requestPasswordReset", otpRateLimiter, agentAuth.requestPasswordReset);
-router.post("/verifyOtpForReset",    otpVerifyLimiter, agentAuth.verifyOtpForReset); // ← phone-keyed verify limit
-router.post("/resetPassword",        otpVerifyLimiter, agentAuth.resetPassword);      // ← phone-keyed verify limit
-router.post("/resendOtpForReset",    otpRateLimiter, agentAuth.resendOtpForReset);
+// ── Password reset ───────────────────────────────────────────────────────────
+router.post("/requestPasswordReset", otpRateLimiter, agentPasswordReset.requestPasswordReset);
+router.post("/verifyOtpForReset",    otpVerifyLimiter, agentPasswordReset.verifyOtpForReset); // ← phone-keyed verify limit
+router.post("/resetPassword",        otpVerifyLimiter, agentPasswordReset.resetPassword);      // ← phone-keyed verify limit
+router.post("/resendOtpForReset",    otpRateLimiter, agentPasswordReset.resendOtpForReset);
 
 module.exports = router;
