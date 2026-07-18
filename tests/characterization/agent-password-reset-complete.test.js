@@ -12,6 +12,7 @@ const app = require('../helpers/app');
 const User = require('../../models/userModel');
 const otpHelper = require('../../utils/otpHelper');
 const tokenService = require('../../utils/tokenService');
+const passwordValidator = require('../../utils/passwordValidator');
 
 const patch = (obj, key, fn) => {
   const old = obj[key];
@@ -82,7 +83,41 @@ test('agent password reset completion characterization', async (t) => {
     } finally { restores.reverse().forEach((fn) => fn()); }
   });
 
-  await t.test('invalid OTP, weak password and unexpected failure map exactly', async () => {
+  await t.test('weak password fails after OTP consumption and before persistence', async () => {
+    const p = phone(6);
+    await user(p);
+    const weakPassword = 'weak';
+    const expected = passwordValidator.validatePassword(weakPassword);
+    const order = [];
+    const restores = [
+      patch(otpHelper, 'verifyOTPCode', async (otpPhone, otp, purpose, consume) => {
+        assert.equal(otpPhone, p);
+        assert.equal(otp, '123456');
+        assert.equal(purpose, 'AGENT_PASSWORD_RESET');
+        assert.equal(consume, true);
+        order.push('otp');
+        return { valid: true };
+      }),
+      patch(bcrypt, 'genSalt', async () => order.push('salt')),
+      patch(bcrypt, 'hash', async () => order.push('hash')),
+      patch(User.prototype, 'save', async () => order.push('save')),
+      patch(tokenService, 'revokeAllUserTokens', async () => order.push('revoke')),
+      patch(User, 'findByIdAndUpdate', async () => order.push('increment')),
+    ];
+    try {
+      const res = await request(app)
+        .post('/api/auth/agent/resetPassword')
+        .send({ phone: p, otp: '123456', newPassword: weakPassword });
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body, {
+        success: false,
+        message: expected.errors?.[0] || expected.message,
+      });
+      assert.deepEqual(order, ['otp']);
+    } finally { restores.reverse().forEach((fn) => fn()); }
+  });
+
+  await t.test('invalid OTP and unexpected OTP-helper failure map exactly', async () => {
     await user(phone(6));
     let restore = patch(otpHelper, 'verifyOTPCode', async () => ({ valid: false, error: 'bad otp' }));
     try {
