@@ -15,6 +15,7 @@ const rateLimit = require("express-rate-limit");
 const agentAuth     = require("../../controllers/authControllers.js/agentAuthController.js");
 const agentSession  = require("../../src/modules/agent/auth/session");
 const agentLogin    = require("../../src/modules/agent/auth/login");
+const agentRegistration = require("../../src/modules/agent/auth/registration");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
 
@@ -33,10 +34,10 @@ const loginRateLimiter = rateLimit({
 });
 
 // ── 3-step self-registration ──────────────────────────────────────────────────
-router.post("/sendOTP",    otpRateLimiter, agentAuth.sendOTP);
-router.post("/verifyOTP",  otpVerifyLimiter, agentAuth.verifyOTP);     // ← phone-keyed verify limit
-router.post("/register",   agentAuth.register);
-router.post("/resendOTP",  otpRateLimiter, agentAuth.resendOTP);
+router.post("/sendOTP",    otpRateLimiter, agentRegistration.sendOTP);
+router.post("/verifyOTP",  otpVerifyLimiter, agentRegistration.verifyOTP);     // ← phone-keyed verify limit
+router.post("/register",   agentRegistration.register);
+router.post("/resendOTP",  otpRateLimiter, agentRegistration.resendOTP);
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 router.post("/login", loginRateLimiter, agentLogin.login);

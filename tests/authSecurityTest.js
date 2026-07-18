@@ -176,9 +176,9 @@ async function runUnitTests() {
     assert("busOwnerAuth: has sendOTP", typeof busOwnerAuth.sendOTP === "function");
     assert("busOwnerAuth: has register", typeof busOwnerAuth.register === "function");
 
-    const agentAuth = require("../controllers/authControllers.js/agentAuthController.js");
-    assert("agentAuth: has sendOTP", typeof agentAuth.sendOTP === "function");
-    assert("agentAuth: has register", typeof agentAuth.register === "function");
+    const agentRegistration = require("../src/modules/agent/auth/registration");
+    assert("agentRegistration: has sendOTP", typeof agentRegistration.sendOTP === "function");
+    assert("agentRegistration: has register", typeof agentRegistration.register === "function");
 
     const activateAuth = require("../controllers/authControllers.js/activateAccountController.js");
     assert("activateAuth: has sendActivationOTP", typeof activateAuth.sendActivationOTP === "function");
