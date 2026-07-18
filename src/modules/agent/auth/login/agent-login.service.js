@@ -15,8 +15,8 @@ const requireInputs = ({ rawPhone, password }) => {
 
 const assertAccountAllowed = (user) => {
   if (user.deletedAt) throw errors.deletedAccountError();
-  if (policy.hasActiveLock(user)) {
-    throw errors.lockedAccountError(policy.lockMinutes(user.lockedUntil));
+  if (policy.hasActiveLock(user, new Date())) {
+    throw errors.lockedAccountError(policy.lockMinutes(user.lockedUntil, Date.now()));
   }
   if (user.status === 'banned') {
     throw errors.bannedAccountError(policy.bannedMessage(user.suspensionReason));
@@ -33,7 +33,7 @@ const handleInvalidPassword = async (user) => {
   const updatedUser = await repository.incrementFailedLoginAttempts(user._id);
   const count = updatedUser.failedLoginAttempts;
   if (policy.shouldLock(count)) {
-    await repository.lockAccount(user._id, policy.lockUntilDate());
+    await repository.lockAccount(user._id, policy.lockUntilDate(Date.now()));
   }
   const remaining = policy.attemptsRemaining(count);
   if (remaining > 0) throw errors.invalidPasswordAttemptsError(remaining);

@@ -7,11 +7,11 @@ const resolveRoles = (user) => (
   user.roles && user.roles.length > 0 ? user.roles : [user.role]
 );
 
-const hasActiveLock = (user, now = new Date()) => (
+const hasActiveLock = (user, now) => (
   Boolean(user.lockedUntil && user.lockedUntil > now)
 );
 
-const lockMinutes = (lockedUntil, nowMs = Date.now()) => (
+const lockMinutes = (lockedUntil, nowMs) => (
   Math.ceil((lockedUntil - nowMs) / 60000)
 );
 
@@ -29,7 +29,7 @@ const inactiveMessage = (reason) => (
 
 const attemptsRemaining = (failedCount) => MAX_ATTEMPTS - failedCount;
 const shouldLock = (failedCount) => failedCount >= MAX_ATTEMPTS;
-const lockUntilDate = () => new Date(Date.now() + LOCK_DURATION_MS);
+const lockUntilDate = (nowMs) => new Date(nowMs + LOCK_DURATION_MS);
 
 module.exports = {
   MAX_ATTEMPTS,

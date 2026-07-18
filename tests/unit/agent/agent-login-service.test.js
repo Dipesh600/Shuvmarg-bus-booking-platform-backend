@@ -65,19 +65,47 @@ test('agent-login service preserves orchestration branches', async (t) => {
   await t.test('invalid password increments, optionally locks, and stops tokens', async () => {
     const restore = [];
     const order = [];
+    const realNow = Date.now;
     patch(repository, 'findLoginUser', async () => { order.push('lookup'); return user(); }, restore);
     patch(bcrypt, 'compare', async () => { order.push('compare'); return false; }, restore);
     patch(repository, 'incrementFailedLoginAttempts', async () => {
       order.push('inc'); return { failedLoginAttempts: 5 };
     }, restore);
-    patch(repository, 'lockAccount', async () => { order.push('lock'); }, restore);
+    patch(repository, 'lockAccount', async (id, lockedUntil) => {
+      order.push(`lock:${id}:${lockedUntil.getTime() - realNow()}`);
+    }, restore);
     patch(tokenService, 'generateTokenPair', async () => { order.push('token'); }, restore);
     try {
       await assert.rejects(() => service.login({ rawPhone: 'p', password: 'bad' }), {
         statusCode: 401,
         responseBody: { success: false, message: 'Too many failed attempts. Account locked for 15 minutes.' },
       });
-      assert.deepEqual(order, ['lookup', 'compare', 'inc', 'lock']);
+      assert.equal(order[0], 'lookup');
+      assert.equal(order[1], 'compare');
+      assert.equal(order[2], 'inc');
+      assert.match(order[3], /^lock:u1:/);
+      const delta = Number(order[3].split(':')[2]);
+      assert.ok(delta > 14.9 * 60 * 1000 && delta <= 15 * 60 * 1000);
+    } finally {
+      restore.reverse().forEach((fn) => fn());
+    }
+  });
+
+  await t.test('active lock uses explicit service time and exact response', async () => {
+    const restore = [];
+    patch(repository, 'findLoginUser', async () => (
+      user({ lockedUntil: new Date(Date.now() + 61_000) })
+    ), restore);
+    patch(bcrypt, 'compare', async () => assert.fail('password compare must not run'), restore);
+    try {
+      await assert.rejects(() => service.login({ rawPhone: 'p', password: 'pw' }), {
+        statusCode: 429,
+        responseBody: {
+          success: false,
+          message: 'Account temporarily locked due to too many failed attempts. Try again in 2 minute(s).',
+          errorCode: 'ACCOUNT_LOCKED',
+        },
+      });
     } finally {
       restore.reverse().forEach((fn) => fn());
     }

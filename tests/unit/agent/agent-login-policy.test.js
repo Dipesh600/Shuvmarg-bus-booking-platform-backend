@@ -9,7 +9,9 @@ test('agent-login policy preserves pure legacy decisions', () => {
   assert.deepEqual(policy.resolveRoles({ roles: [], role: 'agent' }), ['agent']);
   assert.equal(policy.hasActiveLock({ lockedUntil: new Date(2000) }, new Date(3000)), false);
   assert.equal(policy.hasActiveLock({ lockedUntil: new Date(4000) }, new Date(3000)), true);
+  assert.equal(policy.hasActiveLock({ lockedUntil: new Date(3000) }, new Date(3000)), false);
   assert.equal(policy.lockMinutes(new Date(61_000), 0), 2);
+  assert.equal(policy.lockUntilDate(1_000).getTime(), 1_000 + policy.LOCK_DURATION_MS);
   assert.equal(policy.bannedMessage(null), 'Your account has been suspended. Please contact support.');
   assert.equal(policy.bannedMessage('fraud'), 'Your account has been suspended. Reason: fraud');
   assert.equal(policy.inactiveMessage(null), 'Your account has been deactivated. Please contact support.');
