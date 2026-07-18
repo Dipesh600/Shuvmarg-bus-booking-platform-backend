@@ -18,6 +18,7 @@ const express = require("express");
 const rateLimit = require("express-rate-limit");
 const router = express.Router();
 const busOwnerAuth = require("../../controllers/authControllers.js/busOwnerAuthController.js");
+const busOwnerSession = require("../../src/modules/bus-owner/auth/session");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
 
@@ -55,7 +56,7 @@ router.post("/resetPassword",     otpVerifyLimiter, busOwnerAuth.resetPassword);
 router.post("/resendOtpForReset", otpRateLimiter, busOwnerAuth.resendOtpForReset);
 
 // Session management (no JWT required — these operate on refresh tokens)
-router.post("/refresh", busOwnerAuth.refresh);
-router.post("/logout",  busOwnerAuth.logout);
+router.post("/refresh", busOwnerSession.refresh);
+router.post("/logout",  busOwnerSession.logout);
 
 module.exports = router;
