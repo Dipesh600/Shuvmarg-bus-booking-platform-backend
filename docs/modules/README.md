@@ -20,3 +20,4 @@ Authentication documentation:
 
 - [General authentication](auth/README.md)
 - [Agent authentication](agent-auth/README.md)
+- [Bus-owner authentication](bus-owner-auth/README.md)

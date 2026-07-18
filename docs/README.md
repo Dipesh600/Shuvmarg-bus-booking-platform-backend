@@ -12,6 +12,7 @@ The handbook currently covers authentication modules. Future domains can be adde
 |---|---|
 | [General authentication modules](modules/auth/README.md) | Passenger/general authentication flows mounted under `/api`. |
 | [Agent authentication modules](modules/agent-auth/README.md) | Agent-specific authentication flows mounted under `/api/auth/agent`. |
+| [Bus-owner authentication modules](modules/bus-owner-auth/README.md) | Bus-owner-specific authentication flows mounted under `/api/auth/busowner`. |
 
 ## Documentation maintenance rule
 
