@@ -14,6 +14,7 @@ const router  = express.Router();
 const rateLimit = require("express-rate-limit");
 const agentAuth     = require("../../controllers/authControllers.js/agentAuthController.js");
 const agentSession  = require("../../src/modules/agent/auth/session");
+const agentLogin    = require("../../src/modules/agent/auth/login");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
 
@@ -38,7 +39,7 @@ router.post("/register",   agentAuth.register);
 router.post("/resendOTP",  otpRateLimiter, agentAuth.resendOTP);
 
 // ── Login ─────────────────────────────────────────────────────────────────────
-router.post("/login", loginRateLimiter, agentAuth.login);
+router.post("/login", loginRateLimiter, agentLogin.login);
 
 // ── Token management ──────────────────────────────────────────────────────────
 router.post("/refresh", agentSession.refresh);
