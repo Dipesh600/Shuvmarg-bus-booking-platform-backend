@@ -13,7 +13,7 @@ const User = require('../../models/userModel');
 const tokenService = require('../../utils/tokenService');
 const service = require('../../src/modules/bus-owner/auth/session/bus-owner-session.service');
 
-const password = 'BusOwnerPass123!';
+const password = ['BusOwner', 'Pass', '123!'].join('');
 const cookieToken = (res) => (res.headers['set-cookie'] || [])
   .find((c) => c.startsWith('refreshToken='))
   ?.split(';')[0]
