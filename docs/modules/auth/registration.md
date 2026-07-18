@@ -33,7 +33,7 @@ Unauthenticated passenger clients using `/api` registration routes.
 
 ## Request and response walkthrough
 
-`sendPhoneOTP` reads `phone`. Missing phone returns `400` with `status: false` and `Phone number is required!`. Existing phones receive the neutral `200` response without OTP data. New phones call `createAndSendOTP(phone, "REGISTRATION")` and return the same neutral message plus `data.expiresIn`. `OTP_SEND_BLOCKED` maps to `429`.
+`sendPhoneOTP` reads `phone`. Missing phone returns `400` with `success: false` and `Phone number is required!`. Existing phones receive the neutral `200` response without OTP data. New phones call `createAndSendOTP(phone, "REGISTRATION")` and return the same neutral message plus `data.expiresIn`. `OTP_SEND_BLOCKED` maps to `429`.
 
 `verifyPhoneOTP` reads `phone` and `otp`, strips non-digits from `otp`, requires six digits, verifies `REGISTRATION`, checks that the phone was not registered in the meantime, and returns a signed `verificationToken`.
 
@@ -85,7 +85,7 @@ Characterization tests cover send, verify, completion, uniqueness, success, and 
 
 ## Known limitations or inconsistencies
 
-The module uses `status` response fields for many contracts, while some related auth modules use `success`.
+The registration module mixes response flags. Successful send, verify, and complete responses use `status: true`; missing-phone and `OTP_SEND_BLOCKED` responses from `sendPhoneOTP` use `success: false`; most verify and completion errors use `status: false`.
 
 ## Safe extension guidance
 
