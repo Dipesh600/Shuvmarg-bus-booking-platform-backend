@@ -29,7 +29,7 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
 ## Verification references
 
 - Base branch: `dev`
-- Verified source: `refactor/agent-application-status` working tree
+- Verified source: `refactor/agent-application-draft` working tree
 - Mount: `routes/indexRoute.js`
 - Routes: `routes/agentRoute/agentRoute.js`
 - Entry points:
@@ -68,6 +68,11 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `utils/logger.js`
 - Tests:
   - `tests/characterization/agent-application-draft.test.js`
+  - `tests/unit/agent/application-draft/agent-application-draft-controller.test.js`
+  - `tests/unit/agent/application-draft/agent-application-draft-service.test.js`
+  - `tests/unit/agent/application-draft/agent-application-draft-repository.test.js`
+  - `tests/unit/agent/application-draft/draft-updater.test.js`
+  - `tests/unit/agent/application-draft/agent-application-draft-policy.test.js`
   - `tests/characterization/agent-application-status.test.js`
   - `tests/unit/agent/application-status/agent-application-status-controller.test.js`
   - `tests/unit/agent/application-status/agent-application-status-service.test.js`
@@ -86,6 +91,7 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `tests/unit/agent/dashboard/agent-dashboard-repository.test.js`
   - `tests/unit/agent/dashboard/agent-dashboard-mapper.test.js`
 - Validation commands:
+  - `npm run test:agent-application-draft`
   - `npm run test:agent-application-status`
   - `npm run test:agent-profile`
   - `npm run test:agent-dashboard`

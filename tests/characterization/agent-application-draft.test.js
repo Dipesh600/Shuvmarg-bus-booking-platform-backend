@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
+const crypto = require('node:crypto');
 
 const db = require('../helpers/db');
 const app = require('../helpers/app');
@@ -11,7 +12,8 @@ const User = require('../../models/userModel');
 const Agent = require('../../models/agentModel');
 const fs = require('node:fs');
 
-const generateValidToken = (p) => jwt.sign({ ...p, name: p.name || 'Test User', roles: [p.role], activeRole: p.role, purpose: 'access' }, process.env.SECRET_KEY || 'test_secret_key', { expiresIn: '1h' });
+const buildRuntimeValue = (prefix) => `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+const generateValidToken = (p) => jwt.sign({ ...p, name: p.name || 'Test User', roles: [p.role], activeRole: p.role, purpose: 'access' }, process.env.SECRET_KEY || buildRuntimeValue('jwt-fallback'), { expiresIn: '1h' });
 
 test('agent application draft characterization', async (t) => {
     await db.connect();
@@ -20,7 +22,8 @@ test('agent application draft characterization', async (t) => {
 
     const seedUser = async (role = 'agent') => {
         const n = Math.floor(Math.random() * 100000).toString();
-        return User.create({ name: `Agent Draft ${n}`, email: `agent-draft-${n}@example.test`, phone: `98777${n.padStart(5, '0')}`, password: 'password123', role, roles: [role], status: 'active' });
+        const pw = buildRuntimeValue('pw');
+        return User.create({ name: `Agent Draft ${n}`, email: `agent-draft-${n}@example.test`, phone: `98777${n.padStart(5, '0')}`, password: pw, role, roles: [role], status: 'active' });
     };
 
     await t.test('route keeps middleware order without requireApprovedAgent', async () => {
