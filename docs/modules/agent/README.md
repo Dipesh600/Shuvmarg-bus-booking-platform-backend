@@ -14,7 +14,8 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
 | Profile | Modularized under `src/modules/agent/profile` | [Profile](profile.md) |
 | Application status | Modularized under `src/modules/agent/application-status` | [Application status](application-status.md) |
 | Application draft | Modularized under `src/modules/agent/application-draft` | [Application draft](application-draft.md) |
-| Document upload and submit | Legacy controller-backed flow | Not documented in this pass |
+| Application document upload | Modularized under `src/modules/agent/application-document-upload` | [Application document upload](application-document-upload.md) |
+| Application submit | Legacy controller-backed flow | Not documented in this pass |
 | Document proxy | Legacy controller-backed flow | Not documented in this pass |
 
 ## Endpoint ownership
@@ -25,11 +26,12 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
 | GET | `/api/agent/profile` | `auth`, `verifyRoleFromDB`, `agentMiddleware`, `requireApprovedAgent` | `agentProfile.getProfile` |
 | GET | `/api/agent/dashboard` | `auth`, `verifyRoleFromDB`, `agentMiddleware`, `requireApprovedAgent` | `agentDashboard.getDashboard` |
 | POST | `/api/agent/application/save` | `auth`, `verifyRoleFromDB`, `agentMiddleware` | `agentApplicationDraft.saveApplicationDraft` |
+| POST | `/api/agent/application/document` | `auth`, `verifyRoleFromDB`, `agentMiddleware` | `agentApplicationDocumentUpload.uploadDocument` |
 
 ## Verification references
 
 - Base branch: `dev`
-- Verified source: `refactor/agent-application-draft` working tree
+- Verified source: `refactor/agent-application-document-upload` working tree
 - Mount: `routes/indexRoute.js`
 - Routes: `routes/agentRoute/agentRoute.js`
 - Entry points:
@@ -37,6 +39,7 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `src/modules/agent/dashboard/index.js`
   - `src/modules/agent/application-status/index.js`
   - `src/modules/agent/application-draft/index.js`
+  - `src/modules/agent/application-document-upload/index.js`
 - Implementation:
   - `src/modules/agent/application-status/agent-application-status.controller.js`
   - `src/modules/agent/application-status/agent-application-status.service.js`
@@ -57,6 +60,12 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `src/modules/agent/dashboard/agent-dashboard.service.js`
   - `src/modules/agent/dashboard/agent-dashboard.repository.js`
   - `src/modules/agent/dashboard/agent-dashboard.mapper.js`
+  - `src/modules/agent/application-document-upload/agent-application-document-upload.controller.js`
+  - `src/modules/agent/application-document-upload/agent-application-document-upload.service.js`
+  - `src/modules/agent/application-document-upload/agent-application-document-upload.repository.js`
+  - `src/modules/agent/application-document-upload/agent-application-document-upload.policy.js`
+  - `src/modules/agent/application-document-upload/document-type.policy.js`
+  - `src/modules/agent/application-document-upload/document-storage.service.js`
 - Middleware inspected:
   - `middleware/authMiddleware.js`
   - `middleware/verifyRoleFromDB.js`
@@ -90,8 +99,17 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `tests/unit/agent/dashboard/agent-dashboard-service.test.js`
   - `tests/unit/agent/dashboard/agent-dashboard-repository.test.js`
   - `tests/unit/agent/dashboard/agent-dashboard-mapper.test.js`
+  - `tests/characterization/agent-application-document-upload.test.js`
+  - `tests/characterization/agent-application-document-upload-upload.test.js`
+  - `tests/unit/agent/application-document-upload/agent-application-document-upload-controller.test.js`
+  - `tests/unit/agent/application-document-upload/agent-application-document-upload-service.test.js`
+  - `tests/unit/agent/application-document-upload/agent-application-document-upload-service-success.test.js`
+  - `tests/unit/agent/application-document-upload/agent-application-document-upload-repository.test.js`
+  - `tests/unit/agent/application-document-upload/agent-application-document-upload-policy.test.js`
+  - `tests/unit/agent/application-document-upload/document-type-policy.test.js`
 - Validation commands:
   - `npm run test:agent-application-draft`
   - `npm run test:agent-application-status`
   - `npm run test:agent-profile`
   - `npm run test:agent-dashboard`
+  - `npm run test:agent-application-document-upload`
