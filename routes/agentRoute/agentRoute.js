@@ -10,6 +10,7 @@ const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { agentMiddleware } = require("../../middleware/checkRole.js");
 const requireApprovedAgent = require("../../middleware/requireApprovedAgent.js");
 const agentcon = require("../../controllers/agentController/agentController.js");
+const agentApplicationDraft = require("../../src/modules/agent/application-draft");
 const agentApplicationStatus = require("../../src/modules/agent/application-status");
 const agentProfile = require("../../src/modules/agent/profile");
 const agentDashboard = require("../../src/modules/agent/dashboard");
@@ -21,7 +22,7 @@ const agentDashboard = require("../../src/modules/agent/dashboard");
  * @desc    Save the agent application as a draft
  * @access  Private (Agent role required, accessible in DRAFT or MORE_INFO status)
  */
-router.post("/application/save", auth, verifyRoleFromDB, agentMiddleware, agentcon.saveApplicationDraft);
+router.post("/application/save", auth, verifyRoleFromDB, agentMiddleware, agentApplicationDraft.saveApplicationDraft);
 
 /**
  * @route   POST /api/agent/application/document

@@ -13,7 +13,8 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
 | Dashboard | Modularized under `src/modules/agent/dashboard` | [Dashboard](dashboard.md) |
 | Profile | Modularized under `src/modules/agent/profile` | [Profile](profile.md) |
 | Application status | Modularized under `src/modules/agent/application-status` | [Application status](application-status.md) |
-| Application save, document upload and submit | Legacy controller-backed flow | Not documented in this pass |
+| Application draft | Modularized under `src/modules/agent/application-draft` | [Application draft](application-draft.md) |
+| Document upload and submit | Legacy controller-backed flow | Not documented in this pass |
 | Document proxy | Legacy controller-backed flow | Not documented in this pass |
 
 ## Endpoint ownership
@@ -23,6 +24,7 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
 | GET | `/api/agent/application/status` | `auth`, `verifyRoleFromDB`, `agentMiddleware` | `agentApplicationStatus.getApplicationStatus` |
 | GET | `/api/agent/profile` | `auth`, `verifyRoleFromDB`, `agentMiddleware`, `requireApprovedAgent` | `agentProfile.getProfile` |
 | GET | `/api/agent/dashboard` | `auth`, `verifyRoleFromDB`, `agentMiddleware`, `requireApprovedAgent` | `agentDashboard.getDashboard` |
+| POST | `/api/agent/application/save` | `auth`, `verifyRoleFromDB`, `agentMiddleware` | `agentApplicationDraft.saveApplicationDraft` |
 
 ## Verification references
 
@@ -34,6 +36,7 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `src/modules/agent/profile/index.js`
   - `src/modules/agent/dashboard/index.js`
   - `src/modules/agent/application-status/index.js`
+  - `src/modules/agent/application-draft/index.js`
 - Implementation:
   - `src/modules/agent/application-status/agent-application-status.controller.js`
   - `src/modules/agent/application-status/agent-application-status.service.js`
@@ -41,6 +44,11 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `src/modules/agent/application-status/agent-application-status.mapper.js`
   - `src/modules/agent/application-status/document-url.service.js`
   - `src/modules/agent/application-status/reapply-policy.js`
+  - `src/modules/agent/application-draft/agent-application-draft.controller.js`
+  - `src/modules/agent/application-draft/agent-application-draft.service.js`
+  - `src/modules/agent/application-draft/agent-application-draft.repository.js`
+  - `src/modules/agent/application-draft/agent-application-draft.policy.js`
+  - `src/modules/agent/application-draft/draft-updater.js`
   - `src/modules/agent/profile/agent-profile.controller.js`
   - `src/modules/agent/profile/agent-profile.service.js`
   - `src/modules/agent/profile/agent-profile.repository.js`
@@ -59,6 +67,7 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `models/userModel.js`
   - `utils/logger.js`
 - Tests:
+  - `tests/characterization/agent-application-draft.test.js`
   - `tests/characterization/agent-application-status.test.js`
   - `tests/unit/agent/application-status/agent-application-status-controller.test.js`
   - `tests/unit/agent/application-status/agent-application-status-service.test.js`
