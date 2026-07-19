@@ -15,7 +15,7 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
 | Application status | Modularized under `src/modules/agent/application-status` | [Application status](application-status.md) |
 | Application draft | Modularized under `src/modules/agent/application-draft` | [Application draft](application-draft.md) |
 | Application document upload | Modularized under `src/modules/agent/application-document-upload` | [Application document upload](application-document-upload.md) |
-| Application submit | Legacy controller-backed flow | Not documented in this pass |
+| Application submit | Modularized under `src/modules/agent/application-submit` | [Application submit](application-submit.md) |
 | Document proxy | Legacy controller-backed flow | Not documented in this pass |
 
 ## Endpoint ownership
@@ -40,6 +40,7 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `src/modules/agent/application-status/index.js`
   - `src/modules/agent/application-draft/index.js`
   - `src/modules/agent/application-document-upload/index.js`
+  - `src/modules/agent/application-submit/index.js`
 - Implementation:
   - `src/modules/agent/application-status/agent-application-status.controller.js`
   - `src/modules/agent/application-status/agent-application-status.service.js`
@@ -66,6 +67,12 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `src/modules/agent/application-document-upload/agent-application-document-upload.policy.js`
   - `src/modules/agent/application-document-upload/document-type.policy.js`
   - `src/modules/agent/application-document-upload/document-storage.service.js`
+  - `src/modules/agent/application-submit/agent-application-submit.controller.js`
+  - `src/modules/agent/application-submit/agent-application-submit.service.js`
+  - `src/modules/agent/application-submit/agent-application-submit.repository.js`
+  - `src/modules/agent/application-submit/agent-application-submit.policy.js`
+  - `src/modules/agent/application-submit/reapply-window.policy.js`
+  - `src/modules/agent/application-submit/application-completeness.validator.js`
 - Middleware inspected:
   - `middleware/authMiddleware.js`
   - `middleware/verifyRoleFromDB.js`
@@ -107,9 +114,13 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `tests/unit/agent/application-document-upload/agent-application-document-upload-repository.test.js`
   - `tests/unit/agent/application-document-upload/agent-application-document-upload-policy.test.js`
   - `tests/unit/agent/application-document-upload/document-type-policy.test.js`
+  - `tests/characterization/agent-application-submit.test.js`
+  - `tests/unit/agent/application-submit/application-completeness.validator.test.js`
+  - `tests/unit/agent/application-submit/reapply-window.policy.test.js`
 - Validation commands:
   - `npm run test:agent-application-draft`
   - `npm run test:agent-application-status`
   - `npm run test:agent-profile`
   - `npm run test:agent-dashboard`
   - `npm run test:agent-application-document-upload`
+  - `npm run test:agent-application-submit`

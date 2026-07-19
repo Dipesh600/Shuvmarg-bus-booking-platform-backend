@@ -9,9 +9,9 @@ const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { agentMiddleware } = require("../../middleware/checkRole.js");
 const requireApprovedAgent = require("../../middleware/requireApprovedAgent.js");
-const agentcon = require("../../controllers/agentController/agentController.js");
-const agentApplicationDraft = require('../../src/modules/agent/application-draft');
 const agentApplicationStatus = require('../../src/modules/agent/application-status');
+const agentApplicationDraft = require('../../src/modules/agent/application-draft');
+const agentApplicationSubmit = require('../../src/modules/agent/application-submit');
 const agentApplicationDocumentUpload = require('../../src/modules/agent/application-document-upload');
 const agentProfile = require('../../src/modules/agent/profile');
 const agentDashboard = require('../../src/modules/agent/dashboard');
@@ -37,7 +37,7 @@ router.post("/application/document", auth, verifyRoleFromDB, agentMiddleware, ag
  * @desc    Submit the completed agent application for admin review
  * @access  Private (Agent role required, accessible in DRAFT or MORE_INFO status)
  */
-router.post("/application/submit", auth, verifyRoleFromDB, agentMiddleware, agentcon.submitApplication);
+router.post("/application/submit", auth, verifyRoleFromDB, agentMiddleware, agentApplicationSubmit.submitApplication);
 
 /**
  * @route   GET /api/agent/application/status
