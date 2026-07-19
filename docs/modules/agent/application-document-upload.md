@@ -80,7 +80,7 @@ agents/{agentObjectId}/kyc/{document-type}/
   "message": "pan_card uploaded successfully.",
   "data": {
     "documentType": "pan_card",
-    "previewUrl": "https://shuvmarg-bucket.s3.ap-south-1.amazonaws.com/agents/507f1f77bcf86cd799439011/kyc/pan-card/1734567890_file.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...",
+    "previewUrl": "<presigned URL returned by getPresignedUrl(fileKey)>",
     "wasCompressed": false,
     "originalSize": 102400,
     "compressedSize": 102400
