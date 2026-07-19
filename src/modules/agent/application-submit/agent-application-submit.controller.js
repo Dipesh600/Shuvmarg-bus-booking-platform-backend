@@ -19,7 +19,7 @@ const submitApplication = async (req, res) => {
             if (result.errorCode) responsePayload.errorCode = result.errorCode;
             if (result.hoursLeft) responsePayload.hoursLeft = result.hoursLeft;
             if (result.errors) responsePayload.errors = result.errors;
-            
+
             return res.status(result.status).json(responsePayload);
         }
 

@@ -7,7 +7,7 @@ const validator = require('./application-completeness.validator.js');
 
 const processReapply = (agent) => {
     const reapplyStatus = reapplyPolicy.getReapplyStatus(agent);
-    
+
     if (reapplyStatus.isPermanentlyRejected) {
         return {
             success: false,
@@ -16,7 +16,7 @@ const processReapply = (agent) => {
             errorCode: "PERMANENTLY_REJECTED",
         };
     }
-    
+
     if (reapplyStatus.isTooSoon) {
         return {
             success: false,
@@ -26,27 +26,13 @@ const processReapply = (agent) => {
             hoursLeft: reapplyStatus.hoursLeft,
         };
     }
-    
+
     // Reset to DRAFT so they can edit and resubmit
     agent.applicationStatus = "DRAFT";
     return null;
 };
 
-const processSubmit = async (userId, termsAccepted) => {
-    const agent = await repository.findAgentByUserId(userId);
-    if (!agent) {
-        return {
-            success: false,
-            status: 404,
-            message: "No application found. Please start your application first.",
-        };
-    }
-
-    if (agent.applicationStatus === "REJECTED") {
-        const rejectionError = processReapply(agent);
-        if (rejectionError) return rejectionError;
-    }
-
+const validateSubmitRequest = (agent, termsAccepted) => {
     if (!policy.isSubmittableStatus(agent.applicationStatus)) {
         return {
             success: false,
@@ -72,7 +58,10 @@ const processSubmit = async (userId, termsAccepted) => {
             errors: validationResult.errors,
         };
     }
+    return null;
+};
 
+const processSuccessMutation = async (agent) => {
     agent.applicationStatus = "PENDING";
     agent.submittedAt       = new Date();
     agent.termsAcceptedAt   = new Date();
@@ -94,7 +83,30 @@ const processSubmit = async (userId, termsAccepted) => {
     };
 };
 
+const processSubmit = async (userId, termsAccepted) => {
+    const agent = await repository.findAgentByUserId(userId);
+    if (!agent) {
+        return {
+            success: false,
+            status: 404,
+            message: "No application found. Please start your application first.",
+        };
+    }
+
+    if (agent.applicationStatus === "REJECTED") {
+        const rejectionError = processReapply(agent);
+        if (rejectionError) return rejectionError;
+    }
+
+    const validationError = validateSubmitRequest(agent, termsAccepted);
+    if (validationError) return validationError;
+
+    return processSuccessMutation(agent);
+};
+
 module.exports = {
     processSubmit,
     processReapply,
+    validateSubmitRequest,
+    processSuccessMutation,
 };

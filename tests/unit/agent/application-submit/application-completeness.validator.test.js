@@ -43,7 +43,7 @@ test('application-completeness.validator', async (t) => {
     assert.equal(result.isValid, false);
     assert.equal(result.errors.length, 1);
     assert.equal(result.errors[0], 'Business name is required for your agent type.');
-    
+
     agent.businessName = 'My Business';
     assert.equal(validateCompleteness(agent).isValid, true);
   });

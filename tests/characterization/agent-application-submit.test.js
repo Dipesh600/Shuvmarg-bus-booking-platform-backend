@@ -51,7 +51,7 @@ test('agent application submit characterization', async (t) => {
     const routeFile = fs.readFileSync('routes/agentRoute/agentRoute.js', 'utf8');
     assert.match(routeFile, /router\.post\("\/application\/submit", auth, verifyRoleFromDB, agentMiddleware, agentApplicationSubmit\.submitApplication\)/);
     assert.equal((await request(app).post('/api/agent/application/submit')).status, 401);
-    
+
     const passenger = await seedUser('passenger');
     const wrongRole = await submitApp(tokenFor(passenger, 'passenger'), { termsAccepted: true });
     assert.equal(wrongRole.status, 403);
@@ -78,10 +78,10 @@ test('agent application submit characterization', async (t) => {
 
   await t.test('returns 403 if permanently rejected', async () => {
     const user = await seedUser();
-    await Agent.create({ 
-      user: user._id, 
+    await Agent.create({
+      user: user._id,
       applicationStatus: 'REJECTED',
-      isPermanentlyRejected: true 
+      isPermanentlyRejected: true
     });
     const res = await submitApp(tokenFor(user), { termsAccepted: true });
     assert.equal(res.status, 403);
@@ -91,8 +91,8 @@ test('agent application submit characterization', async (t) => {
 
   await t.test('returns 429 if rejected and under 24 hours', async () => {
     const user = await seedUser();
-    await Agent.create({ 
-      user: user._id, 
+    await Agent.create({
+      user: user._id,
       applicationStatus: 'REJECTED',
       rejectedAt: new Date(Date.now() - 1 * 60 * 60 * 1000) // 1 hour ago
     });
@@ -122,66 +122,4 @@ test('agent application submit characterization', async (t) => {
     assert.equal(res.body.errors.includes('citizenship front document is required.'), true);
   });
 
-  await t.test('submits successfully when perfectly valid', async () => {
-    const user = await seedUser();
-    const agent = await Agent.create({
-      user: user._id,
-      agentId: 'AGT-123456',
-      applicationStatus: 'DRAFT',
-      district: 'Kathmandu',
-      municipality: 'KMC',
-      placeName: 'Thamel',
-      operationType: 'individual',
-      shopAddress: 'Thamel-29',
-      citizenshipNumber: '123-456',
-      panNumber: '987654',
-      documents: [
-          { type: 'citizenship_front', url: 'url1', fileKey: 'key1' },
-          { type: 'citizenship_back', url: 'url2', fileKey: 'key2' },
-          { type: 'pan_card', url: 'url3', fileKey: 'key3' }
-      ]
-    });
-    
-    const res = await submitApp(tokenFor(user), { termsAccepted: true });
-    assert.equal(res.status, 200);
-    assert.equal(res.body.success, true);
-    assert.equal(res.body.data.applicationStatus, 'PENDING');
-    assert.equal(res.body.data.agentId, 'AGT-123456');
-    assert.equal(typeof res.body.data.submittedAt, 'string');
-    
-    const updated = await Agent.findById(agent._id);
-    assert.equal(updated.applicationStatus, 'PENDING');
-    assert.equal(updated.submittedAt != null, true);
-    assert.equal(updated.termsAcceptedAt != null, true);
-    assert.equal(updated.rejectionReason, null);
-    assert.equal(updated.moreInfoRequest, null);
-    assert.equal(updated.moreInfoRequestedAt, null);
-  });
-
-  await t.test('submits successfully and resets if rejected > 24 hrs ago', async () => {
-    const user = await seedUser();
-    const agent = await Agent.create({
-      user: user._id,
-      agentId: 'AGT-123456',
-      applicationStatus: 'REJECTED',
-      rejectedAt: new Date(Date.now() - 25 * 60 * 60 * 1000), // 25 hours ago
-      district: 'Kathmandu',
-      municipality: 'KMC',
-      placeName: 'Thamel',
-      operationType: 'individual',
-      shopAddress: 'Thamel-29',
-      citizenshipNumber: '123-456',
-      panNumber: '987654',
-      documents: [
-          { type: 'citizenship_front', url: 'url1', fileKey: 'key1' },
-          { type: 'citizenship_back', url: 'url2', fileKey: 'key2' },
-          { type: 'pan_card', url: 'url3', fileKey: 'key3' }
-      ]
-    });
-
-    const res = await submitApp(tokenFor(user), { termsAccepted: true });
-    assert.equal(res.status, 200);
-    const updated = await Agent.findById(agent._id);
-    assert.equal(updated.applicationStatus, 'PENDING');
-  });
 });

@@ -4,21 +4,6 @@
 
 This module handles the final submission of the KYC application by an agent to the admin team for review.
 
-## Architecture
-
-The module follows the strict separation of concerns required for the refactor, dividing the process into controllers, services, repositories, validators, and policies.
-
-### Entry Point
-- `index.js`: Exposes the `submitApplication` controller method.
-
-### Layers
-- **Controller** (`agent-application-submit.controller.js`): Handles HTTP requests, extracts parameters, invokes the service layer, and maps responses/errors to HTTP status codes.
-- **Service** (`agent-application-submit.service.js`): Orchestrates business logic, evaluating submission readiness based on current application status, reapply windows, and form completeness.
-- **Validator** (`application-completeness.validator.js`): Validates that the agent has provided all required fields (location, business details, identification numbers, and mandatory documents) before submission is allowed.
-- **Policy** (`agent-application-submit.policy.js`): Enforces the rule that applications can only be submitted if their status is `DRAFT` or `MORE_INFO`.
-- **Policy** (`reapply-window.policy.js`): Handles the logic for the 24-hour waiting period after a rejection before an agent can re-submit, as well as permanent rejections.
-- **Repository** (`agent-application-submit.repository.js`): Encapsulates Mongoose interactions for retrieving and updating the agent document.
-
 ## Endpoint
 
 ### `POST /api/agent/application/submit`
@@ -61,5 +46,10 @@ Submit the completed application for admin review.
 Verified with perfectly matched characterization tests ensuring identical behavior to the legacy monolithic controller.
 
 - `tests/characterization/agent-application-submit.test.js`
+- `tests/characterization/agent-application-submit-success.test.js`
 - `tests/unit/agent/application-submit/application-completeness.validator.test.js`
 - `tests/unit/agent/application-submit/reapply-window.policy.test.js`
+- `tests/unit/agent/application-submit/agent-application-submit.controller.test.js`
+- `tests/unit/agent/application-submit/agent-application-submit.service.test.js`
+- `tests/unit/agent/application-submit/agent-application-submit.repository.test.js`
+- `tests/unit/agent/application-submit/agent-application-submit.policy.test.js`

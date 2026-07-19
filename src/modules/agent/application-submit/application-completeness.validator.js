@@ -11,7 +11,7 @@ const validateCompleteness = (agent) => {
     // Step 2 — Business
     if (!agent.operationType) errors.push("Agent type is required.");
     if (!agent.shopAddress)   errors.push("Shop / Office address is required.");
-    
+
     // businessName is required for all types except individual
     if (agent.operationType !== "individual" && !agent.businessName) {
         errors.push("Business name is required for your agent type.");
@@ -33,7 +33,7 @@ const validateCompleteness = (agent) => {
     if (errors.length > 0) {
         return { isValid: false, errors };
     }
-    
+
     return { isValid: true };
 };
 
