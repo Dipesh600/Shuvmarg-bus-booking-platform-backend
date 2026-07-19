@@ -9,6 +9,7 @@ const adminMiddleware = require("../../middleware/adminMiddleware.js");
 const dashboard = require("../../controllers/adminController/dashboardController/dashboardController.js");
 const userDashboard = require("../../controllers/adminController/dashboardController/userDashboardController.js");
 const agentController = require("../../controllers/adminController/adminAgentController/adminAgentController.js");
+const agentKycReview = require("../../src/modules/kyc/agent-review");
 const busOwnerController = require("../../controllers/adminController/busOwnerController/adminBusOwnerController.js");
 const adminPushnotification = require("../../controllers/adminController/adminPushnotification.js/adminPushnotification.js");
 const busOwnerFleetController = require("../../controllers/adminController/busOwnerController/adminBusOwnerFleetController.js");
@@ -113,7 +114,7 @@ router.patch("/registry/discovery/:id/route-options", adminMiddleware, routeDisc
 router.patch("/registry/discovery/:id/discovered-stops", adminMiddleware, routeDiscoveryCtrl.setDiscoveredStops);
 router.patch("/registry/discovery/:id/refine-stops", adminMiddleware, routeDiscoveryCtrl.refineStopsWithLLM);
 router.patch("/finalizeAgentSetup", adminMiddleware, agentController.finalizeAgentSetup);
-router.patch("/agentKycStatus", adminMiddleware, agentController.updateAgentKyc);
+router.patch("/agentKycStatus", adminMiddleware, agentKycReview.updateAgentKyc);
 
 // Bus Owner
 router.post("/busOwner/create", adminMiddleware, busOwnerController.createBusOwnerFull);
@@ -463,4 +464,3 @@ const documentProxy = require("../../controllers/adminController/documentProxyCo
 router.get("/documents/view", adminMiddleware, documentProxy.viewDocument);
 
 module.exports = router;
-

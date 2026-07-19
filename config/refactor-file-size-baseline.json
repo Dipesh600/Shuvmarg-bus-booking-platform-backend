@@ -19,7 +19,7 @@
   "controllers/adminController/coupon-controller/adminCouponController.js": 777,
   "controllers/adminController/fleetWorkstationController.js": 763,
   "controllers/adminController/adminController.js": 717,
-  "controllers/adminController/adminAgentController/adminAgentController.js": 692,
+  "controllers/adminController/adminAgentController/adminAgentController.js": 465,
   "controllers/busOwnerController/busOwnerController.js": 673,
   "services/fleetService.js": 667,
   "services/referralV2Service.js": 642,
