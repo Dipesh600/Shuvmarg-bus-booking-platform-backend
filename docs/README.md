@@ -12,6 +12,7 @@ The handbook currently covers authentication, admin, and KYC modules. Future dom
 |---|---|
 | [General authentication modules](modules/auth/README.md) | Passenger/general authentication flows mounted under `/api`. |
 | [Agent authentication modules](modules/agent-auth/README.md) | Agent-specific authentication flows mounted under `/api/auth/agent`. |
+| [Agent self-service modules](modules/agent/README.md) | Agent-facing post-authentication flows mounted under `/api/agent`. |
 | [Bus-owner authentication modules](modules/bus-owner-auth/README.md) | Bus-owner-specific authentication flows mounted under `/api/auth/busowner`. |
 | [Agent admin modules](modules/agent-admin/README.md) | Admin-facing agent management and reporting flows mounted under `/api/admin`. |
 | [KYC modules](modules/kyc/README.md) | Admin review flows for submitted KYC applications. |

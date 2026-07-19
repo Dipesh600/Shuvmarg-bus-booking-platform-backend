@@ -561,50 +561,10 @@ const getProfile = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /api/agent/dashboard
-//
-// Quick dashboard stats for the home screen.
-// ─────────────────────────────────────────────────────────────────────────────
-const getDashboard = async (req, res) => {
-    try {
-        const userId = req.userInfo?.id;
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "Unauthorized." });
-        }
-
-        const agent = await Agent.findOne({ user: userId }).lean();
-        if (!agent || agent.applicationStatus !== "APPROVED") {
-            return res.status(403).json({
-                success: false,
-                message: "Dashboard available after application approval.",
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            data: {
-                commissionBalance: agent.commissionBalance,
-                totalOnlineBookings: agent.totalOnlineBookings,
-                totalCashBookings: agent.totalCashBookings,
-                totalCommissionEarned: agent.totalCommissionEarned,
-                totalCommissionSettled: agent.totalCommissionSettled,
-                lastBookingAt: agent.lastBookingAt,
-                commissionRate: agent.commissionRate,
-                agentType: agent.agentType,
-            },
-        });
-    } catch (error) {
-        logger.error("agent: getDashboard error", { error: error.message });
-        return res.status(500).json({ success: false, message: "Internal Server Error" });
-    }
-};
-
 module.exports = {
     saveApplicationDraft,
     uploadDocument,
     submitApplication,
     getApplicationStatus,
     getProfile,
-    getDashboard,
 };
