@@ -2,9 +2,6 @@
  * controllers/adminController/adminAgentController/adminAgentController.js
  *
  * Admin-facing agent management endpoints.
- *
- * Routes (registered in adminRoutes.js):
- *   POST  /api/admin/makeUserAgent       — Convert passenger user to agent
  */
 
 const mongoose = require("mongoose");
@@ -12,78 +9,6 @@ const User = require("../../../models/userModel.js");
 const Agent = require("../../../models/agentModel.js");
 const sendOTP = require("../../../handlers/sparro-otp.js");
 const { createLocalNotification } = require("../../notificationController/notification_manager.js");
-
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/admin/makeUserAgent
-// Body: { id } — User._id to convert
-// ─────────────────────────────────────────────────────────────────────────────
-const makeUserAgent = async (req, res) => {
-    try {
-        const { id } = req.body;
-
-        if (!id) {
-            return res.status(400).json({
-                success: false,
-                message: "Id is required!",
-            });
-        }
-
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid user ID format!",
-            });
-        }
-
-        const user = await User.findById(id);
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found!",
-            });
-        }
-
-        // Multi-role check: verify via roles[] array
-        const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
-        if (userRoles.includes("agent")) {
-            return res.status(400).json({
-                success: false,
-                message: "User is already an agent!",
-            });
-        }
-
-        // Add agent role to existing user (DO NOT overwrite user.role)
-        await User.findByIdAndUpdate(id, {
-            $addToSet: { roles: "agent" },
-            $set: { [`roleActivatedAt.agent`]: new Date() },
-        });
-
-        // Ensure Agent document exists
-        let agent = await Agent.findOne({ user: user._id });
-        if (!agent) {
-            agent = new Agent({ user: user._id });
-            await agent.save();
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "Agent role added to user successfully!",
-            data: {
-                userId: user._id,
-                roles: [...userRoles, "agent"],
-                agentId: agent.agentId,
-                agentMongoId: agent._id,
-            },
-        });
-    } catch (error) {
-        console.error("makeUserAgent error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error!",
-        });
-    }
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PATCH /api/admin/finalizeAgentSetup
@@ -247,6 +172,5 @@ const finalizeAgentSetup = async (req, res) => {
 };
 
 module.exports = {
-    makeUserAgent,
     finalizeAgentSetup,
 };

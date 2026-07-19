@@ -9,6 +9,7 @@ const adminMiddleware = require("../../middleware/adminMiddleware.js");
 const dashboard = require("../../controllers/adminController/dashboardController/dashboardController.js");
 const userDashboard = require("../../controllers/adminController/dashboardController/userDashboardController.js");
 const agentController = require("../../controllers/adminController/adminAgentController/adminAgentController.js");
+const agentConversion = require("../../src/modules/agent/admin/conversion");
 const agentDirectory = require("../../src/modules/agent/admin/directory");
 const agentDashboard = require("../../src/modules/agent/admin/dashboard");
 const agentKycReview = require("../../src/modules/kyc/agent-review");
@@ -47,7 +48,6 @@ const routeDiscoveryCtrl   = require("../../controllers/adminController/routeDis
 // Auth Routes
 router.post("/auth/login",   authController.login);
 router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);
-
 // NOTE: No /auth/refresh route.
 // Super Admin sessions are explicit by design — when a token expires, the admin
 // must re-authenticate with their credentials. Silent token refresh is a consumer
@@ -99,7 +99,7 @@ router.post("/two-factor/setup", adminMiddleware, authController.setupTwoFactor)
 router.post("/getAgentDetails", adminMiddleware, agentDirectory.getAgentsById);
 router.get("/getAllAgents", adminMiddleware, agentDirectory.getAllAgents);
 router.get("/agentDashboard", adminMiddleware, agentDashboard.getAgentDashboard);
-router.post("/makeUserAgent", adminMiddleware, agentController.makeUserAgent);
+router.post("/makeUserAgent", adminMiddleware, agentConversion.makeUserAgent);
 
 // Route Discovery Routes
 router.post("/registry/discovery", adminMiddleware, routeDiscoveryCtrl.createSession);
