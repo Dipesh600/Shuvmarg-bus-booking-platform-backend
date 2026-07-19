@@ -484,87 +484,9 @@ const getApplicationStatus = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /api/agent/profile
-//
-// Returns the agent's profile data for the dashboard. Only accessible
-// when application is approved.
-// ─────────────────────────────────────────────────────────────────────────────
-const getProfile = async (req, res) => {
-    try {
-        const userId = req.userInfo?.id;
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "Unauthorized." });
-        }
-
-        const agent = await Agent.findOne({ user: userId })
-            .populate("linkedOperatorId", "brandName logo brandCode")
-            .lean();
-
-        if (!agent) {
-            return res.status(404).json({
-                success: false,
-                message: "Agent profile not found.",
-            });
-        }
-
-        if (agent.applicationStatus !== "APPROVED") {
-            return res.status(403).json({
-                success: false,
-                message: `Your application is "${agent.applicationStatus}". Profile is available after approval.`,
-                data: { applicationStatus: agent.applicationStatus },
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "Agent profile retrieved.",
-            data: {
-                agentId: agent.agentId,
-                agentType: agent.agentType,
-                applicationStatus: agent.applicationStatus,
-                linkedOperator: agent.linkedOperatorId || null,
-
-                // Business
-                businessName: agent.businessName,
-                shopAddress: agent.shopAddress,
-                operationType: agent.operationType,
-                district: agent.district,
-                municipality: agent.municipality,
-
-                // Commission
-                commissionRate: agent.commissionRate,
-                commissionBalance: agent.commissionBalance,
-                minSettlementThreshold: agent.minSettlementThreshold,
-
-                // Stats
-                totalOnlineBookings: agent.totalOnlineBookings,
-                totalCashBookings: agent.totalCashBookings,
-                totalCommissionEarned: agent.totalCommissionEarned,
-                totalCommissionSettled: agent.totalCommissionSettled,
-                lastBookingAt: agent.lastBookingAt,
-
-                // Settlement
-                settlementMethod: agent.settlementMethod,
-
-                // Marketing
-                referralCode: agent.referralCode,
-                qrCodeUrl: agent.qrCodeUrl,
-
-                approvedAt: agent.approvedAt,
-                createdAt: agent.createdAt,
-            },
-        });
-    } catch (error) {
-        logger.error("agent: getProfile error", { error: error.message });
-        return res.status(500).json({ success: false, message: "Internal Server Error" });
-    }
-};
-
 module.exports = {
     saveApplicationDraft,
     uploadDocument,
     submitApplication,
     getApplicationStatus,
-    getProfile,
 };

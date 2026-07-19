@@ -29,7 +29,8 @@
     "test:agent-admin-directory": "node --test tests/characterization/agent-admin-directory.test.js tests/unit/agent/admin/agent-directory-mapper.test.js tests/unit/agent/admin/agent-document-preview-service.test.js",
     "test:agent-admin-conversion": "node --test tests/characterization/agent-admin-conversion.test.js tests/unit/agent/admin/agent-conversion-policy.test.js tests/unit/agent/admin/agent-conversion-service.test.js",
     "test:agent-admin-setup": "node --test tests/characterization/agent-admin-setup.test.js tests/unit/agent/admin/agent-setup-policy.test.js tests/unit/agent/admin/agent-setup-service.test.js tests/unit/agent/admin/agent-setup-notification-service.test.js",
-    "test:agent-dashboard": "node --test tests/characterization/agent-dashboard.test.js tests/unit/agent/dashboard/agent-dashboard-controller.test.js tests/unit/agent/dashboard/agent-dashboard-service.test.js tests/unit/agent/dashboard/agent-dashboard-repository.test.js tests/unit/agent/dashboard/agent-dashboard-mapper.test.js"
+    "test:agent-dashboard": "node --test tests/characterization/agent-dashboard.test.js tests/unit/agent/dashboard/agent-dashboard-controller.test.js tests/unit/agent/dashboard/agent-dashboard-service.test.js tests/unit/agent/dashboard/agent-dashboard-repository.test.js tests/unit/agent/dashboard/agent-dashboard-mapper.test.js",
+    "test:agent-profile": "node --test tests/characterization/agent-profile.test.js tests/unit/agent/profile/agent-profile-controller.test.js tests/unit/agent/profile/agent-profile-service.test.js tests/unit/agent/profile/agent-profile-repository.test.js tests/unit/agent/profile/agent-profile-mapper.test.js"
   },
   "repository": {
     "type": "git",
