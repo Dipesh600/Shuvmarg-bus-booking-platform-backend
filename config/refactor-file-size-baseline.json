@@ -23,7 +23,7 @@
   "services/fleetService.js": 667,
   "services/referralV2Service.js": 642,
   "services/platformRegistryService.js": 624,
-  "controllers/agentController/agentController.js": 492,
+  "controllers/agentController/agentController.js": 369,
   "controllers/adminController/walletController/adminWalletController.js": 556,
   "services/tripGeneratorCron.js": 504,
   "controllers/adminController/ticket-controller/adminTicketController.js": 500,

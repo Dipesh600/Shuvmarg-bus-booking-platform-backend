@@ -20,24 +20,6 @@ const { processFile } = require("../../services/fileProcessor.js");
 const { uploadFileToS3, getPresignedUrl, deleteFromS3, buildS3Path } = require("../../services/s3Service.js");
 const logger = require("../../utils/logger.js");
 
-// ─── HELPER: Generate presigned URLs for documents ──────────────────────────
-const resolveDocumentUrls = async (documents) => {
-    if (!documents || documents.length === 0) return [];
-
-    return Promise.all(
-        documents.map(async (doc) => {
-            const docObj = doc.toObject ? doc.toObject() : { ...doc };
-            // Always expose fileKey so the frontend can build a server-proxy URL
-            // (the presigned URL is kept for legacy/fallback but should not be used directly)
-            if (docObj.fileKey && !docObj.fileKey.startsWith("http")) {
-                docObj.previewUrl = await getPresignedUrl(docObj.fileKey);
-            }
-            // fileKey is already on docObj — no need to add it again
-            return docObj;
-        })
-    );
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/agent/application/save
 //
@@ -380,113 +362,8 @@ const submitApplication = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /api/agent/application/status
-//
-// Returns the agent's complete application state — status, all steps of data,
-// document previews, and any admin feedback.
-// Used by both the application form (to restore draft) and the status screen.
-// ─────────────────────────────────────────────────────────────────────────────
-const getApplicationStatus = async (req, res) => {
-    try {
-        const userId = req.userInfo?.id;
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "Unauthorized." });
-        }
-
-        const agent = await Agent.findOne({ user: userId }).populate("user", "name").lean();
-
-        if (!agent) {
-            return res.status(200).json({
-                success: true,
-                message: "No application started yet.",
-                data: { applicationStatus: "DRAFT", hasApplication: false, userName: req.userInfo?.name || null },
-            });
-        }
-
-        // Resolve document presigned URLs for display in the app
-        const documentsWithUrls = await resolveDocumentUrls(agent.documents || []);
-
-        // Compute reapply eligibility for REJECTED agents
-        let canReapply = false;
-        let reapplyAvailableAt = null;
-        if (agent.applicationStatus === "REJECTED" && !agent.isPermanentlyRejected) {
-            const REAPPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
-            const elapsed = agent.rejectedAt ? Date.now() - new Date(agent.rejectedAt).getTime() : Infinity;
-            canReapply = elapsed >= REAPPLY_WINDOW_MS;
-            if (!canReapply && agent.rejectedAt) {
-                reapplyAvailableAt = new Date(new Date(agent.rejectedAt).getTime() + REAPPLY_WINDOW_MS);
-            }
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "Application status retrieved.",
-            data: {
-                hasApplication: true,
-                agentId: agent.agentId,
-                applicationStatus: agent.applicationStatus,
-                agentType: agent.agentType,
-                submittedAt: agent.submittedAt,
-                approvedAt: agent.approvedAt,
-                userName: agent.user?.name ?? null,
-
-                // Step 1 — Location
-                personal: {
-                    district: agent.district,
-                    municipality: agent.municipality,
-                    placeName: agent.placeName,
-                },
-
-                // Step 2 — Business
-                business: {
-                    businessName: agent.businessName,
-                    shopAddress: agent.shopAddress,
-                    operationType: agent.operationType,
-                    claimedMonthlyVolume: agent.claimedMonthlyVolume,
-                    currentOperators: agent.currentOperators,
-                    referralSource: agent.referralSource,
-                },
-
-                // Step 3 — Identification
-                identification: {
-                    citizenshipNumber: agent.citizenshipNumber,
-                    nationalIdNumber: agent.nationalIdNumber,
-                    panNumber: agent.panNumber,
-                },
-
-                // Step 3 — Documents
-                documents: documentsWithUrls,
-
-                // Consents
-                consents: {
-                    termsAcceptedAt: agent.termsAcceptedAt,
-                    whatsappConsent: agent.whatsappConsent,
-                },
-
-                // Admin feedback
-                rejectionReason: agent.rejectionReason,
-                moreInfoRequest: agent.moreInfoRequest,
-                moreInfoRequestedAt: agent.moreInfoRequestedAt,
-                isPermanentlyRejected: agent.isPermanentlyRejected,
-
-                // Reapply eligibility (only meaningful when REJECTED)
-                canReapply,
-                reapplyAvailableAt,
-
-                createdAt: agent.createdAt,
-                updatedAt: agent.updatedAt,
-            },
-        });
-    } catch (error) {
-        logger.error("agent: getApplicationStatus error", { error: error.message });
-        return res.status(500).json({ success: false, message: "Internal Server Error" });
-    }
-};
-
 module.exports = {
     saveApplicationDraft,
     uploadDocument,
     submitApplication,
-    getApplicationStatus,
 };
