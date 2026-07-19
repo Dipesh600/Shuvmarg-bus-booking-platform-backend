@@ -10,6 +10,7 @@ const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { agentMiddleware } = require("../../middleware/checkRole.js");
 const requireApprovedAgent = require("../../middleware/requireApprovedAgent.js");
 const agentcon = require("../../controllers/agentController/agentController.js");
+const agentDashboard = require("../../src/modules/agent/dashboard");
 
 // ── Application Workflow ──────────────────────────────────────────────────────
 
@@ -67,6 +68,6 @@ router.get("/profile", auth, verifyRoleFromDB, agentMiddleware, requireApprovedA
  * @desc    Retrieve metrics and data for the agent dashboard
  * @access  Private (APPROVED agents only). Enforced by requireApprovedAgent.
  */
-router.get("/dashboard", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentcon.getDashboard);
+router.get("/dashboard", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentDashboard.getDashboard);
 
 module.exports = router;
