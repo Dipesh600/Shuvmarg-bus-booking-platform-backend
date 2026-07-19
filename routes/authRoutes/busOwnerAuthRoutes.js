@@ -18,6 +18,7 @@ const express = require("express");
 const rateLimit = require("express-rate-limit");
 const router = express.Router();
 const busOwnerAuth = require("../../controllers/authControllers.js/busOwnerAuthController.js");
+const busOwnerLogin = require("../../src/modules/bus-owner/auth/login");
 const busOwnerSession = require("../../src/modules/bus-owner/auth/session");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
@@ -47,7 +48,7 @@ router.post("/register",  busOwnerAuth.register);
 router.post("/resendOTP", otpRateLimiter, busOwnerAuth.resendOTP);
 
 // Login (dedicated bus-owner endpoint with proper phone normalization + role check)
-router.post("/login", loginRateLimiter, busOwnerAuth.login);
+router.post("/login", loginRateLimiter, busOwnerLogin.login);
 
 // Password Reset (Bus Owner specific)
 router.post("/requestPasswordReset", otpRateLimiter, busOwnerAuth.requestPasswordReset);
