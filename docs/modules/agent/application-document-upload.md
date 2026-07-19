@@ -66,7 +66,7 @@ When the document type is new:
 ## S3 Path Structure
 
 ```
-agents/{agentId}/kyc/{document-type}/
+agents/{agentObjectId}/kyc/{document-type}/
 ```
 
 `documentType` underscores are replaced with hyphens when building the S3 path (e.g., `pan_card` → `pan-card`).
@@ -80,7 +80,7 @@ agents/{agentId}/kyc/{document-type}/
   "message": "pan_card uploaded successfully.",
   "data": {
     "documentType": "pan_card",
-    "previewUrl": "https://...",
+    "previewUrl": "https://shuvmarg-bucket.s3.ap-south-1.amazonaws.com/agents/507f1f77bcf86cd799439011/kyc/pan-card/1734567890_file.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...",
     "wasCompressed": false,
     "originalSize": 102400,
     "compressedSize": 102400
@@ -102,30 +102,30 @@ agents/{agentId}/kyc/{document-type}/
 
 **No Agent Record**
 ```json
-{ "success": false, "status": 404, "message": "Start your application first before uploading documents." }
+{ "success": false, "message": "Start your application first before uploading documents." }
 ```
 
 **Non-Uploadable Status**
 ```json
-{ "success": false, "status": 400, "message": "Cannot upload documents in \"PENDING\" status." }
+{ "success": false, "message": "Cannot upload documents in \"PENDING\" status." }
 ```
 
 **Invalid Document Type**
 ```json
-{ "success": false, "status": 400, "message": "Invalid document type. Must be one of: citizenship_front, citizenship_back, national_id_front, national_id_back, shop_photo, pan_card, business_registration" }
+{ "success": false, "message": "Invalid document type. Must be one of: citizenship_front, citizenship_back, national_id_front, national_id_back, shop_photo, pan_card, business_registration" }
 ```
 
 **Missing File**
 ```json
-{ "success": false, "status": 400, "message": "No file provided. Send file in 'file' field." }
+{ "success": false, "message": "No file provided. Send file in 'file' field." }
 ```
 
 **Invalid File Type or Too Large (from fileProcessor / S3 layer)**
 ```json
-{ "success": false, "status": 400, "message": "Invalid file type: image/bmp. Allowed: JPEG, PNG, GIF, WEBP, PDF." }
+{ "success": false, "message": "Invalid file type: image/bmp. Allowed: JPEG, PNG, GIF, WEBP, PDF." }
 ```
 
 **Internal Error**
 ```json
-{ "success": false, "status": 500, "message": "Internal Server Error" }
+{ "success": false, "message": "Internal Server Error" }
 ```
