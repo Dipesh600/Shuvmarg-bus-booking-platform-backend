@@ -10,7 +10,7 @@ These contracts are bus-owner-specific. Do not assume they match [general authen
 
 | Domain | Status | Document |
 |---|---|---|
-| Registration | Legacy controller-backed — not yet modularized | Not documented in detail yet |
+| Registration | Modularized under `src/modules/bus-owner/auth/registration` | [Registration](registration.md) |
 | Login | Modularized under `src/modules/bus-owner/auth/login` | [Login](login.md) |
 | Session | Modularized under `src/modules/bus-owner/auth/session` | [Session](session.md) |
 | Password reset | Legacy controller-backed — not yet modularized | Not documented in detail yet |
@@ -19,10 +19,10 @@ These contracts are bus-owner-specific. Do not assume they match [general authen
 
 | Method | Full path | Middleware in order | Owning module |
 |---|---|---|---|
-| POST | `/api/auth/busowner/sendOTP` | `otpRateLimiter` | Legacy bus-owner auth controller |
-| POST | `/api/auth/busowner/verifyOTP` | `otpVerifyLimiter` | Legacy bus-owner auth controller |
-| POST | `/api/auth/busowner/register` | None at route level | Legacy bus-owner auth controller |
-| POST | `/api/auth/busowner/resendOTP` | `otpRateLimiter` | Legacy bus-owner auth controller |
+| POST | `/api/auth/busowner/sendOTP` | `otpRateLimiter` | `busOwnerRegistration.sendOTP` |
+| POST | `/api/auth/busowner/verifyOTP` | `otpVerifyLimiter` | `busOwnerRegistration.verifyOTP` |
+| POST | `/api/auth/busowner/register` | None at route level | `busOwnerRegistration.register` |
+| POST | `/api/auth/busowner/resendOTP` | `otpRateLimiter` | `busOwnerRegistration.resendOTP` |
 | POST | `/api/auth/busowner/login` | `loginRateLimiter` | `busOwnerLogin.login` |
 | POST | `/api/auth/busowner/requestPasswordReset` | `otpRateLimiter` | Legacy bus-owner auth controller |
 | POST | `/api/auth/busowner/verifyOtpForReset` | `otpVerifyLimiter` | Legacy bus-owner auth controller |

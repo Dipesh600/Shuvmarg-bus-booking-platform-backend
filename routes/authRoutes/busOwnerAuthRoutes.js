@@ -19,6 +19,7 @@ const rateLimit = require("express-rate-limit");
 const router = express.Router();
 const busOwnerAuth = require("../../controllers/authControllers.js/busOwnerAuthController.js");
 const busOwnerLogin = require("../../src/modules/bus-owner/auth/login");
+const busOwnerRegistration = require("../../src/modules/bus-owner/auth/registration");
 const busOwnerSession = require("../../src/modules/bus-owner/auth/session");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
@@ -42,10 +43,10 @@ const loginRateLimiter = rateLimit({
 });
 
 // 3-step self-registration
-router.post("/sendOTP",   otpRateLimiter, busOwnerAuth.sendOTP);
-router.post("/verifyOTP", otpVerifyLimiter, busOwnerAuth.verifyOTP);     // ← phone-keyed verify limit
-router.post("/register",  busOwnerAuth.register);
-router.post("/resendOTP", otpRateLimiter, busOwnerAuth.resendOTP);
+router.post("/sendOTP",   otpRateLimiter, busOwnerRegistration.sendOTP);
+router.post("/verifyOTP", otpVerifyLimiter, busOwnerRegistration.verifyOTP);     // ← phone-keyed verify limit
+router.post("/register",  busOwnerRegistration.register);
+router.post("/resendOTP", otpRateLimiter, busOwnerRegistration.resendOTP);
 
 // Login (dedicated bus-owner endpoint with proper phone normalization + role check)
 router.post("/login", loginRateLimiter, busOwnerLogin.login);
