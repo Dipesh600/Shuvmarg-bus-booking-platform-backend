@@ -7,7 +7,6 @@
  *   POST  /api/admin/getAgentDetails     — Get single agent by ID
  *   GET   /api/admin/getAllAgents         — List all agents (with filters)
  *   POST  /api/admin/makeUserAgent       — Convert passenger user to agent
- *   GET   /api/admin/agentDashboard      — Agent module stats
  */
 
 const mongoose = require("mongoose");
@@ -392,74 +391,9 @@ const finalizeAgentSetup = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /api/admin/agentDashboard
-// ─────────────────────────────────────────────────────────────────────────────
-const getAgentDashboard = async (req, res) => {
-    try {
-        const [
-            totalAgents,
-            activeAgents,
-            approvedAgents,
-            pendingAgents,
-            rejectedAgents,
-            moreInfoAgents,
-            suspendedAgents,
-            draftAgents,
-            defaultAgents,
-            operatorLinkedAgents,
-        ] = await Promise.all([
-            // All Agent documents ever created (full historical count)
-            Agent.countDocuments({}),
-            // "Registered" = submitted and in the system (excludes DRAFT & REJECTED)
-            Agent.countDocuments({ applicationStatus: { $in: ["APPROVED", "PENDING", "MORE_INFO", "SUSPENDED"] } }),
-            Agent.countDocuments({ applicationStatus: "APPROVED" }),
-            Agent.countDocuments({ applicationStatus: "PENDING" }),
-            Agent.countDocuments({ applicationStatus: "REJECTED" }),
-            Agent.countDocuments({ applicationStatus: "MORE_INFO" }),
-            Agent.countDocuments({ applicationStatus: "SUSPENDED" }),
-            Agent.countDocuments({ applicationStatus: "DRAFT" }),
-            Agent.countDocuments({ agentType: "DEFAULT" }),
-            Agent.countDocuments({ agentType: "OPERATOR_LINKED" }),
-        ]);
-
-        const approvedPercentage = activeAgents > 0
-            ? ((approvedAgents / activeAgents) * 100).toFixed(0)
-            : 0;
-
-        return res.status(200).json({
-            success: true,
-            data: {
-                // "Registered" agents = submitted (not DRAFT/REJECTED)
-                totalAgents: activeAgents,
-                // Full breakdown for context
-                allTimeTotal: totalAgents,
-                approvedAgents: `${approvedAgents} (${approvedPercentage}% of registered)`,
-                pendingAgents,
-                rejectedAgents,
-                moreInfoAgents,
-                suspendedAgents,
-                draftAgents,
-                byType: {
-                    default: defaultAgents,
-                    operatorLinked: operatorLinkedAgents,
-                },
-            },
-        });
-    } catch (error) {
-        console.error("getAgentDashboard error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Failed to fetch agent dashboard stats",
-            error: error.message,
-        });
-    }
-};
-
 module.exports = {
     getAgentsById,
     getAllAgents,
     makeUserAgent,
     finalizeAgentSetup,
-    getAgentDashboard,
 };

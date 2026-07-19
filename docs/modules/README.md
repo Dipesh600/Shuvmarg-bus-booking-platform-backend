@@ -22,6 +22,10 @@ Authentication documentation:
 - [Agent authentication](agent-auth/README.md)
 - [Bus-owner authentication](bus-owner-auth/README.md)
 
+Admin documentation:
+
+- [Agent admin](agent-admin/README.md)
+
 KYC documentation:
 
 - [KYC modules](kyc/README.md)
