@@ -17,8 +17,8 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const router = express.Router();
-const busOwnerAuth = require("../../controllers/authControllers.js/busOwnerAuthController.js");
 const busOwnerLogin = require("../../src/modules/bus-owner/auth/login");
+const busOwnerPasswordReset = require("../../src/modules/bus-owner/auth/password-reset");
 const busOwnerRegistration = require("../../src/modules/bus-owner/auth/registration");
 const busOwnerSession = require("../../src/modules/bus-owner/auth/session");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
@@ -52,10 +52,10 @@ router.post("/resendOTP", otpRateLimiter, busOwnerRegistration.resendOTP);
 router.post("/login", loginRateLimiter, busOwnerLogin.login);
 
 // Password Reset (Bus Owner specific)
-router.post("/requestPasswordReset", otpRateLimiter, busOwnerAuth.requestPasswordReset);
-router.post("/verifyOtpForReset", otpVerifyLimiter, busOwnerAuth.verifyOtpForReset); // ← phone-keyed verify limit
-router.post("/resetPassword",     otpVerifyLimiter, busOwnerAuth.resetPassword);      // ← phone-keyed verify limit
-router.post("/resendOtpForReset", otpRateLimiter, busOwnerAuth.resendOtpForReset);
+router.post("/requestPasswordReset", otpRateLimiter, busOwnerPasswordReset.requestPasswordReset);
+router.post("/verifyOtpForReset", otpVerifyLimiter, busOwnerPasswordReset.verifyOtpForReset); // ← phone-keyed verify limit
+router.post("/resetPassword",     otpVerifyLimiter, busOwnerPasswordReset.resetPassword);      // ← phone-keyed verify limit
+router.post("/resendOtpForReset", otpRateLimiter, busOwnerPasswordReset.resendOtpForReset);
 
 // Session management (no JWT required — these operate on refresh tokens)
 router.post("/refresh", busOwnerSession.refresh);
