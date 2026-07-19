@@ -10,10 +10,11 @@ const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { agentMiddleware } = require("../../middleware/checkRole.js");
 const requireApprovedAgent = require("../../middleware/requireApprovedAgent.js");
 const agentcon = require("../../controllers/agentController/agentController.js");
-const agentApplicationDraft = require("../../src/modules/agent/application-draft");
-const agentApplicationStatus = require("../../src/modules/agent/application-status");
-const agentProfile = require("../../src/modules/agent/profile");
-const agentDashboard = require("../../src/modules/agent/dashboard");
+const agentApplicationDraft = require('../../src/modules/agent/application-draft');
+const agentApplicationStatus = require('../../src/modules/agent/application-status');
+const agentApplicationDocumentUpload = require('../../src/modules/agent/application-document-upload');
+const agentProfile = require('../../src/modules/agent/profile');
+const agentDashboard = require('../../src/modules/agent/dashboard');
 
 // ── Application Workflow ──────────────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ router.post("/application/save", auth, verifyRoleFromDB, agentMiddleware, agentA
  * @desc    Upload a KYC document for the agent application
  * @access  Private (Agent role required, accessible in DRAFT or MORE_INFO status)
  */
-router.post("/application/document", auth, verifyRoleFromDB, agentMiddleware, agentcon.uploadDocument);
+router.post("/application/document", auth, verifyRoleFromDB, agentMiddleware, agentApplicationDocumentUpload.uploadDocument);
 
 /**
  * @route   POST /api/agent/application/submit
