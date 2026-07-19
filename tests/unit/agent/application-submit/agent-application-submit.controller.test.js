@@ -9,7 +9,7 @@ const logger = require('../../../../utils/logger');
 test('agent-application-submit.controller', async (t) => {
     let logError = null;
     let logInfo = null;
-    
+
     const origLogError = logger.error;
     const origLogInfo = logger.info;
 
