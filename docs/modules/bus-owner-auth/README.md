@@ -13,7 +13,7 @@ These contracts are bus-owner-specific. Do not assume they match [general authen
 | Registration | Modularized under `src/modules/bus-owner/auth/registration` | [Registration](registration.md) |
 | Login | Modularized under `src/modules/bus-owner/auth/login` | [Login](login.md) |
 | Session | Modularized under `src/modules/bus-owner/auth/session` | [Session](session.md) |
-| Password reset | Legacy controller-backed — not yet modularized | Not documented in detail yet |
+| Password reset | Modularized under `src/modules/bus-owner/auth/password-reset` | [Password reset](password-reset.md) |
 
 ## Endpoint table
 
@@ -24,10 +24,10 @@ These contracts are bus-owner-specific. Do not assume they match [general authen
 | POST | `/api/auth/busowner/register` | None at route level | `busOwnerRegistration.register` |
 | POST | `/api/auth/busowner/resendOTP` | `otpRateLimiter` | `busOwnerRegistration.resendOTP` |
 | POST | `/api/auth/busowner/login` | `loginRateLimiter` | `busOwnerLogin.login` |
-| POST | `/api/auth/busowner/requestPasswordReset` | `otpRateLimiter` | Legacy bus-owner auth controller |
-| POST | `/api/auth/busowner/verifyOtpForReset` | `otpVerifyLimiter` | Legacy bus-owner auth controller |
-| POST | `/api/auth/busowner/resetPassword` | `otpVerifyLimiter` | Legacy bus-owner auth controller |
-| POST | `/api/auth/busowner/resendOtpForReset` | `otpRateLimiter` | Legacy bus-owner auth controller |
+| POST | `/api/auth/busowner/requestPasswordReset` | `otpRateLimiter` | `busOwnerPasswordReset.requestPasswordReset` |
+| POST | `/api/auth/busowner/verifyOtpForReset` | `otpVerifyLimiter` | `busOwnerPasswordReset.verifyOtpForReset` |
+| POST | `/api/auth/busowner/resetPassword` | `otpVerifyLimiter` | `busOwnerPasswordReset.resetPassword` |
+| POST | `/api/auth/busowner/resendOtpForReset` | `otpRateLimiter` | `busOwnerPasswordReset.resendOtpForReset` |
 | POST | `/api/auth/busowner/refresh` | None at route level | `busOwnerSession.refresh` |
 | POST | `/api/auth/busowner/logout` | None at route level | `busOwnerSession.logout` |
 
