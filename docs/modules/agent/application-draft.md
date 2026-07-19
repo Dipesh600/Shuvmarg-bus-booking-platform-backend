@@ -2,7 +2,7 @@
 
 This module handles the saving of an agent's KYC application draft. The application workflow allows an agent to save partial data across multiple steps before final submission.
 
-## Architecture
+## Module walkthrough
 
 *   **Controller (`agent-application-draft.controller.js`)**: Handles HTTP request parsing, response formatting, and generic error handling (500 responses).
 *   **Service (`agent-application-draft.service.js`)**: Coordinates the core logic: retrieving or creating the agent, validating the application status, applying field updates, and saving to the repository.

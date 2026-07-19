@@ -76,7 +76,7 @@ test('draft-updater field mapping', async (t) => {
 
     await t.test('unknown fields in payload are not written to agent', () => {
         const agent = makeAgent();
-        updater.updateDraftFields(agent, { unknownField: 'secret', district: 'Ktm' });
+        updater.updateDraftFields(agent, { unknownField: 'ignored-value', district: 'Ktm' });
         assert.equal(agent.district, 'Ktm');
         assert.equal(agent.unknownField, undefined);
     });
