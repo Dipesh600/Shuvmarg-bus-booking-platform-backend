@@ -172,9 +172,9 @@ async function runUnitTests() {
     assert("authController: has logout", typeof authController.logout === "function");
     assert("authController: has changeForcePassword", typeof authController.changeForcePassword === "function");
 
-    const busOwnerAuth = require("../controllers/authControllers.js/busOwnerAuthController.js");
-    assert("busOwnerAuth: has sendOTP", typeof busOwnerAuth.sendOTP === "function");
-    assert("busOwnerAuth: has register", typeof busOwnerAuth.register === "function");
+    const busOwnerRegistration = require("../src/modules/bus-owner/auth/registration");
+    assert("busOwnerRegistration: has sendOTP", typeof busOwnerRegistration.sendOTP === "function");
+    assert("busOwnerRegistration: has register", typeof busOwnerRegistration.register === "function");
 
     const agentRegistration = require("../src/modules/agent/auth/registration");
     assert("agentRegistration: has sendOTP", typeof agentRegistration.sendOTP === "function");

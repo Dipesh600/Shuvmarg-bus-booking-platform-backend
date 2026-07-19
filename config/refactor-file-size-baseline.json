@@ -13,7 +13,7 @@
   "controllers/ticketController/paymentBookingController.js": 1154,
   "services/routeDiscoveryService.js": 1108,
   "controllers/adminController/tripOverviewController.js": 954,
-  "controllers/authControllers.js/busOwnerAuthController.js": 642,
+  "controllers/authControllers.js/busOwnerAuthController.js": 255,
   "services/scheduleService.js": 898,
   "controllers/adminController/busOwnerController/adminBusOwnerController.js": 860,
   "services/smLedgerService.js": 789,
