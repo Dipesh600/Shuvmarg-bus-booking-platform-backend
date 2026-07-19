@@ -92,35 +92,40 @@ agents/{agentId}/kyc/{document-type}/
 
 **Unauthorized (Missing/Invalid Token)**
 ```json
-{ "success": false, "message": "Unauthorized." }
+{ "status": false, "message": "Authorization header is missing or invalid" }
+```
+
+**Role Denied (Not an Agent)**
+```json
+{ "success": false, "message": "Access denied. Required: agent.", "errorCode": "INSUFFICIENT_ROLE" }
 ```
 
 **No Agent Record**
 ```json
-{ "success": false, "message": "Start your application first before uploading documents." }
+{ "success": false, "status": 404, "message": "Start your application first before uploading documents." }
 ```
 
 **Non-Uploadable Status**
 ```json
-{ "success": false, "message": "Cannot upload documents in \"PENDING\" status." }
+{ "success": false, "status": 400, "message": "Cannot upload documents in \"PENDING\" status." }
 ```
 
 **Invalid Document Type**
 ```json
-{ "success": false, "message": "Invalid document type. Must be one of: ..." }
+{ "success": false, "status": 400, "message": "Invalid document type. Must be one of: citizenship_front, citizenship_back, national_id_front, national_id_back, shop_photo, pan_card, business_registration" }
 ```
 
 **Missing File**
 ```json
-{ "success": false, "message": "No file provided. Send file in 'file' field." }
+{ "success": false, "status": 400, "message": "No file provided. Send file in 'file' field." }
 ```
 
 **Invalid File Type or Too Large (from fileProcessor / S3 layer)**
 ```json
-{ "success": false, "message": "Invalid file type: image/bmp. Allowed: JPEG, PNG, GIF, WEBP, PDF." }
+{ "success": false, "status": 400, "message": "Invalid file type: image/bmp. Allowed: JPEG, PNG, GIF, WEBP, PDF." }
 ```
 
 **Internal Error**
 ```json
-{ "success": false, "message": "Internal Server Error" }
+{ "success": false, "status": 500, "message": "Internal Server Error" }
 ```
