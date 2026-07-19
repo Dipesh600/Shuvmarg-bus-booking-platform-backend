@@ -10,6 +10,7 @@ const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { agentMiddleware } = require("../../middleware/checkRole.js");
 const requireApprovedAgent = require("../../middleware/requireApprovedAgent.js");
 const agentcon = require("../../controllers/agentController/agentController.js");
+const agentApplicationStatus = require("../../src/modules/agent/application-status");
 const agentProfile = require("../../src/modules/agent/profile");
 const agentDashboard = require("../../src/modules/agent/dashboard");
 
@@ -41,7 +42,7 @@ router.post("/application/submit", auth, verifyRoleFromDB, agentMiddleware, agen
  * @desc    Retrieve the current status of the agent application (e.g. APPROVED, PENDING, DRAFT)
  * @access  Private (Agent role required, accessible in any status)
  */
-router.get("/application/status", auth, verifyRoleFromDB, agentMiddleware, agentcon.getApplicationStatus);
+router.get("/application/status", auth, verifyRoleFromDB, agentMiddleware, agentApplicationStatus.getApplicationStatus);
 
 // ── Document Proxy ─────────────────────────────────────────────────────────────
 
