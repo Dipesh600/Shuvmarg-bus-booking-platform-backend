@@ -21,7 +21,7 @@ Admin clients calling `/api/admin/makeUserAgent`. The route is protected by `adm
 
 ## What this module does not do
 
-- It does not finalize agent profile fields; `finalizeAgentSetup` remains in the legacy controller.
+- It does not finalize agent profile fields; see [Agent admin setup](setup.md).
 - It does not approve KYC or update application status.
 - It does not send notifications.
 - It does not change the User primary `role` field.

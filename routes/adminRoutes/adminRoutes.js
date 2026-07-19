@@ -8,10 +8,10 @@ const authController = require("../../controllers/adminController/authController
 const adminMiddleware = require("../../middleware/adminMiddleware.js");
 const dashboard = require("../../controllers/adminController/dashboardController/dashboardController.js");
 const userDashboard = require("../../controllers/adminController/dashboardController/userDashboardController.js");
-const agentController = require("../../controllers/adminController/adminAgentController/adminAgentController.js");
 const agentConversion = require("../../src/modules/agent/admin/conversion");
 const agentDirectory = require("../../src/modules/agent/admin/directory");
 const agentDashboard = require("../../src/modules/agent/admin/dashboard");
+const agentSetup = require("../../src/modules/agent/admin/setup");
 const agentKycReview = require("../../src/modules/kyc/agent-review");
 const busOwnerController = require("../../controllers/adminController/busOwnerController/adminBusOwnerController.js");
 const adminPushnotification = require("../../controllers/adminController/adminPushnotification.js/adminPushnotification.js");
@@ -113,7 +113,7 @@ router.post("/registry/discovery/:id/publish", adminMiddleware, routeDiscoveryCt
 router.patch("/registry/discovery/:id/route-options", adminMiddleware, routeDiscoveryCtrl.setRouteOptions);
 router.patch("/registry/discovery/:id/discovered-stops", adminMiddleware, routeDiscoveryCtrl.setDiscoveredStops);
 router.patch("/registry/discovery/:id/refine-stops", adminMiddleware, routeDiscoveryCtrl.refineStopsWithLLM);
-router.patch("/finalizeAgentSetup", adminMiddleware, agentController.finalizeAgentSetup);
+router.patch("/finalizeAgentSetup", adminMiddleware, agentSetup.finalizeAgentSetup);
 router.patch("/agentKycStatus", adminMiddleware, agentKycReview.updateAgentKyc);
 
 // Bus Owner
