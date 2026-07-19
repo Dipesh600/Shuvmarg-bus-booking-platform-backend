@@ -7,21 +7,14 @@
  *   POST  /api/admin/getAgentDetails     — Get single agent by ID
  *   GET   /api/admin/getAllAgents         — List all agents (with filters)
  *   POST  /api/admin/makeUserAgent       — Convert passenger user to agent
- *   PATCH /api/admin/agentKycStatus      — Review application (approve/reject/more-info)
  *   GET   /api/admin/agentDashboard      — Agent module stats
  */
 
 const mongoose = require("mongoose");
 const User = require("../../../models/userModel.js");
 const Agent = require("../../../models/agentModel.js");
-const UserDeviceInfo = require("../../../models/userDeviceInfoModel.js");
-const emailManager = require("../../../emailManager/emailManager.js");
 const sendOTP = require("../../../handlers/sparro-otp.js");
-const {
-    notificationManager,
-    createLocalNotification,
-} = require("../../notificationController/notification_manager.js");
-const generateAgentStatusEmail = require("../../../handlers/agentStatusEmailTemp.js");
+const { createLocalNotification } = require("../../notificationController/notification_manager.js");
 const { getPresignedUrl } = require("../../../services/s3Service.js");
 
 // ─── HELPER: Resolve document presigned URLs for admin review ────────────────
@@ -105,226 +98,6 @@ const getAgentsById = async (req, res) => {
         });
     } catch (error) {
         console.error("getAgentsById error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error!",
-        });
-    }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PATCH /api/admin/agentKycStatus
-// Body: { id, applicationStatus, rejectionReason, moreInfoRequest, ... }
-//
-// Admin reviews agent application:
-//   PENDING → APPROVED | REJECTED | MORE_INFO
-//   MORE_INFO → (agent resubmits) → PENDING (handled by agent controller)
-//   APPROVED → SUSPENDED (admin action)
-//   SUSPENDED → APPROVED (admin re-activation)
-// ─────────────────────────────────────────────────────────────────────────────
-const updateAgentKyc = async (req, res) => {
-    try {
-        const {
-            id,
-            applicationStatus,
-            rejectionReason,
-            moreInfoRequest,
-            isPermanentlyRejected,
-            commissionRate,
-            minSettlementThreshold,
-            adminNotes,
-            // Per-document verification
-            documentVerifications,
-        } = req.body;
-
-        let agent = null;
-
-        if (id && mongoose.Types.ObjectId.isValid(id)) {
-            agent = await Agent.findOne({ user: id });
-            if (!agent) agent = await Agent.findById(id);
-        }
-        if (!agent && id) {
-            agent = await Agent.findOne({ agentId: id });
-        }
-
-        if (!agent) {
-            return res.status(404).json({
-                success: false,
-                message: "Agent not found!",
-            });
-        }
-
-        // ── Per-document verification ──────────────────────────────────────
-        if (documentVerifications && Array.isArray(documentVerifications)) {
-            for (const dv of documentVerifications) {
-                const doc = agent.documents.find((d) => d.type === dv.type);
-                if (doc) {
-                    if (typeof dv.verified === "boolean") {
-                        doc.verified = dv.verified;
-                        if (dv.verified) {
-                            doc.verifiedBy = req.adminInfo?.id || null;
-                            doc.verifiedAt = new Date();
-                            doc.rejectionReason = null;
-                        }
-                    }
-                    if (typeof dv.rejectionReason === "string") {
-                        doc.rejectionReason = dv.rejectionReason;
-                    }
-                }
-            }
-        }
-
-        // ── Application-level status change ────────────────────────────────
-        if (applicationStatus) {
-            const prevStatus = agent.applicationStatus;
-
-            agent.applicationStatus = applicationStatus;
-
-            if (applicationStatus === "APPROVED") {
-                agent.approvedAt = new Date();
-                agent.approvedBy = req.adminInfo?.id || null;
-                agent.rejectionReason = null;
-                agent.moreInfoRequest = null;
-
-                // Sync User model
-                await User.findByIdAndUpdate(agent.user, {
-                    isVerified: true,
-                    status: "active",
-                });
-            }
-
-            if (applicationStatus === "REJECTED") {
-                agent.rejectionReason = rejectionReason || "Application rejected.";
-                if (typeof isPermanentlyRejected === "boolean") {
-                    agent.isPermanentlyRejected = isPermanentlyRejected;
-                }
-
-                // NOTE: Do NOT set User.status = "pending" here!
-                // That would lock the user out of ALL apps (passenger, etc).
-                // Agent-specific rejection lives on Agent.applicationStatus only.
-                // Only update isVerified on the User model.
-                await User.findByIdAndUpdate(agent.user, {
-                    isVerified: false,
-                });
-            }
-
-            if (applicationStatus === "MORE_INFO") {
-                agent.moreInfoRequest = moreInfoRequest || "Additional information required.";
-                agent.moreInfoRequestedAt = new Date();
-            }
-
-            if (applicationStatus === "SUSPENDED") {
-                agent.suspendedAt = new Date();
-                agent.suspendedBy = req.adminInfo?.id || null;
-                agent.suspensionReason = rejectionReason || "Account suspended.";
-
-                await User.findByIdAndUpdate(agent.user, { status: "inactive" });
-            }
-
-            // Re-activation
-            if (applicationStatus === "APPROVED" && prevStatus === "SUSPENDED") {
-                agent.suspendedAt = null;
-                agent.suspendedBy = null;
-                agent.suspensionReason = null;
-
-                await User.findByIdAndUpdate(agent.user, {
-                    status: "active",
-                    isVerified: true,
-                });
-            }
-        }
-
-        // ── Admin config fields ────────────────────────────────────────────
-        if (typeof commissionRate === "number") agent.commissionRate = commissionRate;
-        if (typeof minSettlementThreshold === "number") agent.minSettlementThreshold = minSettlementThreshold;
-        if (typeof adminNotes === "string") agent.adminNotes = adminNotes;
-
-        await agent.save();
-
-        // ── Notifications — only fire when a final decision status is set ────
-        // Skip ALL notifications when admin is only verifying/rejecting individual
-        // documents (documentVerifications only, no applicationStatus change).
-        if (applicationStatus) {
-            const user = await User.findById(agent.user).select("name email phone");
-            const statusText = agent.applicationStatus || "DRAFT";
-
-            // Identify rejected documents for notification detail
-            const invalidDocs = agent.documents
-                .filter((d) => d.verified === false || d.rejectionReason)
-                .map((d) => ({
-                    label: d.type.replace(/_/g, " "),
-                    reason: d.rejectionReason || null,
-                }));
-
-            // Email notification
-            if (user && user.email) {
-                try {
-                    const emailHtml = generateAgentStatusEmail(
-                        user.name,
-                        statusText,
-                        invalidDocs
-                    );
-                    await emailManager(user.email, "Agent Application Update", emailHtml);
-                } catch (emailErr) {
-                    console.warn("[updateAgentKyc] Email failed (non-fatal):", emailErr.message);
-                }
-            }
-
-            // SMS notification
-            if (user && user.phone) {
-                try {
-                    let smsText = `Dear ${user.name || "Agent"}, your agent application status is ${statusText}.`;
-                    if (applicationStatus === "APPROVED") {
-                        if (agent.agentType === "OPERATOR_LINKED") {
-                            smsText = `Welcome ${user.name || "Agent"}, your agent application is approved. Download the app and start selling tickets now! (Access via www.shuvmargagent.vercel.app/ for now)`;
-                        } else {
-                            smsText = `Dear ${user.name || "Agent"}, your agent application status is approved. You can start booking tickets now at www.shuvmargagent.vercel.app/`;
-                        }
-                    }
-                    if (invalidDocs.length > 0) {
-                        const docNames = invalidDocs.map((d) => d.label).join(", ");
-                        smsText += ` Documents needing attention: ${docNames}.`;
-                    }
-                    await sendOTP(user.phone, smsText);
-                } catch (smsErr) {
-                    console.warn("[updateAgentKyc] SMS failed (non-fatal):", smsErr.message);
-                }
-            }
-
-            // Push notification (FCM + local)
-            try {
-                const title = "Agent Application Update";
-                const body =
-                    applicationStatus === "APPROVED"
-                        ? "Congratulations! Your agent application has been approved."
-                        : applicationStatus === "REJECTED"
-                        ? "Your agent application has been reviewed. Please check the app for details."
-                        : applicationStatus === "MORE_INFO"
-                        ? "We need additional information for your application. Please check the app."
-                        : `Application status: ${statusText}.`;
-
-                if (agent.user) {
-                    await createLocalNotification(agent.user, "AGENT_KYC_UPDATE", title, body, {
-                        applicationStatus: statusText,
-                    });
-
-                    const devices = await UserDeviceInfo.find({ userId: agent.user });
-                    const tokens = devices.map((d) => d.token).filter(Boolean);
-                    if (tokens.length > 0) {
-                        await notificationManager(tokens, title, body);
-                    }
-                }
-            } catch (notifyError) {
-                console.error("Agent notification error:", notifyError);
-            }
-        } // end: applicationStatus notification gate
-
-        return res.status(200).json({
-            success: true,
-            message: "Agent application updated successfully!",
-        });
-    } catch (error) {
-        console.error("updateAgentKyc error:", error);
         return res.status(500).json({
             success: false,
             message: "Internal Server Error!",
@@ -688,6 +461,5 @@ module.exports = {
     getAllAgents,
     makeUserAgent,
     finalizeAgentSetup,
-    updateAgentKyc,
     getAgentDashboard,
 };
