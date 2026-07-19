@@ -9,6 +9,7 @@ const adminMiddleware = require("../../middleware/adminMiddleware.js");
 const dashboard = require("../../controllers/adminController/dashboardController/dashboardController.js");
 const userDashboard = require("../../controllers/adminController/dashboardController/userDashboardController.js");
 const agentController = require("../../controllers/adminController/adminAgentController/adminAgentController.js");
+const agentDirectory = require("../../src/modules/agent/admin/directory");
 const agentDashboard = require("../../src/modules/agent/admin/dashboard");
 const agentKycReview = require("../../src/modules/kyc/agent-review");
 const busOwnerController = require("../../controllers/adminController/busOwnerController/adminBusOwnerController.js");
@@ -94,10 +95,9 @@ router.get("/userdashboard", adminMiddleware, userDashboard.getUserDashboardStat
 
 // 2 Step Verification
 router.post("/two-factor/setup", adminMiddleware, authController.setupTwoFactor);
-
 // Agent 
-router.post("/getAgentDetails", adminMiddleware, agentController.getAgentsById);
-router.get("/getAllAgents", adminMiddleware, agentController.getAllAgents);
+router.post("/getAgentDetails", adminMiddleware, agentDirectory.getAgentsById);
+router.get("/getAllAgents", adminMiddleware, agentDirectory.getAllAgents);
 router.get("/agentDashboard", adminMiddleware, agentDashboard.getAgentDashboard);
 router.post("/makeUserAgent", adminMiddleware, agentController.makeUserAgent);
 

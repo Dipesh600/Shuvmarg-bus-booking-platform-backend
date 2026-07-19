@@ -4,8 +4,6 @@
  * Admin-facing agent management endpoints.
  *
  * Routes (registered in adminRoutes.js):
- *   POST  /api/admin/getAgentDetails     — Get single agent by ID
- *   GET   /api/admin/getAllAgents         — List all agents (with filters)
  *   POST  /api/admin/makeUserAgent       — Convert passenger user to agent
  */
 
@@ -14,149 +12,6 @@ const User = require("../../../models/userModel.js");
 const Agent = require("../../../models/agentModel.js");
 const sendOTP = require("../../../handlers/sparro-otp.js");
 const { createLocalNotification } = require("../../notificationController/notification_manager.js");
-const { getPresignedUrl } = require("../../../services/s3Service.js");
-
-// ─── HELPER: Resolve document presigned URLs for admin review ────────────────
-const resolveDocumentUrls = async (documents) => {
-    if (!documents || documents.length === 0) return [];
-
-    return Promise.all(
-        documents.map(async (doc) => {
-            const docObj = typeof doc.toObject === "function" ? doc.toObject() : { ...doc };
-            if (docObj.fileKey && !docObj.fileKey.startsWith("http")) {
-                docObj.previewUrl = await getPresignedUrl(docObj.fileKey);
-            }
-            return docObj;
-        })
-    );
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/admin/getAgentDetails
-// Body: { id } — can be userId, agentId (SHV-AG-XXX-NNN), or Agent._id
-// ─────────────────────────────────────────────────────────────────────────────
-const getAgentsById = async (req, res) => {
-    try {
-        const { id } = req.body;
-
-        if (!id) {
-            return res.status(400).json({
-                success: false,
-                message: "Id is required!",
-            });
-        }
-
-        let user = null;
-        let agent = null;
-
-        // Try as ObjectId (userId or Agent._id)
-        if (mongoose.Types.ObjectId.isValid(id)) {
-            agent = await Agent.findOne({ user: id });
-            if (agent) {
-                user = await User.findById(id).select("-password -__v");
-            } else {
-                agent = await Agent.findById(id);
-                if (agent) {
-                    user = await User.findById(agent.user).select("-password -__v");
-                }
-            }
-        }
-
-        // Try as agentId string (SHV-AG-XXX-NNN)
-        if (!agent) {
-            agent = await Agent.findOne({ agentId: id });
-            if (agent) {
-                user = await User.findById(agent.user).select("-password -__v");
-            }
-        }
-
-        if (!agent) {
-            return res.status(404).json({
-                success: false,
-                message: "Agent not found!",
-            });
-        }
-
-        // Resolve document presigned URLs for admin review
-        const agentData = agent.toObject();
-        agentData.documents = await resolveDocumentUrls(agent.documents);
-
-        // Embed resolved user data directly into agentDetails
-        // so the frontend can access agentDetails.user.name even if profile fetch fails
-        if (user) {
-            agentData.user = { _id: user._id, name: user.name, phone: user.phone, email: user.email };
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "Agent details retrieved successfully!",
-            data: {
-                profile: user,
-                agentDetails: agentData,
-            },
-        });
-    } catch (error) {
-        console.error("getAgentsById error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error!",
-        });
-    }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /api/admin/getAllAgents?status=PENDING&type=DEFAULT
-// ─────────────────────────────────────────────────────────────────────────────
-const getAllAgents = async (req, res) => {
-    try {
-        const { status, type } = req.query;
-
-        const filter = {};
-        if (status) filter.applicationStatus = status;
-        if (type) filter.agentType = type;
-
-        const agents = await Agent.find(filter)
-            .populate("user", "name email phone profilePicture status")
-            .populate("linkedOperatorId", "brandName brandCode")
-            .sort({ createdAt: -1 })
-            .lean();
-
-        const formatted = agents.map((a) => ({
-            id: a._id,
-            agentId: a.agentId,
-            userId: a.user?._id,
-            name: a.user?.name || "N/A",
-            phone: a.user?.phone || "N/A",
-            email: a.user?.email || null,
-            profileImg: a.user?.profilePicture || null,
-            applicationStatus: a.applicationStatus,
-            agentType: a.agentType,
-            linkedOperator: a.linkedOperatorId
-                ? { name: a.linkedOperatorId.brandName, code: a.linkedOperatorId.brandCode }
-                : null,
-            location: [a.municipality, a.district].filter(Boolean).join(", ") || "N/A",
-            commission: `${a.commissionRate}%`,
-            commissionBalance: a.commissionBalance,
-            totalBookings: a.totalOnlineBookings + a.totalCashBookings,
-            operationType: a.operationType,
-            submittedAt: a.submittedAt,
-            createdAt: a.createdAt,
-        }));
-
-        return res.status(200).json({
-            success: true,
-            message: formatted.length === 0 ? "No agents found." : "Agents retrieved successfully!",
-            results: formatted.length,
-            data: formatted,
-        });
-    } catch (error) {
-        console.error("getAllAgents error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error!",
-        });
-    }
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/admin/makeUserAgent
@@ -392,8 +247,6 @@ const finalizeAgentSetup = async (req, res) => {
 };
 
 module.exports = {
-    getAgentsById,
-    getAllAgents,
     makeUserAgent,
     finalizeAgentSetup,
 };
