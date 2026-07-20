@@ -22,31 +22,39 @@ const service = require('./document-proxy.service.js');
  * @param {import('express').Response} res
  */
 const viewDocument = async (req, res) => {
-    const result = await service.resolveDocument(req.query.key);
+    try {
+        const result = await service.resolveDocument(req.query.key);
 
-    if (!result.ok) {
-        return res.status(result.status).json(result.body);
+        if (!result.ok) {
+            return res.status(result.status).json(result.body);
+        }
+
+        const { s3Response, resolvedKey } = result;
+
+        // Forward content-type so the browser knows how to display the file
+        const contentType = s3Response.ContentType || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+
+        // Suggest the filename from the last key segment
+        const filename = resolvedKey.split('/').pop() || 'document';
+        res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+
+        if (s3Response.ContentLength) {
+            res.setHeader('Content-Length', s3Response.ContentLength);
+        }
+
+        // Cache for 5 minutes in the browser (session only)
+        res.setHeader('Cache-Control', 'private, max-age=300');
+
+        // Pipe the S3 readable stream directly to the HTTP response
+        s3Response.Body.pipe(res);
+    } catch (error) {
+        console.error('[documentProxy] viewDocument error:', error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to retrieve document."
+        });
     }
-
-    const { s3Response, resolvedKey } = result;
-
-    // Forward content-type so the browser knows how to display the file
-    const contentType = s3Response.ContentType || 'application/octet-stream';
-    res.setHeader('Content-Type', contentType);
-
-    // Suggest the filename from the last key segment
-    const filename = resolvedKey.split('/').pop() || 'document';
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-
-    if (s3Response.ContentLength) {
-        res.setHeader('Content-Length', s3Response.ContentLength);
-    }
-
-    // Cache for 5 minutes in the browser (session only)
-    res.setHeader('Cache-Control', 'private, max-age=300');
-
-    // Pipe the S3 readable stream directly to the HTTP response
-    s3Response.Body.pipe(res);
 };
 
 module.exports = {
