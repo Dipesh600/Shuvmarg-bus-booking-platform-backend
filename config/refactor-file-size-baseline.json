@@ -59,6 +59,7 @@
   "controllers/adminController/busOwnerController/tripController.js": 259,
   "models/tripModel.js": 256,
   "controllers/adminController/authController/auth-controller.js": 255,
+  "controllers/authControllers.js/busOwnerAuthController.js": 255,
   "controllers/adminController/platformConfigController.js": 254,
   "controllers/adminController/routeDiscoveryController.js": 248,
   "controllers/adminController/busOwnerController/fleetController.js": 246,
@@ -95,6 +96,9 @@
   "controllers/authControllers.js/activateAccountController.js": 161,
   "models/busOwnerModel.js": 154,
   "controllers/adminController/busOwnerController/boardingPointController.js": 153,
+  "tests/characterization/document-proxy.test.js": 194,
+  "tests/unit/shared/document-proxy/document-proxy-controller.test.js": 222,
+  "tests/unit/shared/document-proxy/document-proxy-service.test.js": 209,
   "_boundary150": {
     "_note": "These files are exactly 150 lines — compliant but on the boundary. Any addition makes them a violation.",
     "controllers/busOwnerController/fareRuleController.js": 150

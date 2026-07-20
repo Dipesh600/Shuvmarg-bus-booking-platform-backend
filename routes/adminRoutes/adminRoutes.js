@@ -460,7 +460,7 @@ router.delete("/scratch-themes/:themeId",         adminMiddleware, scratchThemeC
 // Streams private S3 objects through the server — the raw AWS presigned URL
 // (with credential key ID, bucket path, and signature) is NEVER sent to the browser.
 // Frontend calls: GET /api/admin/documents/view?key=owners/{id}/kyc/...
-const documentProxy = require("../../controllers/adminController/documentProxyController.js");
+const documentProxy = require("../../src/modules/shared/document-proxy");
 router.get("/documents/view", adminMiddleware, documentProxy.viewDocument);
 
 module.exports = router;
