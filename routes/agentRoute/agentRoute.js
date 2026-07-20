@@ -48,7 +48,7 @@ router.get("/application/status", auth, verifyRoleFromDB, agentMiddleware, agent
 
 // ── Document Proxy ─────────────────────────────────────────────────────────────
 
-const { viewDocument } = require("../../controllers/adminController/documentProxyController.js");
+const documentProxy = require("../../src/modules/shared/document-proxy");
 
 /**
  * @route   GET /api/agent/documents/view
@@ -56,7 +56,7 @@ const { viewDocument } = require("../../controllers/adminController/documentProx
  *          The key must be an object key stored in the agent's document record (fileKey field).
  * @access  Private (Agent role required)
  */
-router.get("/documents/view", auth, verifyRoleFromDB, agentMiddleware, viewDocument);
+router.get("/documents/view", auth, verifyRoleFromDB, agentMiddleware, documentProxy.viewDocument);
 
 // ── Profile & Dashboard ───────────────────────────────────────────────────────
 
