@@ -31,6 +31,15 @@ const seed = (p, fields = {}) => User.create({
   ...fields,
 });
 
+const findLeadEventually = async (query, maxAttempts = 50, delayMs = 10) => {
+  for (let i = 0; i < maxAttempts; i++) {
+    const lead = await PartnerLead.findOne(query);
+    if (lead) return lead;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error('PartnerLead not found after polling');
+};
+
 test('Agent registration verifyOTP characterization', async (t) => {
   t.before(async () => db.connect());
   t.after(async () => db.disconnect());
@@ -87,8 +96,7 @@ test('Agent registration verifyOTP characterization', async (t) => {
       const decoded = jwt.verify(res.body.verificationToken, process.env.VERIFICATION_TOKEN_SECRET);
       assert.equal(decoded.phone, p);
       assert.equal(decoded.purpose, 'AGENT_REGISTRATION');
-      await new Promise((resolve) => setImmediate(resolve));
-      const lead = await PartnerLead.findOne({ phone: p, leadType: 'otp_verified', entityType: 'agent' });
+      const lead = await findLeadEventually({ phone: p, leadType: 'otp_verified', entityType: 'agent' });
       assert.equal(lead.phoneVerified, true);
       assert.equal(lead.source, 'agent_app');
     } finally { restore(); }
