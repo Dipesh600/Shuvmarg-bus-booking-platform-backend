@@ -3,6 +3,7 @@ const CouponUsage = require("../../models/couponUsageModel.js");
 const UserCouponUsage = require("../../models/userCouponUsageModel.js");
 const CouponHelper = require("../../handlers/couponHelper.js");
 const mongoose = require("mongoose");
+const { getPresignedUrl } = require("../../services/s3Service.js");
 
 // Get available coupons for user
 const getAvailableCoupons = async (req, res) => {
@@ -343,13 +344,21 @@ const getAllCouponsForUser = async (req, res) => {
     const results = [];
 
     for (const coupon of coupons) {
+      // Resolve S3 key to a presigned URL for display; keep null if no image
+      let resolvedImageUrl = null;
+      if (coupon.imageUrl) {
+        resolvedImageUrl = coupon.imageUrl.startsWith("http")
+          ? coupon.imageUrl
+          : await getPresignedUrl(coupon.imageUrl);
+      }
+
       const couponData = {
         _id: coupon._id,
         couponCode: coupon.couponCode,
         title: coupon.title,
         description: coupon.description,
         category: coupon.category,
-        imageUrl: coupon.imageUrl,
+        imageUrl: resolvedImageUrl,
         designConfig: coupon.designConfig,
         discountType: coupon.discountType,
         discountValue: coupon.discountValue,
@@ -398,27 +407,41 @@ const getAllCouponsIncludingExpired = async (req, res) => {
         .limit(20), // cap expired to last 20
     ]);
 
-    const format = (coupon) => ({
-      _id: coupon._id,
-      couponCode: coupon.couponCode,
-      title: coupon.title,
-      description: coupon.description,
-      category: coupon.category,
-      imageUrl: coupon.imageUrl,
-      designConfig: coupon.designConfig,
-      discountType: coupon.discountType,
-      discountValue: coupon.discountValue,
-      minOrderAmount: coupon.minOrderAmount,
-      maxDiscountAmount: coupon.maxDiscountAmount,
-      validFrom: coupon.validFrom,
-      validTo: coupon.validTo,
-      perUserLimit: coupon.perUserLimit,
-    });
+    // Resolve S3 key to presigned URL for each coupon
+    const format = async (coupon) => {
+      let resolvedImageUrl = null;
+      if (coupon.imageUrl) {
+        resolvedImageUrl = coupon.imageUrl.startsWith("http")
+          ? coupon.imageUrl
+          : await getPresignedUrl(coupon.imageUrl);
+      }
+      return {
+        _id: coupon._id,
+        couponCode: coupon.couponCode,
+        title: coupon.title,
+        description: coupon.description,
+        category: coupon.category,
+        imageUrl: resolvedImageUrl,
+        designConfig: coupon.designConfig,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+        minOrderAmount: coupon.minOrderAmount,
+        maxDiscountAmount: coupon.maxDiscountAmount,
+        validFrom: coupon.validFrom,
+        validTo: coupon.validTo,
+        perUserLimit: coupon.perUserLimit,
+      };
+    };
+
+    const [activeFormatted, expiredFormatted] = await Promise.all([
+      Promise.all(activeCoupons.map(format)),
+      Promise.all(expiredCoupons.map(format)),
+    ]);
 
     return res.status(200).json({
       success: true,
       message: "All coupons retrieved successfully!",
-      data: [...activeCoupons.map(format), ...expiredCoupons.map(format)],
+      data: [...activeFormatted, ...expiredFormatted],
     });
   } catch (error) {
     console.error("Error fetching all coupons with expired:", error);

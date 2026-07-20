@@ -22,13 +22,16 @@ const uploadCouponImage = async (req, res) => {
     const folderPath = buildS3Path({ type: "coupon_image" });
     const objectKey = await uploadFileToS3(file, folderPath);
     
-    // Get presigned URL to return
-    const imageUrl = await getPresignedUrl(objectKey);
+    // Return a short-lived presigned URL for immediate preview in the admin,
+    // but also return the objectKey which must be stored in the DB.
+    // The presigned URL expires in 1 hour — do NOT save it to DB.
+    const previewUrl = await getPresignedUrl(objectKey);
     
     return res.status(200).json({
       success: true,
       message: "Image uploaded successfully",
-      imageUrl
+      imageUrl: objectKey,   // ← raw S3 key — STORE THIS in the coupon document
+      previewUrl,             // ← use ONLY for immediate in-browser preview, never persist
     });
   } catch (error) {
     console.error("uploadCouponImage error:", error);
@@ -93,6 +96,7 @@ const createCoupon = async (req, res) => {
       description,
       category,
       imageUrl,
+      designConfig,
       discountType,
       discountValue,
       minOrderAmount,
@@ -201,6 +205,7 @@ const createCoupon = async (req, res) => {
       applicableRoutes: applicableRoutes || [],
       excludedRoutes: excludedRoutes || [],
       applicableUserTypes: applicableUserTypes || [],  // empty = all user types
+      designConfig: designConfig || undefined,
       createdBy: req.adminInfo.id,
       lastModifiedBy: req.adminInfo.id,
     });
@@ -304,6 +309,9 @@ const getAllCoupons = async (req, res) => {
       couponCode: coupon.couponCode,
       title: coupon.title,
       description: coupon.description,
+      category: coupon.category,
+      imageUrl: coupon.imageUrl,
+      designConfig: coupon.designConfig,
       discountType: coupon.discountType,
       discountValue: coupon.discountValue,
       minOrderAmount: coupon.minOrderAmount,
@@ -376,11 +384,19 @@ const getCouponById = async (req, res) => {
     // Get usage statistics
     const usageStats = await CouponHelper.getCouponStats(id);
 
+    // Resolve S3 object key to a fresh presigned URL for display in admin edit form
+    const couponObj = coupon.toObject();
+    if (couponObj.imageUrl && !couponObj.imageUrl.startsWith("http")) {
+      couponObj.imageUrlResolved = await getPresignedUrl(couponObj.imageUrl);
+    } else {
+      couponObj.imageUrlResolved = couponObj.imageUrl || null;
+    }
+
     return res.status(200).json({
       success: true,
       message: "Coupon retrieved successfully!",
       data: {
-        ...coupon.toObject(),
+        ...couponObj,
         isCurrentlyValid: coupon.isCurrentlyValid,
         usageStats: usageStats[0] || {
           totalUsage: 0,
