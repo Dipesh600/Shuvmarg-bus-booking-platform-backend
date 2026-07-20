@@ -17,9 +17,10 @@ const OTP = require("../models/otpModel.js");
 const sendSMS = require("../handlers/sparro-otp.js");
 
 const OTP_EXPIRY_MINUTES = 5;
-const OTP_MAX_ATTEMPTS = 5;   // wrong guesses before the code is dead
-const MAX_OTP_SENDS = 3;       // max OTP sends per phone+purpose per window
-const BLOCK_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+const OTP_MAX_ATTEMPTS = 5;    // wrong guesses before the code is dead
+const MAX_OTP_SENDS = 3;        // max OTP sends per phone+purpose per window
+const BLOCK_DURATION_MS = 10 * 60 * 1000;  // 10 minutes
+const OTP_SEND_COOLDOWN_MS = 60 * 1000;    // 60-second cooldown between sends
 
 /**
  * Fail fast at module load time if the required HMAC secret is absent.
@@ -73,7 +74,7 @@ const safeCompare = (a, b) => {
  */
 const PREFIX_MAP = {
   REGISTRATION:           "Your Shuv Marg Verification code is",
-  PASSWORD_RESET:         "Your Shuv Marg Password Reset code is",
+  PASSWORD_RESET:         "Your Shuv Marg account recovery code is",
   PHONE_CHANGE:           "Your Shuv Marg Phone Change code is",
   ACCOUNT_ACTIVATION:     "Your Shuv Marg Account Activation code is",
   BUSOWNER_REGISTRATION:  "Your Shuv Marg Operator Verification code is",
@@ -96,7 +97,7 @@ const PREFIX_MAP = {
  * @returns {Promise<{ success: boolean, expiresIn: string }>}
  */
 const createAndSendOTP = async (phone, purpose, customPrefix = null) => {
-  // Check if this phone+purpose is currently send-blocked
+  // ── Check 1: Hard block (send-count exhausted) ─────────────────────────────
   const existing = await OTP.findOne({ phone, purpose });
   if (existing && existing.isBlocked()) {
     const unblockAt = new Date(existing.blockedUntil);
@@ -105,6 +106,18 @@ const createAndSendOTP = async (phone, purpose, customPrefix = null) => {
     err.statusCode = 429;
     err.minutesLeft = minutesLeft;
     throw err;
+  }
+
+  // ── Check 2: Cooldown (60-second gap between sends) ──────────────────────────
+  if (existing && existing.lastSentAt) {
+    const elapsed = Date.now() - new Date(existing.lastSentAt).getTime();
+    if (elapsed < OTP_SEND_COOLDOWN_MS) {
+      const secondsLeft = Math.ceil((OTP_SEND_COOLDOWN_MS - elapsed) / 1000);
+      const err = new Error(`OTP_COOLDOWN:${secondsLeft}`);
+      err.statusCode = 429;
+      err.secondsLeft = secondsLeft;
+      throw err;
+    }
   }
 
   const otpCode = generateOtpCode();
@@ -135,6 +148,7 @@ const createAndSendOTP = async (phone, purpose, customPrefix = null) => {
       maxAttempts: OTP_MAX_ATTEMPTS,
       sendCount: newSendCount,
       blockedUntil: newBlockedUntil,
+      lastSentAt: new Date(),       // stamp for cooldown enforcement
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );

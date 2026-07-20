@@ -9,9 +9,10 @@ const express = require("express");
 const router = express.Router();
 const activateController = require("../../controllers/authControllers.js/activateAccountController.js");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
+const { otpSendLimiter } = require("../../middleware/otpRateLimiter.js");
 
 // Send activation OTP
-router.post("/sendOTP", otpRateLimiter, activateController.sendActivationOTP);
+router.post("/sendOTP", otpSendLimiter, otpRateLimiter, activateController.sendActivationOTP);
 
 // Activate account (verify OTP + set new password)
 router.post("/", activateController.activateAccount);

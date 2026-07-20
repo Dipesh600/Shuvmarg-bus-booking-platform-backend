@@ -65,6 +65,12 @@ const otpSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  // Timestamp of the last successful OTP send.
+  // Used to enforce a minimum cooldown between consecutive sends.
+  lastSentAt: {
+    type: Date,
+    default: null,
+  },
 }, { timestamps: true });
 
 // Compound unique index: exactly one active OTP per phone per purpose

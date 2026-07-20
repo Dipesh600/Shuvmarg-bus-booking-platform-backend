@@ -20,7 +20,13 @@ const sendOTP = async ({ phone }) => {
   if (exists && user && (user.status === 'banned' || user.status === 'inactive')) {
     return { statusCode: 200, responseBody: neutralSendBody };
   }
-  await otpHelper.createAndSendOTP(phone, policy.BUS_OWNER_PURPOSE);
+  try {
+    await otpHelper.createAndSendOTP(phone, policy.BUS_OWNER_PURPOSE);
+  } catch (err) {
+    if (policy.isOtpBlocked(err)) throw errors.otpSendBlockedError(policy.otpBlockedMinutes(err));
+    if (policy.isOtpCooldown(err)) throw errors.otpSendCooldownError(policy.otpCooldownSeconds(err));
+    throw err;
+  }
   return { statusCode: 200, responseBody: neutralSendBody };
 };
 
@@ -53,7 +59,14 @@ const resendOTP = async ({ phone }) => {
   if (!phone) throw errors.missingPhoneError();
   const { exists, hasRole } = await phoneGuard.checkPhoneForRole(phone, 'busOwner');
   if (exists && hasRole) throw errors.roleAlreadyRegisteredError();
-  const result = await otpHelper.createAndSendOTP(phone, policy.BUS_OWNER_PURPOSE);
+  let result;
+  try {
+    result = await otpHelper.createAndSendOTP(phone, policy.BUS_OWNER_PURPOSE);
+  } catch (err) {
+    if (policy.isOtpBlocked(err)) throw errors.otpSendBlockedError(policy.otpBlockedMinutes(err));
+    if (policy.isOtpCooldown(err)) throw errors.otpSendCooldownError(policy.otpCooldownSeconds(err));
+    throw err;
+  }
   return {
     statusCode: 200,
     responseBody: {

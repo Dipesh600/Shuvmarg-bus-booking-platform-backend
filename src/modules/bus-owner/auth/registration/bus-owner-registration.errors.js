@@ -40,6 +40,11 @@ const otpSendBlockedError = (minutes) => bodyError(
   429,
   { errorCode: 'OTP_SEND_BLOCKED', retryAfterMinutes: minutes },
 );
+const otpSendCooldownError = (seconds) => bodyError(
+  `Please wait ${seconds} second(s) before requesting a new OTP.`,
+  429,
+  { errorCode: 'OTP_COOLDOWN', retryAfterSeconds: seconds },
+);
 const duplicateKeyError = (message) => bodyError(message, 409);
 
 module.exports = {
@@ -59,5 +64,6 @@ module.exports = {
   invalidPasswordError,
   duplicateEmailError,
   otpSendBlockedError,
+  otpSendCooldownError,
   duplicateKeyError,
 };
