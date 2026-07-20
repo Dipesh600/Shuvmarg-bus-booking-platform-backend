@@ -12,7 +12,8 @@ const getAvailableCoupons = async (req, res) => {
 
     const coupons = await CouponHelper.getAvailableCoupons(
       userId,
-      parseFloat(orderAmount) || 0
+      parseFloat(orderAmount) || 0,
+      req.userInfo.activeRole
     );
 
     return res.status(200).json({
@@ -89,7 +90,8 @@ const validateCoupon = async (req, res) => {
       couponCode,
       userId,
       numericOrderAmount,
-      scheduleId
+      scheduleId,
+      req.userInfo.activeRole
     );
 
     if (!validation.isValid) {
@@ -204,7 +206,8 @@ const getBestCoupon = async (req, res) => {
 
     const availableCoupons = await CouponHelper.getAvailableCoupons(
       userId,
-      parseFloat(orderAmount)
+      parseFloat(orderAmount),
+      req.userInfo.activeRole
     );
 
     // Filter coupons that can be used and sort by discount amount
@@ -345,6 +348,9 @@ const getAllCouponsForUser = async (req, res) => {
         couponCode: coupon.couponCode,
         title: coupon.title,
         description: coupon.description,
+        category: coupon.category,
+        imageUrl: coupon.imageUrl,
+        designConfig: coupon.designConfig,
         discountType: coupon.discountType,
         discountValue: coupon.discountValue,
         minOrderAmount: coupon.minOrderAmount,
@@ -397,6 +403,9 @@ const getAllCouponsIncludingExpired = async (req, res) => {
       couponCode: coupon.couponCode,
       title: coupon.title,
       description: coupon.description,
+      category: coupon.category,
+      imageUrl: coupon.imageUrl,
+      designConfig: coupon.designConfig,
       discountType: coupon.discountType,
       discountValue: coupon.discountValue,
       minOrderAmount: coupon.minOrderAmount,

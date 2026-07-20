@@ -75,6 +75,7 @@ router.get("/booking/getBookingById/:bookingid", adminMiddleware, bookings.getBo
 router.post("/booking/getBookingsByUser", adminMiddleware, bookings.getBookingsByUser);
 // Coupon Management Routes
 router.post("/coupons", adminMiddleware, coupon.createCoupon);
+router.post("/coupons/upload-image", adminMiddleware, coupon.uploadCouponImage);
 router.get("/coupons", adminMiddleware, coupon.getAllCoupons);
 router.get("/coupons-stats", adminMiddleware, coupon.getCouponUsageStats);
 router.get("/coupons/:id/analytics", adminMiddleware, coupon.getCouponAnalytics);

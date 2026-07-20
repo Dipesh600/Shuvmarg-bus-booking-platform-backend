@@ -8,6 +8,33 @@ const {
   createLocalNotification,
 } = require("../../notificationController/notification_manager.js");
 const User = require("../../../models/userModel.js");
+const { uploadFileToS3, buildS3Path, getPresignedUrl } = require("../../../services/s3Service.js");
+
+// Upload a coupon image
+const uploadCouponImage = async (req, res) => {
+  try {
+    if (!req.files || !req.files.image) {
+      return res.status(400).json({ success: false, message: "No image file provided." });
+    }
+    const file = req.files.image;
+    
+    // Upload to S3
+    const folderPath = buildS3Path({ type: "coupon_image" });
+    const objectKey = await uploadFileToS3(file, folderPath);
+    
+    // Get presigned URL to return
+    const imageUrl = await getPresignedUrl(objectKey);
+    
+    return res.status(200).json({
+      success: true,
+      message: "Image uploaded successfully",
+      imageUrl
+    });
+  } catch (error) {
+    console.error("uploadCouponImage error:", error);
+    return res.status(500).json({ success: false, message: "Failed to upload image." });
+  }
+};
 
 /**
  * Sends an FCM push notification to all passengers about a new/activated offer.
@@ -64,6 +91,8 @@ const createCoupon = async (req, res) => {
       couponCode,
       title,
       description,
+      category,
+      imageUrl,
       discountType,
       discountValue,
       minOrderAmount,
@@ -159,6 +188,8 @@ const createCoupon = async (req, res) => {
       couponCode: couponCode.toUpperCase(),
       title,
       description,
+      category,
+      imageUrl,
       discountType,
       discountValue,
       minOrderAmount: minOrderAmount || 0,
@@ -192,6 +223,8 @@ const createCoupon = async (req, res) => {
         couponCode: savedCoupon.couponCode,
         title: savedCoupon.title,
         description: savedCoupon.description,
+        category: savedCoupon.category,
+        imageUrl: savedCoupon.imageUrl,
         discountType: savedCoupon.discountType,
         discountValue: savedCoupon.discountValue,
         minOrderAmount: savedCoupon.minOrderAmount,
@@ -441,6 +474,8 @@ const updateCoupon = async (req, res) => {
         couponCode: updatedCoupon.couponCode,
         title: updatedCoupon.title,
         description: updatedCoupon.description,
+        category: updatedCoupon.category,
+        imageUrl: updatedCoupon.imageUrl,
         discountType: updatedCoupon.discountType,
         discountValue: updatedCoupon.discountValue,
         minOrderAmount: updatedCoupon.minOrderAmount,
@@ -774,4 +809,5 @@ module.exports = {
   toggleCouponStatus,
   getCouponUsageStats,
   getCouponAnalytics,
+  uploadCouponImage,
 };

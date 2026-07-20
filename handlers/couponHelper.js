@@ -15,7 +15,8 @@ class CouponHelper {
     couponCode,
     userId,
     orderAmount,
-    scheduleId = null
+    scheduleId = null,
+    activeRole = null
   ) {
     try {
       // Find the coupon
@@ -96,8 +97,25 @@ class CouponHelper {
         };
       }
 
-      // User type restriction is advisory only — not a hard block during checkout
-      // (Admins can see applicableUserTypes but it does not block users at validation)
+      // Check user role against applicableUserTypes
+      let userRoles = [];
+      if (activeRole) {
+        userRoles = [activeRole];
+      } else {
+        const user = await User.findById(userId);
+        if (user) {
+          userRoles = user.roles || [user.role];
+        }
+      }
+      const hasValidRole = coupon.applicableUserTypes.some(role => userRoles.includes(role));
+      
+      if (!hasValidRole) {
+        return {
+          isValid: false,
+          error: "This coupon is not valid for your account type",
+          errorCode: "ROLE_NOT_APPLICABLE",
+        };
+      }
 
       // Check route restrictions (if applicable)
       if (scheduleId && coupon.applicableRoutes.length > 0) {
@@ -173,13 +191,15 @@ class CouponHelper {
    * @param {number} originalAmount - The original booking amount
    * @returns {Object} Result of coupon application
    */
-  static async applyCoupon(couponCode, userId, bookingId, originalAmount) {
+  static async applyCoupon(couponCode, userId, bookingId, originalAmount, activeRole = null) {
     try {
       // Validate coupon first
       const validation = await this.validateCoupon(
         couponCode,
         userId,
-        originalAmount
+        originalAmount,
+        null,
+        activeRole
       );
 
       if (!validation.isValid) {
@@ -237,16 +257,25 @@ class CouponHelper {
    * @param {number} orderAmount - The order amount (optional)
    * @returns {Array} List of available coupons
    */
-  static async getAvailableCoupons(userId, orderAmount = 0) {
+  static async getAvailableCoupons(userId, orderAmount = 0, activeRole = null) {
     try {
-      const user = await User.findById(userId);
+      let userRoles = [];
+      if (activeRole) {
+        userRoles = [activeRole];
+      } else {
+        const user = await User.findById(userId);
+        if (user) {
+          userRoles = user.roles || [user.role];
+        }
+      }
+
       const now = new Date();
 
       const coupons = await Coupon.find({
         isActive: true,
         validFrom: { $lte: now },
         validTo: { $gte: now },
-        applicableUserTypes: { $in: user.roles || [user.role] },
+        applicableUserTypes: { $in: userRoles },
         $or: [
           { totalUsageLimit: null },
           { $expr: { $lt: ["$usedCount", "$totalUsageLimit"] } },

@@ -137,7 +137,8 @@ const prepareBooking = async (req, res) => {
         couponCode,
         userId,
         originalAmount,
-        scheduleId
+        scheduleId,
+        req.userInfo.activeRole
       );
 
       if (!validation.isValid) {
@@ -423,7 +424,13 @@ const confirmBooking = async (req, res) => {
       // Re-validate coupon discount for cap calculation
       let couponDiscountForCap = 0;
       if (couponCode && couponCode.trim() !== "") {
-        const validation = await CouponHelper.validateCoupon(couponCode, userId, originalAmount, scheduleId);
+        const validation = await CouponHelper.validateCoupon(
+          couponCode,
+          userId,
+          originalAmount,
+          scheduleId,
+          req.userInfo.activeRole
+        );
         if (validation.isValid) {
           couponDiscountForCap = validation.discountAmount;
         }
@@ -453,7 +460,13 @@ const confirmBooking = async (req, res) => {
     } else {
       // Split payment: gateway handles what SM Money doesn't cover
       const afterCoupon = originalAmount - (couponCode ? (await (async () => {
-        const v = await CouponHelper.validateCoupon(couponCode, userId, originalAmount, scheduleId);
+        const v = await CouponHelper.validateCoupon(
+          couponCode,
+          userId,
+          originalAmount,
+          scheduleId,
+          req.userInfo.activeRole
+        );
         return v.isValid ? v.discountAmount : 0;
       })()) : 0);
       gatewayAmount = afterCoupon - smMoneyApplied;
@@ -799,7 +812,13 @@ const confirmBooking = async (req, res) => {
     let appliedCouponCode = null;
 
     if (couponCode && couponCode.trim() !== "") {
-      const validation = await CouponHelper.validateCoupon(couponCode, userId, originalAmount, scheduleId);
+      const validation = await CouponHelper.validateCoupon(
+        couponCode,
+        userId,
+        originalAmount,
+        scheduleId,
+        req.userInfo.activeRole
+      );
       if (!validation.isValid) {
         return res.status(400).json({
           success: false,
@@ -983,7 +1002,13 @@ const confirmBooking = async (req, res) => {
     // Apply coupon usage flag
     if (couponUsed) {
       try {
-        await CouponHelper.applyCoupon(appliedCouponCode, userId, booking._id, originalAmount);
+        await CouponHelper.applyCoupon(
+          appliedCouponCode,
+          userId,
+          booking._id,
+          originalAmount,
+          req.userInfo.activeRole
+        );
       } catch (couponError) {
         console.error("Error recording coupon usage:", couponError);
       }

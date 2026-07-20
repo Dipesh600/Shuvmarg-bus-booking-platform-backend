@@ -174,6 +174,9 @@ const buildS3Path = ({ type, ownerId, brandId, fleetId, driverId, agentId, docum
             // Platform-level assets — not tied to any owner/brand hierarchy
             return `platform/scratch-themes`;
 
+        case "coupon_image":
+            return `platform/coupons`;
+
         default:
             return `misc/${sanitizeSegment(type)}`;
     }
