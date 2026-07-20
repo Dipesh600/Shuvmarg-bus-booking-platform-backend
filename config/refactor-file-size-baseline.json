@@ -96,9 +96,6 @@
   "controllers/authControllers.js/activateAccountController.js": 161,
   "models/busOwnerModel.js": 154,
   "controllers/adminController/busOwnerController/boardingPointController.js": 153,
-  "tests/characterization/document-proxy.test.js": 194,
-  "tests/unit/shared/document-proxy/document-proxy-controller.test.js": 222,
-  "tests/unit/shared/document-proxy/document-proxy-service.test.js": 209,
   "_boundary150": {
     "_note": "These files are exactly 150 lines — compliant but on the boundary. Any addition makes them a violation.",
     "controllers/busOwnerController/fareRuleController.js": 150

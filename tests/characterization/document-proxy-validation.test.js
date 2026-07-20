@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * tests/characterization/document-proxy.test.js
+ * tests/characterization/document-proxy-validation.test.js
  *
  * Characterization tests for:
  *   GET /api/agent/documents/view
@@ -11,15 +11,13 @@
  * middleware chain succeeds exactly as in production.
  */
 
-const test    = require('node:test');
+const { test, mock } = require('node:test');
 const assert  = require('node:assert/strict');
 const crypto  = require('node:crypto');
 const { Readable } = require('node:stream');
-const { mock } = require('node:test');
 const request = require('supertest');
 const jwt     = require('jsonwebtoken');
 
-/* ── env must be set before any module loads ─────────────────────────────── */
 process.env.NODE_ENV              = 'test';
 process.env.SECRET_KEY            = 'test-only-secret-32chars-minimum!!';
 process.env.VERIFICATION_TOKEN_SECRET = 'test-only-verification-secret!!';
@@ -31,16 +29,13 @@ process.env.SPARROW_SMS_TOKEN     = 'test-stub';
 process.env.CLOUDINARY_NAME       = 'test';
 process.env.CLOUDINARY_API_KEY    = 'test';
 process.env.CLOUDINARY_SECRET_KEY = 'test';
-process.env.FCM_PROJECT_ID        = '';
-process.env.FCM_CLIENT_EMAIL      = '';
-process.env.FCM_PRIVATE_KEY       = '';
+process.env.FCM_PROJECT_ID = process.env.FCM_CLIENT_EMAIL = process.env.FCM_PRIVATE_KEY = '';
 
 const db      = require('../helpers/db');
 const app     = require('../helpers/app');
 const User    = require('../../models/userModel');
 const storage = require('../../src/modules/shared/document-proxy/document-proxy.storage.js');
 
-/* ── helpers ─────────────────────────────────────────────────────────────── */
 let seq = 0;
 const next = () => String(++seq).padStart(3, '0');
 const cred = () => `${crypto.randomBytes(12).toString('hex')}A1!`;
@@ -86,8 +81,7 @@ const stubS3Ok = (overrides = {}) => mock.method(storage, 'fetchS3Object', async
     ...overrides,
 }));
 
-/* ── tests ───────────────────────────────────────────────────────────────── */
-test('document-proxy characterization', async (t) => {
+test('document-proxy characterization - validation', async (t) => {
     t.before(async () => db.connect());
     t.after(async ()  => db.disconnect());
     t.beforeEach(async () => db.clearAll());
@@ -119,45 +113,6 @@ test('document-proxy characterization', async (t) => {
         assert.equal(res.body.message, 'Access denied: key path is not permitted.');
         assert.ok('debug_key_start' in res.body);
         assert.ok(res.body.debug_key_start.startsWith('private/'));
-    });
-
-    await t.test('4. allowed prefix owners/ streams file and sets headers', async () => {
-        stubS3Ok({ ContentType: 'image/jpeg' });
-        const user  = await seedAgent();
-        const token = tokenFor(user);
-        const res   = await get('owners/abc/kyc/doc.jpg', token);
-        assert.equal(res.status, 200);
-        assert.equal(res.headers['content-type'], 'image/jpeg');
-        assert.equal(res.headers['cache-control'], 'private, max-age=300');
-    });
-
-    await t.test('5. allowed prefix agents/ is served', async () => {
-        stubS3Ok({ ContentType: 'application/pdf' });
-        const user  = await seedAgent();
-        const token = tokenFor(user);
-        const res   = await get('agents/xyz/doc.pdf', token);
-        assert.equal(res.status, 200);
-    });
-
-    await t.test('6. Content-Disposition uses last key segment', async () => {
-        stubS3Ok();
-        const user  = await seedAgent();
-        const token = tokenFor(user);
-        const res   = await get('owners/123/kyc/citizenship.pdf', token);
-        assert.ok(res.headers['content-disposition'].includes('citizenship.pdf'));
-    });
-
-    await t.test('7. Content-Length is forwarded when S3 provides it', async () => {
-        const data = Buffer.from('file-bytes');
-        mock.method(storage, 'fetchS3Object', async () => ({
-            ContentType:   'application/pdf',
-            ContentLength: data.length,
-            Body:          Readable.from([data]),
-        }));
-        const user  = await seedAgent();
-        const token = tokenFor(user);
-        const res   = await get('owners/123/doc.pdf', token);
-        assert.equal(res.headers['content-length'], String(data.length));
     });
 
     await t.test('8. S3 NoSuchKey → 404 with exact body and debug_key', async () => {
