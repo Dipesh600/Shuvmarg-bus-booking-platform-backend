@@ -3,7 +3,7 @@ const CouponUsage = require("../../models/couponUsageModel.js");
 const UserCouponUsage = require("../../models/userCouponUsageModel.js");
 const CouponHelper = require("../../handlers/couponHelper.js");
 const mongoose = require("mongoose");
-const { getPresignedUrl } = require("../../services/s3Service.js");
+const { getDisplayUrl } = require("../../services/s3Service.js");
 
 // Get available coupons for user
 const getAvailableCoupons = async (req, res) => {
@@ -330,10 +330,9 @@ const searchCoupons = async (req, res) => {
   }
 };
 
-// Get all coupons for user
+// Get all coupons for user (active only — home carousel)
 const getAllCouponsForUser = async (req, res) => {
   try {
-    // Find all active coupons that are currently valid
     const now = new Date();
     const coupons = await Coupon.find({
       isActive: true,
@@ -341,24 +340,26 @@ const getAllCouponsForUser = async (req, res) => {
       validTo: { $gte: now },
     }).sort({ createdAt: -1 });
 
-    const results = [];
-
-    for (const coupon of coupons) {
-      // Resolve S3 key to a presigned URL for display; keep null if no image
-      let resolvedImageUrl = null;
-      if (coupon.imageUrl) {
-        resolvedImageUrl = coupon.imageUrl.startsWith("http")
-          ? coupon.imageUrl
-          : await getPresignedUrl(coupon.imageUrl);
+    // Helper: resolve stored imageUrl → 7-day presigned URL.
+    // Handles raw key ("platform/coupons/...") and legacy full URL.
+    const resolveImage = async (imageUrl) => {
+      if (!imageUrl) return null;
+      let key = imageUrl;
+      if (key.startsWith("http")) {
+        try { key = new URL(key).pathname.replace(/^\//, ""); } catch { return null; }
       }
+      return getDisplayUrl(key);
+    };
 
-      const couponData = {
+    // Resolve all images in parallel — not sequentially.
+    const results = await Promise.all(
+      coupons.map(async (coupon) => ({
         _id: coupon._id,
         couponCode: coupon.couponCode,
         title: coupon.title,
         description: coupon.description,
         category: coupon.category,
-        imageUrl: resolvedImageUrl,
+        imageUrl: await resolveImage(coupon.imageUrl),
         designConfig: coupon.designConfig,
         discountType: coupon.discountType,
         discountValue: coupon.discountValue,
@@ -367,9 +368,12 @@ const getAllCouponsForUser = async (req, res) => {
         validFrom: coupon.validFrom,
         validTo: coupon.validTo,
         perUserLimit: coupon.perUserLimit,
-      };
-      results.push(couponData);
-    }
+      }))
+    );
+
+    // Public endpoint — allow browser/CDN to cache for 60 s, then serve stale
+    // for up to 5 min while revalidating in the background.
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
 
     return res.status(200).json({
       success: true,
@@ -389,8 +393,9 @@ const getAllCouponsForUser = async (req, res) => {
 const getAllCouponsIncludingExpired = async (req, res) => {
   try {
     const now = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    // Fetch active valid coupons first, then expired ones
     const [activeCoupons, expiredCoupons] = await Promise.all([
       Coupon.find({
         isActive: true,
@@ -398,45 +403,49 @@ const getAllCouponsIncludingExpired = async (req, res) => {
         validTo: { $gte: now },
       }).sort({ createdAt: -1 }),
       Coupon.find({
-        $or: [
-          { isActive: false },
-          { validTo: { $lt: now } },
-        ],
+        isActive: true,
+        validTo: { $gte: thirtyDaysAgo, $lt: now },
       })
         .sort({ validTo: -1 })
-        .limit(20), // cap expired to last 20
+        .limit(20),
     ]);
 
-    // Resolve S3 key to presigned URL for each coupon
-    const format = async (coupon) => {
-      let resolvedImageUrl = null;
-      if (coupon.imageUrl) {
-        resolvedImageUrl = coupon.imageUrl.startsWith("http")
-          ? coupon.imageUrl
-          : await getPresignedUrl(coupon.imageUrl);
+    // Resolve image URL — handles both raw S3 keys and legacy full URLs
+    const resolveImage = async (imageUrl) => {
+      if (!imageUrl) return null;
+      let key = imageUrl;
+      if (key.startsWith("http")) {
+        try { key = new URL(key).pathname.replace(/^\//, ""); } catch { return null; }
       }
-      return {
-        _id: coupon._id,
-        couponCode: coupon.couponCode,
-        title: coupon.title,
-        description: coupon.description,
-        category: coupon.category,
-        imageUrl: resolvedImageUrl,
-        designConfig: coupon.designConfig,
-        discountType: coupon.discountType,
-        discountValue: coupon.discountValue,
-        minOrderAmount: coupon.minOrderAmount,
-        maxDiscountAmount: coupon.maxDiscountAmount,
-        validFrom: coupon.validFrom,
-        validTo: coupon.validTo,
-        perUserLimit: coupon.perUserLimit,
-      };
+      return getDisplayUrl(key);
     };
 
+    const format = async (coupon) => ({
+      _id: coupon._id,
+      couponCode: coupon.couponCode,
+      title: coupon.title,
+      description: coupon.description,
+      category: coupon.category,
+      imageUrl: await resolveImage(coupon.imageUrl),
+      designConfig: coupon.designConfig,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      minOrderAmount: coupon.minOrderAmount,
+      maxDiscountAmount: coupon.maxDiscountAmount,
+      validFrom: coupon.validFrom,
+      validTo: coupon.validTo,
+      perUserLimit: coupon.perUserLimit,
+      isActive: coupon.isActive,
+    });
+
+    // Resolve all images in parallel across both lists
     const [activeFormatted, expiredFormatted] = await Promise.all([
       Promise.all(activeCoupons.map(format)),
       Promise.all(expiredCoupons.map(format)),
     ]);
+
+    // Public endpoint — allow caching for 60 s
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
 
     return res.status(200).json({
       success: true,

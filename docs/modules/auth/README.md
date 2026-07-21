@@ -16,7 +16,10 @@ General user authentication routes are mounted by `routes/indexRoute.js` under `
 | Update password | [update-password.md](update-password.md) | Modularized under `src/modules/auth/update-password`. |
 | Force password | [force-password.md](force-password.md) | Modularized under `src/modules/auth/force-password`. |
 | Profile | [profile.md](profile.md) | Modularized under `src/modules/auth/profile`. |
+| Passenger account | [passenger-account.md](passenger-account.md) | Modularized under `src/modules/auth/passenger-account`. Internal resolver — no route. |
+| Passenger OTP auth | [passenger-otp-auth.md](passenger-otp-auth.md) | Modularized under `src/modules/auth/passenger-otp-auth`. Public route at `/api/auth/passenger`. |
 | Account activation | [account-activation.md](account-activation.md) | Legacy controller-backed flow, not yet modularized under `src/modules`. |
+
 
 ## Flow distinction
 
@@ -43,6 +46,7 @@ General user authentication routes are mounted by `routes/indexRoute.js` under `
   - `src/modules/auth/update-password/index.js`
   - `src/modules/auth/force-password/index.js`
   - `src/modules/auth/profile/index.js`
+  - `src/modules/auth/passenger-account/index.js`
   - `controllers/authControllers.js/activateAccountController.js`
 - Middleware:
   - `middleware/authMiddleware.js`
