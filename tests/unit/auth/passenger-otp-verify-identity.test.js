@@ -99,4 +99,29 @@ test('passenger OTP verify service — identity cases and role repair', async (t
       assert.ok(Array.isArray(tokenRoles) && tokenRoles.includes('passenger'));
     } finally { restore.reverse().forEach((fn) => fn()); }
   });
+
+  await t.test('failed role repair throws UNEXPECTED_PASSENGER_STATE and aborts login/token issuance', async () => {
+    const restore = [];
+    const legacy = { _id: 'uid5', role: 'passenger', roles: [], status: 'active', deletedAt: null, phoneVerified: true, forcePasswordChange: false, tokenVersion: 0 };
+    let loginRecorded = false;
+    let tokenGenerated = false;
+    patch(otpHelper, 'verifyOTPCode', async () => ({ valid: true, error: null }), restore);
+    patch(passengerAccount, 'resolvePassengerAccountAfterPhoneVerification', async () => ({ _id: 'uid5' }), restore);
+    patch(repository, 'loadPassengerSessionState', async () => ({ user: { ...legacy }, hasUsablePassword: false }), restore);
+    patch(repository, 'materializeLegacyPassengerRole', async () => {}, restore);
+    patch(repository, 'recordPassengerLogin', async () => { loginRecorded = true; }, restore);
+    patch(tokenService, 'generateTokenPair', async () => { tokenGenerated = true; return { accessToken: 'at', refreshToken: 'rt' }; }, restore);
+    try {
+      await assert.rejects(
+        () => verify(),
+        (err) => {
+          assert.equal(err.statusCode, 500);
+          assert.equal(err.responseBody?.errorCode, 'UNEXPECTED_PASSENGER_STATE');
+          return true;
+        }
+      );
+      assert.equal(loginRecorded, false, 'recordPassengerLogin must not be called');
+      assert.equal(tokenGenerated, false, 'generateTokenPair must not be called');
+    } finally { restore.reverse().forEach((fn) => fn()); }
+  });
 });

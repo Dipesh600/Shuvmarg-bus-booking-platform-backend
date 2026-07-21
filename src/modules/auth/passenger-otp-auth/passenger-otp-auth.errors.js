@@ -88,7 +88,6 @@ const accountRestrictedError = () =>
     success: false,
     message: 'This account is not eligible for authentication. Please contact support.',
     errorCode: 'ACCOUNT_RESTRICTED',
-    contact: { email: 'support@shuvmarg.com' },
   });
 
 module.exports = {
