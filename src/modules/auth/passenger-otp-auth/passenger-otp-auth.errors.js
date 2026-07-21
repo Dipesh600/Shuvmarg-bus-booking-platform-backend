@@ -71,19 +71,24 @@ const forcePasswordChangeError = () =>
   );
 
 const unexpectedPassengerStateError = (detail) =>
-  new AppError('Passenger account state is invalid. Please contact support.', 500, {
-    success: false,
-    message: 'Passenger account state is invalid. Please contact support.',
-    errorCode: 'UNEXPECTED_PASSENGER_STATE',
-    detail: detail || null,
-  });
+  new AppError(
+    'Passenger account state is invalid. Please contact support.',
+    500,
+    {
+      success: false,
+      message: 'Passenger account state is invalid. Please contact support.',
+      errorCode: 'UNEXPECTED_PASSENGER_STATE',
+    },
+    'UNEXPECTED_PASSENGER_STATE',
+    detail ? new Error(detail) : null,
+  );
 
 const accountRestrictedError = () =>
   new AppError('This account is not eligible for authentication. Please contact support.', 403, {
     success: false,
     message: 'This account is not eligible for authentication. Please contact support.',
     errorCode: 'ACCOUNT_RESTRICTED',
-    contact: { email: 'support@shuvmarg.com', phone: '+977-9800000000' },
+    contact: { email: 'support@shuvmarg.com' },
   });
 
 module.exports = {

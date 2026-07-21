@@ -89,7 +89,7 @@ test('passenger OTP auth characterization', async (t) => {
       await sendOTP({ phone: ph });
       // Directly inject a known OTP for testing
       const crypto = require('node:crypto');
-      const secret = process.env.OTP_HMAC_SECRET || 'otp-secret-default';
+      const secret = process.env.SECRET_KEY;
       const rawOtp = '111111';
       const hashed = crypto.createHmac('sha256', secret).update(rawOtp).digest('hex');
       await OTP.findOneAndUpdate(
@@ -114,7 +114,7 @@ test('passenger OTP auth characterization', async (t) => {
     try {
       await sendOTP({ phone: ph });
       const crypto = require('node:crypto');
-      const secret = process.env.OTP_HMAC_SECRET || 'otp-secret-default';
+      const secret = process.env.SECRET_KEY;
       const rawOtp = '222222';
       const hashed = crypto.createHmac('sha256', secret).update(rawOtp).digest('hex');
       await OTP.findOneAndUpdate(

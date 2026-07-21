@@ -58,6 +58,9 @@ const loadRepaired = async (userId) => {
     await repository.materializeLegacyPassengerRole(userId);
     state = await repository.loadPassengerSessionState(userId);
     if (!state) throw errors.unexpectedPassengerStateError('session state missing after role repair');
+    if (!Array.isArray(state.user.roles) || !state.user.roles.includes('passenger')) {
+      throw errors.unexpectedPassengerStateError('legacy role repair failed to materialize passenger role');
+    }
   }
 
   return state;
