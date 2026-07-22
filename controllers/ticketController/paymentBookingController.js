@@ -1096,53 +1096,7 @@ const confirmBooking = async (req, res) => {
   }
 };
 
-// Verify booking status (for checking if booking was successful)
-const verifyBooking = async (req, res) => {
-  try {
-    const { ticketId } = req.params;
-    const userId = req.userInfo.id;
-
-    const booking = await Booking.findOne({
-      ticketId,
-      userId,
-    }).populate("tripId");  // tripId is the correct field (not scheduleId)
-
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found!",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Booking verified successfully!",
-      data: {
-        bookingId: booking._id,
-        ticketId: booking.ticketId,
-        scheduleDetails: booking.scheduleId,
-        seats: booking.seats,
-        originalAmount: booking.originalAmount,
-        discountAmount: booking.discountAmount,
-        totalAmount: booking.totalAmount,
-        couponUsed: booking.couponCode,
-        gateway: booking.gateway,
-        transactionId: booking.transactionId,
-        status: booking.status,
-        bookedAt: booking.bookedAt,
-      },
-    });
-  } catch (error) {
-    console.error("Error verifying booking:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
-
 module.exports = {
   prepareBooking,
   confirmBooking,
-  verifyBooking,
 };

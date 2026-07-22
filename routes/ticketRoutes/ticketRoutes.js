@@ -7,6 +7,7 @@ const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner.js");
 const passengerSeatHold = require("../../src/modules/booking/passenger-seat-hold");
+const bookingVerification = require("../../src/modules/booking/booking-verification");
 
 const busOwnerGuard = [auth, verifyRoleFromDB, role.busOwnerMiddleware, requireApprovedBusOwner];
 const passengerBookingGuard = [auth, verifyRoleFromDB, role.requireRole("passenger")];
@@ -35,7 +36,7 @@ router.post(
   passengerSeatHold.requireOwnedActivePassengerSeatHold,
   paymentBooking.confirmBooking
 );
-router.get("/verifyBooking/:ticketId", ...passengerBookingGuard, paymentBooking.verifyBooking);
+router.get("/verifyBooking/:ticketId", ...passengerBookingGuard, bookingVerification.verifyBooking);
 
 // Get Seats
 router.post("/getSeats", auth, ticket.getSeatsById);
