@@ -10,6 +10,15 @@
 const mongoose = require("mongoose");
 const SeatHold = require("../models/seatHoldModel");
 
+const extractDatabaseName = (urlStr) => {
+  try {
+    const parsed = new URL(urlStr);
+    return parsed.pathname.replace(/^\//, "") || "default";
+  } catch (_) {
+    return "configured-db";
+  }
+};
+
 const ensurePassengerSeatHoldIndexes = async (mongooseInstance = mongoose) => {
   const collection = mongooseInstance.connection.collection("seatholds");
 
@@ -36,19 +45,31 @@ const ensurePassengerSeatHoldIndexes = async (mongooseInstance = mongoose) => {
 
 // Standalone CLI execution
 if (require.main === module) {
-  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI || "mongodb://localhost:27017/shuvmarg";
+  require("dotenv").config();
+  const mongoUrl = process.env.MONGODB_URL;
+  if (!mongoUrl || !mongoUrl.trim()) {
+    console.error("[db:index:passenger-seat-hold] MONGODB_URL environment variable is required.");
+    process.exit(1);
+  }
+
+  const dbName = extractDatabaseName(mongoUrl);
+
   mongoose
-    .connect(mongoUri)
+    .connect(mongoUrl)
     .then(async () => {
-      console.log("[db:index:passenger-seat-hold] Connected to MongoDB. Creating indexes...");
+      console.log(`[db:index:passenger-seat-hold] Connected to database "${dbName}". Creating indexes...`);
       await ensurePassengerSeatHoldIndexes();
       console.log("[db:index:passenger-seat-hold] Successfully ensured seat hold single-field sparse unique indexes.");
-      await mongoose.disconnect();
-      process.exit(0);
     })
     .catch((err) => {
-      console.error("[db:index:passenger-seat-hold] Index creation failed:", err);
-      process.exit(1);
+      console.error("[db:index:passenger-seat-hold] Index creation failed:", err.message);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await mongoose.disconnect().catch(() => {});
+      if (process.exitCode && process.exitCode !== 0) {
+        process.exit(process.exitCode);
+      }
     });
 }
 

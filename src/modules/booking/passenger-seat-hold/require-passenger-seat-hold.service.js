@@ -26,21 +26,23 @@ const validateConfirmationHold = async ({
     throw errors.bookingHoldInvalidError();
   }
 
-  if (clientTripId && String(clientTripId) !== String(hold.tripId)) {
-    throw errors.bookingHoldMismatchError();
+  if (clientTripId !== undefined && clientTripId !== null) {
+    if (typeof clientTripId !== 'string' || !clientTripId.trim() || String(clientTripId).trim() !== String(hold.tripId)) {
+      throw errors.bookingHoldMismatchError();
+    }
   }
 
-  if (clientSeats && Array.isArray(clientSeats) && clientSeats.length > 0) {
+  if (clientSeats !== undefined && clientSeats !== null) {
+    if (!Array.isArray(clientSeats) || clientSeats.length === 0) {
+      throw errors.bookingHoldMismatchError();
+    }
     try {
       const normalizedClient = policy.normalizeSeatNumbers(clientSeats);
       if (!policy.sameSeatSet(normalizedClient, hold.seatNumbers)) {
         throw errors.bookingHoldMismatchError();
       }
     } catch (err) {
-      if (err.errorCode === 'INVALID_SEAT_SELECTION') {
-        throw errors.bookingHoldMismatchError();
-      }
-      throw err;
+      throw errors.bookingHoldMismatchError();
     }
   }
 

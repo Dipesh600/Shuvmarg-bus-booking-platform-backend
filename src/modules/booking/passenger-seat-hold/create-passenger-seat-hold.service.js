@@ -43,22 +43,10 @@ const createOrReusePassengerSeatHold = async ({
     throw errors.seatTemporarilyHeldError();
   }
 
-  const existingHold = await repository.findActiveHoldForUserTrip(userId, tripId, userTripKey, now);
+  let existingHold = await repository.findActiveHoldForUserTrip(userId, tripId, userTripKey, now);
 
   if (existingHold) {
-    if (policy.isLegacyHold(existingHold)) {
-      try {
-        const upgraded = await repository.updateOwnedActiveHold(
-          existingHold._id, userId, tripId, normalizedSeats, seatKeys, userTripKey, now
-        );
-        if (upgraded) return toCanonicalHoldObject(upgraded);
-      } catch (err) {
-        if (isDuplicateKeyError(err)) throw errors.seatTemporarilyHeldError();
-        throw err;
-      }
-    }
-
-    if (policy.sameSeatSet(existingHold.seatNumbers, normalizedSeats)) {
+    if (!policy.isLegacyHold(existingHold) && policy.sameSeatSet(existingHold.seatNumbers, normalizedSeats)) {
       return toCanonicalHoldObject(existingHold);
     }
 
@@ -70,6 +58,23 @@ const createOrReusePassengerSeatHold = async ({
     } catch (err) {
       if (isDuplicateKeyError(err)) throw errors.seatTemporarilyHeldError();
       throw err;
+    }
+
+    // Atomic update returned null (hold expired or changed concurrently) — re-read authoritative state
+    existingHold = await repository.findActiveHoldForUserTrip(userId, tripId, userTripKey, now);
+    if (existingHold) {
+      if (policy.sameSeatSet(existingHold.seatNumbers, normalizedSeats)) {
+        return toCanonicalHoldObject(existingHold);
+      }
+      try {
+        const retriedUpdate = await repository.updateOwnedActiveHold(
+          existingHold._id, userId, tripId, normalizedSeats, seatKeys, userTripKey, now
+        );
+        if (retriedUpdate) return toCanonicalHoldObject(retriedUpdate);
+      } catch (err) {
+        if (isDuplicateKeyError(err)) throw errors.seatTemporarilyHeldError();
+        throw err;
+      }
     }
   }
 

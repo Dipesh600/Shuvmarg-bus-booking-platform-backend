@@ -88,6 +88,30 @@ test('Passenger Seat Hold Middleware & Confirmation Validation', async (t) => {
     } finally { restore.reverse().forEach((f) => f()); }
   });
 
+  await t.test('malformed optional assertion fields throw 409 BOOKING_HOLD_MISMATCH', async () => {
+    const restore = [];
+    const hold = { _id: 'h1', tripId: 't1', userId: 'u1', seatNumbers: ['a1'], status: 'held', expiresAt: new Date(Date.now() + 60000) };
+    patch(repository, 'findOwnedActiveHoldByTempId', async () => hold, restore);
+    try {
+      const malformedCases = [
+        { clientTripId: '' },
+        { clientSeats: 'a1' },
+        { clientSeats: [] },
+        { clientSeats: [null] },
+      ];
+      for (const payload of malformedCases) {
+        await assert.rejects(
+          () => validateConfirmationHold({ tempBookingId: 'BH1', userId: 'u1', ...payload }),
+          (err) => {
+            assert.equal(err.statusCode, 409);
+            assert.equal(err.responseBody.errorCode, 'BOOKING_HOLD_MISMATCH');
+            return true;
+          }
+        );
+      }
+    } finally { restore.reverse().forEach((f) => f()); }
+  });
+
   await t.test('middleware attaches req.bookingHold and calls next()', async () => {
     const restore = [];
     const hold = { _id: 'h1', tripId: 't1', userId: 'u1', seatNumbers: ['a1'], status: 'held', expiresAt: new Date(Date.now() + 60000) };
