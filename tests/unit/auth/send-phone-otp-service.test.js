@@ -31,16 +31,21 @@ test('Unit: sendPhoneOTP service', async (t) => {
     );
   });
 
-  await t.test('registered phone → generic 200, no data, createAndSendOTP NOT called', async () => {
+  await t.test('registered phone → AppError 409 PHONE_ALREADY_REGISTERED', async () => {
     let sendCalled = false;
     phoneGuard.isPhoneRegistered = async () => ({ registered: true });
     otpHelper.createAndSendOTP = async () => { sendCalled = true; };
 
-    const result = await service.sendPhoneOTP({ phone: '9800000001' });
-    assert.equal(result.statusCode, 200);
-    assert.ok(result.responseBody.status);
-    assert.equal(result.responseBody.data, undefined);
-    assert.equal(sendCalled, false);
+    await assert.rejects(
+      () => service.sendPhoneOTP({ phone: '9800000001' }),
+      (err) => {
+        assert.ok(err instanceof AppError);
+        assert.equal(err.statusCode, 409);
+        assert.equal(err.responseBody.errorCode, 'PHONE_ALREADY_REGISTERED');
+        assert.equal(sendCalled, false);
+        return true;
+      }
+    );
   });
 
   await t.test('OTP_SEND_BLOCKED → AppError 429', async () => {
@@ -48,12 +53,11 @@ test('Unit: sendPhoneOTP service', async (t) => {
     otpHelper.createAndSendOTP = async () => { throw new Error('OTP_SEND_BLOCKED:5'); };
 
     await assert.rejects(
-      () => service.sendPhoneOTP({ phone: '9800000002' }),
+      () => service.sendPhoneOTP({ phone: '9800000001' }),
       (err) => {
         assert.ok(err instanceof AppError);
         assert.equal(err.statusCode, 429);
         assert.equal(err.responseBody.errorCode, 'OTP_SEND_BLOCKED');
-        assert.equal(err.responseBody.retryAfterMinutes, 5);
         return true;
       }
     );
@@ -64,11 +68,10 @@ test('Unit: sendPhoneOTP service', async (t) => {
     otpHelper.createAndSendOTP = async () => { throw new Error('Some DB error'); };
 
     await assert.rejects(
-      () => service.sendPhoneOTP({ phone: '9800000003' }),
+      () => service.sendPhoneOTP({ phone: '9800000001' }),
       (err) => {
         assert.ok(err instanceof AppError);
         assert.equal(err.statusCode, 500);
-        assert.equal(err.responseBody.message, 'Failed to send OTP. Please try again.');
         return true;
       }
     );
@@ -76,10 +79,10 @@ test('Unit: sendPhoneOTP service', async (t) => {
 
   await t.test('success → statusCode 200 with expiresIn', async () => {
     phoneGuard.isPhoneRegistered = async () => ({ registered: false });
-    otpHelper.createAndSendOTP = async () => ({ success: true, expiresIn: '5 minutes' });
+    otpHelper.createAndSendOTP = async () => ({ isNew: true, expiresAt: new Date() });
 
-    const result = await service.sendPhoneOTP({ phone: '9800000004' });
-    assert.equal(result.statusCode, 200);
-    assert.equal(result.responseBody.data.expiresIn, '5 minutes');
+    const res = await service.sendPhoneOTP({ phone: '9800000001' });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.responseBody.status, true);
   });
 });

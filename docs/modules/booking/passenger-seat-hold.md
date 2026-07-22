@@ -29,13 +29,17 @@ Internal keys:
 Both keys use `select: false` and `default: undefined` so legacy documents remain unindexed until upgraded.
 
 ### 3. Hold Lifecycle & Atomic State Transitions
-- **Preparation / Hold Acquisition**:
+- **Supported Payment Gateways Allow-List**:
+  - `SUPPORTED_BOOKING_GATEWAYS = new Set(["esewa", "wallet"])`.
+  - Unsupported or malformed gateway values (`cash`, `test`, `khalti`, `stripe`, `""`, `null`, `{}`, `[]`) are rejected immediately with HTTP `400 UNSUPPORTED_PAYMENT_GATEWAY` before any coupon lookup, SM Money balance check, debit, or database mutation.
+
+- **Hold Acquisition & Legacy Canonicalization**:
   1. Expired holds (both user-trip and seat keys, plus legacy) are deleted.
   2. Passenger's existing active hold for the same trip is checked:
-     - If legacy hold (lacking `seatKeys`): atomically upgraded with canonical keys.
+     - Active legacy holds (lacking `seatKeys`) are atomically upgraded with canonical keys before returning.
      - If exact same seat set: returns existing `tempBookingId` and `expiresAt` (expiry NOT extended).
      - If different seat set: atomically updates seats & keys while preserving `tempBookingId` & `expiresAt`.
-     - If update returns null (concurrent modification/expiry), re-reads authoritative state before retrying or creating.
+     - Re-read holds are guaranteed to be canonical (`seatKeys` present/non-empty, `userTripKey` present, `status === "held"`, `expiresAt > now`).
   3. Otherwise creates a new hold with cryptographically random `tempBookingId` (`BH` + hex).
   4. Concurrent conflicts trigger `409 SEAT_TEMPORARILY_HELD`.
 
@@ -45,18 +49,26 @@ Both keys use `select: false` and `default: undefined` so legacy documents remai
   - Compares optional client `scheduleId` & `seatNumbers` against hold canonical values; returns `409 BOOKING_HOLD_MISMATCH` on discrepancy or malformed optional input (`scheduleId: ""`, `seatNumbers: "A1"`, `[]`, `[null]`).
   - Attaches canonical hold to `req.bookingHold`.
 
-- **Pre-Side-Effect Validation & Quote**:
-  - All rejectable validation (coupon validity, discount calculation, SM Money cap, split calculation, gateway amount consistency) occurs BEFORE payment mutation, transaction creation, or permanent seat locking.
-  - Invalid input or mismatch returns `400` directly with 0 state mutations; hold remains active.
-
-- **Explicit Booking Commitment & Transaction State Transition**:
-  - `bookingCommitted` flag is set to `true` ONLY after `Booking.create()` succeeds AND `Transaction` status transitions to `SUCCESS` via `findOneAndUpdate({ _id: txnRecord._id, status: "PAYMENT_RECEIVED" })`.
-  - If transition fails or returns null, system returns `409 BOOKING_RECONCILIATION_REQUIRED` with `caseId: txnRecord._id` without undoing committed booking or releasing locked seats.
-  - If unexpected errors occur after `bookingCommitted = true`, system returns `201` booking success response without executing pre-commit rollbacks.
+- **Confirmation Lifecycle & Reconciliation Boundaries**:
+  - States: `PRE_PAYMENT`, `PAYMENT_RECEIVED`, `SEATS_LOCKED`, `BOOKING_CREATED`, `BOOKING_COMMITTED`.
+  - `bookingCreated = true` is set immediately after `Booking.create()` succeeds.
+  - `bookingCommitted = true` is set ONLY after `Transaction` status transitions to `SUCCESS`.
+  - If `Transaction.findOneAndUpdate` returns `null` or throws, system returns `409 BOOKING_RECONCILIATION_REQUIRED` with `caseId: txnRecord._id` without undoing created booking, reversing payment, or releasing locked seats.
+  - Outer `catch(error)` evaluates lifecycle:
+    - `bookingCommitted === true`: preserves booking/seats/payment and returns `201` if response not sent.
+    - `bookingCreated === true`: enters reconciliation, returning `409 BOOKING_RECONCILIATION_REQUIRED`.
+    - `bookingCreated === false`: performs pre-booking compensation (reverses SM debit, marks transaction `DISPUTED`, rolls back locked seats).
 
 - **Completion Timing (`completePassengerHold`)**:
-  - Executed post-booking in an isolated try/catch block so failure does not undo a committed booking.
-  - Atomically sets `status: "completed"` and `completedAt: now`, while unsetting `seatKeys` and `userTripKey` to release unique index locks.
+  - Executed post-commit in an isolated `try/catch` block (`req.bookingHold._id`, `req.dbUser._id`).
+  - Failure in hold completion or other post-commit tasks (cashback, notifications) logs warnings without changing the `201` booking success response.
 
-### 4. Legacy Booking Retirement
-`/api/ticket/bookTicket` is retired via explicit `retireLegacyBookingFlow` handler and returns `410 LEGACY_BOOKING_FLOW_RETIRED`.
+### 4. Legacy Booking Retirement & Known Limitations
+- `/api/ticket/bookTicket` is retired via explicit `retireLegacyBookingFlow` handler and returns `410 LEGACY_BOOKING_FLOW_RETIRED`.
+
+- **Known Limitations**:
+  - `/api/ticket/getSeats` still requires authentication.
+  - `prepareBooking` still does not validate `boardingPoint`.
+  - `prepareBooking` still does not validate `droppingPoint`.
+  - `prepareBooking` still does not validate `passengerDetails`.
+  - Fare calculation is still not server-authoritative.

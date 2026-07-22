@@ -25,6 +25,13 @@ const toCanonicalHoldObject = (doc) => ({
   completedAt: doc.completedAt || null,
 });
 
+const isCanonicalActiveHold = (doc, now) =>
+  doc &&
+  !policy.isLegacyHold(doc) &&
+  Array.isArray(doc.seatKeys) && doc.seatKeys.length > 0 &&
+  Boolean(doc.userTripKey) &&
+  policy.isActiveHold(doc, now);
+
 const createOrReusePassengerSeatHold = async ({
   userId,
   tripId,
@@ -46,7 +53,7 @@ const createOrReusePassengerSeatHold = async ({
   let existingHold = await repository.findActiveHoldForUserTrip(userId, tripId, userTripKey, now);
 
   if (existingHold) {
-    if (!policy.isLegacyHold(existingHold) && policy.sameSeatSet(existingHold.seatNumbers, normalizedSeats)) {
+    if (isCanonicalActiveHold(existingHold, now) && policy.sameSeatSet(existingHold.seatNumbers, normalizedSeats)) {
       return toCanonicalHoldObject(existingHold);
     }
 
@@ -54,7 +61,7 @@ const createOrReusePassengerSeatHold = async ({
       const updated = await repository.updateOwnedActiveHold(
         existingHold._id, userId, tripId, normalizedSeats, seatKeys, userTripKey, now
       );
-      if (updated) return toCanonicalHoldObject(updated);
+      if (updated && isCanonicalActiveHold(updated, now)) return toCanonicalHoldObject(updated);
     } catch (err) {
       if (isDuplicateKeyError(err)) throw errors.seatTemporarilyHeldError();
       throw err;
@@ -63,17 +70,19 @@ const createOrReusePassengerSeatHold = async ({
     // Atomic update returned null (hold expired or changed concurrently) — re-read authoritative state
     existingHold = await repository.findActiveHoldForUserTrip(userId, tripId, userTripKey, now);
     if (existingHold) {
-      if (policy.sameSeatSet(existingHold.seatNumbers, normalizedSeats)) {
-        return toCanonicalHoldObject(existingHold);
-      }
       try {
         const retriedUpdate = await repository.updateOwnedActiveHold(
           existingHold._id, userId, tripId, normalizedSeats, seatKeys, userTripKey, now
         );
-        if (retriedUpdate) return toCanonicalHoldObject(retriedUpdate);
+        if (retriedUpdate && isCanonicalActiveHold(retriedUpdate, now)) return toCanonicalHoldObject(retriedUpdate);
       } catch (err) {
         if (isDuplicateKeyError(err)) throw errors.seatTemporarilyHeldError();
         throw err;
+      }
+
+      const finalHold = await repository.findActiveHoldForUserTrip(userId, tripId, userTripKey, now);
+      if (isCanonicalActiveHold(finalHold, now) && policy.sameSeatSet(finalHold.seatNumbers, normalizedSeats)) {
+        return toCanonicalHoldObject(finalHold);
       }
     }
   }
@@ -96,7 +105,7 @@ const createOrReusePassengerSeatHold = async ({
   } catch (err) {
     if (isDuplicateKeyError(err)) {
       const reRead = await repository.findActiveHoldForUserTrip(userId, tripId, userTripKey, now);
-      if (reRead && policy.sameSeatSet(reRead.seatNumbers, normalizedSeats)) {
+      if (isCanonicalActiveHold(reRead, now) && policy.sameSeatSet(reRead.seatNumbers, normalizedSeats)) {
         return toCanonicalHoldObject(reRead);
       }
       throw errors.seatTemporarilyHeldError();

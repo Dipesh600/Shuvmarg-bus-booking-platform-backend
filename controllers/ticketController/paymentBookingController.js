@@ -324,7 +324,9 @@ const confirmBooking = async (req, res) => {
   let lockedSeatNumbers = [];
   let lockUserId = null;
   let lockTripId = null;
+  let bookingCreated = false;
   let bookingCommitted = false;
+  let booking = null;
 
   // ── Helper: Reverse SM Money debit if one was made ──────────────
   const _reverseSmDebitIfNeeded = async (reason) => {
@@ -368,7 +370,16 @@ const confirmBooking = async (req, res) => {
         smMoneyToUse,     // SM Money amount to debit (split payment)
       } = req.body;
 
-      if (!tempBookingId || !gateway) {
+      const SUPPORTED_BOOKING_GATEWAYS = new Set(["esewa", "wallet"]);
+      if (!gateway || typeof gateway !== "string" || !SUPPORTED_BOOKING_GATEWAYS.has(gateway)) {
+        return res.status(400).json({
+          success: false,
+          message: "The selected payment gateway is not supported.",
+          errorCode: "UNSUPPORTED_PAYMENT_GATEWAY",
+        });
+      }
+
+      if (!tempBookingId) {
         return res.status(400).json({
           success: false,
           message: "Missing required fields for booking confirmation",
@@ -793,7 +804,6 @@ const confirmBooking = async (req, res) => {
         paymentMethodLabel = gateway.toUpperCase();
       }
 
-      let booking;
       try {
         booking = await Booking.create({
           userId,
@@ -822,6 +832,7 @@ const confirmBooking = async (req, res) => {
           bookedVia: "APP",
           ticketId,
         });
+        bookingCreated = true;
       } catch (bookingError) {
         const failReason = `Booking.create() failed: ${bookingError.message}`;
         logger.error("🚨 confirmBooking: BOOKING CREATION FAILED after payment", {
@@ -871,29 +882,44 @@ const confirmBooking = async (req, res) => {
       // ================================================================
       // STEP 9: TRANSITION TRANSACTION TO SUCCESS WITH VERIFICATION
       // ================================================================
-      const successfulTransaction = await Transaction.findOneAndUpdate(
-        {
-          _id: txnRecord._id,
-          status: "PAYMENT_RECEIVED",
-        },
-        {
-          $set: {
-            status: "SUCCESS",
+      try {
+        const successfulTransaction = await Transaction.findOneAndUpdate(
+          {
+            _id: txnRecord._id,
+            status: "PAYMENT_RECEIVED",
+          },
+          {
+            $set: {
+              status: "SUCCESS",
+              bookingId: booking._id,
+              ticketId,
+            },
+          },
+          {
+            new: true,
+            runValidators: true,
+          }
+        );
+
+        if (!successfulTransaction) {
+          logger.error("🚨 confirmBooking: Transaction SUCCESS transition failed (returned null)", {
+            txnId: txnRecord._id,
             bookingId: booking._id,
             ticketId,
-          },
-        },
-        {
-          new: true,
-          runValidators: true,
+          });
+          return res.status(409).json({
+            success: false,
+            message: "Your payment and booking were received, but final reconciliation is still required.",
+            errorCode: "BOOKING_RECONCILIATION_REQUIRED",
+            caseId: txnRecord._id,
+          });
         }
-      );
-
-      if (!successfulTransaction) {
-        logger.error("🚨 confirmBooking: Transaction SUCCESS transition failed", {
+      } catch (txnError) {
+        logger.error("🚨 confirmBooking: Transaction SUCCESS transition threw exception", {
           txnId: txnRecord._id,
           bookingId: booking._id,
           ticketId,
+          error: txnError.message,
         });
         return res.status(409).json({
           success: false,
@@ -903,12 +929,21 @@ const confirmBooking = async (req, res) => {
         });
       }
 
-      // Set committed boundary flag ONLY after Booking AND Transaction SUCCESS succeed
       bookingCommitted = true;
 
       // ================================================================
       // STEP 10: POST-BOOKING NON-CRITICAL WORK (ISOLATED)
       // ================================================================
+      try {
+        await passengerSeatHold.completePassengerHold({
+          holdId: req.bookingHold._id,
+          userId: req.dbUser._id,
+          now: new Date(),
+        });
+      } catch (holdErr) {
+        logger.warn("confirmBooking: Hold completion failed post-commit", { error: holdErr.message });
+      }
+
       if (smDebitEntryId) {
         try {
           const SMLedger = require("../../models/smLedgerModel");
@@ -986,22 +1021,51 @@ const confirmBooking = async (req, res) => {
         },
       });
   } catch (error) {
-    // ================================================================
-    // OUTER CATCH — Unexpected crash at any point in the flow.
-    // If we already have a txnRecord, mark it appropriately.
-    // If SM Money was debited, attempt reversal.
-    // ================================================================
     logger.error("confirmBooking: Unexpected error in booking flow", {
       error: error.message,
       stack: error.stack,
       txnId: txnRecord?._id,
       smDebitEntryId,
+      bookingCreated,
+      bookingCommitted,
     });
 
-    // Reverse SM Money debit if one was made
+    if (res.headersSent) {
+      return;
+    }
+
+    if (bookingCommitted) {
+      return res.status(201).json({
+        success: true,
+        message: "Booking confirmed successfully!",
+        data: {
+          bookingId: booking?._id,
+          ticketId: booking?.ticketId || "",
+          originalAmount,
+          discountAmount: discountAmount || 0,
+          smMoneyUsed: smMoneyApplied || 0,
+          gatewayAmount: gatewayAmount || 0,
+          totalAmount: finalAmount || originalAmount,
+          couponUsed: appliedCouponCode || null,
+          paymentId: paymentId || `sm_wallet_${Date.now()}`,
+          gateway: gateway || "",
+          seats: normalizedSeats || [],
+        },
+      });
+    }
+
+    if (bookingCreated) {
+      return res.status(409).json({
+        success: false,
+        message: "Your payment and booking were received, but final reconciliation is still required.",
+        errorCode: "BOOKING_RECONCILIATION_REQUIRED",
+        caseId: txnRecord?._id,
+      });
+    }
+
+    // PRE_BOOKING: Perform compensation
     await _reverseSmDebitIfNeeded(`Unexpected crash: ${error.message}`);
 
-    // If transaction was written but booking didn't complete, mark DISPUTED
     if (txnRecord) {
       try {
         await Transaction.findByIdAndUpdate(txnRecord._id, {
@@ -1018,7 +1082,6 @@ const confirmBooking = async (req, res) => {
       }
     }
 
-    // If seats were locked, attempt rollback
     if (seatsLocked && lockedSeatNumbers.length > 0 && lockUserId && lockTripId) {
       try {
         await _rollbackSeatLocks(lockTripId, lockedSeatNumbers, lockUserId);
@@ -1027,7 +1090,6 @@ const confirmBooking = async (req, res) => {
       }
     }
 
-    // Return structured error with case ID if available
     if (txnRecord) {
       return res.status(500).json({
         success:   false,
