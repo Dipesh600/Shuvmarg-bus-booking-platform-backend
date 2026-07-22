@@ -11,6 +11,8 @@
     "test:force-password": "node --test tests/characterization/auth-force-password-errors.test.js tests/characterization/auth-force-password-success.test.js tests/unit/auth/force-password-controller.test.js tests/unit/auth/force-password-service.test.js tests/unit/auth/force-password-order.test.js tests/unit/auth/force-password-failures.test.js",
     "test:update-password": "node --test tests/characterization/auth-update-password-errors.test.js tests/characterization/auth-update-password-success.test.js tests/characterization/auth-update-password-attempts.test.js tests/unit/auth/update-password-controller.test.js tests/unit/auth/update-password-service.test.js tests/unit/auth/update-password-attempts.test.js tests/unit/auth/update-password-failures.test.js tests/unit/auth/update-password-order.test.js tests/unit/auth/update-password-repository.test.js",
     "check:filesize": "node tools/check-file-size.js",
+    "check:filesize:diff": "node tools/check-file-size-diff.js",
+    "test:ci-filesize": "node --test tests/unit/tools/check-file-size-diff.test.js",
     "start": "node --no-deprecation index.js",
     "dev": "nodemon index.js",
     "generate-referral-codes": "node scripts/generateReferralCodesForExistingUsers.js",
