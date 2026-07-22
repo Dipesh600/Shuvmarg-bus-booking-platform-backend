@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const admin = require("../../controllers/adminController/adminController.js");
 const bookings = require("../../controllers/adminController/booking/bookingController.js");
-const coupon = require("../../controllers/adminController/coupon-controller/adminCouponController.js");
+const couponAdminRoutes = require("../../src/modules/coupon/admin");
 const autoSeat = require("../../controllers/adminController/seat-controller/adminAutoSeatController.js");
 const authController = require("../../controllers/adminController/authController/auth-controller.js");
 const adminMiddleware = require("../../middleware/adminMiddleware.js");
@@ -74,20 +74,7 @@ router.get("/booking/stats", adminMiddleware, bookings.getBookingStats);
 router.get("/booking/getBookingById/:bookingid", adminMiddleware, bookings.getBookingById);
 router.post("/booking/getBookingsByUser", adminMiddleware, bookings.getBookingsByUser);
 // Coupon Management Routes
-router.post("/coupons", adminMiddleware, coupon.createCoupon);
-router.post("/coupons/upload-image", adminMiddleware, coupon.uploadCouponImage);
-router.post("/coupons/delete-image", adminMiddleware, coupon.deleteOrphanedCouponImage);
-router.get("/coupons", adminMiddleware, coupon.getAllCoupons);
-router.get("/coupons-stats", adminMiddleware, coupon.getCouponUsageStats);
-router.get("/coupons/:id/analytics", adminMiddleware, coupon.getCouponAnalytics);
-router.get("/coupons/:id", adminMiddleware, coupon.getCouponById);
-router.put("/coupons/:id", adminMiddleware, coupon.updateCoupon);
-router.delete("/coupons/:id", adminMiddleware, coupon.deleteCoupon);
-router.patch(
-  "/coupons/:id/toggle-status",
-  adminMiddleware,
-  coupon.toggleCouponStatus
-);
+router.use(couponAdminRoutes);
 
 // Dashboard
 router.get("/dashboard", adminMiddleware, dashboard.getDashboardStats);
