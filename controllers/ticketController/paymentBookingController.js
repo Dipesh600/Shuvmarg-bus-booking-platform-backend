@@ -15,13 +15,13 @@ const {
 const SeatHold               = require("../../models/seatHoldModel.js");
 
 // Step 1: Prepare booking with coupon validation (before payment)
-const prepareBooking = async (req, res) => {
+const prepareBooking = async (req, res, next) => {
   try {
     if (!req.body || Object.keys(req.body).length === 0) {
       return res.status(400).json({ success: false, message: "your body is empty please add" });
     }
     const { scheduleId, seatNumbers, originalAmount, couponCode, smMoneyToUse } = req.body;
-    const userId = req.userInfo.id;
+    const userId = req.dbUser._id;
 
     // Validate required fields
     if (
@@ -70,14 +70,6 @@ const prepareBooking = async (req, res) => {
       });
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found!",
-      });
-    }
-
     // Validate seat availability
     const allSeats = [...seatDoc.seata, ...seatDoc.seatb, ...seatDoc.seatc];
     const alreadyBookedSeats = [];
@@ -103,27 +95,6 @@ const prepareBooking = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `Seat ${alreadyBookedSeats.join(", ")} is already booked!`,
-      });
-    }
-
-    // [NEW] Soft Locking: Check if any of these seats are currently held by another user
-    const activeHolds = await SeatHold.find({
-      tripId: scheduleId,
-      seatNumbers: { $in: normalizedSeats },
-      expiresAt: { $gt: new Date() }, // Active holds only
-      userId: { $ne: userId } // It's okay if the current user already holds them (e.g., retrying payment)
-    });
-
-    if (activeHolds.length > 0) {
-      // Find exactly which seats are held
-      let heldSeats = [];
-      activeHolds.forEach(hold => heldSeats.push(...hold.seatNumbers));
-      heldSeats = heldSeats.filter(seat => normalizedSeats.includes(seat));
-      
-      return res.status(409).json({
-        success: false,
-        message: `Seat(s) ${heldSeats.map(s => s.toUpperCase()).join(", ")} are currently held by another user completing their booking. Please wait a few minutes or select other seats.`,
-        errorCode: "SEAT_TEMPORARILY_HELD",
       });
     }
 
@@ -188,27 +159,23 @@ const prepareBooking = async (req, res) => {
     const afterCouponAmount = originalAmount - discountAmount;
     const gatewayAmount = afterCouponAmount - smMoneyApplied;
 
-    // Generate a temporary booking ID for tracking (short, alphanumeric for eSewa compatibility)
-    const tempBookingId = `T${Date.now()}${Math.floor(Math.random() * 1000)}`;
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
-
-    // [NEW] Soft Locking: Create the hold record
-    await SeatHold.create({
-      tripId: scheduleId,
+    // Create or reuse atomic seat hold
+    const passengerSeatHold = require("../../src/modules/booking/passenger-seat-hold");
+    const hold = await passengerSeatHold.createOrReusePassengerSeatHold({
       userId,
+      tripId: scheduleId,
       seatNumbers: normalizedSeats,
-      tempBookingId,
-      expiresAt,
+      now: new Date(),
     });
 
-    // Return booking preparation details with full split breakdown
+    // Return booking preparation details with full split breakdown and data.seats
     return res.status(200).json({
       success: true,
       message: "Booking prepared successfully. Proceed with payment.",
       data: {
-        tempBookingId,
+        tempBookingId: hold.tempBookingId,
         scheduleId,
-        seats: normalizedSeats,
+        seats: hold.seatNumbers,
         originalAmount,
         // Coupon breakdown
         couponDiscount: discountAmount,
@@ -222,10 +189,11 @@ const prepareBooking = async (req, res) => {
         totalDiscount: discountAmount + smMoneyApplied,
         gatewayAmount,        // Amount to charge at payment gateway
         paymentAmount: gatewayAmount, // Backward compat — same as gatewayAmount
-        expiresAt,
+        expiresAt: hold.expiresAt,
       },
     });
   } catch (error) {
+    if (error.statusCode) return next(error);
     console.error("Error preparing booking:", error);
     return res.status(500).json({
       success: false,
@@ -372,8 +340,8 @@ const confirmBooking = async (req, res) => {
       paymentId,
       paymentAmount,
       gateway,
-      scheduleId,       // Note: scheduleId here is tripId in the new model
-      seatNumbers,
+      scheduleId: clientScheduleId,
+      seatNumbers: clientSeats,
       originalAmount,
       couponCode,
       boardingPoint,    // { name, time, lat, lng } — now persisted
@@ -386,16 +354,19 @@ const confirmBooking = async (req, res) => {
       walletPin,        // Required when gateway === "wallet" — server-side PIN verification
       smMoneyToUse,     // SM Money amount to debit (split payment)
     } = req.body;
-    const userId = req.userInfo.id;
 
-    if (!tempBookingId || !gateway || !scheduleId || !seatNumbers) {
+    if (!tempBookingId || !gateway) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields for booking confirmation",
       });
     }
 
-    const normalizedSeats = seatNumbers.map((seat) => seat.toLowerCase());
+    const userId = req.dbUser._id;
+    const scheduleId = req.bookingHold.tripId;
+    const seatNumbers = req.bookingHold.seatNumbers;
+    const normalizedSeats = seatNumbers;
+
     lockUserId = userId;
     lockTripId = scheduleId;
 
@@ -796,13 +767,6 @@ const confirmBooking = async (req, res) => {
     seatsLocked = true;
     lockedSeatNumbers = normalizedSeats;
 
-    // Soft Locking: Seats successfully permanently locked! Delete the temporary hold.
-    try {
-      await SeatHold.deleteMany({ tempBookingId });
-    } catch (e) {
-      logger.warn("Failed to clean up SeatHold after confirmation", { tempBookingId, error: e });
-    }
-
     // ================================================================
     // STEP 7: AMOUNT VERIFICATION (coupon discount + split payment)
     // ================================================================
@@ -993,6 +957,16 @@ const confirmBooking = async (req, res) => {
       gatewayAmount,
       paymentMethod: paymentMethodLabel,
     });
+
+    // Complete active passenger seat hold
+    const passengerSeatHold = require("../../src/modules/booking/passenger-seat-hold");
+    if (req.bookingHold && req.bookingHold._id) {
+      await passengerSeatHold.completePassengerHold({
+        holdId: req.bookingHold._id,
+        userId: req.dbUser._id,
+        now: new Date(),
+      });
+    }
 
     // ================================================================
     // STEP 10: POST-BOOKING — Coupon usage, cashback, notifications
