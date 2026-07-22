@@ -297,7 +297,32 @@ const _sendDisputeAdminAlert = async (transaction, reason) => {
     logger.error("confirmBooking: failed to send admin dispute alert", { error: alertErr.message });
   }
 };
+// ── Module-level helpers (keep confirmBooking readable) ─────────────────────
+const _generateTicketId = () => {
+  const d = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  return `TKT-${d}-${Math.floor(1000 + Math.random() * 90000)}`;
+};
 
+const _buildCommittedResponse = (booking, ticketId, f) => ({
+  success: true, message: 'Booking confirmed successfully!',
+  data: {
+    bookingId: booking._id, ticketId,
+    originalAmount: f.originalAmount, discountAmount: f.discountAmount,
+    smMoneyUsed: f.smMoneyApplied, gatewayAmount: f.gatewayAmount, totalAmount: f.finalAmount,
+    couponUsed: f.appliedCouponCode || null,
+    savings: f.discountAmount > 0 ? Math.round((f.discountAmount / f.originalAmount) * 10000) / 100 : 0,
+    paymentId: f.paymentId || `sm_wallet_${Date.now()}`,
+    gateway: f.gateway, seats: f.normalizedSeats, scratchCardId: f.scratchCardId || null,
+  },
+});
+
+const _sendBookingConfirmedNotification = async (userId, ticketId, meta) => {
+  const { createLocalNotification, notificationManager } = require('../notificationController/notification_manager.js');
+  const UserDeviceInfo = require('../../models/userDeviceInfoModel.js');
+  await createLocalNotification(userId, 'BOOKING_CONFIRMED', 'Ticket Booked Successfully', `Your ticket (${ticketId}) is confirmed.`, meta);
+  const tokens = (await UserDeviceInfo.find({ userId })).map((d) => d.token).filter(Boolean);
+  if (tokens.length > 0) await notificationManager(tokens, 'Ticket Booked Successfully', `Your ticket (${ticketId}) is confirmed.`);
+};
 
 // Step 2: Confirm booking after successful payment — SPLIT PAYMENT + ATOMIC seat lock
 // ================================================================
@@ -327,6 +352,9 @@ const confirmBooking = async (req, res) => {
   let bookingCreated = false;
   let bookingCommitted = false;
   let booking = null;
+  // Snapshot of all response fields captured before bookingCommitted=true.
+  // The outer catch reads ONLY this so a post-commit ReferenceError is impossible.
+  let committedBookingResponse = null;
 
   // ── Helper: Reverse SM Money debit if one was made ──────────────
   const _reverseSmDebitIfNeeded = async (reason) => {
@@ -780,13 +808,7 @@ const confirmBooking = async (req, res) => {
       // ================================================================
       // STEP 8: CREATE BOOKING RECORD
       // ================================================================
-      const generateTicketId = () => {
-        const dateStr = new Date().toISOString().split("T")[0].replace(/-/g, "");
-        const randomNum = Math.floor(1000 + Math.random() * 90000);
-        return `TKT-${dateStr}-${randomNum}`;
-      };
-
-      const ticketId = generateTicketId();
+      const ticketId = _generateTicketId();
 
       const formattedPassengers = (passengerDetails || []).map(p => ({
         name: p.name || "Passenger",
@@ -929,6 +951,13 @@ const confirmBooking = async (req, res) => {
         });
       }
 
+      // Capture all response fields BEFORE marking committed so the outer
+      // catch can always build a safe success response without block-scope refs.
+      committedBookingResponse = _buildCommittedResponse(booking, ticketId, {
+        originalAmount, discountAmount, smMoneyApplied, gatewayAmount,
+        finalAmount, appliedCouponCode, paymentId, gateway, normalizedSeats,
+        scratchCardId: null,
+      });
       bookingCommitted = true;
 
       // ================================================================
@@ -979,47 +1008,22 @@ const confirmBooking = async (req, res) => {
         });
         if (cashbackResult && cashbackResult.scratchCard) {
           scratchCardId = cashbackResult.scratchCard._id;
+          // Update the snapshot so the response includes the scratch card.
+          committedBookingResponse.data.scratchCardId = scratchCardId;
         }
       } catch (cashbackErr) {
         logger.error("confirmBooking: Failed to generate cashback", { error: cashbackErr.message });
       }
 
       try {
-        await createLocalNotification(
-          userId,
-          "BOOKING_CONFIRMED",
-          "Ticket Booked Successfully",
-          `Your ticket (${ticketId}) is confirmed.`,
-          { scheduleId, seats: normalizedSeats, originalAmount, discountAmount, finalAmount, smMoneyUsed: smMoneyApplied, gatewayAmount, couponCode: appliedCouponCode }
-        );
-        const userDevices = await UserDeviceInfo.find({ userId });
-        const tokens = userDevices.map((d) => d.token).filter(Boolean);
-        if (tokens.length > 0) {
-          await notificationManager(tokens, "Ticket Booked Successfully", `Your ticket (${ticketId}) is confirmed.`);
-        }
+        await _sendBookingConfirmedNotification(userId, ticketId,
+          { scheduleId, seats: normalizedSeats, originalAmount, discountAmount,
+            finalAmount, smMoneyUsed: smMoneyApplied, gatewayAmount, couponCode: appliedCouponCode });
       } catch (notifErr) {
-        logger.warn("confirmBooking: Notification failed post-commit", { error: notifErr.message });
+        logger.warn('confirmBooking: Notification failed post-commit', { error: notifErr.message });
       }
 
-      return res.status(201).json({
-        success: true,
-        message: "Booking confirmed successfully!",
-        data: {
-          bookingId: booking._id,
-          ticketId,
-          originalAmount,
-          discountAmount,
-          smMoneyUsed: smMoneyApplied,
-          gatewayAmount,
-          totalAmount: finalAmount,
-          couponUsed: appliedCouponCode,
-          savings: discountAmount > 0 ? Math.round((discountAmount / originalAmount) * 100 * 100) / 100 : 0,
-          paymentId: paymentId || `sm_wallet_${Date.now()}`,
-          gateway,
-          seats: normalizedSeats,
-          scratchCardId,
-        },
-      });
+      return res.status(201).json(committedBookingResponse);
   } catch (error) {
     logger.error("confirmBooking: Unexpected error in booking flow", {
       error: error.message,
@@ -1034,24 +1038,10 @@ const confirmBooking = async (req, res) => {
       return;
     }
 
-    if (bookingCommitted) {
-      return res.status(201).json({
-        success: true,
-        message: "Booking confirmed successfully!",
-        data: {
-          bookingId: booking?._id,
-          ticketId: booking?.ticketId || "",
-          originalAmount,
-          discountAmount: discountAmount || 0,
-          smMoneyUsed: smMoneyApplied || 0,
-          gatewayAmount: gatewayAmount || 0,
-          totalAmount: finalAmount || originalAmount,
-          couponUsed: appliedCouponCode || null,
-          paymentId: paymentId || `sm_wallet_${Date.now()}`,
-          gateway: gateway || "",
-          seats: normalizedSeats || [],
-        },
-      });
+    if (bookingCommitted && committedBookingResponse) {
+      // Safe: committedBookingResponse was fully captured before bookingCommitted=true.
+      // No block-scoped variables are referenced here.
+      return res.status(201).json(committedBookingResponse);
     }
 
     if (bookingCreated) {

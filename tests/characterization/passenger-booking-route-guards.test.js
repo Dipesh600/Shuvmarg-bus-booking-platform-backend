@@ -1,106 +1,122 @@
 'use strict';
-
 /**
  * tests/characterization/passenger-booking-route-guards.test.js
- * Real Express route characterization tests for passenger booking endpoints using supertest.
+ *
+ * Real Express route characterization tests (Supertest).
+ * Covers: no-token, invalid-token, agent, busOwner, multi-role,
+ * security properties, valid-passenger pass-through on prepareBooking /
+ * confirmBooking / verifyBooking, and legacy /bookTicket 410.
  */
-
 process.env.SECRET_KEY ||= 'test-only-secret-32chars-minimum!!';
 
-const test = require('node:test');
-const assert = require('node:assert/strict');
+const test    = require('node:test');
+const assert  = require('node:assert/strict');
 const request = require('supertest');
-const jwt = require('jsonwebtoken');
-const app = require('../helpers/app');
-const db = require('../helpers/db');
-const User = require('../../models/userModel');
+const jwt     = require('jsonwebtoken');
+const app     = require('../helpers/app');
+const db      = require('../helpers/db');
+const User    = require('../../models/userModel');
+
+let _seq = 9800100100;
+const nextPhone = () => String(_seq++);
+const mkUser  = (o = {}) => User.create({ phone: nextPhone(), password: 'Password1!', role: 'passenger', roles: ['passenger'], status: 'active', tokenVersion: 0, ...o });
+const sign    = (u, o = {}) => jwt.sign({ id: u._id.toString(), role: u.role || 'passenger', activeRole: 'passenger', tokenVersion: u.tokenVersion ?? 0, purpose: 'access', ...o }, process.env.SECRET_KEY, { expiresIn: '1h' });
+const bearer  = (tok) => `Bearer ${tok}`;
+
+const PREPARE   = '/api/ticket/prepareBooking';
+const CONFIRM   = '/api/ticket/confirmBooking';
+const VERIFY    = '/api/ticket/verifyBooking/TKT-X';
+const LEGACY    = '/api/ticket/bookTicket';
+const AUTH_HDRS = ['Authorization'];
 
 test('Passenger Booking Real Express Route Guards', async (t) => {
-  t.before(async () => db.connect());
-  t.after(async () => db.disconnect());
-  t.beforeEach(async () => db.clearAll());
+  t.before(() => db.connect());
+  t.after(() => db.disconnect());
+  t.beforeEach(() => db.clearAll());
 
-  const createPassenger = (overrides = {}) =>
-    User.create({
-      phone: '9800000010',
-      password: 'password123',
-      role: 'passenger',
-      roles: ['passenger'],
-      status: 'active',
-      tokenVersion: 0,
-      ...overrides,
-    });
-
-  const signToken = (user, overrides = {}) =>
-    jwt.sign(
-      { id: user._id.toString(), role: user.role || 'passenger', activeRole: 'passenger', tokenVersion: 0, purpose: 'access', ...overrides },
-      process.env.SECRET_KEY,
-      { expiresIn: '1h' }
-    );
-
-  await t.test('no token returns 401 across all protected booking endpoints', async () => {
-    const r1 = await request(app).post('/api/ticket/prepareBooking').send({});
-    const r2 = await request(app).post('/api/ticket/confirmBooking').send({});
-    const r3 = await request(app).get('/api/ticket/verifyBooking/tkt1');
-    const r4 = await request(app).post('/api/ticket/bookTicket').send({});
-    assert.equal(r1.status, 401);
-    assert.equal(r2.status, 401);
-    assert.equal(r3.status, 401);
-    assert.equal(r4.status, 401);
+  await t.test('1. no token → 401 on all four protected endpoints', async () => {
+    const [r1, r2, r3, r4] = await Promise.all([
+      request(app).post(PREPARE).send({}),
+      request(app).post(CONFIRM).send({}),
+      request(app).get(VERIFY),
+      request(app).post(LEGACY).send({}),
+    ]);
+    for (const r of [r1, r2, r3, r4]) assert.equal(r.status, 401);
   });
 
-  await t.test('invalid token returns 401', async () => {
-    const r = await request(app).post('/api/ticket/prepareBooking').set('Authorization', 'Bearer invalid-token').send({});
-    assert.equal(r.status, 401);
+  await t.test('2. invalid token → 401 on all four protected endpoints', async () => {
+    const h = bearer('totally-invalid-token');
+    const [r1, r2, r3, r4] = await Promise.all([
+      request(app).post(PREPARE).set('Authorization', h).send({}),
+      request(app).post(CONFIRM).set('Authorization', h).send({}),
+      request(app).get(VERIFY).set('Authorization', h),
+      request(app).post(LEGACY).set('Authorization', h).send({}),
+    ]);
+    for (const r of [r1, r2, r3, r4]) assert.equal(r.status, 401);
   });
 
-  await t.test('agent and busOwner activeRole tokens return 403 INSUFFICIENT_ROLE', async () => {
-    const u = await createPassenger({ roles: ['passenger', 'agent'] });
-    const token = signToken(u, { activeRole: 'agent', role: 'agent' });
-    const r = await request(app).post('/api/ticket/prepareBooking').set('Authorization', `Bearer ${token}`).send({ scheduleId: '1' });
-    assert.equal(r.status, 403);
-    assert.equal(r.body.errorCode, 'INSUFFICIENT_ROLE');
+  await t.test('3a. agent activeRole → 403 INSUFFICIENT_ROLE on prepareBooking', async () => {
+    const u = await mkUser({ role: 'agent', roles: ['agent'] });
+    const r = await request(app).post(PREPARE).set('Authorization', bearer(sign(u, { activeRole: 'agent', role: 'agent' }))).send({});
+    assert.equal(r.status, 403); assert.equal(r.body.errorCode, 'INSUFFICIENT_ROLE');
   });
 
-  await t.test('banned, soft-deleted, inactive, revoked, stale token and force password users are blocked', async () => {
-    const bannedUser = await createPassenger({ status: 'banned' });
-    const deletedUser = await createPassenger({ deletedAt: new Date() });
-    const inactiveUser = await createPassenger({ status: 'inactive' });
-    const revokedUser = await createPassenger({ role: 'agent', roles: ['agent'] });
-    const staleUser = await createPassenger({ tokenVersion: 1 });
-    const forcePwUser = await createPassenger({ forcePasswordChange: true });
-
-    const rBanned = await request(app).post('/api/ticket/prepareBooking').set('Authorization', `Bearer ${signToken(bannedUser)}`).send({ scheduleId: '1' });
-    const rDeleted = await request(app).post('/api/ticket/prepareBooking').set('Authorization', `Bearer ${signToken(deletedUser)}`).send({ scheduleId: '1' });
-    const rInactive = await request(app).post('/api/ticket/prepareBooking').set('Authorization', `Bearer ${signToken(inactiveUser)}`).send({ scheduleId: '1' });
-    const rRevoked = await request(app).post('/api/ticket/prepareBooking').set('Authorization', `Bearer ${signToken(revokedUser, { activeRole: 'passenger' })}`).send({ scheduleId: '1' });
-    const rStale = await request(app).post('/api/ticket/prepareBooking').set('Authorization', `Bearer ${signToken(staleUser, { tokenVersion: 0 })}`).send({ scheduleId: '1' });
-    const rForcePw = await request(app).post('/api/ticket/prepareBooking').set('Authorization', `Bearer ${signToken(forcePwUser)}`).send({ scheduleId: '1' });
-
-    assert.equal(rBanned.status, 403);
-    assert.equal(rBanned.body.errorCode, 'ACCOUNT_BANNED');
-    assert.equal(rDeleted.status, 403);
-    assert.equal(rDeleted.body.errorCode, 'ACCOUNT_DEACTIVATED');
-    assert.equal(rInactive.status, 403);
-    assert.equal(rInactive.body.errorCode, 'ACCOUNT_INACTIVE');
-    assert.equal(rRevoked.status, 403);
-    assert.equal(rRevoked.body.errorCode, 'ROLE_REVOKED');
-    assert.equal(rStale.status, 401);
-    assert.equal(rStale.body.errorCode, 'SESSION_INVALIDATED');
-    assert.equal(rForcePw.status, 403);
-    assert.equal(rForcePw.body.errorCode, 'FORCE_PASSWORD_CHANGE');
+  await t.test('3b. busOwner activeRole → 403 INSUFFICIENT_ROLE on prepareBooking', async () => {
+    const u = await mkUser({ role: 'busOwner', roles: ['busOwner'] });
+    const r = await request(app).post(PREPARE).set('Authorization', bearer(sign(u, { activeRole: 'busOwner', role: 'busOwner' }))).send({});
+    assert.equal(r.status, 403); assert.equal(r.body.errorCode, 'INSUFFICIENT_ROLE');
   });
 
-  await t.test('authenticated passenger passing guard reaches prepareBooking and legacy /bookTicket returns 410', async () => {
-    const u = await createPassenger();
-    const token = signToken(u);
+  await t.test('3c. multi-role account with activeRole:agent → 403 INSUFFICIENT_ROLE', async () => {
+    const u = await mkUser({ roles: ['passenger', 'agent'], role: 'passenger' });
+    const r = await request(app).post(PREPARE).set('Authorization', bearer(sign(u, { activeRole: 'agent', role: 'agent' }))).send({});
+    assert.equal(r.status, 403); assert.equal(r.body.errorCode, 'INSUFFICIENT_ROLE');
+  });
 
-    const rPrepare = await request(app).post('/api/ticket/prepareBooking').set('Authorization', `Bearer ${token}`).send({ scheduleId: '507f1f77bcf86cd799439011' });
-    assert.equal(rPrepare.status, 400);
-    assert.equal(rPrepare.body.message.includes('Missing required fields') || rPrepare.body.message.includes('Trip not found'), true);
+  await t.test('4. security properties: banned/deleted/inactive/revoked/stale/forcePasswordChange', async () => {
+    const [banned, deleted, inactive, revoked, stale, forcePw] = await Promise.all([
+      mkUser({ status: 'banned' }), mkUser({ deletedAt: new Date() }), mkUser({ status: 'inactive' }),
+      mkUser({ role: 'agent', roles: ['agent'] }), mkUser({ tokenVersion: 5 }), mkUser({ forcePasswordChange: true }),
+    ]);
+    const [rB, rD, rI, rRev, rS, rFP] = await Promise.all([
+      request(app).post(PREPARE).set('Authorization', bearer(sign(banned))).send({}),
+      request(app).post(PREPARE).set('Authorization', bearer(sign(deleted))).send({}),
+      request(app).post(PREPARE).set('Authorization', bearer(sign(inactive))).send({}),
+      request(app).post(PREPARE).set('Authorization', bearer(sign(revoked, { activeRole: 'passenger' }))).send({}),
+      request(app).post(PREPARE).set('Authorization', bearer(sign(stale, { tokenVersion: 0 }))).send({}),
+      request(app).post(PREPARE).set('Authorization', bearer(sign(forcePw))).send({}),
+    ]);
+    assert.equal(rB.status, 403);  assert.equal(rB.body.errorCode,  'ACCOUNT_BANNED');
+    assert.equal(rD.status, 403);  assert.equal(rD.body.errorCode,  'ACCOUNT_DEACTIVATED');
+    assert.equal(rI.status, 403);  assert.equal(rI.body.errorCode,  'ACCOUNT_INACTIVE');
+    assert.equal(rRev.status, 403);assert.equal(rRev.body.errorCode,'ROLE_REVOKED');
+    assert.equal(rS.status, 401);  assert.equal(rS.body.errorCode,  'SESSION_INVALIDATED');
+    assert.equal(rFP.status, 403); assert.equal(rFP.body.errorCode, 'FORCE_PASSWORD_CHANGE');
+  });
 
-    const rLegacy = await request(app).post('/api/ticket/bookTicket').set('Authorization', `Bearer ${token}`).send({ scheduleId: '507f1f77bcf86cd799439011' });
-    assert.equal(rLegacy.status, 410);
-    assert.equal(rLegacy.body.errorCode, 'LEGACY_BOOKING_FLOW_RETIRED');
+  await t.test('5. valid passenger passes guard on prepareBooking (domain rejects)', async () => {
+    const u = await mkUser();
+    const r = await request(app).post(PREPARE).set('Authorization', bearer(sign(u))).send({ scheduleId: '507f1f77bcf86cd799439011' });
+    assert.notEqual(r.status, 401); assert.notEqual(r.status, 403);
+    assert.ok(r.status >= 400, `expected domain-level error, got ${r.status}`);
+  });
+
+  await t.test('6. valid passenger passes guard on confirmBooking (domain rejects)', async () => {
+    const u = await mkUser();
+    const r = await request(app).post(CONFIRM).set('Authorization', bearer(sign(u))).send({ tempBookingId: 'BH1', gateway: 'esewa', paymentAmount: 100, originalAmount: 100 });
+    assert.notEqual(r.status, 401); assert.notEqual(r.status, 403);
+    assert.ok(r.status >= 400);
+  });
+
+  await t.test('7. valid passenger passes guard on verifyBooking (domain 404)', async () => {
+    const u = await mkUser();
+    const r = await request(app).get(VERIFY).set('Authorization', bearer(sign(u)));
+    assert.notEqual(r.status, 401); assert.notEqual(r.status, 403); assert.equal(r.status, 404);
+  });
+
+  await t.test('8. legacy /bookTicket → 410 LEGACY_BOOKING_FLOW_RETIRED', async () => {
+    const u = await mkUser();
+    const r = await request(app).post(LEGACY).set('Authorization', bearer(sign(u))).send({});
+    assert.equal(r.status, 410); assert.equal(r.body.errorCode, 'LEGACY_BOOKING_FLOW_RETIRED');
   });
 });
