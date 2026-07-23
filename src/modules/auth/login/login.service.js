@@ -53,6 +53,26 @@ const runAuthentication = async ({ emailOrPhone, password, appSource, deviceInfo
 
   loginPolicy.verifyAccountStatus(user);
 
+  // Guard: passenger accounts created via phone OTP have no password.
+  // Attempting bcrypt.compare against a null/missing hash would throw or produce
+  // an incorrect result. Block early with a typed error so the client can redirect
+  // to the OTP authentication flow.
+  // This check runs AFTER verifyAccountStatus so banned/inactive accounts still
+  // receive the account-restriction response rather than a password-state hint.
+  // Do NOT increment failedLoginAttempts — this is not a credential failure.
+  const hasUsablePassword = !!(user.password && user.password.length > 0);
+  if (!hasUsablePassword) {
+    throw new AppError(
+      'This account does not have a password. Please continue with phone verification.',
+      401,
+      {
+        success: false,
+        message: 'This account does not have a password. Please continue with phone verification.',
+        errorCode: 'PASSWORD_NOT_SET',
+      },
+    );
+  }
+
   const isMatch = await bcrypt.compare(password, user.password);
 
   if (!isMatch) {

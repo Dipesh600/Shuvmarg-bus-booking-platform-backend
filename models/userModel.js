@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const accountRolePolicy = require('../src/shared/auth/account-role.policy');
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -28,7 +29,14 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
+      // NOTE: validators run BEFORE pre-save hooks — resolve effective roles
+      // independently using roles[] when non-empty, else fall back to role.
+      required: [
+        function requirePasswordForOperationalRoles() {
+          return accountRolePolicy.hasPrivilegedRole(this);
+        },
+        'Password is required for operational roles',
+      ],
       minlength: [8, "Password must be at least 8 characters long"],
       select: false,
     },
@@ -50,11 +58,8 @@ const userSchema = new mongoose.Schema(
       default: "passenger",
     },
     // === MULTI-ROLE SUPPORT (SOURCE OF TRUTH FOR AUTHORIZATION) ===
-    // All roles this user actively holds. One phone number = one User = many roles.
-    // Role is added when user registers/is onboarded via a specific app.
-    // Role-specific status lives on role profile models (Agent.applicationStatus,
-    // BusOwner.verificationStatus), NOT on User.status.
-    // User.status is platform-wide only (active/banned/etc).
+    // All roles this user actively holds. Grows when user is onboarded to a new app.
+    // Role-specific status lives on role profile models (Agent, BusOwner), not here.
     roles: {
       type: [String],
       enum: ["passenger", "agent", "busOwner", "conductor", "driver"],
@@ -137,21 +142,16 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,    // Non-null = account locked until this timestamp
     },
-    // Incremented on logout and password change.
-    // Access tokens embed the version they were minted with.
-    // verifyRoleFromDB rejects any token whose version no longer matches,
-    // making logged-out / pre-password-change tokens immediately invalid.
+    // Incremented on logout/password change. Tokens embed the version; stale tokens are rejected.
     tokenVersion: {
       type: Number,
       default: 0,
     },
-
     // === SOFT DELETE ===
     deletedAt: {
       type: Date,
       default: null,    // Non-null = account soft-deleted
     },
-
     // === ADMIN ENFORCEMENT ===
     // Why the user was banned/suspended — shown to the user in the app
     suspensionReason: {
@@ -170,7 +170,6 @@ const userSchema = new mongoose.Schema(
       ref: "SuperAdmin",
       default: null,
     },
-
     // === ADMIN-GENERATED CREDENTIALS ===
     forcePasswordChange: {
       type: Boolean,

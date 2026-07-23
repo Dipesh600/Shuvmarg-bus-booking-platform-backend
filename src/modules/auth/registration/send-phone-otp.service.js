@@ -25,8 +25,17 @@ const sendPhoneOTP = async ({ phone }) => {
 
     const { registered } = await phoneGuard.isPhoneRegistered(phone);
     if (registered) {
-      // Enumeration defence: same 200 shape, no OTP sent, no data field
-      return mapper.toSendOtpRegisteredResponse();
+      // Sign-up context: tell the user explicitly so they don't waste an OTP slot.
+      // 409 Conflict is the correct HTTP semantics — the resource (phone account) already exists.
+      throw new AppError(
+        'Phone already registered',
+        409,
+        {
+          status: false,
+          message: 'This phone number is already registered. Please log in instead.',
+          errorCode: 'PHONE_ALREADY_REGISTERED',
+        }
+      );
     }
 
     const result = await otpHelper.createAndSendOTP(phone, 'REGISTRATION');
@@ -43,6 +52,20 @@ const sendPhoneOTP = async ({ phone }) => {
           message: `Too many OTP requests. Please wait ${minutesLeft} minute(s) before trying again.`,
           errorCode: 'OTP_SEND_BLOCKED',
           retryAfterMinutes: minutesLeft,
+        }
+      );
+    }
+    // OTP_COOLDOWN thrown by createAndSendOTP — 60-second cooldown between sends
+    if (error.message && error.message.startsWith('OTP_COOLDOWN:')) {
+      const secondsLeft = parseInt(error.message.split(':')[1], 10) || 60;
+      throw new AppError(
+        'OTP send cooldown',
+        429,
+        {
+          success: false,
+          message: `Please wait ${secondsLeft} second(s) before requesting a new OTP.`,
+          errorCode: 'OTP_COOLDOWN',
+          retryAfterSeconds: secondsLeft,
         }
       );
     }

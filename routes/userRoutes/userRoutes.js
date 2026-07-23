@@ -14,7 +14,7 @@ const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralC
 const userCouponController = require("../../controllers/couponController/userCouponController.js");
 const recordCouponUsageController = require("../../controllers/couponController/recordCouponUsageController.js");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
-const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
+const { otpVerifyLimiter, otpSendLimiter } = require("../../middleware/otpRateLimiter.js");
 const rateLimit = require("express-rate-limit");
 
 // Strict rate limiter for login attempts (per account — 10 per 15 min)
@@ -43,17 +43,17 @@ const passwordChangeLimiter = rateLimit({
 
 // ── PUBLIC AUTH ROUTES (no JWT needed) ────────────────────────────────────────
 // New three-step registration process
-router.post("/sendPhoneOTP",       otpRateLimiter, registrationModule.sendPhoneOTP);    // ← OTP rate limit
+router.post("/sendPhoneOTP",       otpSendLimiter, otpRateLimiter, registrationModule.sendPhoneOTP);    // ← IP limit + phone-presence
 router.post("/verifyPhoneOTP",     otpVerifyLimiter, registrationModule.verifyPhoneOTP); // ← phone-keyed verify limit
 router.post("/completeRegistration", registrationModule.completeRegistration);
 
 router.post("/login",              loginLimiter, loginModule.login);              // ← Login rate limit
 // SECURITY: /verifyOtp (legacy) removed — no brute-force limit, plain === comparison, no purpose enforcement.
 // Use verifyPhoneOTP for registration OTP verification.
-router.post("/requestPasswordReset", otpRateLimiter, passwordResetModule.requestPasswordReset); // ← OTP rate limit
+router.post("/requestPasswordReset", otpSendLimiter, otpRateLimiter, passwordResetModule.requestPasswordReset); // ← IP limit + phone-presence
 router.post("/verifyOtpForReset",  otpVerifyLimiter, passwordResetModule.verifyOtpForReset); // ← phone-keyed verify limit
 router.post("/resetPassword",      otpVerifyLimiter, passwordResetModule.resetPassword);    // ← phone-keyed verify limit
-router.post("/resendOtp",          otpRateLimiter, otpResendModule.resendOtp);        // ← OTP rate limit
+router.post("/resendOtp",          otpSendLimiter, otpRateLimiter, otpResendModule.resendOtp);        // ← IP limit + phone-presence
 
 // Token management (refresh, logout, force password change)
 router.post("/refresh",            sessionController.refreshAccessToken);               // ← No auth needed (uses refresh token)

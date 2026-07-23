@@ -3,10 +3,12 @@ name: Test and CI Foundation
 on:
   push:
     branches:
-      - 'refactor/**'
+      - dev
+
   pull_request:
     branches:
       - dev
+      - 'refactor/**'
 
 jobs:
   test:
@@ -18,6 +20,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -27,8 +31,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check file sizes
+      - name: Check repository file sizes
+        if: github.event_name == 'push' || github.base_ref == 'dev'
         run: npm run check:filesize
+
+      - name: Check incremental file sizes
+        if: github.event_name == 'pull_request' && github.base_ref != 'dev'
+        run: npm run check:filesize:diff -- "${{ github.event.pull_request.base.sha }}"
 
       - name: Run tests
         run: npm test

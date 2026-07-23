@@ -40,7 +40,25 @@ const otpSendBlockedError = (minutes) => bodyError(
   429,
   { errorCode: 'OTP_SEND_BLOCKED', retryAfterMinutes: minutes },
 );
+const otpSendCooldownError = (seconds) => bodyError(
+  `Please wait ${seconds} second(s) before requesting a new OTP.`,
+  429,
+  { errorCode: 'OTP_COOLDOWN', retryAfterSeconds: seconds },
+);
 const duplicateKeyError = (message) => bodyError(message, 409);
+
+/**
+ * Returned when an existing passwordless passenger (no password on file)
+ * attempts the bus-owner registration upgrade without supplying a password.
+ * The message is deliberate and safe — no credential state is revealed during
+ * the OTP verification step, only during the final registration completion.
+ */
+const passwordRequiredForRoleUpgradeError = () => bodyError(
+  'A password is required to activate bus operator access.',
+  400,
+  { errorCode: 'PASSWORD_REQUIRED_FOR_ROLE_UPGRADE' },
+);
+
 
 module.exports = {
   missingPhoneError,
@@ -59,5 +77,7 @@ module.exports = {
   invalidPasswordError,
   duplicateEmailError,
   otpSendBlockedError,
+  otpSendCooldownError,
   duplicateKeyError,
+  passwordRequiredForRoleUpgradeError,
 };

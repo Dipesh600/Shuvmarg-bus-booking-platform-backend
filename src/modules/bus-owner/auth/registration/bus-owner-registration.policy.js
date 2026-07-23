@@ -12,6 +12,9 @@ const isOtpRecent = (otpRecord, nowMs) =>
 const isOtpBlocked = (error) =>
   Boolean(error.message && error.message.startsWith('OTP_SEND_BLOCKED:'));
 const otpBlockedMinutes = (error) => parseInt(error.message.split(':')[1], 10) || 10;
+const isOtpCooldown = (error) =>
+  Boolean(error.message && error.message.startsWith('OTP_COOLDOWN:'));
+const otpCooldownSeconds = (error) => parseInt(error.message.split(':')[1], 10) || 60;
 const missingRegistrationField = ({ phone, name, companyName }) => {
   if (!phone) return 'Phone';
   if (!name) return 'Name';
@@ -55,6 +58,8 @@ module.exports = {
   isOtpRecent,
   isOtpBlocked,
   otpBlockedMinutes,
+  isOtpCooldown,
+  otpCooldownSeconds,
   missingRegistrationField,
   hasShortName,
   hasShortCompanyName,

@@ -24,6 +24,14 @@ const otpBlockedError = (minutesLeft) =>
     retryAfterMinutes: minutesLeft,
   });
 
+const otpCooldownError = (secondsLeft) =>
+  new AppError('OTP send cooldown', 429, {
+    success: false,
+    message: `Please wait ${secondsLeft} second(s) before requesting a new OTP.`,
+    errorCode: 'OTP_COOLDOWN',
+    retryAfterSeconds: secondsLeft,
+  });
+
 const resendFailedError = (cause) =>
   new AppError('Failed to resend OTP', 500, {
     success: false,
@@ -33,5 +41,6 @@ const resendFailedError = (cause) =>
 module.exports = {
   registeredPhoneError,
   otpBlockedError,
+  otpCooldownError,
   resendFailedError,
 };
