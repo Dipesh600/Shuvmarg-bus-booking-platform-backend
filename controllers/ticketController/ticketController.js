@@ -63,7 +63,9 @@ const searchTickets = async (req, res) => {
 
 
 
-const searchTrips = tripDiscovery.searchTrips;
+const searchTrips = async (req, res) => {
+  return require("../../src/modules/trip-discovery").searchTrips(req, res);
+};
 
 const createSeats = async (req, res) => {
   return res.status(410).json({

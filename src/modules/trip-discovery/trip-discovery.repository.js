@@ -1,5 +1,10 @@
-const Trip = require("../../models/tripModel");
-const Seat = require("../../models/seatsModel");
+const Trip = require("../../../models/tripModel");
+const Seat = require("../../../models/seatsModel");
+const BusRoute = require("../../../models/busRouteModel");
+const Stop = require("../../../models/stopModel");
+const RouteCorridor = require("../../../models/routeCorridorModel");
+const RouteVariant = require("../../../models/routeVariantModel");
+const RouteStop = require("../../../models/routeStopModel");
 
 async function countTrips(tripQuery) {
   return await Trip.countDocuments(tripQuery);
@@ -52,8 +57,56 @@ async function getSeatAvailabilityMap(tripIds) {
   return seatAvailabilityMap;
 }
 
+async function findLegacyRoutes(fromRegex, toRegex) {
+  const [fwdRoutes, revRoutes] = await Promise.all([
+    BusRoute.find({ from: fromRegex, to: toRegex, status: "ACTIVE" }),
+    BusRoute.find({ from: toRegex, to: fromRegex, status: "ACTIVE" }),
+  ]);
+  return [...fwdRoutes, ...revRoutes];
+}
+
+async function findStopsByNameOrCode(regex) {
+  return await Stop.find({
+    $or: [{ name: regex }, { code: regex }],
+    status: "ACTIVE",
+  }).select("_id name").lean();
+}
+
+async function findCorridors(originIds, destIds) {
+  const [fwdCorridors, revCorridors] = await Promise.all([
+    RouteCorridor.find({ originId: { $in: originIds }, destinationId: { $in: destIds }, status: "ACTIVE" }).lean(),
+    RouteCorridor.find({ originId: { $in: destIds }, destinationId: { $in: originIds }, status: "ACTIVE" }).lean(),
+  ]);
+  return { fwdCorridors, revCorridors };
+}
+
+async function findVariants(fwdCorridorIds, revCorridorIds) {
+  const [fwdVariants, revVariants] = await Promise.all([
+    fwdCorridorIds.length > 0
+      ? RouteVariant.find({ corridorId: { $in: fwdCorridorIds }, direction: "FORWARD", status: "ACTIVE" }).lean()
+      : Promise.resolve([]),
+    revCorridorIds.length > 0
+      ? RouteVariant.find({ corridorId: { $in: revCorridorIds }, direction: "RETURN", status: "ACTIVE" }).lean()
+      : Promise.resolve([]),
+  ]);
+  return { fwdVariants, revVariants };
+}
+
+async function findRouteStops(originIds, destIds) {
+  const [originRouteStops, destRouteStops] = await Promise.all([
+    RouteStop.find({ stopId: { $in: originIds } }).select("variantId sequence estimatedMinutesFromOrigin isMajor").lean(),
+    RouteStop.find({ stopId: { $in: destIds } }).select("variantId sequence estimatedMinutesFromOrigin isMajor").lean(),
+  ]);
+  return { originRouteStops, destRouteStops };
+}
+
 module.exports = {
   countTrips,
   findTripsWithPopulate,
-  getSeatAvailabilityMap
+  getSeatAvailabilityMap,
+  findLegacyRoutes,
+  findStopsByNameOrCode,
+  findCorridors,
+  findVariants,
+  findRouteStops
 };
