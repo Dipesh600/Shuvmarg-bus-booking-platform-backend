@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 test('Admin Coupon Route Wiring Characterization', async () => {
   const middlewarePath = require.resolve('../../middleware/adminMiddleware.js');
   const controllerPath = require.resolve('../../controllers/adminController/coupon-controller/adminCouponController.js');
+  const analyticsPath = require.resolve('../../src/modules/coupon/admin/analytics/index.js');
   const routesPath = require.resolve('../../src/modules/coupon/admin/coupon-admin.routes.js');
   const indexPath = require.resolve('../../src/modules/coupon/admin/index.js');
 
@@ -23,6 +24,7 @@ test('Admin Coupon Route Wiring Characterization', async () => {
 
   const oldMiddlewareCache = require.cache[middlewarePath];
   const oldControllerCache = require.cache[controllerPath];
+  const oldAnalyticsCache = require.cache[analyticsPath];
   const oldRoutesCache = require.cache[routesPath];
   const oldIndexCache = require.cache[indexPath];
 
@@ -44,11 +46,19 @@ test('Admin Coupon Route Wiring Characterization', async () => {
         deleteOrphanedCouponImage: deleteOrphanedCouponImageStub,
         getAllCoupons: getAllCouponsStub,
         getCouponUsageStats: getCouponUsageStatsStub,
-        getCouponAnalytics: getCouponAnalyticsStub,
         getCouponById: getCouponByIdStub,
         updateCoupon: updateCouponStub,
         deleteCoupon: deleteCouponStub,
         toggleCouponStatus: toggleCouponStatusStub,
+      },
+    };
+
+    require.cache[analyticsPath] = {
+      id: analyticsPath,
+      filename: analyticsPath,
+      loaded: true,
+      exports: {
+        getCouponAnalytics: getCouponAnalyticsStub,
       },
     };
 
@@ -105,6 +115,9 @@ test('Admin Coupon Route Wiring Characterization', async () => {
 
     if (oldControllerCache) require.cache[controllerPath] = oldControllerCache;
     else delete require.cache[controllerPath];
+
+    if (oldAnalyticsCache) require.cache[analyticsPath] = oldAnalyticsCache;
+    else delete require.cache[analyticsPath];
 
     if (oldRoutesCache) require.cache[routesPath] = oldRoutesCache;
     else delete require.cache[routesPath];
