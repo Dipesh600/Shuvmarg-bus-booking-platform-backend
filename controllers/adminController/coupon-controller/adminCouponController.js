@@ -748,6 +748,13 @@ const getCouponUsageStats = async (req, res) => {
   }
 };
 
+module.exports = {
+  createCoupon,
+  getAllCoupons,
+  getCouponById,
+  updateCoupon,
+  deleteCoupon,
+  toggleCouponStatus,
   getCouponUsageStats,
   uploadCouponImage,
   deleteOrphanedCouponImage,
