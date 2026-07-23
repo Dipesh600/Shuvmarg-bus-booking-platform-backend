@@ -9,16 +9,12 @@ const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwne
 const passengerSeatHold = require("../../src/modules/booking/passenger-seat-hold");
 const bookingVerification = require("../../src/modules/booking/booking-verification");
 const busOwnerScheduleManagement = require("../../src/modules/bus-owner/schedule-management");
+const legacyBookingRetirement = require("../../src/modules/booking/legacy-booking-retirement");
 
 const busOwnerGuard = [auth, verifyRoleFromDB, role.busOwnerMiddleware, requireApprovedBusOwner];
 const passengerBookingGuard = [auth, verifyRoleFromDB, role.requireRole("passenger")];
 
-const retireLegacyBookingFlow = (req, res) =>
-  res.status(410).json({
-    success: false,
-    message: "This booking endpoint has been retired. Use the prepare and confirm booking flow.",
-    errorCode: "LEGACY_BOOKING_FLOW_RETIRED",
-  });
+
 
 router.post("/createTicket", busOwnerGuard, busOwnerScheduleManagement.createSchedule);
 router.post("/creatSeats", busOwnerGuard, ticket.createSeats);
@@ -27,7 +23,7 @@ router.delete("/deleteTicket", busOwnerGuard, busOwnerScheduleManagement.deleteS
 router.post("/getTicketById", busOwnerGuard, busOwnerScheduleManagement.getScheduleById);
 
 // Book Ticket (Retired - 410 Gone)
-router.post("/bookTicket", ...passengerBookingGuard, retireLegacyBookingFlow);
+router.post("/bookTicket", ...passengerBookingGuard, legacyBookingRetirement.retireLegacyBookingFlow);
 
 // Payment Gateway Booking Flow
 router.post("/prepareBooking", ...passengerBookingGuard, paymentBooking.prepareBooking);
