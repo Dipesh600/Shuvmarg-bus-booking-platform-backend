@@ -18,7 +18,7 @@ const Transaction = require("../../models/transactionModel");
 const Refund = require("../../models/refundModel");
 const { calculateRefund } = require("../../services/refundCalculatorService");
 
-const SeatHold = require("../../models/seatHoldModel.js");
+const tripSeatAvailability = require("../../src/modules/booking/trip-seat-availability");
 const SeatTemplate = require("../../models/seatTemplateModel");
 const { getPresignedUrl } = require("../../services/s3Service.js");
 
@@ -71,78 +71,7 @@ const createSeats = async (req, res) => {
 };
 
 // Get Seats by id
-const getSeatsById = async (req, res) => {
-  try {
-    const { tripId } = req.body;
-
-    if (!tripId) {
-      return res.status(400).json({
-        status: false,
-        message: "Please Provide Trip Id!",
-      });
-    }
-
-    const seats = await Seat.findOne({ tripId: tripId }).lean();
-    if (!seats) {
-      return res.status(404).json({
-        status: false,
-        message: "Seats Not Found!",
-      });
-    }
-
-    let seatConfig = null;
-    const trip = await Trip.findById(tripId).populate("seatTemplateId busId");
-    if (trip) {
-      if (trip.seatTemplateId && trip.seatTemplateId.seatConfig) {
-        seatConfig = trip.seatTemplateId.seatConfig;
-      } else if (trip.busId && trip.busId.seatConfig) {
-        seatConfig = trip.busId.seatConfig;
-      }
-    }
-
-    // [NEW] Soft Locking: Mask actively held seats as booked
-    const currentUserId = req.userInfo ? req.userInfo.id : null;
-    const activeHolds = await SeatHold.find({
-      tripId: tripId,
-      expiresAt: { $gt: new Date() },
-      ...(currentUserId ? { userId: { $ne: currentUserId } } : {}) // Don't mask holds belonging to the requesting user
-    });
-
-    if (activeHolds.length > 0) {
-      let heldSeatsSet = new Set();
-      activeHolds.forEach(hold => hold.seatNumbers.forEach(s => heldSeatsSet.add(s.toLowerCase())));
-
-      // Override booked status for held seats
-      const maskSeats = (seatArray) => {
-        if (!seatArray) return;
-        seatArray.forEach(seat => {
-          if (!seat.booked && heldSeatsSet.has(seat.seatNo.toLowerCase())) {
-            seat.booked = true; // Mask as booked for the UI
-            seat.blockedFor = "reserved"; // Optional flag so UI could style it differently if needed
-          }
-        });
-      };
-
-      maskSeats(seats.seata);
-      maskSeats(seats.seatb);
-      maskSeats(seats.seatc);
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: "Successfully fetched seats!",
-      data: {
-        ...seats,
-        seatConfig: seatConfig
-      },
-    });
-  } catch (e) {
-    return res.status(500).json({
-      status: true,
-      message: "Internal Server Error!",
-    });
-  }
-};
+const getSeatsById = tripSeatAvailability.getTripSeatAvailability;
 
 const bookTicket = legacyBookingRetirement.retireLegacyBookingFlow;
 
