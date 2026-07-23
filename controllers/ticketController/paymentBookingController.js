@@ -2,7 +2,6 @@
 const Seat                   = require("../../models/seatsModel.js");
 const Booking                = require("../../models/bookTicketModel.js");
 const User                   = require("../../models/userModel.js");
-const UserDeviceInfo         = require("../../models/userDeviceInfoModel.js");
 const CouponHelper           = require("../../handlers/couponHelper.js");
 // YatraPointsHistory removed — YatraPoints deprecated in favour of SM Ledger cashback
 const Transaction            = require("../../models/transactionModel.js");
@@ -10,18 +9,23 @@ const { verifyEsewaPayment } = require("../../services/esewaVerificationService.
 const logger                 = require("../../utils/logger.js");
 const {
   createLocalNotification,
-  notificationManager,
 } = require("../notificationController/notification_manager.js");
 const SeatHold               = require("../../models/seatHoldModel.js");
+const passengerSeatHold      = require("../../src/modules/booking/passenger-seat-hold");
+const {
+  sendBookingConfirmedNotification,
+  generateBookingTicketId,
+  buildCommittedBookingResponse,
+} = require("../../src/modules/booking/booking-confirmation");
 
 // Step 1: Prepare booking with coupon validation (before payment)
-const prepareBooking = async (req, res) => {
+const prepareBooking = async (req, res, next) => {
   try {
     if (!req.body || Object.keys(req.body).length === 0) {
       return res.status(400).json({ success: false, message: "your body is empty please add" });
     }
     const { scheduleId, seatNumbers, originalAmount, couponCode, smMoneyToUse } = req.body;
-    const userId = req.userInfo.id;
+    const userId = req.dbUser._id;
 
     // Validate required fields
     if (
@@ -58,8 +62,21 @@ const prepareBooking = async (req, res) => {
       });
     }
 
-    // Check seat availability
-    const normalizedSeats = seatNumbers.map((seat) => seat.toLowerCase());
+    // Check seat availability with domain policy normalization
+    let normalizedSeats;
+    try {
+      normalizedSeats = passengerSeatHold.normalizeSeatNumbers(seatNumbers);
+    } catch (err) {
+      if (err.statusCode) {
+        return res.status(err.statusCode).json(err.responseBody);
+      }
+      return res.status(400).json({
+        success: false,
+        message: "Invalid seat selection.",
+        errorCode: "INVALID_SEAT_SELECTION",
+      });
+    }
+
     // Find seats using tripId (the new Trip model is authoritative)
     const seatDoc = await Seat.findOne({ tripId: scheduleId });
 
@@ -67,14 +84,6 @@ const prepareBooking = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Seat data not found for schedule.",
-      });
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found!",
       });
     }
 
@@ -106,27 +115,6 @@ const prepareBooking = async (req, res) => {
       });
     }
 
-    // [NEW] Soft Locking: Check if any of these seats are currently held by another user
-    const activeHolds = await SeatHold.find({
-      tripId: scheduleId,
-      seatNumbers: { $in: normalizedSeats },
-      expiresAt: { $gt: new Date() }, // Active holds only
-      userId: { $ne: userId } // It's okay if the current user already holds them (e.g., retrying payment)
-    });
-
-    if (activeHolds.length > 0) {
-      // Find exactly which seats are held
-      let heldSeats = [];
-      activeHolds.forEach(hold => heldSeats.push(...hold.seatNumbers));
-      heldSeats = heldSeats.filter(seat => normalizedSeats.includes(seat));
-      
-      return res.status(409).json({
-        success: false,
-        message: `Seat(s) ${heldSeats.map(s => s.toUpperCase()).join(", ")} are currently held by another user completing their booking. Please wait a few minutes or select other seats.`,
-        errorCode: "SEAT_TEMPORARILY_HELD",
-      });
-    }
-
     // Handle coupon validation if provided
     let discountAmount = 0;
     let finalAmount = originalAmount;
@@ -137,7 +125,8 @@ const prepareBooking = async (req, res) => {
         couponCode,
         userId,
         originalAmount,
-        scheduleId
+        scheduleId,
+        req.userInfo.activeRole
       );
 
       if (!validation.isValid) {
@@ -187,27 +176,22 @@ const prepareBooking = async (req, res) => {
     const afterCouponAmount = originalAmount - discountAmount;
     const gatewayAmount = afterCouponAmount - smMoneyApplied;
 
-    // Generate a temporary booking ID for tracking (short, alphanumeric for eSewa compatibility)
-    const tempBookingId = `T${Date.now()}${Math.floor(Math.random() * 1000)}`;
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
-
-    // [NEW] Soft Locking: Create the hold record
-    await SeatHold.create({
-      tripId: scheduleId,
+    // Create or reuse atomic seat hold
+    const hold = await passengerSeatHold.createOrReusePassengerSeatHold({
       userId,
+      tripId: scheduleId,
       seatNumbers: normalizedSeats,
-      tempBookingId,
-      expiresAt,
+      now: new Date(),
     });
 
-    // Return booking preparation details with full split breakdown
+    // Return booking preparation details with full split breakdown and data.seats
     return res.status(200).json({
       success: true,
       message: "Booking prepared successfully. Proceed with payment.",
       data: {
-        tempBookingId,
+        tempBookingId: hold.tempBookingId,
         scheduleId,
-        seats: normalizedSeats,
+        seats: hold.seatNumbers,
         originalAmount,
         // Coupon breakdown
         couponDiscount: discountAmount,
@@ -221,10 +205,11 @@ const prepareBooking = async (req, res) => {
         totalDiscount: discountAmount + smMoneyApplied,
         gatewayAmount,        // Amount to charge at payment gateway
         paymentAmount: gatewayAmount, // Backward compat — same as gatewayAmount
-        expiresAt,
+        expiresAt: hold.expiresAt,
       },
     });
   } catch (error) {
+    if (error.statusCode) return next(error);
     console.error("Error preparing booking:", error);
     return res.status(500).json({
       success: false,
@@ -316,7 +301,6 @@ const _sendDisputeAdminAlert = async (transaction, reason) => {
   }
 };
 
-
 // Step 2: Confirm booking after successful payment — SPLIT PAYMENT + ATOMIC seat lock
 // ================================================================
 // EXECUTION ORDER (split-payment with reverseDebit safety net):
@@ -336,13 +320,18 @@ const _sendDisputeAdminAlert = async (transaction, reason) => {
 //  10. Post-booking: cashback, notifications
 // ================================================================
 const confirmBooking = async (req, res) => {
-  // Cleanup state — used in outer catch for rollback
+  let smDebitEntryId = null;
   let txnRecord = null;
   let seatsLocked = false;
   let lockedSeatNumbers = [];
   let lockUserId = null;
   let lockTripId = null;
-  let smDebitEntryId = null;  // Track SM Money debit for reversal
+  let bookingCreated = false;
+  let bookingCommitted = false;
+  let booking = null;
+  // Snapshot of all response fields captured before bookingCommitted=true.
+  // The outer catch reads ONLY this so a post-commit ReferenceError is impossible.
+  let committedBookingResponse = null;
 
   // ── Helper: Reverse SM Money debit if one was made ──────────────
   const _reverseSmDebitIfNeeded = async (reason) => {
@@ -362,704 +351,699 @@ const confirmBooking = async (req, res) => {
     }
   };
 
-  try {
-    if (!req.body || Object.keys(req.body).length === 0) {
-      return res.status(400).json({ success: false, message: "your body is empty please add" });
-    }
-    const {
-      tempBookingId,
-      paymentId,
-      paymentAmount,
-      gateway,
-      scheduleId,       // Note: scheduleId here is tripId in the new model
-      seatNumbers,
-      originalAmount,
-      couponCode,
-      boardingPoint,    // { name, time, lat, lng } — now persisted
-      droppingPoint,    // { name, time, lat, lng } — now persisted
-      bookedFrom,       // User's searched origin (e.g., "Bardibas") — persisted on Booking
-      bookedTo,         // User's searched destination (e.g., "Kathmandu") — persisted on Booking
-      bookedDepartureTime, // Stop-specific departure time (resolved by search)
-      bookedArrivalTime,   // Stop-specific arrival time (resolved by search)
-      passengerDetails, // [{ name, age, gender, seatNo }] — DoT compliance
-      walletPin,        // Required when gateway === "wallet" — server-side PIN verification
-      smMoneyToUse,     // SM Money amount to debit (split payment)
-    } = req.body;
-    const userId = req.userInfo.id;
-
-    if (!tempBookingId || !gateway || !scheduleId || !seatNumbers) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields for booking confirmation",
-      });
-    }
-
-    const normalizedSeats = seatNumbers.map((seat) => seat.toLowerCase());
-    lockUserId = userId;
-    lockTripId = scheduleId;
-
-    // ================================================================
-    // STEP 1: RE-VALIDATE SM MONEY + COMPUTE SPLIT (spec §11.3)
-    // Balance can change between prepareBooking and confirmBooking
-    // (concurrent session, expiry, clawback). Always re-validate here.
-    // ================================================================
-    const smLedgerService = require("../../services/smLedgerService.js");
-    const PlatformConfig = require("../../models/platformConfigModel.js");
-
-    let smMoneyApplied = 0;
-    let gatewayAmount = paymentAmount || 0;
-
-    const requestedSmMoney = Math.max(0, Math.floor(Number(smMoneyToUse) || 0));
-
-    if (requestedSmMoney > 0) {
-      const [balanceResult, smConfig] = await Promise.all([
-        smLedgerService.computeSpendableBalance(userId),
-        PlatformConfig.getConfig("sm_money_config"),
-      ]);
-
-      const spendableBalance = balanceResult.display;
-      const maxDiscountPercent = (smConfig && smConfig.maxDiscountPercent) || 80;
-
-      // Re-validate coupon discount for cap calculation
-      let couponDiscountForCap = 0;
-      if (couponCode && couponCode.trim() !== "") {
-        const validation = await CouponHelper.validateCoupon(couponCode, userId, originalAmount, scheduleId);
-        if (validation.isValid) {
-          couponDiscountForCap = validation.discountAmount;
-        }
+    try {
+      if (!req.body || Object.keys(req.body).length === 0) {
+        return res.status(400).json({ success: false, message: "your body is empty please add" });
       }
-
-      const maxTotalDiscount = Math.floor(originalAmount * (maxDiscountPercent / 100));
-      const maxSmMoneyAllowed = Math.max(0, maxTotalDiscount - couponDiscountForCap);
-
-      // Clamp to min(requested, balance, cap)
-      smMoneyApplied = Math.min(requestedSmMoney, spendableBalance, maxSmMoneyAllowed);
-
-      if (smMoneyApplied <= 0) {
-        logger.info("confirmBooking: SM Money requested but insufficient balance or cap hit", {
-          userId, requestedSmMoney, spendableBalance, maxSmMoneyAllowed,
-        });
-        smMoneyApplied = 0;
-      }
-    }
-
-    // Compute the actual gateway amount
-    // For pure wallet (gateway === "wallet"), the entire finalAmount goes through SM Money
-    // For split payment (gateway === "esewa" + smMoneyToUse), subtract SM Money from paymentAmount
-    if (gateway === "wallet") {
-      // Full SM Wallet payment — the paymentAmount IS the SM Money amount
-      smMoneyApplied = paymentAmount;
-      gatewayAmount = 0;
-    } else {
-      // Split payment: gateway handles what SM Money doesn't cover
-      const afterCoupon = originalAmount - (couponCode ? (await (async () => {
-        const v = await CouponHelper.validateCoupon(couponCode, userId, originalAmount, scheduleId);
-        return v.isValid ? v.discountAmount : 0;
-      })()) : 0);
-      gatewayAmount = afterCoupon - smMoneyApplied;
-    }
-
-    // ================================================================
-    // STEP 2: DEBIT SM MONEY VIA FIFO (if applicable)
-    // This MUST happen BEFORE gateway verification, because if the
-    // gateway fails we reverseDebit. But we need SM Money locked
-    // atomically — no other concurrent session can spend the same credits.
-    // ================================================================
-    if (smMoneyApplied > 0 && gateway !== "wallet") {
-      // Split payment: debit SM Money via ledger FIFO
-      try {
-        const debitEntry = await smLedgerService.debitLedgerFIFO({
-          userId,
-          amount: smMoneyApplied,
-          bookingId: null, // Booking doesn't exist yet — will be linked via Transaction
-          note: `SM Money spent at checkout: Rs. ${smMoneyApplied} (temp: ${tempBookingId})`,
-        });
-        smDebitEntryId = debitEntry._id;
-        logger.info("confirmBooking: SM Money debited (split payment)", {
-          userId, amount: smMoneyApplied, debitEntryId: smDebitEntryId,
-        });
-      } catch (smDebitErr) {
-        logger.warn("confirmBooking: SM Money FIFO debit failed", {
-          userId, amount: smMoneyApplied, error: smDebitErr.message,
-        });
-        return res.status(402).json({
-          success: false,
-          message: smDebitErr.message || "Failed to debit Shuvmarg Money",
-          errorCode: "SM_MONEY_DEBIT_FAILED",
-        });
-      }
-    }
-
-    // ================================================================
-    // STEP 3: GATEWAY PAYMENT VERIFICATION
-    // ================================================================
-
-    // 3A: eSewa server-side verification
-    if (gateway === "esewa") {
-      if (!paymentId || !gatewayAmount) {
-        await _reverseSmDebitIfNeeded("Missing paymentId or gatewayAmount for eSewa");
-        return res.status(400).json({
-          success: false,
-          message: "Missing paymentId or paymentAmount for eSewa confirmation",
-          errorCode: "ESEWA_PARAMS_MISSING",
-        });
-      }
-      const esewaCheck = await verifyEsewaPayment(paymentId, gatewayAmount);
-      if (!esewaCheck.verified) {
-        logger.warn("confirmBooking: eSewa verification failed", {
-          paymentId, gatewayAmount, userId, reason: esewaCheck.error,
-        });
-        // CRITICAL: Reverse SM Money debit before returning
-        await _reverseSmDebitIfNeeded(`eSewa verification failed: ${esewaCheck.error}`);
-        return res.status(402).json({
-          success: false,
-          message: `Payment verification failed: ${esewaCheck.error}`,
-          errorCode: "ESEWA_VERIFICATION_FAILED",
-        });
-      }
-      logger.info("confirmBooking: eSewa payment verified", { paymentId, userId, gatewayAmount });
-    }
-
-    // 3B: Full wallet payment — PIN verification + atomic debit
-    let walletDebitResult = null;
-    if (gateway === "wallet") {
-      // ── PIN Verification (zero-trust) ──────────────────────────────
-      if (!walletPin || !/^\d{4}$/.test(walletPin)) {
-        return res.status(401).json({
-          success: false,
-          message: "Wallet PIN is required for wallet payments.",
-          errorCode: "WALLET_PIN_REQUIRED",
-        });
-      }
-
-      const Wallet  = require("../../models/walletModel");
-      const bcrypt  = require("bcryptjs");
-      const userWallet = await Wallet.findOne({ userId });
-
-      if (!userWallet || !userWallet.isPinSet) {
-        return res.status(400).json({
-          success: false,
-          message: "Wallet PIN is not set. Please set up your wallet first.",
-          errorCode: "WALLET_PIN_NOT_SET",
-        });
-      }
-
-      if (userWallet.status !== "active") {
-        return res.status(403).json({
-          success: false,
-          message: "Wallet is frozen. Please contact support.",
-          errorCode: "WALLET_FROZEN",
-        });
-      }
-
-      const pinMatch = await bcrypt.compare(walletPin, userWallet.pin);
-      if (!pinMatch) {
-        logger.warn("confirmBooking: Wallet PIN mismatch", { userId });
-        return res.status(401).json({
-          success: false,
-          message: "Incorrect wallet PIN.",
-          errorCode: "WALLET_PIN_INVALID",
-        });
-      }
-
-      logger.info("confirmBooking: Wallet PIN verified server-side", { userId });
-
-      // ── Atomic Debit via FIFO ──────────────────────────────────────
-      try {
-        const debitEntry = await smLedgerService.debitLedgerFIFO({
-          userId,
-          amount: smMoneyApplied,
-          bookingId: null,
-          note: `SM Wallet full payment: Rs. ${smMoneyApplied} (temp: ${tempBookingId})`,
-        });
-        smDebitEntryId = debitEntry._id;
-        logger.info("confirmBooking: SM Wallet debited successfully (full payment)", {
-          userId, amount: smMoneyApplied, debitEntryId: smDebitEntryId,
-        });
-      } catch (walletErr) {
-        logger.warn("confirmBooking: SM Wallet debit failed", {
-          userId, amount: smMoneyApplied, error: walletErr.message,
-        });
-        return res.status(402).json({
-          success: false,
-          message: walletErr.message || "Failed to debit SM Wallet",
-          errorCode: "WALLET_DEBIT_FAILED",
-        });
-      }
-    }
-
-    // ================================================================
-    // STEP 4: WRITE TRANSACTION RECORD — PAYMENT_RECEIVED
-    // This is the single source of truth. Written BEFORE any seat
-    // locking or booking creation. If the server crashes after this
-    // point, the reconciliation cron will catch it.
-    // ================================================================
-    const gatewayFeeConfig = await PlatformConfig.getConfig("gateway_fees");
-    const currentGatewayFeeRate = (gatewayFeeConfig && gatewayFeeConfig[gateway])
-      ? gatewayFeeConfig[gateway].feePercent || 0
-      : 0;
-
-    txnRecord = await Transaction.create({
-      userId,
-      tripId:          scheduleId,
-      seats:           normalizedSeats,
-      transactionType: "BOOKING",
-      gateway:         gateway === "wallet" ? "sm_wallet" : gateway,
-      transactionId:   paymentId || `sm_wallet_${Date.now()}`,
-      originalAmount:  originalAmount || paymentAmount,
-      totalAmount:     (gatewayAmount || 0) + (smMoneyApplied || 0),
-      status:          "PAYMENT_RECEIVED",
-      paidAt:          new Date(),
-      meta: {
+      const {
         tempBookingId,
-        paymentMethod: gateway === "wallet" ? "SM_WALLET" : gateway.toUpperCase(),
-        bookedVia:     "APP",
-        smMoneyUsed:   smMoneyApplied,
-        gatewayAmount: gatewayAmount,
-        smDebitEntryId: smDebitEntryId,
-        gatewayFeeRate: currentGatewayFeeRate,
-      },
-    });
+        paymentId,
+        paymentAmount,
+        gateway,
+        scheduleId: clientScheduleId,
+        seatNumbers: clientSeats,
+        originalAmount,
+        couponCode,
+        boardingPoint,    // { name, time, lat, lng } — now persisted
+        droppingPoint,    // { name, time, lat, lng } — now persisted
+        bookedFrom,       // User's searched origin (e.g., "Bardibas") — persisted on Booking
+        bookedTo,         // User's searched destination (e.g., "Kathmandu") — persisted on Booking
+        bookedDepartureTime, // Stop-specific departure time (resolved by search)
+        bookedArrivalTime,   // Stop-specific arrival time (resolved by search)
+        passengerDetails, // [{ name, age, gender, seatNo }] — DoT compliance
+        walletPin,        // Required when gateway === "wallet" — server-side PIN verification
+        smMoneyToUse,     // SM Money amount to debit (split payment)
+      } = req.body;
 
-    logger.info("confirmBooking: Transaction record created (PAYMENT_RECEIVED)", {
-      txnId: txnRecord._id,
-      paymentId,
-      userId,
-      gatewayAmount,
-      smMoneyApplied,
-    });
-
-    // ================================================================
-    // STEP 5: VERIFY TRIP STATUS & BOOKING CUTOFF
-    // ================================================================
-    const Trip = require("../../models/tripModel.js");
-    const trip = await Trip.findById(scheduleId).lean();
-    if (!trip) {
-      await Transaction.findByIdAndUpdate(txnRecord._id, {
-        status: "DISPUTED",
-        disputeReason: "Trip not found after payment verification",
-      });
-      await _reverseSmDebitIfNeeded("Trip not found after payment");
-      await _sendDisputeAdminAlert(txnRecord, "Trip not found after payment verification");
-      return res.status(404).json({
-        success: false,
-        message: `Your payment was received but the trip was not found. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
-        caseId: txnRecord._id,
-        errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-      });
-    }
-
-    if (trip.bookingClosesAt && new Date(trip.bookingClosesAt) < new Date()) {
-      await Transaction.findByIdAndUpdate(txnRecord._id, {
-        status: "DISPUTED",
-        disputeReason: "Booking window closed after payment was processed",
-      });
-      await _reverseSmDebitIfNeeded("Booking window closed after payment");
-      await _sendDisputeAdminAlert(txnRecord, "Booking window closed after payment was processed");
-      return res.status(400).json({
-        success: false,
-        message: `Your payment was received but booking has closed for this trip. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
-        caseId: txnRecord._id,
-        errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-      });
-    }
-
-    if (trip.status !== "scheduled" && trip.status !== "boarding") {
-      await Transaction.findByIdAndUpdate(txnRecord._id, {
-        status: "DISPUTED",
-        disputeReason: `Trip status is "${trip.status}" — not bookable after payment`,
-      });
-      await _reverseSmDebitIfNeeded(`Trip status "${trip.status}" not bookable`);
-      await _sendDisputeAdminAlert(txnRecord, `Trip status is "${trip.status}" — not bookable`);
-      return res.status(400).json({
-        success: false,
-        message: `Your payment was received but the trip is no longer available (status: ${trip.status}). Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
-        caseId: txnRecord._id,
-        errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-      });
-    }
-
-    // ================================================================
-    // STEP 6: ATOMIC SEAT LOCK
-    // ================================================================
-    const seatDoc = await Seat.findOne({ tripId: scheduleId });
-    if (!seatDoc) {
-      await Transaction.findByIdAndUpdate(txnRecord._id, {
-        status: "DISPUTED",
-        disputeReason: "Seat data not found for trip after payment",
-      });
-      await _reverseSmDebitIfNeeded("Seat data not found after payment");
-      await _sendDisputeAdminAlert(txnRecord, "Seat data not found for trip after payment");
-      return res.status(404).json({
-        success: false,
-        message: `Your payment was received but seat data is missing. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
-        caseId: txnRecord._id,
-        errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-      });
-    }
-
-    const allSeats = [...seatDoc.seata, ...seatDoc.seatb, ...seatDoc.seatc];
-    
-    // Get the EXACT seat string from DB, since findOneAndUpdate arrayFilters are case-sensitive
-    const exactSeatsToLock = [];
-    for (const reqSeat of normalizedSeats) {
-      const exactSeat = allSeats.find((s) => s.seatNo.toLowerCase() === reqSeat);
-      if (exactSeat) {
-        exactSeatsToLock.push(exactSeat.seatNo);
-      } else {
-        // Fallback to uppercase for invalid seats so error messages look normal
-        exactSeatsToLock.push(reqSeat.toUpperCase());
-      }
-    }
-
-    const alreadyBookedSeats = [];
-    const invalidSeats = [];
-
-    for (const seatNo of exactSeatsToLock) {
-      let arrayField = null;
-      if (seatDoc.seata.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
-        arrayField = "seata";
-      } else if (seatDoc.seatb.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
-        arrayField = "seatb";
-      } else if (seatDoc.seatc.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
-        arrayField = "seatc";
-      }
-
-      if (!arrayField) {
-        invalidSeats.push(seatNo.toUpperCase());
-        continue;
-      }
-
-      // Attempt atomic update: only succeeds if the seat exists AND booked: false
-      const updated = await Seat.findOneAndUpdate(
-        {
-          tripId: scheduleId,
-          [arrayField]: { $elemMatch: { seatNo: seatNo, booked: false } }
-        },
-        {
-          $set: {
-            [`${arrayField}.$[elem].booked`]:    true,
-            [`${arrayField}.$[elem].bookedBy`]:  userId,
-            [`${arrayField}.$[elem].bookedAt`]:  new Date(),
-          }
-        },
-        {
-          arrayFilters: [{ "elem.seatNo": seatNo, "elem.booked": false }],
-          new: true,
-        }
-      );
-
-      if (!updated) {
-        alreadyBookedSeats.push(seatNo.toUpperCase());
-      }
-    }
-
-    // If any seat failed to lock, ROLLBACK all successfully locked seats + SM Money
-    if (invalidSeats.length > 0 || alreadyBookedSeats.length > 0) {
-      // Rollback: release any seats that were successfully locked
-      await _rollbackSeatLocks(scheduleId, normalizedSeats, userId);
-
-      const reasons = [];
-      if (invalidSeats.length > 0) reasons.push(`Invalid seat(s): ${invalidSeats.join(", ")}`);
-      if (alreadyBookedSeats.length > 0) reasons.push(`Already booked: ${alreadyBookedSeats.join(", ")} — taken during payment`);
-      const fullReason = reasons.join(" | ");
-
-      await Transaction.findByIdAndUpdate(txnRecord._id, {
-        status: "DISPUTED",
-        disputeReason: `Seat lock failed after payment: ${fullReason}`,
-      });
-      await _reverseSmDebitIfNeeded(`Seat lock failed: ${fullReason}`);
-      await _sendDisputeAdminAlert(txnRecord, `Seat lock failed: ${fullReason}`);
-
-      return res.status(409).json({
-        success: false,
-        message: `Your payment was received but the requested seats are no longer available. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours. (${fullReason})`,
-        caseId: txnRecord._id,
-        errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-      });
-    }
-
-    // Track that seats are now locked (for cleanup in outer catch)
-    seatsLocked = true;
-    lockedSeatNumbers = normalizedSeats;
-
-    // Soft Locking: Seats successfully permanently locked! Delete the temporary hold.
-    try {
-      await SeatHold.deleteMany({ tempBookingId });
-    } catch (e) {
-      logger.warn("Failed to clean up SeatHold after confirmation", { tempBookingId, error: e });
-    }
-
-    // ================================================================
-    // STEP 7: AMOUNT VERIFICATION (coupon discount + split payment)
-    // ================================================================
-    let discountAmount = 0;
-    let finalAmount = originalAmount;
-    let couponUsed = null;
-    let appliedCouponCode = null;
-
-    if (couponCode && couponCode.trim() !== "") {
-      const validation = await CouponHelper.validateCoupon(couponCode, userId, originalAmount, scheduleId);
-      if (!validation.isValid) {
+      const SUPPORTED_BOOKING_GATEWAYS = new Set(["esewa", "wallet"]);
+      if (!gateway || typeof gateway !== "string" || !SUPPORTED_BOOKING_GATEWAYS.has(gateway)) {
         return res.status(400).json({
           success: false,
-          message: `Coupon validation failed: ${validation.error}`,
-          errorCode: "COUPON_INVALID_DURING_CONFIRMATION",
+          message: "The selected payment gateway is not supported.",
+          errorCode: "UNSUPPORTED_PAYMENT_GATEWAY",
         });
       }
-      discountAmount = validation.discountAmount;
-      finalAmount = validation.finalAmount;
-      couponUsed = validation.coupon._id;
-      appliedCouponCode = validation.coupon.couponCode;
-    }
 
-    // Verify total adds up: finalAmount (after coupon) = gatewayAmount + smMoneyApplied
-    // Allow ±1 tolerance for rounding
-    const expectedTotal = gatewayAmount + smMoneyApplied;
-    if (Math.abs(finalAmount - expectedTotal) > 1) {
-      logger.warn("confirmBooking: Amount mismatch in split payment", {
-        finalAmount, gatewayAmount, smMoneyApplied, expectedTotal,
-      });
-      // Don't block — log the discrepancy but proceed (amounts were server-computed)
-    }
+      if (!tempBookingId) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required fields for booking confirmation",
+        });
+      }
 
-    // ================================================================
-    // STEP 8: CREATE BOOKING RECORD — in its OWN try/catch
-    // This is the most critical section. If this fails, money has moved
-    // AND seats are locked. We must rollback seats, reverse SM Money, and mark DISPUTED.
-    // ================================================================
-    const generateTicketId = () => {
-      const dateStr = new Date().toISOString().split("T")[0].replace(/-/g, "");
-      const randomNum = Math.floor(1000 + Math.random() * 90000);
-      return `TKT-${dateStr}-${randomNum}`;
-    };
+      const userId = req.dbUser._id;
+      const scheduleId = req.bookingHold.tripId;
+      const seatNumbers = req.bookingHold.seatNumbers;
+      const normalizedSeats = seatNumbers;
 
-    const ticketId = generateTicketId();
+      lockUserId = userId;
+      lockTripId = scheduleId;
 
-    const formattedPassengers = (passengerDetails || []).map(p => ({
-      name: p.name || "Passenger",
-      age: p.age || 0,
-      gender: p.gender || "other",
-      seatNo: (Array.isArray(p.seatNo) ? p.seatNo[0] : p.seatNo) || normalizedSeats[0] || "N/A"
-    }));
+      // ================================================================
+      // STEP 1: PRE-SIDE-EFFECT VALIDATION & CONFIRMATION QUOTE
+      // Must occur BEFORE any payment debit, verification, transaction
+      // creation, or seat locking.
+      // ================================================================
+      let discountAmount = 0;
+      let finalAmount = originalAmount;
+      let couponUsed = null;
+      let appliedCouponCode = null;
 
-    // Determine payment method label
-    let paymentMethodLabel;
-    if (gateway === "wallet") {
-      paymentMethodLabel = "SM_WALLET";
-    } else if (smMoneyApplied > 0) {
-      paymentMethodLabel = "SM_WALLET_SPLIT"; // Split: part SM Money + part gateway
-    } else {
-      paymentMethodLabel = gateway.toUpperCase();
-    }
+      if (couponCode && couponCode.trim() !== "") {
+        const validation = await CouponHelper.validateCoupon(
+          couponCode,
+          userId,
+          originalAmount,
+          scheduleId,
+          req.userInfo.activeRole
+        );
+        if (!validation.isValid) {
+          return res.status(400).json({
+            success: false,
+            message: `Coupon validation failed: ${validation.error}`,
+            errorCode: "COUPON_INVALID_DURING_CONFIRMATION",
+          });
+        }
+        discountAmount = validation.discountAmount;
+        finalAmount = validation.finalAmount;
+        couponUsed = validation.coupon._id;
+        appliedCouponCode = validation.coupon.couponCode;
+      }
 
-    let booking;
-    try {
-      booking = await Booking.create({
+      const smLedgerService = require("../../services/smLedgerService.js");
+      const PlatformConfig = require("../../models/platformConfigModel.js");
+
+      let smMoneyApplied = 0;
+      let gatewayAmount = paymentAmount || 0;
+
+      const requestedSmMoney = Math.max(0, Math.floor(Number(smMoneyToUse) || 0));
+
+      if (requestedSmMoney > 0) {
+        const [balanceResult, smConfig] = await Promise.all([
+          smLedgerService.computeSpendableBalance(userId),
+          PlatformConfig.getConfig("sm_money_config"),
+        ]);
+
+        const spendableBalance = balanceResult.display;
+        const maxDiscountPercent = (smConfig && smConfig.maxDiscountPercent) || 80;
+
+        const maxTotalDiscount = Math.floor(originalAmount * (maxDiscountPercent / 100));
+        const maxSmMoneyAllowed = Math.max(0, maxTotalDiscount - discountAmount);
+
+        smMoneyApplied = Math.min(requestedSmMoney, spendableBalance, maxSmMoneyAllowed);
+        if (smMoneyApplied <= 0) {
+          smMoneyApplied = 0;
+        }
+      }
+
+      if (gateway === "wallet") {
+        smMoneyApplied = paymentAmount;
+        gatewayAmount = 0;
+      } else {
+        const afterCoupon = originalAmount - discountAmount;
+        gatewayAmount = afterCoupon - smMoneyApplied;
+      }
+
+      // Amount consistency check
+      const expectedTotal = gatewayAmount + smMoneyApplied;
+      if (Math.abs(finalAmount - expectedTotal) > 1) {
+        logger.warn("confirmBooking: Amount mismatch in confirmation quote", {
+          finalAmount, gatewayAmount, smMoneyApplied, expectedTotal,
+        });
+        return res.status(400).json({
+          success: false,
+          message: "Amount mismatch between coupon, wallet, and gateway calculations.",
+          errorCode: "AMOUNT_MISMATCH",
+        });
+      }
+
+      // ================================================================
+      // STEP 2: DEBIT SM MONEY VIA FIFO (if applicable)
+      // ================================================================
+      if (smMoneyApplied > 0 && gateway !== "wallet") {
+        try {
+          const debitEntry = await smLedgerService.debitLedgerFIFO({
+            userId,
+            amount: smMoneyApplied,
+            bookingId: null,
+            note: `SM Money spent at checkout: Rs. ${smMoneyApplied} (temp: ${tempBookingId})`,
+          });
+          smDebitEntryId = debitEntry._id;
+          logger.info("confirmBooking: SM Money debited (split payment)", {
+            userId, amount: smMoneyApplied, debitEntryId: smDebitEntryId,
+          });
+        } catch (smDebitErr) {
+          logger.warn("confirmBooking: SM Money FIFO debit failed", {
+            userId, amount: smMoneyApplied, error: smDebitErr.message,
+          });
+          return res.status(402).json({
+            success: false,
+            message: smDebitErr.message || "Failed to debit Shuvmarg Money",
+            errorCode: "SM_MONEY_DEBIT_FAILED",
+          });
+        }
+      }
+
+      // ================================================================
+      // STEP 3: GATEWAY PAYMENT VERIFICATION
+      // ================================================================
+      if (gateway === "esewa") {
+        if (!paymentId || !gatewayAmount) {
+          await _reverseSmDebitIfNeeded("Missing paymentId or gatewayAmount for eSewa");
+          return res.status(400).json({
+            success: false,
+            message: "Missing paymentId or paymentAmount for eSewa confirmation",
+            errorCode: "ESEWA_PARAMS_MISSING",
+          });
+        }
+        const esewaCheck = await verifyEsewaPayment(paymentId, gatewayAmount);
+        if (!esewaCheck.verified) {
+          logger.warn("confirmBooking: eSewa verification failed", {
+            paymentId, gatewayAmount, userId, reason: esewaCheck.error,
+          });
+          await _reverseSmDebitIfNeeded(`eSewa verification failed: ${esewaCheck.error}`);
+          return res.status(402).json({
+            success: false,
+            message: `Payment verification failed: ${esewaCheck.error}`,
+            errorCode: "ESEWA_VERIFICATION_FAILED",
+          });
+        }
+        logger.info("confirmBooking: eSewa payment verified", { paymentId, userId, gatewayAmount });
+      }
+
+      let walletDebitResult = null;
+      if (gateway === "wallet") {
+        if (!walletPin || !/^\d{4}$/.test(walletPin)) {
+          return res.status(401).json({
+            success: false,
+            message: "Wallet PIN is required for wallet payments.",
+            errorCode: "WALLET_PIN_REQUIRED",
+          });
+        }
+
+        const Wallet  = require("../../models/walletModel");
+        const bcrypt  = require("bcryptjs");
+        const userWallet = await Wallet.findOne({ userId });
+
+        if (!userWallet || !userWallet.isPinSet) {
+          return res.status(400).json({
+            success: false,
+            message: "Wallet PIN is not set. Please set up your wallet first.",
+            errorCode: "WALLET_PIN_NOT_SET",
+          });
+        }
+
+        if (userWallet.status !== "active") {
+          return res.status(403).json({
+            success: false,
+            message: "Wallet is frozen. Please contact support.",
+            errorCode: "WALLET_FROZEN",
+          });
+        }
+
+        const pinMatch = await bcrypt.compare(walletPin, userWallet.pin);
+        if (!pinMatch) {
+          logger.warn("confirmBooking: Wallet PIN mismatch", { userId });
+          return res.status(401).json({
+            success: false,
+            message: "Incorrect wallet PIN.",
+            errorCode: "WALLET_PIN_INVALID",
+          });
+        }
+
+        logger.info("confirmBooking: Wallet PIN verified server-side", { userId });
+
+        try {
+          const debitEntry = await smLedgerService.debitLedgerFIFO({
+            userId,
+            amount: smMoneyApplied,
+            bookingId: null,
+            note: `SM Wallet full payment: Rs. ${smMoneyApplied} (temp: ${tempBookingId})`,
+          });
+          smDebitEntryId = debitEntry._id;
+          logger.info("confirmBooking: SM Wallet debited successfully (full payment)", {
+            userId, amount: smMoneyApplied, debitEntryId: smDebitEntryId,
+          });
+        } catch (walletErr) {
+          logger.warn("confirmBooking: SM Wallet debit failed", {
+            userId, amount: smMoneyApplied, error: walletErr.message,
+          });
+          return res.status(402).json({
+            success: false,
+            message: walletErr.message || "Failed to debit SM Wallet",
+            errorCode: "WALLET_DEBIT_FAILED",
+          });
+        }
+      }
+
+      // ================================================================
+      // STEP 4: WRITE TRANSACTION RECORD — PAYMENT_RECEIVED
+      // ================================================================
+      const gatewayFeeConfig = await PlatformConfig.getConfig("gateway_fees");
+      const currentGatewayFeeRate = (gatewayFeeConfig && gatewayFeeConfig[gateway])
+        ? gatewayFeeConfig[gateway].feePercent || 0
+        : 0;
+
+      txnRecord = await Transaction.create({
         userId,
-        tripId: scheduleId,
-        brandId: trip.brandId || null,
-        busId:   trip.busId   || null,
-        bookedFrom: bookedFrom || null,
-        bookedTo:   bookedTo   || null,
-        bookedDepartureTime: bookedDepartureTime || null,
-        bookedArrivalTime:   bookedArrivalTime   || null,
-        seats: normalizedSeats,
-        passengerDetails: formattedPassengers,
-        boardingPoint: boardingPoint || {},
-        droppingPoint: droppingPoint || {},
-        originalAmount,
-        couponUsed,
-        couponCode: appliedCouponCode,
-        discountAmount,
-        totalAmount: finalAmount,
-        // SM Money split payment fields
-        smMoneyUsed: smMoneyApplied,
-        gatewayAmount: gatewayAmount,
-        gatewayFeeRate: currentGatewayFeeRate,
-        smDebitEntryId: smDebitEntryId,
-        paymentMethod: paymentMethodLabel,
-        transactionId: paymentId || `sm_wallet_${Date.now()}`,
-        bookedVia: "APP",
-        ticketId,
+        tripId:          scheduleId,
+        seats:           normalizedSeats,
+        transactionType: "BOOKING",
+        gateway:         gateway === "wallet" ? "sm_wallet" : gateway,
+        transactionId:   paymentId || `sm_wallet_${Date.now()}`,
+        originalAmount:  originalAmount || paymentAmount,
+        totalAmount:     (gatewayAmount || 0) + (smMoneyApplied || 0),
+        status:          "PAYMENT_RECEIVED",
+        paidAt:          new Date(),
+        meta: {
+          tempBookingId,
+          paymentMethod: gateway === "wallet" ? "SM_WALLET" : gateway.toUpperCase(),
+          bookedVia:     "APP",
+          smMoneyUsed:   smMoneyApplied,
+          gatewayAmount: gatewayAmount,
+          smDebitEntryId: smDebitEntryId,
+          gatewayFeeRate: currentGatewayFeeRate,
+        },
       });
-    } catch (bookingError) {
-      // ──────────────────────────────────────────────────────────────
-      // CRITICAL FAILURE: Payment received, seats locked, but
-      // Booking.create() failed. Rollback everything.
-      // ──────────────────────────────────────────────────────────────
-      const failReason = `Booking.create() failed: ${bookingError.message}`;
-      logger.error("🚨 confirmBooking: BOOKING CREATION FAILED after payment", {
+
+      logger.info("confirmBooking: Transaction record created (PAYMENT_RECEIVED)", {
         txnId: txnRecord._id,
         paymentId,
         userId,
-        scheduleId,
-        seats: normalizedSeats,
-        error: bookingError.message,
-        stack: bookingError.stack,
+        gatewayAmount,
+        smMoneyApplied,
       });
 
-      // 1. Mark transaction as DISPUTED
-      await Transaction.findByIdAndUpdate(txnRecord._id, {
-        status:        "DISPUTED",
-        disputeReason: failReason,
-        failureReason: bookingError.message,
-      });
-
-      // 2. Release seat locks so other users can book
-      await _rollbackSeatLocks(scheduleId, normalizedSeats, userId);
-
-      // 3. Reverse SM Money debit
-      await _reverseSmDebitIfNeeded(failReason);
-
-      // 4. Alert admin
-      await _sendDisputeAdminAlert(txnRecord, failReason);
-
-      // 5. Notify user with case ID
-      try {
-        await createLocalNotification(
-          userId,
-          "PAYMENT_DISPUTE",
-          "Payment Received — Ticket Issue",
-          `Your payment of Rs.${(gatewayAmount || 0) + (smMoneyApplied || 0)} was received but ticket creation encountered an issue. Case ID: ${txnRecord._id}. Our team will resolve this within 2 hours.`,
-          {
-            transactionId: txnRecord._id,
-            esewaPaymentId: paymentId,
-            amount: (gatewayAmount || 0) + (smMoneyApplied || 0),
-          }
-        );
-      } catch (notifErr) {
-        logger.error("confirmBooking: failed to notify user about dispute", { error: notifErr.message });
-      }
-
-      // 6. Return structured error with case ID
-      return res.status(500).json({
-        success:   false,
-        message:   `Your payment was received but ticket creation failed. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
-        caseId:    txnRecord._id,
-        errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-      });
-    }
-
-    // ================================================================
-    // STEP 9: BOOKING CREATED SUCCESSFULLY — Update transaction to SUCCESS
-    // ================================================================
-    await Transaction.findByIdAndUpdate(txnRecord._id, {
-      status:    "SUCCESS",
-      bookingId: booking._id,
-      ticketId,
-    });
-
-    // Link the SM Money debit entry to the actual booking (if applicable)
-    if (smDebitEntryId) {
-      try {
-        const SMLedger = require("../../models/smLedgerModel");
-        await SMLedger.updateOne(
-          { _id: smDebitEntryId },
-          { $set: { bookingId: booking._id } }
-        );
-      } catch (linkErr) {
-        logger.warn("confirmBooking: failed to link SM debit to booking", {
-          smDebitEntryId, bookingId: booking._id, error: linkErr.message,
+      // ================================================================
+      // STEP 5: VERIFY TRIP STATUS & BOOKING CUTOFF
+      // ================================================================
+      const Trip = require("../../models/tripModel.js");
+      const trip = await Trip.findById(scheduleId).lean();
+      if (!trip) {
+        await Transaction.findByIdAndUpdate(txnRecord._id, {
+          status: "DISPUTED",
+          disputeReason: "Trip not found after payment verification",
+        });
+        await _reverseSmDebitIfNeeded("Trip not found after payment");
+        await _sendDisputeAdminAlert(txnRecord, "Trip not found after payment verification");
+        return res.status(404).json({
+          success: false,
+          message: `Your payment was received but the trip was not found. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
+          caseId: txnRecord._id,
+          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
         });
       }
-    }
 
-    logger.info("confirmBooking: Booking created, transaction marked SUCCESS", {
-      txnId: txnRecord._id,
-      bookingId: booking._id,
-      ticketId,
-      userId,
-      smMoneyUsed: smMoneyApplied,
-      gatewayAmount,
-      paymentMethod: paymentMethodLabel,
-    });
+      if (trip.bookingClosesAt && new Date(trip.bookingClosesAt) < new Date()) {
+        await Transaction.findByIdAndUpdate(txnRecord._id, {
+          status: "DISPUTED",
+          disputeReason: "Booking window closed after payment was processed",
+        });
+        await _reverseSmDebitIfNeeded("Booking window closed after payment");
+        await _sendDisputeAdminAlert(txnRecord, "Booking window closed after payment was processed");
+        return res.status(400).json({
+          success: false,
+          message: `Your payment was received but booking has closed for this trip. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
+          caseId: txnRecord._id,
+          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
+        });
+      }
 
-    // ================================================================
-    // STEP 10: POST-BOOKING — Coupon usage, cashback, notifications
-    // These are all non-critical. Failures here do NOT affect the booking.
-    // ================================================================
+      if (trip.status !== "scheduled" && trip.status !== "boarding") {
+        await Transaction.findByIdAndUpdate(txnRecord._id, {
+          status: "DISPUTED",
+          disputeReason: `Trip status is "${trip.status}" — not bookable after payment`,
+        });
+        await _reverseSmDebitIfNeeded(`Trip status "${trip.status}" not bookable`);
+        await _sendDisputeAdminAlert(txnRecord, `Trip status is "${trip.status}" — not bookable`);
+        return res.status(400).json({
+          success: false,
+          message: `Your payment was received but the trip is no longer available (status: ${trip.status}). Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
+          caseId: txnRecord._id,
+          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
+        });
+      }
 
-    // Apply coupon usage flag
-    if (couponUsed) {
+      // ================================================================
+      // STEP 6: ATOMIC SEAT LOCK
+      // ================================================================
+      const seatDoc = await Seat.findOne({ tripId: scheduleId });
+      if (!seatDoc) {
+        await Transaction.findByIdAndUpdate(txnRecord._id, {
+          status: "DISPUTED",
+          disputeReason: "Seat data not found for trip after payment",
+        });
+        await _reverseSmDebitIfNeeded("Seat data not found after payment");
+        await _sendDisputeAdminAlert(txnRecord, "Seat data not found for trip after payment");
+        return res.status(404).json({
+          success: false,
+          message: `Your payment was received but seat data is missing. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
+          caseId: txnRecord._id,
+          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
+        });
+      }
+
+      const allSeats = [...seatDoc.seata, ...seatDoc.seatb, ...seatDoc.seatc];
+
+      const exactSeatsToLock = [];
+      for (const reqSeat of normalizedSeats) {
+        const exactSeat = allSeats.find((s) => s.seatNo.toLowerCase() === reqSeat);
+        if (exactSeat) {
+          exactSeatsToLock.push(exactSeat.seatNo);
+        } else {
+          exactSeatsToLock.push(reqSeat.toUpperCase());
+        }
+      }
+
+      const alreadyBookedSeats = [];
+      const invalidSeats = [];
+
+      for (const seatNo of exactSeatsToLock) {
+        let arrayField = null;
+        if (seatDoc.seata.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
+          arrayField = "seata";
+        } else if (seatDoc.seatb.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
+          arrayField = "seatb";
+        } else if (seatDoc.seatc.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
+          arrayField = "seatc";
+        }
+
+        if (!arrayField) {
+          invalidSeats.push(seatNo.toUpperCase());
+          continue;
+        }
+
+        const updated = await Seat.findOneAndUpdate(
+          {
+            tripId: scheduleId,
+            [arrayField]: { $elemMatch: { seatNo: seatNo, booked: false } }
+          },
+          {
+            $set: {
+              [`${arrayField}.$[elem].booked`]:    true,
+              [`${arrayField}.$[elem].bookedBy`]:  userId,
+              [`${arrayField}.$[elem].bookedAt`]:  new Date(),
+            }
+          },
+          {
+            arrayFilters: [{ "elem.seatNo": seatNo, "elem.booked": false }],
+            new: true,
+          }
+        );
+
+        if (!updated) {
+          alreadyBookedSeats.push(seatNo.toUpperCase());
+        }
+      }
+
+      if (invalidSeats.length > 0 || alreadyBookedSeats.length > 0) {
+        await _rollbackSeatLocks(scheduleId, normalizedSeats, userId);
+
+        const reasons = [];
+        if (invalidSeats.length > 0) reasons.push(`Invalid seat(s): ${invalidSeats.join(", ")}`);
+        if (alreadyBookedSeats.length > 0) reasons.push(`Already booked: ${alreadyBookedSeats.join(", ")} — taken during payment`);
+        const fullReason = reasons.join(" | ");
+
+        await Transaction.findByIdAndUpdate(txnRecord._id, {
+          status: "DISPUTED",
+          disputeReason: `Seat lock failed after payment: ${fullReason}`,
+        });
+        await _reverseSmDebitIfNeeded(`Seat lock failed: ${fullReason}`);
+        await _sendDisputeAdminAlert(txnRecord, `Seat lock failed: ${fullReason}`);
+
+        return res.status(409).json({
+          success: false,
+          message: `Your payment was received but the requested seats are no longer available. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours. (${fullReason})`,
+          caseId: txnRecord._id,
+          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
+        });
+      }
+
+      seatsLocked = true;
+      lockedSeatNumbers = normalizedSeats;
+
+      // ================================================================
+      // STEP 8: CREATE BOOKING RECORD
+      // ================================================================
+      const ticketId = generateBookingTicketId();
+
+      const formattedPassengers = (passengerDetails || []).map(p => ({
+        name: p.name || "Passenger",
+        age: p.age || 0,
+        gender: p.gender || "other",
+        seatNo: (Array.isArray(p.seatNo) ? p.seatNo[0] : p.seatNo) || normalizedSeats[0] || "N/A"
+      }));
+
+      let paymentMethodLabel;
+      if (gateway === "wallet") {
+        paymentMethodLabel = "SM_WALLET";
+      } else if (smMoneyApplied > 0) {
+        paymentMethodLabel = "SM_WALLET_SPLIT";
+      } else {
+        paymentMethodLabel = gateway.toUpperCase();
+      }
+
       try {
-        await CouponHelper.applyCoupon(appliedCouponCode, userId, booking._id, originalAmount);
-      } catch (couponError) {
-        console.error("Error recording coupon usage:", couponError);
-      }
-    }
+        booking = await Booking.create({
+          userId,
+          tripId: scheduleId,
+          brandId: trip.brandId || null,
+          busId:   trip.busId   || null,
+          bookedFrom: bookedFrom || null,
+          bookedTo:   bookedTo   || null,
+          bookedDepartureTime: bookedDepartureTime || null,
+          bookedArrivalTime:   bookedArrivalTime   || null,
+          seats: normalizedSeats,
+          passengerDetails: formattedPassengers,
+          boardingPoint: boardingPoint || {},
+          droppingPoint: droppingPoint || {},
+          originalAmount,
+          couponUsed,
+          couponCode: appliedCouponCode,
+          discountAmount,
+          totalAmount: finalAmount,
+          smMoneyUsed: smMoneyApplied,
+          gatewayAmount: gatewayAmount,
+          gatewayFeeRate: currentGatewayFeeRate,
+          smDebitEntryId: smDebitEntryId,
+          paymentMethod: paymentMethodLabel,
+          transactionId: paymentId || `sm_wallet_${Date.now()}`,
+          bookedVia: "APP",
+          ticketId,
+        });
+        bookingCreated = true;
+      } catch (bookingError) {
+        const failReason = `Booking.create() failed: ${bookingError.message}`;
+        logger.error("🚨 confirmBooking: BOOKING CREATION FAILED after payment", {
+          txnId: txnRecord._id,
+          paymentId,
+          userId,
+          scheduleId,
+          seats: normalizedSeats,
+          error: bookingError.message,
+          stack: bookingError.stack,
+        });
 
-    // ──────────────────────────────────────────────────────────────
-    // Generate Cashback Scratch Card
-    // Spec §4.3: Cashback is ALWAYS calculated on BASE ticket price
-    // (not after discounts). This is critical — discounted bookings
-    // still earn cashback on the full original amount.
-    // ──────────────────────────────────────────────────────────────
-    let scratchCardId = null;
-    try {
-      const cashbackResult = await smLedgerService.generateCashback({
-        userId,
-        bookingId: booking._id,
-        baseTicketPrice: originalAmount,
+        await Transaction.findByIdAndUpdate(txnRecord._id, {
+          status:        "DISPUTED",
+          disputeReason: failReason,
+          failureReason: bookingError.message,
+        });
+
+        await _rollbackSeatLocks(scheduleId, normalizedSeats, userId);
+        await _reverseSmDebitIfNeeded(failReason);
+        await _sendDisputeAdminAlert(txnRecord, failReason);
+
+        try {
+          await createLocalNotification(
+            userId,
+            "PAYMENT_DISPUTE",
+            "Payment Received — Ticket Issue",
+            `Your payment of Rs.${(gatewayAmount || 0) + (smMoneyApplied || 0)} was received but ticket creation encountered an issue. Case ID: ${txnRecord._id}. Our team will resolve this within 2 hours.`,
+            {
+              transactionId: txnRecord._id,
+              esewaPaymentId: paymentId,
+              amount: (gatewayAmount || 0) + (smMoneyApplied || 0),
+            }
+          );
+        } catch (notifErr) {
+          logger.error("confirmBooking: failed to notify user about dispute", { error: notifErr.message });
+        }
+
+        return res.status(500).json({
+          success:   false,
+          message:   `Your payment was received but ticket creation failed. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
+          caseId:    txnRecord._id,
+          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
+        });
+      }
+
+      // ================================================================
+      // STEP 9: TRANSITION TRANSACTION TO SUCCESS WITH VERIFICATION
+      // ================================================================
+      try {
+        const successfulTransaction = await Transaction.findOneAndUpdate(
+          {
+            _id: txnRecord._id,
+            status: "PAYMENT_RECEIVED",
+          },
+          {
+            $set: {
+              status: "SUCCESS",
+              bookingId: booking._id,
+              ticketId,
+            },
+          },
+          {
+            new: true,
+            runValidators: true,
+          }
+        );
+
+        if (!successfulTransaction) {
+          logger.error("🚨 confirmBooking: Transaction SUCCESS transition failed (returned null)", {
+            txnId: txnRecord._id,
+            bookingId: booking._id,
+            ticketId,
+          });
+          return res.status(409).json({
+            success: false,
+            message: "Your payment and booking were received, but final reconciliation is still required.",
+            errorCode: "BOOKING_RECONCILIATION_REQUIRED",
+            caseId: txnRecord._id,
+          });
+        }
+      } catch (txnError) {
+        logger.error("🚨 confirmBooking: Transaction SUCCESS transition threw exception", {
+          txnId: txnRecord._id,
+          bookingId: booking._id,
+          ticketId,
+          error: txnError.message,
+        });
+        return res.status(409).json({
+          success: false,
+          message: "Your payment and booking were received, but final reconciliation is still required.",
+          errorCode: "BOOKING_RECONCILIATION_REQUIRED",
+          caseId: txnRecord._id,
+        });
+      }
+
+      // Capture all response fields BEFORE marking committed so the outer
+      // catch can always build a safe success response without block-scope refs.
+      committedBookingResponse = buildCommittedBookingResponse(booking, ticketId, {
+        originalAmount, discountAmount, smMoneyApplied, gatewayAmount,
+        finalAmount, appliedCouponCode, paymentId, gateway, normalizedSeats,
+        scratchCardId: null,
       });
-      if (cashbackResult && cashbackResult.scratchCard) {
-        scratchCardId = cashbackResult.scratchCard._id;
+      bookingCommitted = true;
+
+      // ================================================================
+      // STEP 10: POST-BOOKING NON-CRITICAL WORK (ISOLATED)
+      // ================================================================
+      try {
+        await passengerSeatHold.completePassengerHold({
+          holdId: req.bookingHold._id,
+          userId: req.dbUser._id,
+          now: new Date(),
+        });
+      } catch (holdErr) {
+        logger.warn("confirmBooking: Hold completion failed post-commit", { error: holdErr.message });
       }
-    } catch (cashbackErr) {
-      logger.error("confirmBooking: Failed to generate cashback", { error: cashbackErr.message });
-    }
 
-    // Notifications
-    await createLocalNotification(
-      userId,
-      "BOOKING_CONFIRMED",
-      "Ticket Booked Successfully",
-      `Your ticket (${ticketId}) is confirmed.`,
-      { scheduleId, seats: normalizedSeats, originalAmount, discountAmount, finalAmount, smMoneyUsed: smMoneyApplied, gatewayAmount, couponCode: appliedCouponCode }
-    );
+      if (smDebitEntryId) {
+        try {
+          const SMLedger = require("../../models/smLedgerModel");
+          await SMLedger.updateOne(
+            { _id: smDebitEntryId },
+            { $set: { bookingId: booking._id } }
+          );
+        } catch (linkErr) {
+          logger.warn("confirmBooking: failed to link SM debit to booking", { error: linkErr.message });
+        }
+      }
 
-    const userDevices = await UserDeviceInfo.find({ userId });
-    const tokens = userDevices.map((d) => d.token).filter(Boolean);
-    if (tokens.length > 0) {
-      await notificationManager(tokens, "Ticket Booked Successfully", `Your ticket (${ticketId}) is confirmed.`);
-    }
+      if (couponUsed) {
+        try {
+          await CouponHelper.applyCoupon(
+            appliedCouponCode,
+            userId,
+            booking._id,
+            originalAmount,
+            req.userInfo.activeRole
+          );
+        } catch (couponError) {
+          logger.error("Error recording coupon usage:", couponError);
+        }
+      }
 
-    return res.status(201).json({
-      success: true,
-      message: "Booking confirmed successfully!",
-      data: {
-        bookingId: booking._id,
-        ticketId,
-        originalAmount,
-        discountAmount,
-        smMoneyUsed: smMoneyApplied,
-        gatewayAmount,
-        totalAmount: finalAmount,
-        couponUsed: appliedCouponCode,
-        savings: discountAmount > 0 ? Math.round((discountAmount / originalAmount) * 100 * 100) / 100 : 0,
-        paymentId: paymentId || `sm_wallet_${Date.now()}`,
-        gateway,
-        seats: normalizedSeats,
-        scratchCardId, // Return scratch card ID so UI can show it immediately
-      },
-    });
+      let scratchCardId = null;
+      try {
+        const cashbackResult = await smLedgerService.generateCashback({
+          userId,
+          bookingId: booking._id,
+          baseTicketPrice: originalAmount,
+        });
+        if (cashbackResult && cashbackResult.scratchCard) {
+          scratchCardId = cashbackResult.scratchCard._id;
+          // Update the snapshot so the response includes the scratch card.
+          committedBookingResponse.data.scratchCardId = scratchCardId;
+        }
+      } catch (cashbackErr) {
+        logger.error("confirmBooking: Failed to generate cashback", { error: cashbackErr.message });
+      }
+
+      try {
+        await sendBookingConfirmedNotification({
+          userId,
+          ticketId,
+          metadata: {
+            scheduleId,
+            seats: normalizedSeats,
+            originalAmount,
+            discountAmount,
+            finalAmount,
+            smMoneyUsed: smMoneyApplied,
+            gatewayAmount,
+            couponCode: appliedCouponCode,
+          },
+        });
+      } catch (notifErr) {
+        logger.warn('confirmBooking: Notification failed post-commit', { error: notifErr.message });
+      }
+
+      return res.status(201).json(committedBookingResponse);
   } catch (error) {
-    // ================================================================
-    // OUTER CATCH — Unexpected crash at any point in the flow.
-    // If we already have a txnRecord, mark it appropriately.
-    // If SM Money was debited, attempt reversal.
-    // ================================================================
     logger.error("confirmBooking: Unexpected error in booking flow", {
       error: error.message,
       stack: error.stack,
       txnId: txnRecord?._id,
       smDebitEntryId,
+      bookingCreated,
+      bookingCommitted,
     });
 
-    // Reverse SM Money debit if one was made
+    if (res.headersSent) {
+      return;
+    }
+
+    if (bookingCommitted && committedBookingResponse) {
+      // Safe: committedBookingResponse was fully captured before bookingCommitted=true.
+      // No block-scoped variables are referenced here.
+      return res.status(201).json(committedBookingResponse);
+    }
+
+    if (bookingCreated) {
+      return res.status(409).json({
+        success: false,
+        message: "Your payment and booking were received, but final reconciliation is still required.",
+        errorCode: "BOOKING_RECONCILIATION_REQUIRED",
+        caseId: txnRecord?._id,
+      });
+    }
+
+    // PRE_BOOKING: Perform compensation
     await _reverseSmDebitIfNeeded(`Unexpected crash: ${error.message}`);
 
-    // If transaction was written but booking didn't complete, mark DISPUTED
     if (txnRecord) {
       try {
         await Transaction.findByIdAndUpdate(txnRecord._id, {
@@ -1076,7 +1060,6 @@ const confirmBooking = async (req, res) => {
       }
     }
 
-    // If seats were locked, attempt rollback
     if (seatsLocked && lockedSeatNumbers.length > 0 && lockUserId && lockTripId) {
       try {
         await _rollbackSeatLocks(lockTripId, lockedSeatNumbers, lockUserId);
@@ -1085,7 +1068,6 @@ const confirmBooking = async (req, res) => {
       }
     }
 
-    // Return structured error with case ID if available
     if (txnRecord) {
       return res.status(500).json({
         success:   false,
@@ -1102,53 +1084,7 @@ const confirmBooking = async (req, res) => {
   }
 };
 
-// Verify booking status (for checking if booking was successful)
-const verifyBooking = async (req, res) => {
-  try {
-    const { ticketId } = req.params;
-    const userId = req.userInfo.id;
-
-    const booking = await Booking.findOne({
-      ticketId,
-      userId,
-    }).populate("tripId");  // tripId is the correct field (not scheduleId)
-
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found!",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Booking verified successfully!",
-      data: {
-        bookingId: booking._id,
-        ticketId: booking.ticketId,
-        scheduleDetails: booking.scheduleId,
-        seats: booking.seats,
-        originalAmount: booking.originalAmount,
-        discountAmount: booking.discountAmount,
-        totalAmount: booking.totalAmount,
-        couponUsed: booking.couponCode,
-        gateway: booking.gateway,
-        transactionId: booking.transactionId,
-        status: booking.status,
-        bookedAt: booking.bookedAt,
-      },
-    });
-  } catch (error) {
-    console.error("Error verifying booking:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
-
 module.exports = {
   prepareBooking,
   confirmBooking,
-  verifyBooking,
 };

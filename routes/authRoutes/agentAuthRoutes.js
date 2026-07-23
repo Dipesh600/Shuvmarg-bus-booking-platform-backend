@@ -17,7 +17,7 @@ const agentLogin    = require("../../src/modules/agent/auth/login");
 const agentRegistration = require("../../src/modules/agent/auth/registration");
 const agentPasswordReset = require("../../src/modules/agent/auth/password-reset");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
-const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
+const { otpVerifyLimiter, otpSendLimiter } = require("../../middleware/otpRateLimiter.js");
 
 // Strict rate limiter for login attempts (per account — 10 per 15 min)
 const loginRateLimiter = rateLimit({
@@ -34,10 +34,10 @@ const loginRateLimiter = rateLimit({
 });
 
 // ── 3-step self-registration ──────────────────────────────────────────────────
-router.post("/sendOTP",    otpRateLimiter, agentRegistration.sendOTP);
+router.post("/sendOTP",    otpSendLimiter, otpRateLimiter, agentRegistration.sendOTP);
 router.post("/verifyOTP",  otpVerifyLimiter, agentRegistration.verifyOTP);     // ← phone-keyed verify limit
 router.post("/register",   agentRegistration.register);
-router.post("/resendOTP",  otpRateLimiter, agentRegistration.resendOTP);
+router.post("/resendOTP",  otpSendLimiter, otpRateLimiter, agentRegistration.resendOTP);
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 router.post("/login", loginRateLimiter, agentLogin.login);
@@ -47,9 +47,9 @@ router.post("/refresh", agentSession.refresh);
 router.post("/logout",  agentSession.logout);
 
 // ── Password reset ───────────────────────────────────────────────────────────
-router.post("/requestPasswordReset", otpRateLimiter, agentPasswordReset.requestPasswordReset);
+router.post("/requestPasswordReset", otpSendLimiter, otpRateLimiter, agentPasswordReset.requestPasswordReset);
 router.post("/verifyOtpForReset",    otpVerifyLimiter, agentPasswordReset.verifyOtpForReset); // ← phone-keyed verify limit
 router.post("/resetPassword",        otpVerifyLimiter, agentPasswordReset.resetPassword);      // ← phone-keyed verify limit
-router.post("/resendOtpForReset",    otpRateLimiter, agentPasswordReset.resendOtpForReset);
+router.post("/resendOtpForReset",    otpSendLimiter, otpRateLimiter, agentPasswordReset.resendOtpForReset);
 
 module.exports = router;

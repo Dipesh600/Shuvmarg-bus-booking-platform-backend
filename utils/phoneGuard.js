@@ -57,26 +57,23 @@ const normalizePhone = (phone) => {
 };
 
 /**
- * Build a phone query that matches both raw and normalized forms.
- * This catches records stored as "9803643115" when queried with "+9779803643115" and vice versa.
- *
+ * Build a phone query matching both raw and normalized forms.
  * @param {string} phone - Raw phone input
- * @returns {Object} MongoDB query filter for phone matching
+ * @param {boolean} [options.includeDeleted=false] - When true, includes soft-deleted records.
+ *   Default false — existing callers always exclude deleted users.
+ * @returns {Object} MongoDB query filter
  */
-const buildPhoneQuery = (phone) => {
+const buildPhoneQuery = (phone, options = {}) => {
     const normalized = normalizePhone(phone);
     const raw = String(phone).trim();
+    const includeDeleted = Boolean(options.includeDeleted);
 
-    // If normalization didn't change anything, simple equality
-    if (normalized === raw) {
-        return { phone: raw, deletedAt: null };
-    }
+    const phoneFilter = normalized === raw
+        ? { phone: raw }
+        : { phone: { $in: [raw, normalized] } };
 
-    // Search for EITHER the raw input or the normalized form
-    return {
-        phone: { $in: [raw, normalized] },
-        deletedAt: null,
-    };
+    if (includeDeleted) return phoneFilter;
+    return { ...phoneFilter, deletedAt: null };
 };
 
 /**
@@ -182,5 +179,4 @@ const phoneGuardMiddleware = (targetRole) => {
     };
 };
 
-module.exports = { normalizePhone, checkPhoneForRole, isPhoneRegistered, phoneGuardMiddleware };
-
+module.exports = { normalizePhone, buildPhoneQuery, checkPhoneForRole, isPhoneRegistered, phoneGuardMiddleware };

@@ -250,6 +250,8 @@ if (require.main === module) {
   setupTripGeneratorCron();
   setupFleetDocumentExpiryCron();
   setupReconciliationCron();
+  // Note: orphan coupon image cleanup is handled client-side via localStorage
+  // tombstoning in the admin Create Offer page — no server-side cron needed.
   startServer(app, PORT);
 }
 

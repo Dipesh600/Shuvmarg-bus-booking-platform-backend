@@ -22,7 +22,17 @@ const resendOtpForReset = async ({ rawPhone }) => {
   const { hasRole } = await phoneGuard.checkPhoneForRole(phone, 'busOwner');
   if (!hasRole) return neutralResult();
   if (policy.isSuspended(user)) throw errors.suspendedAccountError();
-  const result = await otpHelper.createAndSendOTP(phone, policy.OTP_PURPOSE);
+  let result;
+  try {
+    result = await otpHelper.createAndSendOTP(phone, policy.OTP_PURPOSE);
+  } catch (err) {
+    if (policy.isOtpBlocked(err)) throw errors.otpBlockedError(policy.retryMinutes(err));
+    if (err.message && err.message.startsWith('OTP_COOLDOWN:')) {
+      const secondsLeft = parseInt(err.message.split(':')[1], 10) || 60;
+      throw errors.otpCooldownError(secondsLeft);
+    }
+    throw err;
+  }
   return {
     statusCode: 200,
     responseBody: {

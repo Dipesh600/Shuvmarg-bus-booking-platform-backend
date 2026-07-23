@@ -18,6 +18,7 @@ const conductorRoutes = require("./conductorRoutes/conductorRoutes.js")
 const busOwnerAuthRoutes = require("./authRoutes/busOwnerAuthRoutes.js");
 const agentAuthRoutes = require("./authRoutes/agentAuthRoutes.js");
 const activateAuthRoutes = require("./authRoutes/activateAuthRoutes.js");
+const passengerAuthRoutes = require("./authRoutes/passengerAuthRoutes.js");
 
 const partnerLeadRoutes = require("./partnerLeadRoutes.js");
 
@@ -40,5 +41,6 @@ router.use("/api", partnerLeadRoutes);
 router.use("/api/auth/busowner", busOwnerAuthRoutes);
 router.use("/api/auth/agent", agentAuthRoutes);
 router.use("/api/auth/activate", activateAuthRoutes);
+router.use("/api/auth/passenger", passengerAuthRoutes);
 
 module.exports = router;

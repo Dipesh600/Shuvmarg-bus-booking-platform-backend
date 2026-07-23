@@ -106,6 +106,11 @@ const resendOtp = async ({ phone, purpose }) => {
       throw errors.otpBlockedError(minutesLeft);
     }
 
+    if (error.message && error.message.startsWith('OTP_COOLDOWN:')) {
+      const secondsLeft = parseInt(error.message.split(':')[1], 10) || 60;
+      throw errors.otpCooldownError(secondsLeft);
+    }
+
     throw errors.resendFailedError(error);
   }
 };

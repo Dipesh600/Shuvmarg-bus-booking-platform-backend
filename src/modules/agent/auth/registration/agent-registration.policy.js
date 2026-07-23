@@ -13,6 +13,9 @@ const isOtpRecent = (otpRecord, nowMs) =>
 const otpBlockedMinutes = (error) => parseInt(error.message.split(':')[1], 10) || 10;
 const isOtpBlocked = (error) =>
   Boolean(error.message && error.message.startsWith('OTP_SEND_BLOCKED:'));
+const isOtpCooldown = (error) =>
+  Boolean(error.message && error.message.startsWith('OTP_COOLDOWN:'));
+const otpCooldownSeconds = (error) => parseInt(error.message.split(':')[1], 10) || 60;
 const normalizedEmail = (email) => email.toLowerCase().trim();
 const newUserData = ({ name, phone, password, email, now }) => {
   const userData = {
@@ -39,6 +42,8 @@ module.exports = {
   isOtpRecent,
   otpBlockedMinutes,
   isOtpBlocked,
+  isOtpCooldown,
+  otpCooldownSeconds,
   normalizedEmail,
   newUserData,
 };

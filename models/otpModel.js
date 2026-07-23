@@ -34,6 +34,7 @@ const otpSchema = new mongoose.Schema({
       "BUSOWNER_PASSWORD_RESET",
       "AGENT_REGISTRATION",
       "AGENT_PASSWORD_RESET",
+      "PASSENGER_AUTH",
     ],
     required: true,
   },
@@ -62,6 +63,12 @@ const otpSchema = new mongoose.Schema({
   // When set, blocks any new OTP sends for this phone+purpose until this time.
   // Set when sendCount hits MAX_OTP_SENDS or when maxAttempts is exhausted.
   blockedUntil: {
+    type: Date,
+    default: null,
+  },
+  // Timestamp of the last successful OTP send.
+  // Used to enforce a minimum cooldown between consecutive sends.
+  lastSentAt: {
     type: Date,
     default: null,
   },

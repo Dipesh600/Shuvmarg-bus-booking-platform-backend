@@ -1,14 +1,13 @@
 'use strict';
 
-const bcrypt = require('bcryptjs');
 const phoneGuard = require('../../../../../utils/phoneGuard');
-const passwordValidator = require('../../../../../utils/passwordValidator');
 const tokenService = require('../../../../../utils/tokenService');
 const verificationToken = require('../../../../../utils/verificationToken');
 const repository = require('./bus-owner-registration.repository');
 const leadRepository = require('./bus-owner-registration-lead.repository');
 const policy = require('./bus-owner-registration.policy');
 const errors = require('./bus-owner-registration.errors');
+const { persistUpgrade } = require('./bus-owner-registration-upgrade');
 
 const validateBasics = ({ phone, name, companyName, verificationToken: token }) => {
   const missing = policy.missingRegistrationField({ phone, name, companyName });
@@ -29,9 +28,9 @@ const assertRecentOtp = async (phone) => {
   if (!policy.isOtpRecent(otpRecord, Date.now())) throw errors.otpExpiredError();
 };
 
-const persistUpgrade = (user, now) => repository.upgradeUserToBusOwner(user._id, now);
-
 const persistNewUser = async ({ phone, name, password, email, address, now }) => {
+  const bcrypt = require('bcryptjs');
+  const passwordValidator = require('../../../../../utils/passwordValidator');
   if (!password) throw errors.missingNewPasswordError();
   const check = passwordValidator.validatePassword(password);
   if (!check.valid) throw errors.invalidPasswordError(check);
@@ -83,7 +82,7 @@ const register = async (input) => {
   const isUpgrade = Boolean(exists && user);
   const now = new Date();
   const savedUser = isUpgrade
-    ? await persistUpgrade(user, now)
+    ? await persistUpgrade(user, input.password, now)
     : await persistNewUser({ ...input, now });
   await ensureBusOwnerProfile({ userId: savedUser._id, companyName: input.companyName });
   const { accessToken, refreshToken } = await tokenService.generateTokenPair(savedUser, {

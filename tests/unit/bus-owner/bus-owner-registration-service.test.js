@@ -93,14 +93,16 @@ test('bus-owner registration service preserves orchestration order', async (t) =
     } finally { restores.reverse().forEach((fn) => fn()); }
   });
 
-  await t.test('upgrade skips password validation/hash and preserves profile', async () => {
+  await t.test('upgrade with existing password: skips password validation/hash and preserves profile', async () => {
     const restores = [];
     const order = [];
     patch(phoneGuard, 'normalizePhone', (p) => p, restores);
     patch(verificationToken, 'validateVerificationToken', () => ({ valid: true }), restores);
     patch(repository, 'findConsumedOtp', async () => ({ updatedAt: new Date() }), restores);
     patch(phoneGuard, 'checkPhoneForRole', async () => ({ exists: true, user: { _id: 'u' } }), restores);
-    patch(bcrypt, 'hash', async () => assert.fail('upgrade must not hash'), restores);
+    // hasUsablePassword returns true — user already has credentials
+    patch(repository, 'hasUsablePassword', async () => { order.push('hasPwd'); return true; }, restores);
+    patch(bcrypt, 'hash', async () => assert.fail('upgrade with existing password must not hash'), restores);
     patch(repository, 'upgradeUserToBusOwner', async () => { order.push('upgrade'); return userDoc(); }, restores);
     patch(repository, 'findBusOwnerByUser', async () => { order.push('findProfile'); return { _id: 'profile' }; }, restores);
     patch(repository, 'createBusOwnerProfile', async () => assert.fail('existing profile preserved'), restores);
@@ -108,7 +110,7 @@ test('bus-owner registration service preserves orchestration order', async (t) =
     patch(leadRepository, 'convertOtpVerifiedLead', () => Promise.resolve(), restores);
     try {
       await service.register({ rawPhone: '9810000000', name: 'Owner', companyName: 'Company', verificationToken: 'vt' });
-      assert.deepEqual(order, ['upgrade', 'findProfile', 'tokens']);
+      assert.deepEqual(order, ['hasPwd', 'upgrade', 'findProfile', 'tokens']);
     } finally { restores.reverse().forEach((fn) => fn()); }
   });
 });

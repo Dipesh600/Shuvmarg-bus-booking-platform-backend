@@ -26,7 +26,7 @@ test('Auth Registration: sendPhoneOTP', async (t) => {
     assert.equal(res.body.message, 'Phone number is required.');
   });
 
-  await t.test('registered phone → exact generic 200, no data field', async () => {
+  await t.test('registered phone → 409 PHONE_ALREADY_REGISTERED', async () => {
     await User.create({
       phone: '9800000001', name: 'Existing', address: 'KTM', gender: 'male',
       password: 'hashedpwd!!!', phoneVerified: true, isVerified: true, roles: ['passenger'],
@@ -37,10 +37,8 @@ test('Auth Registration: sendPhoneOTP', async (t) => {
     const restore = patchMethod(otpHelper, 'createAndSendOTP', async () => { sendCalled = true; });
     try {
       const res = await request(app).post('/api/sendPhoneOTP').send({ phone: '9800000001' });
-      assert.equal(res.status, 200);
-      assert.equal(res.body.status, true);
-      assert.match(res.body.message, /eligible/);
-      assert.equal(res.body.data, undefined);
+      assert.equal(res.status, 409);
+      assert.equal(res.body.errorCode, 'PHONE_ALREADY_REGISTERED');
       assert.equal(sendCalled, false);
     } finally { restore(); }
   });

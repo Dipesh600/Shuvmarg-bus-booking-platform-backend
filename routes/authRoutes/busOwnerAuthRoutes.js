@@ -22,7 +22,7 @@ const busOwnerPasswordReset = require("../../src/modules/bus-owner/auth/password
 const busOwnerRegistration = require("../../src/modules/bus-owner/auth/registration");
 const busOwnerSession = require("../../src/modules/bus-owner/auth/session");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
-const { otpVerifyLimiter } = require("../../middleware/otpRateLimiter.js");
+const { otpVerifyLimiter, otpSendLimiter } = require("../../middleware/otpRateLimiter.js");
 
 // Strict rate limiter for login attempts — 10 attempts per 15 minutes per account
 const loginRateLimiter = rateLimit({
@@ -43,19 +43,19 @@ const loginRateLimiter = rateLimit({
 });
 
 // 3-step self-registration
-router.post("/sendOTP",   otpRateLimiter, busOwnerRegistration.sendOTP);
+router.post("/sendOTP",   otpSendLimiter, otpRateLimiter, busOwnerRegistration.sendOTP);
 router.post("/verifyOTP", otpVerifyLimiter, busOwnerRegistration.verifyOTP);     // ← phone-keyed verify limit
 router.post("/register",  busOwnerRegistration.register);
-router.post("/resendOTP", otpRateLimiter, busOwnerRegistration.resendOTP);
+router.post("/resendOTP", otpSendLimiter, otpRateLimiter, busOwnerRegistration.resendOTP);
 
 // Login (dedicated bus-owner endpoint with proper phone normalization + role check)
 router.post("/login", loginRateLimiter, busOwnerLogin.login);
 
 // Password Reset (Bus Owner specific)
-router.post("/requestPasswordReset", otpRateLimiter, busOwnerPasswordReset.requestPasswordReset);
+router.post("/requestPasswordReset", otpSendLimiter, otpRateLimiter, busOwnerPasswordReset.requestPasswordReset);
 router.post("/verifyOtpForReset", otpVerifyLimiter, busOwnerPasswordReset.verifyOtpForReset); // ← phone-keyed verify limit
 router.post("/resetPassword",     otpVerifyLimiter, busOwnerPasswordReset.resetPassword);      // ← phone-keyed verify limit
-router.post("/resendOtpForReset", otpRateLimiter, busOwnerPasswordReset.resendOtpForReset);
+router.post("/resendOtpForReset", otpSendLimiter, otpRateLimiter, busOwnerPasswordReset.resendOtpForReset);
 
 // Session management (no JWT required — these operate on refresh tokens)
 router.post("/refresh", busOwnerSession.refresh);

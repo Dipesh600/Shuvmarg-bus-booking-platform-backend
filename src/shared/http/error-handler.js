@@ -41,13 +41,26 @@ const errorHandler = (err, req, res, next) => {
   const isDevelopment = process.env.NODE_ENV === 'development';
 
   // ── Logging ────────────────────────────────────────────────────────────────
-  logger.error('Unhandled server error', {
-    requestId: req.requestId,
-    error:     err.message,
-    stack:     isDevelopment ? err.stack : undefined,
-    path:      req.originalUrl || req.path,
-    method:    req.method,
-  });
+  const isAppError = err instanceof AppError;
+  const isOperational = isAppError && err.statusCode < 500;
+  
+  if (isOperational) {
+    logger.warn('AppError (operational)', {
+      requestId: req.requestId,
+      error:     err.message,
+      statusCode: err.statusCode,
+      path:      req.originalUrl || req.path,
+      method:    req.method,
+    });
+  } else {
+    logger.error('Unhandled server error', {
+      requestId: req.requestId,
+      error:     err.message,
+      stack:     isDevelopment ? err.stack : undefined,
+      path:      req.originalUrl || req.path,
+      method:    req.method,
+    });
+  }
 
   // ── AppError: caller-supplied responseBody ──────────────────────────────
   if (err instanceof AppError && err.responseBody) {
