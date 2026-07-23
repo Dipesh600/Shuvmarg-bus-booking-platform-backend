@@ -1,6 +1,7 @@
 const Coupon = require("../models/couponModel");
 const CouponUsage = require("../models/couponUsageModel");
 const User = require("../models/userModel");
+const couponStatisticsService = require("../src/modules/coupon/admin/statistics/coupon-statistics.service.js");
 
 class CouponHelper {
   /**
@@ -327,59 +328,7 @@ class CouponHelper {
    * @returns {Object} Usage statistics
    */
   static async getCouponStats(couponId = null) {
-    try {
-      let matchCondition = {};
-      if (couponId) {
-        matchCondition.couponId = couponId;
-      }
-
-      const stats = await CouponUsage.aggregate([
-        { $match: matchCondition },
-        {
-          $group: {
-            _id: "$couponId",
-            totalUsage: { $sum: 1 },
-            totalDiscountGiven: { $sum: "$discountAmount" },
-            totalOriginalAmount: { $sum: "$originalAmount" },
-            uniqueUsers: { $addToSet: "$userId" },
-          },
-        },
-        {
-          $lookup: {
-            from: "coupons",
-            localField: "_id",
-            foreignField: "_id",
-            as: "couponDetails",
-          },
-        },
-        {
-          $unwind: "$couponDetails",
-        },
-        {
-          $project: {
-            couponCode: "$couponDetails.couponCode",
-            title: "$couponDetails.title",
-            totalUsage: 1,
-            totalDiscountGiven: 1,
-            totalOriginalAmount: 1,
-            uniqueUsersCount: { $size: "$uniqueUsers" },
-            averageDiscount: {
-              $divide: ["$totalDiscountGiven", "$totalUsage"],
-            },
-            conversionRate: {
-              $multiply: [
-                { $divide: ["$totalDiscountGiven", "$totalOriginalAmount"] },
-                100,
-              ],
-            },
-          },
-        },
-      ]);
-
-      return stats;
-    } catch (error) {
-      throw new Error("Error fetching coupon statistics");
-    }
+    return couponStatisticsService.getCouponStats(couponId);
   }
 
   /**
