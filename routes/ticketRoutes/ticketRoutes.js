@@ -8,6 +8,7 @@ const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner.js");
 const passengerSeatHold = require("../../src/modules/booking/passenger-seat-hold");
 const bookingVerification = require("../../src/modules/booking/booking-verification");
+const busOwnerScheduleManagement = require("../../src/modules/bus-owner/schedule-management");
 
 const busOwnerGuard = [auth, verifyRoleFromDB, role.busOwnerMiddleware, requireApprovedBusOwner];
 const passengerBookingGuard = [auth, verifyRoleFromDB, role.requireRole("passenger")];
@@ -19,11 +20,11 @@ const retireLegacyBookingFlow = (req, res) =>
     errorCode: "LEGACY_BOOKING_FLOW_RETIRED",
   });
 
-router.post("/createTicket", busOwnerGuard, ticket.createTicket);
+router.post("/createTicket", busOwnerGuard, busOwnerScheduleManagement.createSchedule);
 router.post("/creatSeats", busOwnerGuard, ticket.createSeats);
-router.patch("/updateTicket", busOwnerGuard, ticket.updateTicket);
-router.delete("/deleteTicket", busOwnerGuard, ticket.deleteTicket);
-router.post("/getTicketById", busOwnerGuard, ticket.getTicketById);
+router.patch("/updateTicket", busOwnerGuard, busOwnerScheduleManagement.updateSchedule);
+router.delete("/deleteTicket", busOwnerGuard, busOwnerScheduleManagement.deleteSchedule);
+router.post("/getTicketById", busOwnerGuard, busOwnerScheduleManagement.getScheduleById);
 
 // Book Ticket (Retired - 410 Gone)
 router.post("/bookTicket", ...passengerBookingGuard, retireLegacyBookingFlow);
