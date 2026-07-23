@@ -729,25 +729,6 @@ const toggleCouponStatus = async (req, res) => {
   }
 };
 
-// Get coupon usage statistics
-const getCouponUsageStats = async (req, res) => {
-  try {
-    const stats = await CouponHelper.getCouponStats();
-
-    return res.status(200).json({
-      success: true,
-      message: "Coupon usage statistics retrieved successfully!",
-      data: stats,
-    });
-  } catch (error) {
-    console.error("Error fetching coupon stats:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
-
 module.exports = {
   createCoupon,
   getAllCoupons,
@@ -755,7 +736,6 @@ module.exports = {
   updateCoupon,
   deleteCoupon,
   toggleCouponStatus,
-  getCouponUsageStats,
   uploadCouponImage,
   deleteOrphanedCouponImage,
 };

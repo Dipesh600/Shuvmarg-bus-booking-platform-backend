@@ -2,6 +2,7 @@ const express = require("express");
 const adminMiddleware = require("../../../../middleware/adminMiddleware.js");
 const couponController = require("../../../../controllers/adminController/coupon-controller/adminCouponController.js");
 const { getCouponAnalytics } = require("./analytics");
+const { getCouponUsageStats } = require("./statistics");
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ router.get("/coupons", adminMiddleware, couponController.getAllCoupons);
 router.get(
   "/coupons-stats",
   adminMiddleware,
-  couponController.getCouponUsageStats
+  getCouponUsageStats
 );
 router.get(
   "/coupons/:id/analytics",

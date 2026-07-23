@@ -7,6 +7,7 @@ test('Admin Coupon Route Wiring Characterization', async () => {
   const middlewarePath = require.resolve('../../middleware/adminMiddleware.js');
   const controllerPath = require.resolve('../../controllers/adminController/coupon-controller/adminCouponController.js');
   const analyticsPath = require.resolve('../../src/modules/coupon/admin/analytics/index.js');
+  const statisticsPath = require.resolve('../../src/modules/coupon/admin/statistics/index.js');
   const routesPath = require.resolve('../../src/modules/coupon/admin/coupon-admin.routes.js');
   const indexPath = require.resolve('../../src/modules/coupon/admin/index.js');
 
@@ -25,6 +26,7 @@ test('Admin Coupon Route Wiring Characterization', async () => {
   const oldMiddlewareCache = require.cache[middlewarePath];
   const oldControllerCache = require.cache[controllerPath];
   const oldAnalyticsCache = require.cache[analyticsPath];
+  const oldStatisticsCache = require.cache[statisticsPath];
   const oldRoutesCache = require.cache[routesPath];
   const oldIndexCache = require.cache[indexPath];
 
@@ -45,7 +47,6 @@ test('Admin Coupon Route Wiring Characterization', async () => {
         uploadCouponImage: uploadCouponImageStub,
         deleteOrphanedCouponImage: deleteOrphanedCouponImageStub,
         getAllCoupons: getAllCouponsStub,
-        getCouponUsageStats: getCouponUsageStatsStub,
         getCouponById: getCouponByIdStub,
         updateCoupon: updateCouponStub,
         deleteCoupon: deleteCouponStub,
@@ -59,6 +60,15 @@ test('Admin Coupon Route Wiring Characterization', async () => {
       loaded: true,
       exports: {
         getCouponAnalytics: getCouponAnalyticsStub,
+      },
+    };
+
+    require.cache[statisticsPath] = {
+      id: statisticsPath,
+      filename: statisticsPath,
+      loaded: true,
+      exports: {
+        getCouponUsageStats: getCouponUsageStatsStub,
       },
     };
 
@@ -118,6 +128,9 @@ test('Admin Coupon Route Wiring Characterization', async () => {
 
     if (oldAnalyticsCache) require.cache[analyticsPath] = oldAnalyticsCache;
     else delete require.cache[analyticsPath];
+
+    if (oldStatisticsCache) require.cache[statisticsPath] = oldStatisticsCache;
+    else delete require.cache[statisticsPath];
 
     if (oldRoutesCache) require.cache[routesPath] = oldRoutesCache;
     else delete require.cache[routesPath];
