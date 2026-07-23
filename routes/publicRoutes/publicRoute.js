@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const ticket = require("../../controllers/ticketController/ticketController.js");
+const paymentBooking = require("../../controllers/ticketController/paymentBookingController.js");
 const tripDiscovery = require("../../src/modules/trip-discovery");
 const fareRuleCon = require("../../controllers/busOwnerController/fareRuleController.js");
 const {

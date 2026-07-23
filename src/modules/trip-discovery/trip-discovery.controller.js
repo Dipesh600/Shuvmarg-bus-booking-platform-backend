@@ -1,11 +1,11 @@
-function createTripDiscoveryController({ searchTripsService }) {
+function createTripDiscoveryController({ searchTripsService, logger = console }) {
   const searchTrips = async (req, res) => {
     try {
       const { from, to, date, shift } = req.body;
       const page = Math.max(1, parseInt(req.query.page) || 1);
       const limit = Math.min(50, parseInt(req.query.limit) || 10);
 
-      console.log("Search Query:", { from, to, date, shift, page, limit });
+      logger.log("Search Query:", { from, to, date, shift, page, limit });
 
       const result = await searchTripsService({ from, to, date, shift, page, limit });
 
@@ -31,7 +31,7 @@ function createTripDiscoveryController({ searchTripsService }) {
         data: result.data
       });
     } catch (error) {
-      console.error("searchTrips error:", error);
+      logger.error("searchTrips error:", error);
       return res.status(500).json({ success: false, message: "Internal Server Error", error: error.message });
     }
   };

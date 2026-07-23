@@ -25,17 +25,18 @@ test("Trip Discovery Mapper", async (t) => {
   };
 
   const getPresignedUrlMock = async (key) => `http://s3/${key}`;
+  const timeToMinsMock = (timeStr) => 0; // dummy
   const seatMap = { "trip123": 15 };
   const originStopIds = new Set();
   const destStopIds = new Set();
 
-  const { mapTripResponse } = createTripMapper({ getPresignedUrl: getPresignedUrlMock });
+  const { mapTripResponse } = createTripMapper({ getPresignedUrl: getPresignedUrlMock, timeToMins: timeToMinsMock });
 
   await t.test("formats standard output matching legacy API exactly", async () => {
     const result = await mapTripResponse([dummyTrip], seatMap, originStopIds, destStopIds, null, null);
     assert.strictEqual(result.length, 1);
     const mapped = result[0];
-    
+
     assert.strictEqual(mapped._id, "trip123");
     assert.strictEqual(mapped.routeDetail.routeName, "CityA to CityB");
     assert.strictEqual(mapped.busDetail.busName, "Super Bus");

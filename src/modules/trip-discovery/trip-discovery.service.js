@@ -4,7 +4,7 @@ function createTripDiscoveryService({ resolveRouteCandidates, buildTripQuery, co
 
     // 1. Resolve stops and routes
     const resolution = await resolveRouteCandidates(from, to);
-    
+
     if (resolution.legacyRouteIds.length === 0 && resolution.variantIds.length === 0 && from && to) {
       return {
         results: 0,
@@ -31,11 +31,11 @@ function createTripDiscoveryService({ resolveRouteCandidates, buildTripQuery, co
 
     // 6. Map response
     const validTrips = await mapTripResponse(
-      trips, 
-      seatAvailabilityMap, 
-      resolution.originStopIds, 
-      resolution.destStopIds, 
-      resolution.resolvedFromName, 
+      trips,
+      seatAvailabilityMap,
+      resolution.originStopIds,
+      resolution.destStopIds,
+      resolution.resolvedFromName,
       resolution.resolvedToName
     );
 

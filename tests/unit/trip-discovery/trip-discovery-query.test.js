@@ -62,7 +62,7 @@ test("Trip Discovery Query Builder", async (t) => {
   await t.test("empty shift creates no shift condition", () => {
     const query = buildTripQuery([], [], "2024-01-01", "");
     assert.strictEqual(query.shift, undefined);
-    
+
     const query2 = buildTripQuery([], [], "2024-01-01", null);
     assert.strictEqual(query2.shift, undefined);
   });

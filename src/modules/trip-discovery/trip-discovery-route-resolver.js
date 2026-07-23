@@ -44,10 +44,10 @@ function createRouteResolver({ repository }) {
 
         // ── Strategy A: Direct corridor (A→B or B→A) ──────────────────
         const { fwdCorridors, revCorridors } = await repository.findCorridors(originIds, destIds);
-        
+
         const fwdCorridorIds = fwdCorridors.map(c => c._id);
         const revCorridorIds = revCorridors.map(c => c._id);
-        
+
         const { fwdVariants, revVariants } = await repository.findVariants(fwdCorridorIds, revCorridorIds);
 
         variantIds = [...fwdVariants, ...revVariants].map(v => v._id);

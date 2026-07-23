@@ -38,7 +38,8 @@ test("Trip Discovery Controller", async (t) => {
         results: 1
       };
     };
-    const { searchTrips } = createTripDiscoveryController({ searchTripsService: mockService });
+    const mockLogger = { log: () => {}, error: () => {} };
+    const { searchTrips } = createTripDiscoveryController({ searchTripsService: mockService, logger: mockLogger });
     await searchTrips(req, res, () => {});
   });
 
@@ -57,7 +58,8 @@ test("Trip Discovery Controller", async (t) => {
     const mockService = async () => {
       throw new Error("Service error");
     };
-    const { searchTrips } = createTripDiscoveryController({ searchTripsService: mockService });
+    const mockLogger = { log: () => {}, error: () => {} };
+    const { searchTrips } = createTripDiscoveryController({ searchTripsService: mockService, logger: mockLogger });
     await searchTrips(req, res, () => {});
   });
 });

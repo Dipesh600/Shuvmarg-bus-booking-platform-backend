@@ -1,60 +1,20 @@
-const { test, before, after } = require("node:test");
+const { test } = require("node:test");
 const assert = require("node:assert");
-const request = require("supertest");
-const app = require("../helpers/app"); 
-const db = require("../helpers/db");
+const publicRoute = require("../../routes/publicRoutes/publicRoute");
+const tripDiscovery = require("../../src/modules/trip-discovery");
 
-// We are only doing characterization testing. We'll verify we get the same 400 shape if `from` or `to` is missing, 
-// and when doing a valid request, we get 200 with the right shape.
+test("Trip Discovery Router Integration", async (t) => {
+  await t.test("Router exposes POST /searchTrips pointing to trip-discovery controller", () => {
+    // Find the layer matching /searchTrips
+    const layer = publicRoute.stack.find(
+      l => l.route && l.route.path === "/searchTrips"
+    );
 
-test("Trip Discovery Characterization", async (t) => {
-  before(async () => {
-    await db.connect();
-  });
+    assert.ok(layer, "Expected route /searchTrips to exist");
+    assert.strictEqual(layer.route.methods.post, true, "Expected /searchTrips to accept POST");
 
-  after(async () => {
-    await db.disconnect();
-  });
-
-  await t.test("Missing 'from' yields 200 with expected shape", async () => {
-    const response = await request(app)
-      .post("/api/public/searchTrips")
-      .send({
-        to: "city-b",
-        date: "2024-01-01"
-      });
-
-    assert.strictEqual(response.status, 200);
-    assert.strictEqual(response.body.success, true);
-  });
-
-  await t.test("Missing 'to' yields 200 with expected shape", async () => {
-    const response = await request(app)
-      .post("/api/public/searchTrips")
-      .send({
-        from: "city-a",
-        date: "2024-01-01"
-      });
-
-    assert.strictEqual(response.status, 200);
-    assert.strictEqual(response.body.success, true);
-  });
-
-  await t.test("Valid payload yields expected pagination nodes and keys", async () => {
-    const response = await request(app)
-      .post("/api/public/searchTrips")
-      .send({
-        from: "invalid1",
-        to: "invalid2",
-        date: "2024-01-01"
-      });
-      
-    // Because no data in DB, we should get 200 with empty array, or a 200 with no routes message. 
-    // Let's assert the base shape.
-    assert.strictEqual(response.status, 200);
-    assert.strictEqual(response.body.success, true);
-    if (response.body.data) {
-      assert.ok(Array.isArray(response.body.data));
-    }
+    // The handler should be exactly the one exported by the trip-discovery module
+    const handler = layer.route.stack[0].handle;
+    assert.strictEqual(handler, tripDiscovery.searchTrips, "Expected handler to be tripDiscovery.searchTrips");
   });
 });

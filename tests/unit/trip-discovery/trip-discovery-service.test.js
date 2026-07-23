@@ -15,16 +15,16 @@ test("Trip Discovery Service", async (t) => {
     const mockBuilder = () => ({ isActive: true });
     const mockMapper = async () => [];
 
-    const { searchTripsService } = createTripDiscoveryService({ 
-      resolveRouteCandidates: mockResolver, 
-      buildTripQuery: mockBuilder, 
-      countTrips: async () => 0, 
-      findTripsWithPopulate: async () => [], 
-      getSeatAvailabilityMap: async () => ({}), 
-      mapTripResponse: mockMapper 
+    const { searchTripsService } = createTripDiscoveryService({
+      resolveRouteCandidates: mockResolver,
+      buildTripQuery: mockBuilder,
+      countTrips: async () => 0,
+      findTripsWithPopulate: async () => [],
+      getSeatAvailabilityMap: async () => ({}),
+      mapTripResponse: mockMapper
     });
     const result = await searchTripsService({ from: "cityA", to: "cityB", date: "2024-01-01", shift: "day", page: 1, limit: 10 });
-    
+
     assert.ok(resolverCalled);
     assert.strictEqual(result.total, 0);
     assert.deepStrictEqual(result.data, []);
@@ -34,7 +34,7 @@ test("Trip Discovery Service", async (t) => {
     let countCalled = false;
     let findCalled = false;
     let mapperCalled = false;
-    
+
     const mockResolver = async () => {
       return { legacyRouteIds: ["route1"], variantIds: ["var1"] };
     };
@@ -44,16 +44,16 @@ test("Trip Discovery Service", async (t) => {
       return trips; // pass through
     };
 
-    const { searchTripsService } = createTripDiscoveryService({ 
-      resolveRouteCandidates: mockResolver, 
-      buildTripQuery: mockBuilder, 
+    const { searchTripsService } = createTripDiscoveryService({
+      resolveRouteCandidates: mockResolver,
+      buildTripQuery: mockBuilder,
       countTrips: async () => { countCalled = true; return 1; },
       findTripsWithPopulate: async () => { findCalled = true; return [{ _id: "trip1" }]; },
       getSeatAvailabilityMap: async () => ({ "trip1": 15 }),
-      mapTripResponse: mockMapper 
+      mapTripResponse: mockMapper
     });
     const result = await searchTripsService({ from: "cityA", to: "cityB", date: "2024-01-01", shift: "day", page: 1, limit: 10 });
-    
+
     assert.ok(countCalled);
     assert.ok(findCalled);
     assert.ok(mapperCalled);
