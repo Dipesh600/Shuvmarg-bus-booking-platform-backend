@@ -1,34 +1,129 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 
-// We test repository functions indirectly by asserting the Mongoose models' mock inputs
+const Trip = require("../../../models/tripModel");
+const Seat = require("../../../models/seatsModel");
+const BusRoute = require("../../../models/busRouteModel");
+const Stop = require("../../../models/stopModel");
+const RouteCorridor = require("../../../models/routeCorridorModel");
+const RouteVariant = require("../../../models/routeVariantModel");
+const RouteStop = require("../../../models/routeStopModel");
+
 const repo = require("../../../src/modules/trip-discovery/trip-discovery.repository");
 
+const mockFind = (Model, res) => {
+  let c = [], s = [], l = 0, orig = Model.find;
+  Model.find = (q, p) => {
+    c.push({q, p});
+    const chain = {
+      select: sel => { s.push(sel); return chain; },
+      lean: () => { l++; return Promise.resolve(res); }
+    };
+    return chain;
+  };
+  return { c, s, getL: () => l, restore: () => Model.find = orig };
+};
+
 test("Trip Discovery Repository", async (t) => {
-  // Since models are required inside the repo directly, we'd typically use a tool like proxyquire
-  // or mock the mongoose models. 
-  // However, because we're not rewriting the repository file to use injection right now,
-  // we will just do a basic sanity check here or skip the deep mocking if we can't easily intercept it.
-  // The prompt asked for:
-  // - stop lookup handles missing cities
-  // - corridor lookup handles reversed stops
-  // - variant lookup pulls by corridor ID
-  // - route lookup pulls active and published
-  // - trip execution handles empty $or
-  // - trip execution handles pagination and sorting
-  // - trip execution populates exact legacy paths
-  //
-  // Since `require("../../../models/...")` is used, we might not be able to easily mock it 
-  // without proxyquire or Jest in this `node:test` setup, unless we override require cache.
-  // For characterization, we'll verify it exports the expected functions.
-  
-  await t.test("exports expected functions", () => {
-    assert.strictEqual(typeof repo.findLegacyRoutes, "function");
-    assert.strictEqual(typeof repo.findStopsByNameOrCode, "function");
-    assert.strictEqual(typeof repo.findCorridors, "function");
-    assert.strictEqual(typeof repo.findVariants, "function");
-    assert.strictEqual(typeof repo.findRouteStops, "function");
-    assert.strictEqual(typeof repo.findTripsWithPopulate, "function");
-    assert.strictEqual(typeof repo.countTrips, "function");
+  await t.test("findLegacyRoutes matches forward/reverse with ACTIVE status", async () => {
+    let c = []; const orig = BusRoute.find;
+    BusRoute.find = q => { c.push(q); return Promise.resolve([{mock:"route"}]); };
+    try {
+      await repo.findLegacyRoutes("A", "B");
+      assert.deepStrictEqual(c, [{from:"A", to:"B", status:"ACTIVE"}, {from:"B", to:"A", status:"ACTIVE"}]);
+    } finally { BusRoute.find = orig; }
+  });
+
+  await t.test("findStopsByNameOrCode queries $or and ACTIVE, returns select and lean", async () => {
+    const m = mockFind(Stop, [{ _id: "s1", name: "S1" }]);
+    try {
+      await repo.findStopsByNameOrCode("Ktm");
+      assert.deepStrictEqual(m.c[0].q, { $or: [{ name: "Ktm" }, { code: "Ktm" }], status: "ACTIVE" });
+      assert.strictEqual(m.s[0], "_id name");
+      assert.strictEqual(m.getL(), 1);
+    } finally { m.restore(); }
+  });
+
+  await t.test("findCorridors matches exact fwd and rev logic", async () => {
+    const m = mockFind(RouteCorridor, []);
+    try {
+      await repo.findCorridors(["o"], ["d"]);
+      assert.deepStrictEqual(m.c[0].q, { originId: { $in: ["o"] }, destinationId: { $in: ["d"] }, status: "ACTIVE" });
+      assert.deepStrictEqual(m.c[1].q, { originId: { $in: ["d"] }, destinationId: { $in: ["o"] }, status: "ACTIVE" });
+      assert.strictEqual(m.getL(), 2);
+    } finally { m.restore(); }
+  });
+
+  await t.test("findVariants matches FORWARD/RETURN and exact queries", async () => {
+    const m = mockFind(RouteVariant, []);
+    try {
+      assert.strictEqual((await repo.findVariants([], [])).fwdVariants.length, 0);
+      assert.strictEqual(m.c.length, 0);
+      await repo.findVariants(["c1"], ["c2"]);
+      assert.deepStrictEqual(m.c[0].q, { corridorId: { $in: ["c1"] }, direction: "FORWARD", status: "ACTIVE" });
+      assert.deepStrictEqual(m.c[1].q, { corridorId: { $in: ["c2"] }, direction: "RETURN", status: "ACTIVE" });
+    } finally { m.restore(); }
+  });
+
+  await t.test("findRouteStops queries origin and dest exact select string and lean", async () => {
+    const m = mockFind(RouteStop, []);
+    try {
+      await repo.findRouteStops(["s1"], ["s2"]);
+      assert.deepStrictEqual(m.c[0].q, { stopId: { $in: ["s1"] } });
+      assert.deepStrictEqual(m.c[1].q, { stopId: { $in: ["s2"] } });
+      assert.strictEqual(m.s[0], "variantId sequence estimatedMinutesFromOrigin isMajor");
+      assert.strictEqual(m.s[1], "variantId sequence estimatedMinutesFromOrigin isMajor");
+      assert.strictEqual(m.getL(), 2);
+    } finally { m.restore(); }
+  });
+
+  await t.test("countTrips receives unchanged query", async () => {
+    let q; const orig = Trip.countDocuments;
+    Trip.countDocuments = query => { q = query; return Promise.resolve(5); };
+    try {
+      assert.strictEqual(await repo.countTrips({ s: "A" }), 5);
+      assert.deepStrictEqual(q, { s: "A" });
+    } finally { Trip.countDocuments = orig; }
+  });
+
+  await t.test("findTripsWithPopulate exactly asserts sort, skip, limit, projection, populate, lean", async () => {
+    let rq, rp, sc, skc, lmc, lc, pop = [], orig = Trip.find;
+    Trip.find = (q, p) => {
+      rq = q; rp = p;
+      const ch = {
+        sort: s => { sc = s; return ch; }, skip: s => { skc = s; return ch; }, limit: s => { lmc = s; return ch; },
+        populate: (p1, p2) => { pop.push(p2 ? { path: p1, select: p2 } : p1); return ch; },
+        lean: () => { lc = true; return Promise.resolve([]); }
+      };
+      return ch;
+    };
+    try {
+      await repo.findTripsWithPopulate({ s: "A" }, 10, 20);
+      assert.deepStrictEqual(rq, { s: "A" });
+      assert.strictEqual(rp, "-createdAt -updatedAt -__v -isAutoGenerated -templateId -returnTripLinked -recurrence -daysOfWeek -autoGenerateUntil");
+      assert.deepStrictEqual(sc, { tripDate: 1, departureTime: 1 });
+      assert.strictEqual(skc, 10); assert.strictEqual(lmc, 20); assert.strictEqual(lc, true);
+      assert.strictEqual(pop[0].path, "busId");
+      assert.strictEqual(pop[0].select, "busName busNumber busType vehicleType totalSeats seatLayout fleetImages averageRating totalReviews amenitiesId boardingPointId");
+      assert.strictEqual(pop[0].populate[0].path, "amenitiesId");
+      assert.strictEqual(pop[1].path, "variantId");
+      assert.strictEqual(pop[1].select, "name direction");
+      assert.strictEqual(pop[1].populate.path, "corridorId");
+      assert.strictEqual(pop[2].path, "routeId");
+      assert.strictEqual(pop[2].select, "routeName from to distance duration distanceKm durationMinutes basePrice");
+      assert.strictEqual(pop[3].path, "scheduleId");
+      assert.strictEqual(pop[3].select, "operatorRouteConfigId");
+    } finally { Trip.find = orig; }
+  });
+
+  await t.test("getSeatAvailabilityMap uses tripId $in, lean, combines a/b/c, counts unbooked", async () => {
+    const m = mockFind(Seat, [{ tripId: "t1", seata: [{booked: true}, {booked: false}] }, { tripId: "t2", seatb: [{booked: true}] }]);
+    try {
+      const res = await repo.getSeatAvailabilityMap(["t1", "t2"]);
+      assert.deepStrictEqual(m.c[0].q, { tripId: { $in: ["t1", "t2"] } });
+      assert.strictEqual(m.getL(), 1);
+      assert.strictEqual(res["t1"], 1);
+      assert.strictEqual(res["t2"], 0);
+    } finally { m.restore(); }
   });
 });
