@@ -1,4 +1,8 @@
 const mongoose = require("mongoose");
+const couponDesignConfigFields = require("../src/modules/coupon/model/coupon-design-config.fields.js");
+const {
+  calculateCouponDiscount,
+} = require("../src/modules/coupon/model/coupon-discount.policy.js");
 
 const couponSchema = new mongoose.Schema(
   {
@@ -32,25 +36,7 @@ const couponSchema = new mongoose.Schema(
       default: "General Offer",
       trim: true,
     },
-    designConfig: {
-      edges: {
-        top: { type: String, enum: ["smooth", "ticket", "torn", "jagged"], default: "smooth" },
-        bottom: { type: String, enum: ["smooth", "ticket", "torn", "jagged"], default: "smooth" },
-        left: { type: String, enum: ["smooth", "ticket", "torn", "jagged"], default: "smooth" },
-        right: { type: String, enum: ["smooth", "ticket", "torn", "jagged"], default: "smooth" }
-      },
-      typography: {
-        titleAlignment: { type: String, enum: ["left", "center", "right"], default: "left" },
-        descAlignment: { type: String, enum: ["left", "center", "right"], default: "left" },
-        codeAlignment: { type: String, enum: ["left", "center", "right"], default: "left" }
-      },
-      imageConfig: {
-        scale: { type: Number, default: 100 },
-        offsetX: { type: Number, default: 0 },
-        offsetY: { type: Number, default: 0 },
-        fit: { type: String, enum: ["cover", "contain", "fill"], default: "contain" }
-      }
-    },
+    designConfig: couponDesignConfigFields,
     discountType: {
       type: String,
       enum: ["percentage", "fixed"],
@@ -151,34 +137,7 @@ couponSchema.virtual("isCurrentlyValid").get(function () {
 
 // Method to calculate discount amount
 couponSchema.methods.calculateDiscount = function (orderAmount) {
-  // Use the full validation logic including dates
-  if (!this.isCurrentlyValid) {
-    return 0;
-  }
-
-  if (orderAmount < this.minOrderAmount) {
-    return 0;
-  }
-
-  let discountAmount = 0;
-
-  if (this.discountType === "percentage") {
-    discountAmount = (orderAmount * this.discountValue) / 100;
-  } else if (this.discountType === "fixed") {
-    discountAmount = this.discountValue;
-  }
-
-  // Apply maximum discount limit if set
-  if (this.maxDiscountAmount && discountAmount > this.maxDiscountAmount) {
-    discountAmount = this.maxDiscountAmount;
-  }
-
-  // Ensure discount doesn't exceed order amount
-  if (discountAmount > orderAmount) {
-    discountAmount = orderAmount;
-  }
-
-  return Math.round(discountAmount * 100) / 100; // Round to 2 decimal places
+  return calculateCouponDiscount(this, orderAmount);
 };
 
 // Pre-save middleware to validate dates
