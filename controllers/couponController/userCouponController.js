@@ -3,7 +3,10 @@ const CouponUsage = require("../../models/couponUsageModel.js");
 const UserCouponUsage = require("../../models/userCouponUsageModel.js");
 const CouponHelper = require("../../handlers/couponHelper.js");
 const mongoose = require("mongoose");
-const { getDisplayUrl } = require("../../services/s3Service.js");
+const {
+  getAllCouponsForUser,
+  getAllCouponsIncludingExpired,
+} = require("../../src/modules/coupon/catalog");
 
 // Get available coupons for user
 const getAvailableCoupons = async (req, res) => {
@@ -330,136 +333,7 @@ const searchCoupons = async (req, res) => {
   }
 };
 
-// Get all coupons for user (active only — home carousel)
-const getAllCouponsForUser = async (req, res) => {
-  try {
-    const now = new Date();
-    const coupons = await Coupon.find({
-      isActive: true,
-      validFrom: { $lte: now },
-      validTo: { $gte: now },
-    }).sort({ createdAt: -1 });
 
-    // Helper: resolve stored imageUrl → 7-day presigned URL.
-    // Handles raw key ("platform/coupons/...") and legacy full URL.
-    const resolveImage = async (imageUrl) => {
-      if (!imageUrl) return null;
-      let key = imageUrl;
-      if (key.startsWith("http")) {
-        try { key = new URL(key).pathname.replace(/^\//, ""); } catch { return null; }
-      }
-      return getDisplayUrl(key);
-    };
-
-    // Resolve all images in parallel — not sequentially.
-    const results = await Promise.all(
-      coupons.map(async (coupon) => ({
-        _id: coupon._id,
-        couponCode: coupon.couponCode,
-        title: coupon.title,
-        description: coupon.description,
-        category: coupon.category,
-        imageUrl: await resolveImage(coupon.imageUrl),
-        designConfig: coupon.designConfig,
-        discountType: coupon.discountType,
-        discountValue: coupon.discountValue,
-        minOrderAmount: coupon.minOrderAmount,
-        maxDiscountAmount: coupon.maxDiscountAmount,
-        validFrom: coupon.validFrom,
-        validTo: coupon.validTo,
-        perUserLimit: coupon.perUserLimit,
-      }))
-    );
-
-    // Public endpoint — allow browser/CDN to cache for 60 s, then serve stale
-    // for up to 5 min while revalidating in the background.
-    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-
-    return res.status(200).json({
-      success: true,
-      message: "All coupons retrieved successfully!",
-      data: results,
-    });
-  } catch (error) {
-    console.error("Error fetching all coupons:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
-
-// Get ALL coupons for user — active AND expired (for "See All" page)
-const getAllCouponsIncludingExpired = async (req, res) => {
-  try {
-    const now = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const [activeCoupons, expiredCoupons] = await Promise.all([
-      Coupon.find({
-        isActive: true,
-        validFrom: { $lte: now },
-        validTo: { $gte: now },
-      }).sort({ createdAt: -1 }),
-      Coupon.find({
-        isActive: true,
-        validTo: { $gte: thirtyDaysAgo, $lt: now },
-      })
-        .sort({ validTo: -1 })
-        .limit(20),
-    ]);
-
-    // Resolve image URL — handles both raw S3 keys and legacy full URLs
-    const resolveImage = async (imageUrl) => {
-      if (!imageUrl) return null;
-      let key = imageUrl;
-      if (key.startsWith("http")) {
-        try { key = new URL(key).pathname.replace(/^\//, ""); } catch { return null; }
-      }
-      return getDisplayUrl(key);
-    };
-
-    const format = async (coupon) => ({
-      _id: coupon._id,
-      couponCode: coupon.couponCode,
-      title: coupon.title,
-      description: coupon.description,
-      category: coupon.category,
-      imageUrl: await resolveImage(coupon.imageUrl),
-      designConfig: coupon.designConfig,
-      discountType: coupon.discountType,
-      discountValue: coupon.discountValue,
-      minOrderAmount: coupon.minOrderAmount,
-      maxDiscountAmount: coupon.maxDiscountAmount,
-      validFrom: coupon.validFrom,
-      validTo: coupon.validTo,
-      perUserLimit: coupon.perUserLimit,
-      isActive: coupon.isActive,
-    });
-
-    // Resolve all images in parallel across both lists
-    const [activeFormatted, expiredFormatted] = await Promise.all([
-      Promise.all(activeCoupons.map(format)),
-      Promise.all(expiredCoupons.map(format)),
-    ]);
-
-    // Public endpoint — allow caching for 60 s
-    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-
-    return res.status(200).json({
-      success: true,
-      message: "All coupons retrieved successfully!",
-      data: [...activeFormatted, ...expiredFormatted],
-    });
-  } catch (error) {
-    console.error("Error fetching all coupons with expired:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
 
 module.exports = {
   getAvailableCoupons,
