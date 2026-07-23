@@ -1,6 +1,6 @@
 const Ticket = require("../../models/busScheduleModel.js");
 const Seat = require("../../models/seatsModel.js");
-const cloudinary = require("../../handlers/cloudinary.js");
+const busOwnerScheduleManagement = require("../../src/modules/bus-owner/schedule-management");
 const Booking = require("../../models/bookTicketModel.js");
 const Review = require("../../models/reviewModel.js");
 const { v4: uuidv4 } = require("uuid");
@@ -29,106 +29,7 @@ const SeatTemplate = require("../../models/seatTemplateModel");
 const { getPresignedUrl } = require("../../services/s3Service.js");
 
 
-const createTicket = async (req, res) => {
-  try {
-    if (!req.body || Object.keys(req.body).length === 0) {
-      return res.status(400).json({ status: false, message: "your body is empty please add" });
-    }
-    const {
-      operatorName,
-      bussName,
-      vehicleType,
-      departureTime,
-      arrivalTime,
-      date,
-      from,
-      to,
-      routeId,
-      price,
-      totalSeats,
-      bussNo,
-      totalTimeTaken,
-      shift,
-      boardingPoints,
-      amenities,
-    } = req.body;
-    const getinfo = req.userInfo;
-    console.log("my info", getinfo);
-    console.log("My data", getinfo.role, getinfo.id);
 
-    // const thumbnail = req.files?.thumbnail;
-
-    // if (!thumbnail) {
-    //   return res
-    //     .status(400)
-    //     .json({ status: false, message: "Thumbnail image is required." });
-    // }
-
-    if (
-      !operatorName ||
-      !bussName ||
-      !vehicleType ||
-      !departureTime ||
-      !arrivalTime ||
-      !from ||
-      !to ||
-      !price ||
-      !totalSeats ||
-      !bussNo ||
-      !totalTimeTaken ||
-      !shift
-    ) {
-      return res.status(400).json({
-        status: false,
-        message: "Missing required fields.",
-      });
-    }
-
-    // Convert file buffer to base64 data URI
-    // const base64Thumbnail = `data:${
-    //   thumbnail.mimetype
-    // };base64,${thumbnail.data.toString("base64")}`;
-    // // Upload to Cloudinary
-    // const result = await cloudinary.uploader.upload(base64Thumbnail, {
-    //   folder: "buss_ticket_thumbnail",
-    // });
-
-    const yatrapoints = Math.round(price * 0.1);
-    const newSchedule = await Ticket.create({
-      operatorName,
-      bussName,
-      bussNo,
-      vehicleType,
-      departureTime,
-      arrivalTime,
-      date,
-      route: { from, to },
-      ...(routeId ? { routeId } : {}),
-      price,
-      yatrapoints,
-      totalSeats,
-      totalTimeTaken,
-      shift,
-      boardingPoints: boardingPoints || [], // Add boardingPoints with default empty array
-      amenities: amenities || [], // Add amenities with default empty array
-      thumbnail: null, // or result.secure_url if using cloudinary
-      operatorId: getinfo.id,
-      operatorRole: getinfo.role,
-    });
-
-    return res.status(201).json({
-      status: true,
-      message: "Bus ticket created!",
-      data: newSchedule,
-    });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({
-      status: false,
-      message: "Internal Server Error!",
-    });
-  }
-};
 
 // Get My YatraPoints History
 const getMyYatraHistory = async (req, res) => {
@@ -153,159 +54,7 @@ const getMyYatraHistory = async (req, res) => {
   }
 };
 
-// update code
-const updateTicket = async (req, res) => {
-  try {
-    const getinfo = req.userInfo;
-    const {
-      operatorName,
-      bussName,
-      vehicleType,
-      departureTime,
-      arrivalTime,
-      date,
-      from,
-      to,
-      price,
-      totalSeats,
-      bussNo,
-      totalTimeTaken,
-      shift,
-      ticketId,
-      boardingPoints,
-    } = req.body;
 
-    const ticket = await Ticket.findById(ticketId);
-    if (!ticket) {
-      return res
-        .status(404)
-        .json({ status: false, message: "Ticket not found." });
-    }
-
-    // Optional: Check permission
-    if (ticket.operatorId.toString() !== getinfo.id) {
-      return res.status(403).json({
-        status: false,
-        message: "Unauthorized to update this ticket.",
-      });
-    }
-
-    // If thumbnail is updated
-    if (req.files?.thumbnail) {
-      const thumbnail = req.files.thumbnail;
-      const base64Thumbnail = `data:${thumbnail.mimetype
-        };base64,${thumbnail.data.toString("base64")}`;
-      const result = await cloudinary.uploader.upload(base64Thumbnail, {
-        folder: "buss_ticket_thumbnail",
-      });
-      ticket.thumbnail = result.secure_url;
-    }
-
-    // Update ticket fields
-    ticket.operatorName = operatorName || ticket.operatorName;
-    ticket.bussName = bussName || ticket.bussName;
-    ticket.vehicleType = vehicleType || ticket.vehicleType;
-    ticket.departureTime = departureTime || ticket.departureTime;
-    ticket.arrivalTime = arrivalTime || ticket.arrivalTime;
-    ticket.bussNo = bussNo || ticket.bussNo;
-    ticket.date = date || ticket.date;
-    ticket.route = {
-      from: from || ticket.route.from,
-      to: to || ticket.route.to,
-    };
-    ticket.price = price || ticket.price;
-    ticket.yatrapoints = price ? Math.round(price * 0.1) : ticket.yatrapoints;
-    ticket.totalSeats = totalSeats || ticket.totalSeats;
-    ticket.totalTimeTaken = totalTimeTaken || ticket.totalTimeTaken;
-    ticket.shift = shift || ticket.shift;
-    ticket.boardingPoints =
-      boardingPoints !== undefined ? boardingPoints : ticket.boardingPoints;
-
-    await ticket.save();
-
-    return res.status(200).json({
-      status: true,
-      message: "Ticket updated successfully!",
-      data: ticket,
-    });
-  } catch (error) {
-    console.error(error);
-    return res
-      .status(500)
-      .json({ status: false, message: "Internal Server Error" });
-  }
-};
-
-// Delete Ticket
-const deleteTicket = async (req, res) => {
-  try {
-    const { ticketId } = req.body;
-    const getinfo = req.userInfo;
-
-    const ticket = await Ticket.findById(ticketId);
-    if (!ticket) {
-      return res
-        .status(404)
-        .json({ status: false, message: "Ticket not found." });
-    }
-
-    if (ticket.operatorId.toString() !== getinfo.id) {
-      return res.status(403).json({
-        status: false,
-        message: "Unauthorized to delete this ticket.",
-      });
-    }
-    // Delete thumbnail from cloudinary
-    // const publicId = ticket.thumbnail.split('/').pop().split('.')[0];
-    // await cloudinary.uploader.destroy(`buss_ticket_thumbnail/${publicId}`);
-
-    await Ticket.findByIdAndDelete(ticketId);
-
-    return res.status(200).json({
-      status: true,
-      message: "Ticket deleted successfully!",
-    });
-  } catch (error) {
-    console.error(error);
-    return res
-      .status(500)
-      .json({ status: false, message: "Internal Server Error" });
-  }
-};
-
-// Get Ticket By Id
-const getTicketById = async (req, res) => {
-  try {
-    const { ticketId } = req.body;
-    const getinfo = req.userInfo;
-
-    const ticket = await Ticket.findById(ticketId);
-    if (!ticket) {
-      return res.status(404).json({
-        status: false,
-        message: "Ticket not found.",
-      });
-    }
-    if (ticket.operatorId.toString() !== getinfo.id) {
-      return res.status(403).json({
-        status: false,
-        message: "Unauthorized to get ticket!",
-      });
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: "Ticket fetched successfully!",
-      data: ticket,
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      status: false,
-      message: "Internal Server Error.",
-    });
-  }
-};
 
 // search ticket
 const searchTickets = async (req, res) => {
@@ -2090,6 +1839,13 @@ function _timeToMins(time) {
 
   return 0; // unparseable — treated as midnight
 }
+
+// Compatibility aliases — implementation now lives in the schedule-management module.
+// Any existing import of these names from this file continues to resolve correctly.
+const createTicket = busOwnerScheduleManagement.createSchedule;
+const updateTicket = busOwnerScheduleManagement.updateSchedule;
+const deleteTicket = busOwnerScheduleManagement.deleteSchedule;
+const getTicketById = busOwnerScheduleManagement.getScheduleById;
 
 module.exports = {
   createTicket,
