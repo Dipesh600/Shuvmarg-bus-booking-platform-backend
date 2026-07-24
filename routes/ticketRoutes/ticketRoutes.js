@@ -50,9 +50,11 @@ router.get("/getMyYatraHistory", auth, ticket.getMyYatraHistory);
 
 // Validate YatraPoints for discount
 router.post("/validateYatraPoints", auth, ticket.validateYatraPoints);
+const passengerBookingCancellation = require("../../src/modules/booking/passenger-booking-cancellation");
+
 // Cancel Ticket
-router.post("/cancelTicket", auth, ticket.cancelTicket);
+router.post("/cancelTicket", auth, passengerBookingCancellation.cancelPassengerBooking);
 // Cancel Estimate (preview refund breakdown)
-router.post("/cancelEstimate", auth, ticket.cancelEstimate);
+router.post("/cancelEstimate", auth, passengerBookingCancellation.estimatePassengerBookingCancellation);
 
 module.exports = router;
