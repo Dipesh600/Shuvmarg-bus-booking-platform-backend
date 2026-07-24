@@ -1,8 +1,8 @@
 const Ticket = require("../../models/busScheduleModel.js");
 const Seat = require("../../models/seatsModel.js");
 const busOwnerScheduleManagement = require("../../src/modules/bus-owner/schedule-management");
+const passengerBookingHistory = require("../../src/modules/booking/passenger-booking-history");
 const Booking = require("../../models/bookTicketModel.js");
-const Review = require("../../models/reviewModel.js");
 
 const User = require("../../models/userModel.js");
 const UserDeviceInfo = require("../../models/userDeviceInfoModel.js");
@@ -14,13 +14,11 @@ const {
   notificationManager,
 } = require("../notificationController/notification_manager.js");
 const Trip = require("../../models/tripModel");
-const Transaction = require("../../models/transactionModel");
 const Refund = require("../../models/refundModel");
 const { calculateRefund } = require("../../services/refundCalculatorService");
 
 const tripSeatAvailability = require("../../src/modules/booking/trip-seat-availability");
 const SeatTemplate = require("../../models/seatTemplateModel");
-const { getPresignedUrl } = require("../../services/s3Service.js");
 
 const tripDiscovery = require("../../src/modules/trip-discovery");
 const legacyBookingRetirement = require("../../src/modules/booking/legacy-booking-retirement");
@@ -376,190 +374,7 @@ const cancelEstimate = async (req, res) => {
   }
 };
 
-// Get My ticket history
-const getMyTicketHistory = async (req, res) => {
-  try {
-    const userId = req.userInfo.id;
-
-    const bookings = await Booking.find({ userId: userId })
-      .populate({
-        path: "tripId",
-        populate: [
-          {
-            path: "busId",
-            select:
-              "busName busNumber busType vehicleType totalSeats seatLayout amenitiesId boardingPointId fleetImages",
-            populate: [
-              {
-                path: "amenitiesId",
-                select: "amenities",
-              },
-              {
-                path: "boardingPointId",
-                select: "city boardingPoints description",
-              },
-            ],
-          },
-          {
-            path: "routeId",
-            select: "routeName from to distance duration basePrice",
-          },
-        ],
-      })
-      .lean();
-
-    const bookingIds = bookings.map((b) => b._id);
-
-    const transactions = await Transaction.find({
-      bookingId: { $in: bookingIds },
-    })
-      .select({
-        bookingId: 1,
-        gateway: 1,
-        transactionId: 1,
-        status: 1,
-        totalAmount: 1,
-        paidAt: 1,
-      })
-      .lean();
-    const transactionByBookingId = new Map(
-      transactions.map((t) => [String(t.bookingId), t])
-    );
-
-    const foundReviews = await Review.find({
-      userId: userId,
-      bookingId: { $in: bookingIds },
-    })
-      .select({ bookingId: 1 })
-      .lean();
-    const reviewedSet = new Set(foundReviews.map((r) => String(r.bookingId)));
-
-    // Fetch refund records for all bookings (for cancelled tickets)
-    const refunds = await Refund.find({
-      bookingId: { $in: bookingIds },
-    })
-      .select({
-        bookingId: 1,
-        originalAmount: 1,
-        cancellationCharge: 1,
-        refundAmount: 1,
-        status: 1,
-        requestedAt: 1,
-        processedAt: 1,
-        completedAt: 1,
-        reason: 1,
-        remarks: 1,
-        refundGateway: 1,
-      })
-      .lean();
-    const refundByBookingId = new Map(
-      refunds.map((r) => [String(r.bookingId), r])
-    );
-
-    const result = await Promise.all(bookings.map(async (booking) => {
-      const transaction = transactionByBookingId.get(String(booking._id)) || null;
-      const refund = refundByBookingId.get(String(booking._id)) || null;
-
-      let trip = booking.tripId || null;
-
-      if (trip && trip.busId) {
-        const bus = trip.busId;
-        const rawImages = bus?.fleetImages || [];
-        const presignedImages = await Promise.all(
-          rawImages.map((key) => getPresignedUrl(key))
-        );
-
-        trip.busId = {
-          ...bus,
-          fleetImages: presignedImages.filter(Boolean),
-          amenitiesDetail: bus.amenitiesId || null,
-          boardingPointDetail: bus.boardingPointId || null,
-          amenitiesId: undefined,
-          boardingPointId: undefined,
-        };
-      }
-
-      if (trip) {
-        // Build routeDetail — prefer populated routeId, fall back to denormalized fields
-        const baseRouteDetail = trip.routeId
-          ? trip.routeId
-          : {
-              _id: trip.variantId || null,
-              routeName: trip.directionLabel || `${trip.fromStopName || "?"} → ${trip.toStopName || "?"}`,
-              from: trip.fromStopName || "N/A",
-              to: trip.toStopName || "N/A",
-            };
-
-        // Override with booking's actual searched route (bookedFrom/bookedTo)
-        // This shows the user's actual journey (e.g., "Bardibas → Kathmandu")
-        // instead of the bus's full terminal route (e.g., "Janakpur → Kathmandu")
-        const routeDetail = {
-          ...baseRouteDetail,
-          from: booking.bookedFrom || baseRouteDetail.from,
-          to:   booking.bookedTo   || baseRouteDetail.to,
-        };
-
-        trip = {
-          ...trip,
-          // Override times with user's stop-specific times when available
-          departureTime: booking.bookedDepartureTime || trip.departureTime,
-          arrivalTime:   booking.bookedArrivalTime   || trip.arrivalTime,
-          routeDetail,
-          routeId: undefined,
-        };
-      }
-
-      return {
-        booking: {
-          seats: booking.seats,
-          totalAmount: booking.totalAmount,
-          status: booking.status,
-          refundStatus: refund?.status || booking.refundStatus || "",
-          refundAmount: refund?.refundAmount || booking.refundAmount || 0,
-          ticketId: booking.ticketId,
-          bookingId: booking._id,
-          review: reviewedSet.has(String(booking._id)),
-        },
-        trip,
-        payment: transaction
-          ? {
-            gateway: transaction.gateway,
-            transactionId: transaction.transactionId,
-            status: transaction.status,
-            totalAmount: transaction.totalAmount,
-            paidAt: transaction.paidAt,
-          }
-          : null,
-        refund: refund
-          ? {
-            refundAmount: refund.refundAmount,
-            cancellationCharge: refund.cancellationCharge,
-            originalAmount: refund.originalAmount,
-            status: refund.status,
-            requestedAt: refund.requestedAt,
-            processedAt: refund.processedAt,
-            completedAt: refund.completedAt,
-            reason: refund.reason,
-            remarks: refund.remarks,
-            refundGateway: refund.refundGateway,
-          }
-          : null,
-      };
-    }));
-
-    return res.status(200).json({
-      status: true,
-      message: "Successfully fetched Booking History",
-      data: result,
-    });
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({
-      status: false,
-      message: "Internal Server Error",
-    });
-  }
-};
+const getMyTicketHistory = passengerBookingHistory.getPassengerBookingHistory;
 
 // Validate YatraPoints for discount
 const validateYatraPoints = async (req, res) => {
