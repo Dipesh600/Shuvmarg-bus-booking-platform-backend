@@ -10,6 +10,7 @@ const passengerSeatHold = require("../../src/modules/booking/passenger-seat-hold
 const bookingVerification = require("../../src/modules/booking/booking-verification");
 const busOwnerScheduleManagement = require("../../src/modules/bus-owner/schedule-management");
 const legacyBookingRetirement = require("../../src/modules/booking/legacy-booking-retirement");
+const tripSeatAvailability = require("../../src/modules/booking/trip-seat-availability");
 
 const busOwnerGuard = [auth, verifyRoleFromDB, role.busOwnerMiddleware, requireApprovedBusOwner];
 const passengerBookingGuard = [auth, verifyRoleFromDB, role.requireRole("passenger")];
@@ -36,7 +37,7 @@ router.post(
 router.get("/verifyBooking/:ticketId", ...passengerBookingGuard, bookingVerification.verifyBooking);
 
 // Get Seats
-router.post("/getSeats", auth, ticket.getSeatsById);
+router.post("/getSeats", auth, tripSeatAvailability.getTripSeatAvailability);
 // Get My ticket History
 router.get("/getMyTicketHistory", auth, ticket.getMyTicketHistory);
 // Get My YatraPoints History
