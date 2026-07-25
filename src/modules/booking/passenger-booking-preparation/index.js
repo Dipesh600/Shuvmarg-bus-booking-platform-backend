@@ -1,0 +1,32 @@
+const Trip = require("../../../../models/tripModel.js");
+const Seat = require("../../../../models/seatsModel.js");
+const PlatformConfig = require("../../../../models/platformConfigModel.js");
+const CouponHelper = require("../../../../handlers/couponHelper.js");
+const smLedgerService = require("../../../../services/smLedgerService.js");
+const passengerSeatHold = require("../passenger-seat-hold");
+
+const { createPassengerBookingPreparationRepository } = require("./passenger-booking-preparation.repository.js");
+const policy = require("./passenger-booking-preparation.policy.js");
+const mapper = require("./passenger-booking-preparation.mapper.js");
+const { createPassengerBookingPreparationService } = require("./passenger-booking-preparation.service.js");
+const { createPassengerBookingPreparationController } = require("./passenger-booking-preparation.controller.js");
+
+const repository = createPassengerBookingPreparationRepository({ Trip, Seat });
+const clock = () => new Date();
+
+const service = createPassengerBookingPreparationService({
+  repository,
+  couponHelper: CouponHelper,
+  smLedgerService,
+  platformConfig: PlatformConfig,
+  passengerSeatHold,
+  policy,
+  mapper,
+  clock,
+});
+
+const controller = createPassengerBookingPreparationController({ service });
+
+module.exports = {
+  preparePassengerBooking: controller.preparePassengerBooking,
+};
