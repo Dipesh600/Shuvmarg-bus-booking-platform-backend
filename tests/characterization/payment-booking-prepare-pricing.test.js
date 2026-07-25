@@ -11,7 +11,6 @@ test('prepareBooking pricing & hold characterization', async (t) => {
   let h;
   t.beforeEach(() => {
     h = setupPrepareHarness();
-    h.installSeatNormalizationSeam();
   });
   t.afterEach(() => { h.restore(); });
 
