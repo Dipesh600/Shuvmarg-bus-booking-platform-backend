@@ -22,6 +22,11 @@ const {
   preparePassengerBooking,
 } = require("../../src/modules/booking/passenger-booking-preparation");
 
+const {
+  validatePassengerBookingConfirmationRequest,
+  buildPassengerBookingConfirmationQuote,
+} = require("../../src/modules/booking/passenger-booking-confirmation-quote");
+
 // Step 1: Prepare booking with coupon validation (before payment)
 const prepareBooking = preparePassengerBooking;
 
@@ -183,20 +188,17 @@ const confirmBooking = async (req, res) => {
         smMoneyToUse,     // SM Money amount to debit (split payment)
       } = req.body;
 
-      const SUPPORTED_BOOKING_GATEWAYS = new Set(["esewa", "wallet"]);
-      if (!gateway || typeof gateway !== "string" || !SUPPORTED_BOOKING_GATEWAYS.has(gateway)) {
-        return res.status(400).json({
-          success: false,
-          message: "The selected payment gateway is not supported.",
-          errorCode: "UNSUPPORTED_PAYMENT_GATEWAY",
-        });
-      }
-
-      if (!tempBookingId) {
-        return res.status(400).json({
-          success: false,
-          message: "Missing required fields for booking confirmation",
-        });
+      // ================================================================
+      // STEP 1: PRE-SIDE-EFFECT VALIDATION & CONFIRMATION QUOTE
+      // Must occur BEFORE any payment debit, verification, transaction
+      // creation, or seat locking.
+      // ================================================================
+      const requestValidationResult = validatePassengerBookingConfirmationRequest({
+        gateway,
+        tempBookingId,
+      });
+      if (!requestValidationResult.ok) {
+        return res.status(requestValidationResult.statusCode).json(requestValidationResult.body);
       }
 
       const userId = req.dbUser._id;
@@ -207,83 +209,32 @@ const confirmBooking = async (req, res) => {
       lockUserId = userId;
       lockTripId = scheduleId;
 
-      // ================================================================
-      // STEP 1: PRE-SIDE-EFFECT VALIDATION & CONFIRMATION QUOTE
-      // Must occur BEFORE any payment debit, verification, transaction
-      // creation, or seat locking.
-      // ================================================================
-      let discountAmount = 0;
-      let finalAmount = originalAmount;
-      let couponUsed = null;
-      let appliedCouponCode = null;
-
-      if (couponCode && couponCode.trim() !== "") {
-        const validation = await CouponHelper.validateCoupon(
-          couponCode,
-          userId,
-          originalAmount,
-          scheduleId,
-          req.userInfo.activeRole
-        );
-        if (!validation.isValid) {
-          return res.status(400).json({
-            success: false,
-            message: `Coupon validation failed: ${validation.error}`,
-            errorCode: "COUPON_INVALID_DURING_CONFIRMATION",
-          });
-        }
-        discountAmount = validation.discountAmount;
-        finalAmount = validation.finalAmount;
-        couponUsed = validation.coupon._id;
-        appliedCouponCode = validation.coupon.couponCode;
+      const confirmationQuoteResult = await buildPassengerBookingConfirmationQuote({
+        gateway,
+        tempBookingId,
+        paymentAmount,
+        originalAmount,
+        couponCode,
+        smMoneyToUse,
+        userId,
+        scheduleId,
+        activeRole: req.userInfo.activeRole,
+      });
+      if (!confirmationQuoteResult.ok) {
+        return res.status(confirmationQuoteResult.statusCode).json(confirmationQuoteResult.body);
       }
+      const {
+        discountAmount,
+        finalAmount,
+        couponUsed,
+        appliedCouponCode,
+        requestedSmMoney,
+        smMoneyApplied,
+        gatewayAmount,
+      } = confirmationQuoteResult.quote;
 
       const smLedgerService = require("../../services/smLedgerService.js");
       const PlatformConfig = require("../../models/platformConfigModel.js");
-
-      let smMoneyApplied = 0;
-      let gatewayAmount = paymentAmount || 0;
-
-      const requestedSmMoney = Math.max(0, Math.floor(Number(smMoneyToUse) || 0));
-
-      if (requestedSmMoney > 0) {
-        const [balanceResult, smConfig] = await Promise.all([
-          smLedgerService.computeSpendableBalance(userId),
-          PlatformConfig.getConfig("sm_money_config"),
-        ]);
-
-        const spendableBalance = balanceResult.display;
-        const maxDiscountPercent = (smConfig && smConfig.maxDiscountPercent) || 80;
-
-        const maxTotalDiscount = Math.floor(originalAmount * (maxDiscountPercent / 100));
-        const maxSmMoneyAllowed = Math.max(0, maxTotalDiscount - discountAmount);
-
-        smMoneyApplied = Math.min(requestedSmMoney, spendableBalance, maxSmMoneyAllowed);
-        if (smMoneyApplied <= 0) {
-          smMoneyApplied = 0;
-        }
-      }
-
-      if (gateway === "wallet") {
-        smMoneyApplied = paymentAmount;
-        gatewayAmount = 0;
-      } else {
-        const afterCoupon = originalAmount - discountAmount;
-        gatewayAmount = afterCoupon - smMoneyApplied;
-      }
-
-      // Amount consistency check
-      const expectedTotal = gatewayAmount + smMoneyApplied;
-      if (Math.abs(finalAmount - expectedTotal) > 1) {
-        logger.warn("confirmBooking: Amount mismatch in confirmation quote", {
-          finalAmount, gatewayAmount, smMoneyApplied, expectedTotal,
-        });
-        return res.status(400).json({
-          success: false,
-          message: "Amount mismatch between coupon, wallet, and gateway calculations.",
-          errorCode: "AMOUNT_MISMATCH",
-        });
-      }
 
       // ================================================================
       // STEP 2: DEBIT SM MONEY VIA FIFO (if applicable)

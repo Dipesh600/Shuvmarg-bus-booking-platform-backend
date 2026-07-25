@@ -27,6 +27,15 @@ const patchVerify = (fn) => {
 };
 const post = (body) => request(app).post('/api/auth/busowner/verifyOTP').send(body);
 
+const findLeadEventually = async (query, maxAttempts = 50, delayMs = 10) => {
+  for (let i = 0; i < maxAttempts; i++) {
+    const lead = await PartnerLead.findOne(query);
+    if (lead) return lead;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  throw new Error('PartnerLead not found after polling');
+};
+
 test('bus-owner registration verifyOTP characterization', async (t) => {
   t.before(async () => db.connect());
   t.after(async () => db.disconnect());
@@ -63,8 +72,7 @@ test('bus-owner registration verifyOTP characterization', async (t) => {
       assert.equal(decoded.phone, p);
       assert.equal(decoded.purpose, 'BUSOWNER_REGISTRATION');
       assert.deepEqual(calls[0], [p, '123456', 'BUSOWNER_REGISTRATION']);
-      await new Promise((resolve) => setImmediate(resolve));
-      const lead = await PartnerLead.findOne({ phone: p, leadType: 'otp_verified', entityType: 'busOwner' });
+      const lead = await findLeadEventually({ phone: p, leadType: 'otp_verified', entityType: 'busOwner' });
       assert.equal(lead.phoneVerified, true);
       assert.equal(lead.source, 'busowner_app');
     } finally { restore(); }
