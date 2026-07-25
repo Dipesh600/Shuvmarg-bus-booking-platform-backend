@@ -24,7 +24,7 @@ test("passenger-booking-cancellation estimate characterization", async (t) => {
   await t.test("missing ticketId returns 400", async () => {
     req.body = {};
     req.userInfo = { id: "user1" };
-    await harness.ticketController.cancelEstimate(req, res);
+    await harness.passengerBookingCancellation.estimatePassengerBookingCancellation(req, res);
     assert.strictEqual(res.statusCode, 400);
     assert.deepStrictEqual(res.body, { status: false, message: "ticketId is required" });
   });
@@ -33,7 +33,7 @@ test("passenger-booking-cancellation estimate characterization", async (t) => {
     req.body = { ticketId: "T123" };
     req.userInfo = { id: "user1" };
     harness.mocks.bookingFindOne.mock.mockImplementationOnce(() => Promise.resolve(null));
-    await harness.ticketController.cancelEstimate(req, res);
+    await harness.passengerBookingCancellation.estimatePassengerBookingCancellation(req, res);
     assert.strictEqual(res.statusCode, 404);
     assert.deepStrictEqual(res.body, { status: false, message: "Booking not found" });
   });
@@ -43,7 +43,7 @@ test("passenger-booking-cancellation estimate characterization", async (t) => {
     req.userInfo = { id: "user1" };
     const booking = { userId: new mongoose.Types.ObjectId() };
     harness.mocks.bookingFindOne.mock.mockImplementationOnce(() => Promise.resolve(booking));
-    await harness.ticketController.cancelEstimate(req, res);
+    await harness.passengerBookingCancellation.estimatePassengerBookingCancellation(req, res);
     assert.strictEqual(res.statusCode, 403);
     assert.deepStrictEqual(res.body, { status: false, message: "You are not authorized to view this booking" });
   });
@@ -54,7 +54,7 @@ test("passenger-booking-cancellation estimate characterization", async (t) => {
     req.userInfo = { id: userId.toString() };
     const booking = { userId, status: "cancelled" };
     harness.mocks.bookingFindOne.mock.mockImplementationOnce(() => Promise.resolve(booking));
-    await harness.ticketController.cancelEstimate(req, res);
+    await harness.passengerBookingCancellation.estimatePassengerBookingCancellation(req, res);
     assert.strictEqual(res.statusCode, 400);
     assert.deepStrictEqual(res.body, { status: false, message: "Cannot cancel a booking with status 'cancelled'" });
   });
@@ -67,7 +67,7 @@ test("passenger-booking-cancellation estimate characterization", async (t) => {
     harness.mocks.bookingFindOne.mock.mockImplementationOnce(() => Promise.resolve(booking));
     harness.mocks.tripFindById.mock.mockImplementationOnce(() => Promise.resolve(null));
     
-    await harness.ticketController.cancelEstimate(req, res);
+    await harness.passengerBookingCancellation.estimatePassengerBookingCancellation(req, res);
     assert.strictEqual(res.statusCode, 404);
     assert.deepStrictEqual(res.body, { status: false, message: "Trip details not found" });
   });
@@ -97,7 +97,7 @@ test("passenger-booking-cancellation estimate characterization", async (t) => {
       });
     });
 
-    await harness.ticketController.cancelEstimate(req, res);
+    await harness.passengerBookingCancellation.estimatePassengerBookingCancellation(req, res);
     
     assert.strictEqual(res.statusCode, 200);
     assert.deepStrictEqual(calcArgs, {

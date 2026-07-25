@@ -41,7 +41,7 @@ describe("passenger-booking-history error characterization", () => {
   it("handles missing req.userInfo", async () => {
     req.userInfo = undefined;
     
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
     
     assert.strictEqual(res.status.mock.callCount(), 1);
     assert.strictEqual(consoleErrorMock.mock.callCount(), 1);
@@ -56,7 +56,7 @@ describe("passenger-booking-history error characterization", () => {
     const error = new Error("DB Error");
     harness.mocks.bookingFind.mock.mockImplementation(() => { throw error; });
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     await assertExact500Behavior(error);
     assert.strictEqual(harness.mocks.transactionFind.mock.callCount(), 0);
@@ -69,7 +69,7 @@ describe("passenger-booking-history error characterization", () => {
     }));
     harness.mocks.transactionFind.mock.mockImplementation(() => { throw error; });
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     await assertExact500Behavior(error);
     assert.strictEqual(harness.mocks.reviewFind.mock.callCount(), 0);
@@ -85,7 +85,7 @@ describe("passenger-booking-history error characterization", () => {
     }));
     harness.mocks.reviewFind.mock.mockImplementation(() => { throw error; });
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     await assertExact500Behavior(error);
     assert.strictEqual(harness.mocks.refundFind.mock.callCount(), 0);
@@ -104,7 +104,7 @@ describe("passenger-booking-history error characterization", () => {
     }));
     harness.mocks.refundFind.mock.mockImplementation(() => { throw error; });
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     await assertExact500Behavior(error);
   });
@@ -127,7 +127,7 @@ describe("passenger-booking-history error characterization", () => {
     const error = new Error("S3 Error");
     harness.mocks.getPresignedUrl.mock.mockImplementation(async () => { throw error; });
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     await assertExact500Behavior(error);
   });

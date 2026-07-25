@@ -18,10 +18,7 @@ function setupHarness() {
   };
   s3Service.getPresignedUrl = mocks.getPresignedUrl;
 
-  // Force controller to reload so it picks up the mocked getPresignedUrl
-  const controllerPath = require.resolve("../../controllers/ticketController/ticketController");
-  delete require.cache[controllerPath];
-  const ticketController = require("../../controllers/ticketController/ticketController");
+  const passengerBookingHistory = require("../../src/modules/booking/passenger-booking-history");
 
   function restore() {
     mocks.bookingFind.mock.restore();
@@ -29,11 +26,10 @@ function setupHarness() {
     mocks.reviewFind.mock.restore();
     mocks.refundFind.mock.restore();
     s3Service.getPresignedUrl = originalGetPresignedUrl;
-    delete require.cache[controllerPath]; // allow next test to require clean if needed
   }
 
   return {
-    ticketController,
+    passengerBookingHistory,
     mocks,
     restore,
   };

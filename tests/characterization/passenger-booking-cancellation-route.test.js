@@ -1,8 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const ticketRoutes = require("../../routes/ticketRoutes/ticketRoutes");
-const ticketController = require("../../controllers/ticketController/ticketController");
 const auth = require("../../middleware/authMiddleware");
+const passengerBookingCancellation = require("../../src/modules/booking/passenger-booking-cancellation");
 
 test("passenger-booking-cancellation routes", async (t) => {
   const routeLayers = ticketRoutes.stack.filter((layer) => layer.route);
@@ -17,7 +17,7 @@ test("passenger-booking-cancellation routes", async (t) => {
     const handlers = route.stack.map((layer) => layer.handle);
     assert.strictEqual(handlers.length, 2);
     assert.strictEqual(handlers[0], auth);
-    assert.strictEqual(handlers[1], ticketController.cancelTicket);
+    assert.strictEqual(handlers[1], passengerBookingCancellation.cancelPassengerBooking);
   });
 
   await t.test("cancelEstimate route exists and has exact middleware and handler", () => {
@@ -30,6 +30,6 @@ test("passenger-booking-cancellation routes", async (t) => {
     const handlers = route.stack.map((layer) => layer.handle);
     assert.strictEqual(handlers.length, 2);
     assert.strictEqual(handlers[0], auth);
-    assert.strictEqual(handlers[1], ticketController.cancelEstimate);
+    assert.strictEqual(handlers[1], passengerBookingCancellation.estimatePassengerBookingCancellation);
   });
 });

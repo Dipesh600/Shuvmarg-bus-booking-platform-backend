@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 
-const ticketController = require("../../controllers/ticketController/ticketController");
+const tripSeatAvailability = require("../../src/modules/booking/trip-seat-availability");
 const Seat = require("../../models/seatsModel");
 const Trip = require("../../models/tripModel");
 const SeatHold = require("../../models/seatHoldModel");
@@ -28,7 +28,7 @@ test("Trip seat availability config characterization", async (t) => {
     Trip.findById = () => ({ populate: () => Promise.resolve(mockTrip) });
     SeatHold.find = () => Promise.resolve(mockHolds);
 
-    await ticketController.getSeatsById(req, res);
+    await tripSeatAvailability.getTripSeatAvailability(req, res);
     return responseBody;
   };
 

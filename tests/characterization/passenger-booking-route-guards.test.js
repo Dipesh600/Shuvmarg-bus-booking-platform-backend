@@ -5,7 +5,7 @@
  * Real Express route characterization tests (Supertest).
  * Covers: no-token, invalid-token, agent, busOwner, multi-role,
  * security properties, valid-passenger pass-through on prepareBooking /
- * confirmBooking / verifyBooking, and legacy /bookTicket 410.
+ * confirmBooking / verifyBooking.
  */
 const {
   createTestSecret,
@@ -30,33 +30,29 @@ const bearer  = (tok) => `Bearer ${tok}`;
 const PREPARE   = '/api/ticket/prepareBooking';
 const CONFIRM   = '/api/ticket/confirmBooking';
 const VERIFY    = '/api/ticket/verifyBooking/TKT-X';
-const LEGACY    = '/api/ticket/bookTicket';
-const AUTH_HDRS = ['Authorization'];
 
 test('Passenger Booking Real Express Route Guards', async (t) => {
   t.before(() => db.connect());
   t.after(() => db.disconnect());
   t.beforeEach(() => db.clearAll());
 
-  await t.test('1. no token → 401 on all four protected endpoints', async () => {
-    const [r1, r2, r3, r4] = await Promise.all([
+  await t.test('1. no token → 401 on all three protected endpoints', async () => {
+    const [r1, r2, r3] = await Promise.all([
       request(app).post(PREPARE).send({}),
       request(app).post(CONFIRM).send({}),
       request(app).get(VERIFY),
-      request(app).post(LEGACY).send({}),
     ]);
-    for (const r of [r1, r2, r3, r4]) assert.equal(r.status, 401);
+    for (const r of [r1, r2, r3]) assert.equal(r.status, 401);
   });
 
-  await t.test('2. invalid token → 401 on all four protected endpoints', async () => {
+  await t.test('2. invalid token → 401 on all three protected endpoints', async () => {
     const h = bearer('totally-invalid-token');
-    const [r1, r2, r3, r4] = await Promise.all([
+    const [r1, r2, r3] = await Promise.all([
       request(app).post(PREPARE).set('Authorization', h).send({}),
       request(app).post(CONFIRM).set('Authorization', h).send({}),
       request(app).get(VERIFY).set('Authorization', h),
-      request(app).post(LEGACY).set('Authorization', h).send({}),
     ]);
-    for (const r of [r1, r2, r3, r4]) assert.equal(r.status, 401);
+    for (const r of [r1, r2, r3]) assert.equal(r.status, 401);
   });
 
   await t.test('3a. agent activeRole → 403 INSUFFICIENT_ROLE on prepareBooking', async () => {
@@ -118,9 +114,9 @@ test('Passenger Booking Real Express Route Guards', async (t) => {
     assert.notEqual(r.status, 401); assert.notEqual(r.status, 403); assert.equal(r.status, 404);
   });
 
-  await t.test('8. legacy /bookTicket → 410 LEGACY_BOOKING_FLOW_RETIRED', async () => {
+  await t.test('8. retired /bookTicket → 404 not-found (no longer registered)', async () => {
     const u = await mkUser();
-    const r = await request(app).post(LEGACY).set('Authorization', bearer(sign(u))).send({});
-    assert.equal(r.status, 410); assert.equal(r.body.errorCode, 'LEGACY_BOOKING_FLOW_RETIRED');
+    const r = await request(app).post('/api/ticket/bookTicket').set('Authorization', bearer(sign(u))).send({});
+    assert.equal(r.status, 404);
   });
 });

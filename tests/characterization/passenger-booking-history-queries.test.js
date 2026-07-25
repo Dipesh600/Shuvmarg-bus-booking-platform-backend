@@ -45,7 +45,7 @@ describe("passenger-booking-history queries characterization", () => {
     harness.mocks.reviewFind.mock.mockImplementation(reviewQueryMock);
     harness.mocks.refundFind.mock.mockImplementation(refundQueryMock);
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     assert.strictEqual(harness.mocks.bookingFind.mock.callCount(), 1);
     const [bookingArgs] = harness.mocks.bookingFind.mock.calls[0].arguments;

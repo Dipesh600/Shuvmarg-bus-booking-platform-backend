@@ -55,7 +55,7 @@ describe("passenger-booking-history error characterization", () => {
     harness.mocks.reviewFind.mock.mockImplementation(() => ({ select: () => ({ lean: () => Promise.resolve([]) }) }));
     harness.mocks.refundFind.mock.mockImplementation(() => ({ select: () => ({ lean: () => Promise.resolve([]) }) }));
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     assert.strictEqual(res.status.mock.callCount(), 1);
     assert.strictEqual(res.status.mock.calls[0].arguments[0], 500);
@@ -70,7 +70,7 @@ describe("passenger-booking-history error characterization", () => {
     harness.mocks.reviewFind.mock.mockImplementation(() => ({ select: () => ({ lean: () => Promise.resolve([]) }) }));
     harness.mocks.refundFind.mock.mockImplementation(() => ({ select: () => ({ lean: () => Promise.resolve([]) }) }));
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     assert.strictEqual(res.status.mock.callCount(), 1);
     assert.strictEqual(res.status.mock.calls[0].arguments[0], 500);
