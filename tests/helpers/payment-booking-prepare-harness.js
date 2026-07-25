@@ -25,10 +25,6 @@ function setupPrepareHarness() {
     });
   }
 
-  function installSeatNormalizationSeam() {
-    mockMethod(passengerSeatHold, 'normalizeSeatNumbers', (seats) => (Array.isArray(seats) ? seats.map(s => String(s).toLowerCase()) : seats));
-  }
-
   delete require.cache[controllerPath];
   const { prepareBooking } = require('../../controllers/ticketController/paymentBookingController.js');
 
@@ -56,7 +52,7 @@ function setupPrepareHarness() {
     delete require.cache[controllerPath];
   }
 
-  return { prepareBooking, mockMethod, defaults, restore, installSeatNormalizationSeam, Trip, Seat, CouponHelper, smLedgerService, PlatformConfig, passengerSeatHold };
+  return { prepareBooking, mockMethod, defaults, restore, Trip, Seat, CouponHelper, smLedgerService, PlatformConfig, passengerSeatHold };
 }
 
 function makePrepareReq(body = {}) {

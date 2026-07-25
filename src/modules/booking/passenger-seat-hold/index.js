@@ -17,6 +17,7 @@ module.exports = {
   policy,
   errors,
   repository,
+  normalizeSeatNumbers: policy.normalizeSeatNumbers,
   createOrReusePassengerSeatHold,
   validateConfirmationHold,
   completePassengerHold,
