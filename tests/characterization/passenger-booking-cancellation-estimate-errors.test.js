@@ -30,7 +30,7 @@ test("passenger-booking-cancellation estimate errors characterization", async (t
     let errLogs = [];
     console.error = (...args) => { errLogs.push(args); };
 
-    await harness.ticketController.cancelEstimate(req, res);
+    await harness.passengerBookingCancellation.estimatePassengerBookingCancellation(req, res);
     
     console.error = origError;
 

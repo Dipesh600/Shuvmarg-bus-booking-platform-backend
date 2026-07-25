@@ -3,7 +3,6 @@ const assert = require("node:assert");
 
 const routes = require("../../routes/ticketRoutes/ticketRoutes");
 const auth = require("../../middleware/authMiddleware");
-const ticketController = require("../../controllers/ticketController/ticketController");
 const tripSeatAvailability = require("../../src/modules/booking/trip-seat-availability");
 test("Trip seat availability route characterization", (t) => {
   const routedLayers = routes.stack.filter((layer) => layer.route);
@@ -43,14 +42,7 @@ test("Trip seat availability route characterization", (t) => {
     "Final handler should be tripSeatAvailability.getTripSeatAvailability"
   );
   
-  // 7b. compatibility identity is exact
-  assert.strictEqual(
-    ticketController.getSeatsById,
-    tripSeatAvailability.getTripSeatAvailability,
-    "Compatibility identity should be exact"
-  );
-  
-  // 8. no `verifyRoleFromDB` handler is present
+
   const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB");
   assert.ok(!handlers.includes(verifyRoleFromDB), "No verifyRoleFromDB handler should be present");
   

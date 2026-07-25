@@ -64,7 +64,7 @@ test("passenger-booking-cancellation refund characterization", async (t) => {
       return Promise.resolve({ _id: "refund123" });
     });
 
-    await harness.ticketController.cancelTicket(req, res);
+    await harness.passengerBookingCancellation.cancelPassengerBooking(req, res);
     
     assert.strictEqual(res.statusCode, 200);
 

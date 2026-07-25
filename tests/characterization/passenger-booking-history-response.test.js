@@ -85,7 +85,7 @@ describe("passenger-booking-history response characterization", () => {
       })
     }));
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     assert.strictEqual(res.status.mock.callCount(), 1);
     assert.strictEqual(res.status.mock.calls[0].arguments[0], 200);

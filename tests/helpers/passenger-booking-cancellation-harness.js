@@ -24,10 +24,7 @@ function setupHarness() {
     creditWallet: mock.method(walletService, "creditWallet", () => Promise.resolve({})),
   };
 
-  // Force ticketController to reload so we can test cleanly if needed
-  const controllerPath = require.resolve("../../controllers/ticketController/ticketController");
-  delete require.cache[controllerPath];
-  const ticketController = require("../../controllers/ticketController/ticketController");
+  const passengerBookingCancellation = require("../../src/modules/booking/passenger-booking-cancellation");
 
   function restore() {
     mocks.bookingFindOne.mock.restore();
@@ -40,11 +37,10 @@ function setupHarness() {
     mocks.notificationManager.mock.restore();
     mocks.clawbackCashback.mock.restore();
     mocks.creditWallet.mock.restore();
-    delete require.cache[controllerPath];
   }
 
   return {
-    ticketController,
+    passengerBookingCancellation,
     mocks,
     restore,
   };

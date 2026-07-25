@@ -30,7 +30,7 @@ test("passenger-booking-cancellation outer error characterization", async (t) =>
     let errLogs = [];
     console.error = (...args) => { errLogs.push(args); };
 
-    await harness.ticketController.cancelTicket(req, res);
+    await harness.passengerBookingCancellation.cancelPassengerBooking(req, res);
     
     console.error = origError;
 

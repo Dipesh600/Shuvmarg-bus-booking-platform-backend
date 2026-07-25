@@ -67,7 +67,7 @@ test("passenger-booking-cancellation notification characterization", async (t) =
       return Promise.resolve();
     });
 
-    await harness.ticketController.cancelTicket(req, res);
+    await harness.passengerBookingCancellation.cancelPassengerBooking(req, res);
     
     assert.strictEqual(res.statusCode, 200);
 
@@ -124,7 +124,7 @@ test("passenger-booking-cancellation notification characterization", async (t) =
     
     harness.mocks.createLocalNotification.mock.mockImplementationOnce(() => Promise.reject(new Error("Notify Error")));
 
-    await harness.ticketController.cancelTicket(req, res);
+    await harness.passengerBookingCancellation.cancelPassengerBooking(req, res);
     
     // Notification failure still results in 200
     assert.strictEqual(res.statusCode, 200);

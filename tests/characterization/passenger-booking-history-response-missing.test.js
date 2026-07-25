@@ -41,7 +41,7 @@ describe("passenger-booking-history response characterization", () => {
       })
     }));
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     const jsonArg = res.json.mock.calls[0].arguments[0];
     const item = jsonArg.data[0];
@@ -75,7 +75,7 @@ describe("passenger-booking-history response characterization", () => {
       select: () => ({ lean: () => Promise.resolve([refund1, refund2]) })
     }));
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     const jsonArg = res.json.mock.calls[0].arguments[0];
     const item = jsonArg.data[0];

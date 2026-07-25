@@ -68,7 +68,7 @@ test("passenger-booking-cancellation success characterization", async (t) => {
     harness.mocks.seatFindOne.mock.mockImplementationOnce(() => Promise.resolve(seatDoc));
     harness.mocks.refundCreate.mock.mockImplementationOnce(() => Promise.resolve({ _id: "refund123" }));
 
-    await harness.ticketController.cancelTicket(req, res);
+    await harness.passengerBookingCancellation.cancelPassengerBooking(req, res);
     
     assert.strictEqual(res.statusCode, 200);
     assert.deepStrictEqual(res.body, {

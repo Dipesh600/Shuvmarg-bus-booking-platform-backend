@@ -45,7 +45,7 @@ describe("passenger-booking-history trip/image characterization", () => {
       populate: () => ({ lean: () => Promise.resolve([bookingDoc]) })
     }));
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     const jsonArg = res.json.mock.calls[0].arguments[0];
     const trip = jsonArg.data[0].trip;
@@ -81,7 +81,7 @@ describe("passenger-booking-history trip/image characterization", () => {
       populate: () => ({ lean: () => Promise.resolve([bookingDoc]) })
     }));
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     const jsonArg = res.json.mock.calls[0].arguments[0];
     const trip = jsonArg.data[0].trip;
@@ -112,7 +112,7 @@ describe("passenger-booking-history trip/image characterization", () => {
       populate: () => ({ lean: () => Promise.resolve([bookingDoc]) })
     }));
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     const jsonArg = res.json.mock.calls[0].arguments[0];
     const trip = jsonArg.data[0].trip;
@@ -133,7 +133,7 @@ describe("passenger-booking-history trip/image characterization", () => {
       populate: () => ({ lean: () => Promise.resolve([bookingDoc]) })
     }));
 
-    await harness.ticketController.getMyTicketHistory(req, res);
+    await harness.passengerBookingHistory.getPassengerBookingHistory(req, res);
 
     const jsonArg = res.json.mock.calls[0].arguments[0];
     const trip = jsonArg.data[0].trip;
