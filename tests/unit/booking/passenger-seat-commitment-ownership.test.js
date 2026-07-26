@@ -55,7 +55,7 @@ test('passengerSeatCommitment ownership static tests', async (t) => {
       'seatCommitmentResult.statusCode',
       'seatCommitmentResult.body',
       'seatCommitmentResult.lockedSeatNumbers',
-      'Transaction.findByIdAndUpdate',
+      'markPassengerPaymentDisputed',
     ];
     for (const str of requiredInController) {
       assert.equal(

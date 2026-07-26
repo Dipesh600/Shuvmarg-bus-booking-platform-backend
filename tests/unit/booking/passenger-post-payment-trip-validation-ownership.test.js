@@ -54,9 +54,9 @@ test('passengerPostPaymentTripValidation ownership static tests', async (t) => {
       'postPaymentTripResult.statusCode',
       'postPaymentTripResult.body',
       'postPaymentTripResult.trip',
-      'Transaction.findByIdAndUpdate',
+      'markPassengerPaymentDisputed',
       '_reverseInternalMoneyDebitIfNeeded',
-      '_sendDisputeAdminAlert',
+      'sendPassengerPaymentDisputeAdminAlert',
     ];
     for (const sym of requiredSymbols) {
       assert.equal(

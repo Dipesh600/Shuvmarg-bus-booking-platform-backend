@@ -35,16 +35,17 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
       'gatewayAmount',
       'debitPassengerWalletPayment',
       'debitPassengerSplitPayment',
-      'reversePassengerSplitPaymentDebit',
+      'reversePassengerInternalMoneyDebits',
       'verifyPassengerEsewaPayment',
       'createPassengerBookingPaymentTransaction',
       'validatePassengerPostPaymentTrip',
       'commitPassengerSeats',
       'persistPassengerBooking',
-      'Transaction.findByIdAndUpdate',
+      'markPassengerPaymentDisputed',
       'rollbackPassengerSeatLocks',
-      '_sendDisputeAdminAlert',
+      'sendPassengerPaymentDisputeAdminAlert',
       '_reverseInternalMoneyDebitIfNeeded',
+      'completePassengerBookingPostCommit',
     ];
     for (const ref of requiredReferences) {
       assert.ok(controllerSource.includes(ref), `controller retains ${ref}`);
@@ -69,13 +70,15 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
     assert.ok(controllerSource.includes('buildPassengerBookingConfirmationQuote({'), 'buildPassengerBookingConfirmationQuote invoked');
     assert.ok(controllerSource.includes('debitPassengerWalletPayment({'), 'debitPassengerWalletPayment invoked');
     assert.ok(controllerSource.includes('debitPassengerSplitPayment({'), 'debitPassengerSplitPayment invoked');
-    assert.ok(controllerSource.includes('reversePassengerSplitPaymentDebit({'), 'reversePassengerSplitPaymentDebit invoked');
+    assert.ok(controllerSource.includes('reversePassengerInternalMoneyDebits({'), 'reversePassengerInternalMoneyDebits invoked');
     assert.ok(controllerSource.includes('verifyPassengerEsewaPayment({'), 'verifyPassengerEsewaPayment invoked');
     assert.ok(controllerSource.includes('createPassengerBookingPaymentTransaction({'), 'createPassengerBookingPaymentTransaction invoked');
     assert.ok(controllerSource.includes('validatePassengerPostPaymentTrip({'), 'validatePassengerPostPaymentTrip invoked');
     assert.ok(controllerSource.includes('commitPassengerSeats({'), 'commitPassengerSeats invoked');
     assert.ok(controllerSource.includes('persistPassengerBooking({'), 'persistPassengerBooking invoked');
     assert.ok(controllerSource.includes('reconcilePassengerTransactionSuccess({'), 'reconcilePassengerTransactionSuccess invoked');
+    assert.ok(controllerSource.includes('markPassengerPaymentDisputed({'), 'markPassengerPaymentDisputed invoked');
+    assert.ok(controllerSource.includes('completePassengerBookingPostCommit({'), 'completePassengerBookingPostCommit invoked');
     assert.ok(controllerSource.includes('rollbackPassengerSeatLocks({'), 'rollbackPassengerSeatLocks invoked');
   });
 });

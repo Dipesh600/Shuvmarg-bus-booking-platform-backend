@@ -42,7 +42,7 @@ test('passengerTransactionSuccessReconciliation ownership static tests', async (
     assert.ok(controllerContent.includes('Transaction SUCCESS transition failed (returned null)'));
     assert.ok(controllerContent.includes('Transaction SUCCESS transition threw exception'));
     assert.ok(controllerContent.includes('BOOKING_RECONCILIATION_REQUIRED'));
-    assert.ok(controllerContent.includes('buildCommittedBookingResponse'));
+    assert.ok(controllerContent.includes('buildPassengerCommittedBookingResponse'));
     assert.ok(controllerContent.includes('bookingCommitted = true'));
   });
 

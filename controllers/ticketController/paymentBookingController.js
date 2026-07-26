@@ -1,19 +1,7 @@
-// busScheduleModel removed — seats are indexed by tripId in the new Trip-based model
-const CouponHelper           = require("../../handlers/couponHelper.js");
-// YatraPointsHistory removed — YatraPoints deprecated in favour of SM Ledger cashback
-const Transaction            = require("../../models/transactionModel.js");
 const {
   verifyPassengerEsewaPayment,
 } = require("../../src/modules/booking/passenger-esewa-verification");
 const logger                 = require("../../utils/logger.js");
-const {
-  createLocalNotification,
-} = require("../notificationController/notification_manager.js");
-const passengerSeatHold      = require("../../src/modules/booking/passenger-seat-hold");
-const {
-  sendBookingConfirmedNotification,
-  buildCommittedBookingResponse,
-} = require("../../src/modules/booking/booking-confirmation");
 
 const {
   preparePassengerBooking,
@@ -30,8 +18,11 @@ const {
 
 const {
   debitPassengerSplitPayment,
-  reversePassengerSplitPaymentDebit,
 } = require("../../src/modules/booking/passenger-split-payment");
+
+const {
+  reversePassengerInternalMoneyDebits,
+} = require("../../src/modules/booking/passenger-internal-money-compensation");
 
 const {
   createPassengerBookingPaymentTransaction,
@@ -54,49 +45,19 @@ const {
   reconcilePassengerTransactionSuccess,
 } = require("../../src/modules/booking/passenger-transaction-success-reconciliation");
 
+const {
+  markPassengerPaymentDisputed,
+  sendPassengerPaymentDisputeAdminAlert,
+  notifyPassengerPaymentDispute,
+} = require("../../src/modules/booking/passenger-payment-dispute");
+
+const {
+  buildPassengerCommittedBookingResponse,
+  completePassengerBookingPostCommit,
+} = require("../../src/modules/booking/passenger-booking-post-commit");
+
 // Step 1: Prepare booking with coupon validation (before payment)
 const prepareBooking = preparePassengerBooking;
-
-
-
-// ================================================================
-// HELPER: Send admin alert for disputed payment
-// ================================================================
-const _sendDisputeAdminAlert = async (transaction, reason) => {
-  try {
-    // Log prominently — this is a money-stuck situation
-    logger.error("🚨 DISPUTED PAYMENT — Manual refund required", {
-      transactionId: transaction._id,
-      esewaPaymentId: transaction.transactionId,
-      userId: transaction.userId,
-      amount: transaction.totalAmount,
-      tripId: transaction.tripId,
-      seats: transaction.seats,
-      reason,
-    });
-
-    // In-app notification for admin review (uses admin userId from env, or falls back to log-only)
-    const adminUserId = process.env.ADMIN_ALERT_USER_ID;
-    if (adminUserId) {
-      await createLocalNotification(
-        adminUserId,
-        "DISPUTED_PAYMENT",
-        "⚠️ Disputed Payment — Action Required",
-        `Payment of Rs.${transaction.totalAmount} received (eSewa: ${transaction.transactionId}) but booking creation failed. Case ID: ${transaction._id}. Reason: ${reason}`,
-        {
-          transactionId: transaction._id,
-          esewaPaymentId: transaction.transactionId,
-          userId: transaction.userId,
-          amount: transaction.totalAmount,
-          tripId: transaction.tripId,
-          seats: transaction.seats,
-        }
-      );
-    }
-  } catch (alertErr) {
-    logger.error("confirmBooking: failed to send admin dispute alert", { error: alertErr.message });
-  }
-};
 
 // Step 2: Confirm booking after successful payment — SPLIT PAYMENT + ATOMIC seat lock
 // ================================================================
@@ -129,21 +90,14 @@ const confirmBooking = async (req, res) => {
 
   // ── Helper: Reverse internal money debit if one was made ────────
   const _reverseInternalMoneyDebitIfNeeded = async (reason) => {
-    if (splitPaymentDebitEntryId) {
-      await reversePassengerSplitPaymentDebit({ debitEntryId: splitPaymentDebitEntryId, reason });
-      splitPaymentDebitEntryId = null;
-    }
+    const result = await reversePassengerInternalMoneyDebits({
+      splitPaymentDebitEntryId,
+      walletDebitEntryId,
+      reason,
+    });
 
-    if (walletDebitEntryId) {
-      try {
-        const smLedgerService = require("../../services/smLedgerService.js");
-        await smLedgerService.reverseDebit(walletDebitEntryId);
-        logger.info("confirmBooking: SM Money debit reversed", { smDebitEntryId: walletDebitEntryId, reason });
-        walletDebitEntryId = null;
-      } catch (reverseErr) {
-        logger.error("confirmBooking: CRITICAL — failed to reverse SM Money debit", { smDebitEntryId: walletDebitEntryId, reason, error: reverseErr.message });
-      }
-    }
+    splitPaymentDebitEntryId = result.splitPaymentDebitEntryId;
+    walletDebitEntryId = result.walletDebitEntryId;
   };
 
     try {
@@ -210,8 +164,6 @@ const confirmBooking = async (req, res) => {
         smMoneyApplied,
         gatewayAmount,
       } = confirmationQuoteResult.quote;
-
-      const smLedgerService = require("../../services/smLedgerService.js");
 
       // ================================================================
       // STEP 2: DEBIT SM MONEY VIA FIFO (if applicable)
@@ -281,17 +233,17 @@ const confirmBooking = async (req, res) => {
       });
 
       if (!postPaymentTripResult.ok) {
-        await Transaction.findByIdAndUpdate(txnRecord._id, {
-          status: "DISPUTED",
+        await markPassengerPaymentDisputed({
+          transactionId: txnRecord._id,
           disputeReason: postPaymentTripResult.disputeReason,
         });
         await _reverseInternalMoneyDebitIfNeeded(
           postPaymentTripResult.compensationReason
         );
-        await _sendDisputeAdminAlert(
-          txnRecord,
-          postPaymentTripResult.adminAlertReason
-        );
+        await sendPassengerPaymentDisputeAdminAlert({
+          transaction: txnRecord,
+          reason: postPaymentTripResult.adminAlertReason,
+        });
         return res
           .status(postPaymentTripResult.statusCode)
           .json(postPaymentTripResult.body);
@@ -318,8 +270,8 @@ const confirmBooking = async (req, res) => {
           });
         }
 
-        await Transaction.findByIdAndUpdate(txnRecord._id, {
-          status: "DISPUTED",
+        await markPassengerPaymentDisputed({
+          transactionId: txnRecord._id,
           disputeReason: seatCommitmentResult.disputeReason,
         });
 
@@ -327,10 +279,10 @@ const confirmBooking = async (req, res) => {
           seatCommitmentResult.compensationReason
         );
 
-        await _sendDisputeAdminAlert(
-          txnRecord,
-          seatCommitmentResult.adminAlertReason
-        );
+        await sendPassengerPaymentDisputeAdminAlert({
+          transaction: txnRecord,
+          reason: seatCommitmentResult.adminAlertReason,
+        });
 
         return res
           .status(seatCommitmentResult.statusCode)
@@ -384,8 +336,8 @@ const confirmBooking = async (req, res) => {
           stack: bookingError.stack,
         });
 
-        await Transaction.findByIdAndUpdate(txnRecord._id, {
-          status:        "DISPUTED",
+        await markPassengerPaymentDisputed({
+          transactionId: txnRecord._id,
           disputeReason: failReason,
           failureReason: bookingError.message,
         });
@@ -396,23 +348,16 @@ const confirmBooking = async (req, res) => {
           userId,
         });
         await _reverseInternalMoneyDebitIfNeeded(failReason);
-        await _sendDisputeAdminAlert(txnRecord, failReason);
-
-        try {
-          await createLocalNotification(
-            userId,
-            "PAYMENT_DISPUTE",
-            "Payment Received — Ticket Issue",
-            `Your payment of Rs.${(gatewayAmount || 0) + (smMoneyApplied || 0)} was received but ticket creation encountered an issue. Case ID: ${txnRecord._id}. Our team will resolve this within 2 hours.`,
-            {
-              transactionId: txnRecord._id,
-              esewaPaymentId: paymentId,
-              amount: (gatewayAmount || 0) + (smMoneyApplied || 0),
-            }
-          );
-        } catch (notifErr) {
-          logger.error("confirmBooking: failed to notify user about dispute", { error: notifErr.message });
-        }
+        await sendPassengerPaymentDisputeAdminAlert({
+          transaction: txnRecord,
+          reason: failReason,
+        });
+        await notifyPassengerPaymentDispute({
+          userId,
+          transaction: txnRecord,
+          paymentId,
+          amount: (gatewayAmount || 0) + (smMoneyApplied || 0),
+        });
 
         return res.status(500).json({
           success:   false,
@@ -463,86 +408,37 @@ const confirmBooking = async (req, res) => {
 
       // Capture all response fields BEFORE marking committed so the outer
       // catch can always build a safe success response without block-scope refs.
-      committedBookingResponse = buildCommittedBookingResponse(booking, ticketId, {
+      committedBookingResponse = buildPassengerCommittedBookingResponse({
+        booking,
+        ticketId,
         originalAmount, discountAmount, smMoneyApplied, gatewayAmount,
         finalAmount, appliedCouponCode, paymentId, gateway, normalizedSeats,
-        scratchCardId: null,
       });
       bookingCommitted = true;
 
       // ================================================================
       // STEP 10: POST-BOOKING NON-CRITICAL WORK (ISOLATED)
       // ================================================================
-      try {
-        await passengerSeatHold.completePassengerHold({
-          holdId: req.bookingHold._id,
-          userId: req.dbUser._id,
-          now: new Date(),
-        });
-      } catch (holdErr) {
-        logger.warn("confirmBooking: Hold completion failed post-commit", { error: holdErr.message });
-      }
-
-      if (internalMoneyDebitEntryId) {
-        try {
-          const SMLedger = require("../../models/smLedgerModel");
-          await SMLedger.updateOne(
-            { _id: internalMoneyDebitEntryId },
-            { $set: { bookingId: booking._id } }
-          );
-        } catch (linkErr) {
-          logger.warn("confirmBooking: failed to link SM debit to booking", { error: linkErr.message });
-        }
-      }
-
-      if (couponUsed) {
-        try {
-          await CouponHelper.applyCoupon(
-            appliedCouponCode,
-            userId,
-            booking._id,
-            originalAmount,
-            req.userInfo.activeRole
-          );
-        } catch (couponError) {
-          logger.error("Error recording coupon usage:", couponError);
-        }
-      }
-
-      let scratchCardId = null;
-      try {
-        const cashbackResult = await smLedgerService.generateCashback({
-          userId,
-          bookingId: booking._id,
-          baseTicketPrice: originalAmount,
-        });
-        if (cashbackResult && cashbackResult.scratchCard) {
-          scratchCardId = cashbackResult.scratchCard._id;
-          // Update the snapshot so the response includes the scratch card.
-          committedBookingResponse.data.scratchCardId = scratchCardId;
-        }
-      } catch (cashbackErr) {
-        logger.error("confirmBooking: Failed to generate cashback", { error: cashbackErr.message });
-      }
-
-      try {
-        await sendBookingConfirmedNotification({
-          userId,
-          ticketId,
-          metadata: {
-            scheduleId,
-            seats: normalizedSeats,
-            originalAmount,
-            discountAmount,
-            finalAmount,
-            smMoneyUsed: smMoneyApplied,
-            gatewayAmount,
-            couponCode: appliedCouponCode,
-          },
-        });
-      } catch (notifErr) {
-        logger.warn('confirmBooking: Notification failed post-commit', { error: notifErr.message });
-      }
+      await completePassengerBookingPostCommit({
+        booking,
+        ticketId,
+        holdId: req.bookingHold._id,
+        userId,
+        activeRole: req.userInfo.activeRole,
+        scheduleId,
+        originalAmount,
+        discountAmount,
+        smMoneyApplied,
+        gatewayAmount,
+        finalAmount,
+        appliedCouponCode,
+        paymentId,
+        gateway,
+        normalizedSeats,
+        couponUsed,
+        internalMoneyDebitEntryId,
+        committedBookingResponse,
+      });
 
       return res.status(201).json(committedBookingResponse);
   } catch (error) {
@@ -580,12 +476,15 @@ const confirmBooking = async (req, res) => {
 
     if (txnRecord) {
       try {
-        await Transaction.findByIdAndUpdate(txnRecord._id, {
-          status:        "DISPUTED",
+        await markPassengerPaymentDisputed({
+          transactionId: txnRecord._id,
           disputeReason: `Unexpected crash: ${error.message}`,
           failureReason: error.message,
         });
-        await _sendDisputeAdminAlert(txnRecord, `Unexpected crash: ${error.message}`);
+        await sendPassengerPaymentDisputeAdminAlert({
+          transaction: txnRecord,
+          reason: `Unexpected crash: ${error.message}`,
+        });
       } catch (txnUpdateErr) {
         logger.error("confirmBooking: CRITICAL — failed to mark transaction DISPUTED", {
           txnId: txnRecord._id,

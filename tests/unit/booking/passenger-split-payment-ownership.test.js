@@ -34,7 +34,7 @@ test('passengerSplitPaymentOwnership unit tests', async (t) => {
   await t.test('2. controller contains required integrated symbols and helper names', () => {
     const requiredSymbols = [
       'debitPassengerSplitPayment',
-      'reversePassengerSplitPaymentDebit',
+      'reversePassengerInternalMoneyDebits',
       '_reverseInternalMoneyDebitIfNeeded',
       'walletDebitEntryId',
       'splitPaymentDebitEntryId',
@@ -88,6 +88,7 @@ test('passengerSplitPaymentOwnership unit tests', async (t) => {
     assert.ok(!controllerSource.includes('smMoneyApplied > 0 && gateway !== "wallet"'));
     assert.ok(!controllerSource.includes('errorCode: "SM_MONEY_DEBIT_FAILED"'));
     assert.ok(!controllerSource.includes('SM Money spent at checkout'));
+    assert.ok(!controllerSource.includes('reversePassengerSplitPaymentDebit'));
     assert.ok(fs.existsSync(controllerPath), 'controller exists');
     assert.ok(fs.existsSync(servicePath), 'service exists');
   });
