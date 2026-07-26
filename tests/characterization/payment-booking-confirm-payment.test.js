@@ -47,7 +47,7 @@ test('confirmBooking payment verification characterization', async (t) => {
     h.mockMethod(h.smLedgerService, 'debitLedgerFIFO', ({ amount }) => { walletDebitAmount = amount; return Promise.resolve({ _id: 'd1' }); });
 
     const res = makeMockConfirmRes();
-    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', walletPin: '1234', paymentAmount: 1000, originalAmount: 1000 }), res);
+    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', paymentAmount: 1000, originalAmount: 1000 }), res);
     assert.equal(res.getStatus(), 201);
     assert.equal(walletDebitAmount, 1000);
   });
@@ -56,7 +56,7 @@ test('confirmBooking payment verification characterization', async (t) => {
     h.mockMethod(h.smLedgerService, 'debitLedgerFIFO', () => Promise.reject(new Error('Wallet debit error')));
 
     const res = makeMockConfirmRes();
-    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', walletPin: '1234', paymentAmount: 1000, originalAmount: 1000 }), res);
+    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', paymentAmount: 1000, originalAmount: 1000 }), res);
     assert.equal(res.getStatus(), 402);
     assert.deepEqual(res.getJson(), { success: false, message: 'Wallet debit error', errorCode: 'WALLET_DEBIT_FAILED' });
   });

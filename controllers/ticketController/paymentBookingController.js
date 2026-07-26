@@ -184,7 +184,6 @@ const confirmBooking = async (req, res) => {
         bookedDepartureTime, // Stop-specific departure time (resolved by search)
         bookedArrivalTime,   // Stop-specific arrival time (resolved by search)
         passengerDetails, // [{ name, age, gender, seatNo }] — DoT compliance
-        walletPin,        // Required when gateway === "wallet" — server-side PIN verification
         smMoneyToUse,     // SM Money amount to debit (split payment)
       } = req.body;
 
@@ -290,25 +289,15 @@ const confirmBooking = async (req, res) => {
         logger.info("confirmBooking: eSewa payment verified", { paymentId, userId, gatewayAmount });
       }
 
-      let walletDebitResult = null;
       if (gateway === "wallet") {
-        if (!walletPin || !/^\d{4}$/.test(walletPin)) {
-          return res.status(401).json({
-            success: false,
-            message: "Wallet PIN is required for wallet payments.",
-            errorCode: "WALLET_PIN_REQUIRED",
-          });
-        }
-
         const Wallet  = require("../../models/walletModel");
-        const bcrypt  = require("bcryptjs");
         const userWallet = await Wallet.findOne({ userId });
 
-        if (!userWallet || !userWallet.isPinSet) {
+        if (!userWallet) {
           return res.status(400).json({
             success: false,
-            message: "Wallet PIN is not set. Please set up your wallet first.",
-            errorCode: "WALLET_PIN_NOT_SET",
+            message: "Wallet is not available for this account.",
+            errorCode: "WALLET_NOT_AVAILABLE",
           });
         }
 
@@ -319,18 +308,6 @@ const confirmBooking = async (req, res) => {
             errorCode: "WALLET_FROZEN",
           });
         }
-
-        const pinMatch = await bcrypt.compare(walletPin, userWallet.pin);
-        if (!pinMatch) {
-          logger.warn("confirmBooking: Wallet PIN mismatch", { userId });
-          return res.status(401).json({
-            success: false,
-            message: "Incorrect wallet PIN.",
-            errorCode: "WALLET_PIN_INVALID",
-          });
-        }
-
-        logger.info("confirmBooking: Wallet PIN verified server-side", { userId });
 
         try {
           const debitEntry = await smLedgerService.debitLedgerFIFO({
