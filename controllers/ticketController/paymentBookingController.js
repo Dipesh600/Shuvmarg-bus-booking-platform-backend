@@ -27,6 +27,10 @@ const {
   buildPassengerBookingConfirmationQuote,
 } = require("../../src/modules/booking/passenger-booking-confirmation-quote");
 
+const {
+  debitPassengerWalletPayment,
+} = require("../../src/modules/booking/passenger-wallet-payment");
+
 // Step 1: Prepare booking with coupon validation (before payment)
 const prepareBooking = preparePassengerBooking;
 
@@ -290,46 +294,19 @@ const confirmBooking = async (req, res) => {
       }
 
       if (gateway === "wallet") {
-        const Wallet  = require("../../models/walletModel");
-        const userWallet = await Wallet.findOne({ userId });
+        const walletPaymentResult = await debitPassengerWalletPayment({
+          userId,
+          amount: smMoneyApplied,
+          tempBookingId,
+        });
 
-        if (!userWallet) {
-          return res.status(400).json({
-            success: false,
-            message: "Wallet is not available for this account.",
-            errorCode: "WALLET_NOT_AVAILABLE",
-          });
+        if (!walletPaymentResult.ok) {
+          return res
+            .status(walletPaymentResult.statusCode)
+            .json(walletPaymentResult.body);
         }
 
-        if (userWallet.status !== "active") {
-          return res.status(403).json({
-            success: false,
-            message: "Wallet is frozen. Please contact support.",
-            errorCode: "WALLET_FROZEN",
-          });
-        }
-
-        try {
-          const debitEntry = await smLedgerService.debitLedgerFIFO({
-            userId,
-            amount: smMoneyApplied,
-            bookingId: null,
-            note: `SM Wallet full payment: Rs. ${smMoneyApplied} (temp: ${tempBookingId})`,
-          });
-          smDebitEntryId = debitEntry._id;
-          logger.info("confirmBooking: SM Wallet debited successfully (full payment)", {
-            userId, amount: smMoneyApplied, debitEntryId: smDebitEntryId,
-          });
-        } catch (walletErr) {
-          logger.warn("confirmBooking: SM Wallet debit failed", {
-            userId, amount: smMoneyApplied, error: walletErr.message,
-          });
-          return res.status(402).json({
-            success: false,
-            message: walletErr.message || "Failed to debit SM Wallet",
-            errorCode: "WALLET_DEBIT_FAILED",
-          });
-        }
+        smDebitEntryId = walletPaymentResult.debitEntryId;
       }
 
       // ================================================================
