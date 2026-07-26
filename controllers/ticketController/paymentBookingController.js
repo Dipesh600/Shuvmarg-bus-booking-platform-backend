@@ -36,6 +36,10 @@ const {
   reversePassengerSplitPaymentDebit,
 } = require("../../src/modules/booking/passenger-split-payment");
 
+const {
+  createPassengerBookingPaymentTransaction,
+} = require("../../src/modules/booking/passenger-booking-payment-transaction");
+
 // Step 1: Prepare booking with coupon validation (before payment)
 const prepareBooking = preparePassengerBooking;
 
@@ -236,7 +240,6 @@ const confirmBooking = async (req, res) => {
       } = confirmationQuoteResult.quote;
 
       const smLedgerService = require("../../services/smLedgerService.js");
-      const PlatformConfig = require("../../models/platformConfigModel.js");
 
       // ================================================================
       // STEP 2: DEBIT SM MONEY VIA FIFO (if applicable)
@@ -280,40 +283,22 @@ const confirmBooking = async (req, res) => {
       // ================================================================
       // STEP 4: WRITE TRANSACTION RECORD — PAYMENT_RECEIVED
       // ================================================================
-      const gatewayFeeConfig = await PlatformConfig.getConfig("gateway_fees");
-      const currentGatewayFeeRate = (gatewayFeeConfig && gatewayFeeConfig[gateway])
-        ? gatewayFeeConfig[gateway].feePercent || 0
-        : 0;
-
-      txnRecord = await Transaction.create({
+      const paymentTransactionResult = await createPassengerBookingPaymentTransaction({
         userId,
-        tripId:          scheduleId,
-        seats:           normalizedSeats,
-        transactionType: "BOOKING",
-        gateway:         gateway === "wallet" ? "sm_wallet" : gateway,
-        transactionId:   paymentId || `sm_wallet_${Date.now()}`,
-        originalAmount:  originalAmount || paymentAmount,
-        totalAmount:     (gatewayAmount || 0) + (smMoneyApplied || 0),
-        status:          "PAYMENT_RECEIVED",
-        paidAt:          new Date(),
-        meta: {
-          tempBookingId,
-          paymentMethod: gateway === "wallet" ? "SM_WALLET" : gateway.toUpperCase(),
-          bookedVia:     "APP",
-          smMoneyUsed:   smMoneyApplied,
-          gatewayAmount: gatewayAmount,
-          smDebitEntryId: internalMoneyDebitEntryId,
-          gatewayFeeRate: currentGatewayFeeRate,
-        },
-      });
-
-      logger.info("confirmBooking: Transaction record created (PAYMENT_RECEIVED)", {
-        txnId: txnRecord._id,
+        scheduleId,
+        seatNumbers: normalizedSeats,
+        gateway,
         paymentId,
-        userId,
+        originalAmount,
+        paymentAmount,
         gatewayAmount,
         smMoneyApplied,
+        tempBookingId,
+        internalMoneyDebitEntryId,
       });
+
+      txnRecord = paymentTransactionResult.transaction;
+      const currentGatewayFeeRate = paymentTransactionResult.gatewayFeeRate;
 
       // ================================================================
       // STEP 5: VERIFY TRIP STATUS & BOOKING CUTOFF
