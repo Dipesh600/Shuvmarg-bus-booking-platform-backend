@@ -38,6 +38,7 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
       'reversePassengerSplitPaymentDebit',
       'verifyPassengerEsewaPayment',
       'createPassengerBookingPaymentTransaction',
+      'validatePassengerPostPaymentTrip',
       'Transaction.findByIdAndUpdate',
       'Booking.create',
       '_rollbackSeatLocks',
@@ -63,12 +64,13 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
     }
   });
 
-  await t.test('5. confirmation, wallet, split, esewa, and transaction operations are invoked via modular boundaries', () => {
+  await t.test('5. confirmation, wallet, split, esewa, transaction, and trip validation operations are invoked via modular boundaries', () => {
     assert.ok(controllerSource.includes('buildPassengerBookingConfirmationQuote({'), 'buildPassengerBookingConfirmationQuote invoked');
     assert.ok(controllerSource.includes('debitPassengerWalletPayment({'), 'debitPassengerWalletPayment invoked');
     assert.ok(controllerSource.includes('debitPassengerSplitPayment({'), 'debitPassengerSplitPayment invoked');
     assert.ok(controllerSource.includes('reversePassengerSplitPaymentDebit({'), 'reversePassengerSplitPaymentDebit invoked');
     assert.ok(controllerSource.includes('verifyPassengerEsewaPayment({'), 'verifyPassengerEsewaPayment invoked');
     assert.ok(controllerSource.includes('createPassengerBookingPaymentTransaction({'), 'createPassengerBookingPaymentTransaction invoked');
+    assert.ok(controllerSource.includes('validatePassengerPostPaymentTrip({'), 'validatePassengerPostPaymentTrip invoked');
   });
 });
