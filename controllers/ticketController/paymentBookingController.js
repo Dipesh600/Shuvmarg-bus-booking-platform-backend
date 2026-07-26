@@ -4,7 +4,9 @@ const Booking                = require("../../models/bookTicketModel.js");
 const CouponHelper           = require("../../handlers/couponHelper.js");
 // YatraPointsHistory removed — YatraPoints deprecated in favour of SM Ledger cashback
 const Transaction            = require("../../models/transactionModel.js");
-const { verifyEsewaPayment } = require("../../services/esewaVerificationService.js");
+const {
+  verifyPassengerEsewaPayment,
+} = require("../../src/modules/booking/passenger-esewa-verification");
 const logger                 = require("../../utils/logger.js");
 const {
   createLocalNotification,
@@ -126,7 +128,7 @@ const _sendDisputeAdminAlert = async (transaction, reason) => {
 // EXECUTION ORDER (orchestrating modules with compensation safety net):
 //   1. Pre-side-effect validation & build confirmation quote via module
 //   2. Debit split-payment SM Money via module (if applicable)
-//   3. Verify gateway payment (eSewa inline or wallet via module)
+//   3. Verify eSewa or process wallet debit via their modules
 //   4. Write Transaction record (PAYMENT_RECEIVED)
 //   5. Verify trip status & booking cutoff
 //   6. Atomic seat lock
@@ -248,28 +250,21 @@ const confirmBooking = async (req, res) => {
       // ================================================================
       // STEP 3: GATEWAY PAYMENT VERIFICATION
       // ================================================================
-      if (gateway === "esewa") {
-        if (!paymentId || !gatewayAmount) {
-          await _reverseInternalMoneyDebitIfNeeded("Missing paymentId or gatewayAmount for eSewa");
-          return res.status(400).json({
-            success: false,
-            message: "Missing paymentId or paymentAmount for eSewa confirmation",
-            errorCode: "ESEWA_PARAMS_MISSING",
-          });
-        }
-        const esewaCheck = await verifyEsewaPayment(paymentId, gatewayAmount);
-        if (!esewaCheck.verified) {
-          logger.warn("confirmBooking: eSewa verification failed", {
-            paymentId, gatewayAmount, userId, reason: esewaCheck.error,
-          });
-          await _reverseInternalMoneyDebitIfNeeded(`eSewa verification failed: ${esewaCheck.error}`);
-          return res.status(402).json({
-            success: false,
-            message: `Payment verification failed: ${esewaCheck.error}`,
-            errorCode: "ESEWA_VERIFICATION_FAILED",
-          });
-        }
-        logger.info("confirmBooking: eSewa payment verified", { paymentId, userId, gatewayAmount });
+      const esewaVerificationResult = await verifyPassengerEsewaPayment({
+        gateway,
+        paymentId,
+        gatewayAmount,
+        userId,
+      });
+
+      if (!esewaVerificationResult.ok) {
+        await _reverseInternalMoneyDebitIfNeeded(
+          esewaVerificationResult.compensationReason
+        );
+
+        return res
+          .status(esewaVerificationResult.statusCode)
+          .json(esewaVerificationResult.body);
       }
 
       if (gateway === "wallet") {

@@ -8,6 +8,8 @@ const userDeviceInfoPath = require.resolve('../../models/userDeviceInfoModel.js'
 const esewaPath = require.resolve('../../services/esewaVerificationService.js');
 const confirmationPath = require.resolve('../../src/modules/booking/booking-confirmation/booking-confirmation-notification.service.js');
 const confirmationIndexPath = require.resolve('../../src/modules/booking/booking-confirmation');
+const esewaVerificationIndexPath = require.resolve('../../src/modules/booking/passenger-esewa-verification');
+const esewaVerificationServicePath = require.resolve('../../src/modules/booking/passenger-esewa-verification/passenger-esewa-verification.service.js');
 const controllerPath = require.resolve('../../controllers/ticketController/paymentBookingController.js');
 
 const notifStub = {
@@ -44,6 +46,8 @@ function setupConfirmHarness() {
 
   delete require.cache[confirmationPath];
   delete require.cache[confirmationIndexPath];
+  delete require.cache[esewaVerificationIndexPath];
+  delete require.cache[esewaVerificationServicePath];
   const bookingConfirmation = require('../../src/modules/booking/booking-confirmation');
 
   const defaults = {
@@ -103,6 +107,8 @@ function setupConfirmHarness() {
     delete require.cache[esewaPath];
     delete require.cache[confirmationPath];
     delete require.cache[confirmationIndexPath];
+    delete require.cache[esewaVerificationIndexPath];
+    delete require.cache[esewaVerificationServicePath];
     delete require.cache[controllerPath];
   }
 
