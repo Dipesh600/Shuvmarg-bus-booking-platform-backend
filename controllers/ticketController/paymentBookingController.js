@@ -31,6 +31,11 @@ const {
   debitPassengerWalletPayment,
 } = require("../../src/modules/booking/passenger-wallet-payment");
 
+const {
+  debitPassengerSplitPayment,
+  reversePassengerSplitPaymentDebit,
+} = require("../../src/modules/booking/passenger-split-payment");
+
 // Step 1: Prepare booking with coupon validation (before payment)
 const prepareBooking = preparePassengerBooking;
 
@@ -137,7 +142,8 @@ const _sendDisputeAdminAlert = async (transaction, reason) => {
 //  10. Post-booking: cashback, notifications
 // ================================================================
 const confirmBooking = async (req, res) => {
-  let smDebitEntryId = null;
+  let walletDebitEntryId = null;
+  let splitPaymentDebitEntryId = null;
   let txnRecord = null;
   let seatsLocked = false;
   let lockedSeatNumbers = [];
@@ -150,21 +156,22 @@ const confirmBooking = async (req, res) => {
   // The outer catch reads ONLY this so a post-commit ReferenceError is impossible.
   let committedBookingResponse = null;
 
-  // ── Helper: Reverse SM Money debit if one was made ──────────────
-  const _reverseSmDebitIfNeeded = async (reason) => {
-    if (!smDebitEntryId) return;
-    try {
-      const smLedgerService = require("../../services/smLedgerService.js");
-      await smLedgerService.reverseDebit(smDebitEntryId);
-      logger.info("confirmBooking: SM Money debit reversed", {
-        smDebitEntryId, reason,
-      });
-      smDebitEntryId = null; // Clear so we don't double-reverse
-    } catch (reverseErr) {
-      logger.error("confirmBooking: CRITICAL — failed to reverse SM Money debit", {
-        smDebitEntryId, reason, error: reverseErr.message,
-      });
-      // This is a money-stuck situation — admin must intervene
+  // ── Helper: Reverse internal money debit if one was made ────────
+  const _reverseInternalMoneyDebitIfNeeded = async (reason) => {
+    if (splitPaymentDebitEntryId) {
+      await reversePassengerSplitPaymentDebit({ debitEntryId: splitPaymentDebitEntryId, reason });
+      splitPaymentDebitEntryId = null;
+    }
+
+    if (walletDebitEntryId) {
+      try {
+        const smLedgerService = require("../../services/smLedgerService.js");
+        await smLedgerService.reverseDebit(walletDebitEntryId);
+        logger.info("confirmBooking: SM Money debit reversed", { smDebitEntryId: walletDebitEntryId, reason });
+        walletDebitEntryId = null;
+      } catch (reverseErr) {
+        logger.error("confirmBooking: CRITICAL — failed to reverse SM Money debit", { smDebitEntryId: walletDebitEntryId, reason, error: reverseErr.message });
+      }
     }
   };
 
@@ -242,36 +249,18 @@ const confirmBooking = async (req, res) => {
       // ================================================================
       // STEP 2: DEBIT SM MONEY VIA FIFO (if applicable)
       // ================================================================
-      if (smMoneyApplied > 0 && gateway !== "wallet") {
-        try {
-          const debitEntry = await smLedgerService.debitLedgerFIFO({
-            userId,
-            amount: smMoneyApplied,
-            bookingId: null,
-            note: `SM Money spent at checkout: Rs. ${smMoneyApplied} (temp: ${tempBookingId})`,
-          });
-          smDebitEntryId = debitEntry._id;
-          logger.info("confirmBooking: SM Money debited (split payment)", {
-            userId, amount: smMoneyApplied, debitEntryId: smDebitEntryId,
-          });
-        } catch (smDebitErr) {
-          logger.warn("confirmBooking: SM Money FIFO debit failed", {
-            userId, amount: smMoneyApplied, error: smDebitErr.message,
-          });
-          return res.status(402).json({
-            success: false,
-            message: smDebitErr.message || "Failed to debit Shuvmarg Money",
-            errorCode: "SM_MONEY_DEBIT_FAILED",
-          });
-        }
+      const splitPaymentResult = await debitPassengerSplitPayment({ gateway, userId, amount: smMoneyApplied, tempBookingId });
+      if (!splitPaymentResult.ok) {
+        return res.status(splitPaymentResult.statusCode).json(splitPaymentResult.body);
       }
+      splitPaymentDebitEntryId = splitPaymentResult.debitEntryId;
 
       // ================================================================
       // STEP 3: GATEWAY PAYMENT VERIFICATION
       // ================================================================
       if (gateway === "esewa") {
         if (!paymentId || !gatewayAmount) {
-          await _reverseSmDebitIfNeeded("Missing paymentId or gatewayAmount for eSewa");
+          await _reverseInternalMoneyDebitIfNeeded("Missing paymentId or gatewayAmount for eSewa");
           return res.status(400).json({
             success: false,
             message: "Missing paymentId or paymentAmount for eSewa confirmation",
@@ -283,7 +272,7 @@ const confirmBooking = async (req, res) => {
           logger.warn("confirmBooking: eSewa verification failed", {
             paymentId, gatewayAmount, userId, reason: esewaCheck.error,
           });
-          await _reverseSmDebitIfNeeded(`eSewa verification failed: ${esewaCheck.error}`);
+          await _reverseInternalMoneyDebitIfNeeded(`eSewa verification failed: ${esewaCheck.error}`);
           return res.status(402).json({
             success: false,
             message: `Payment verification failed: ${esewaCheck.error}`,
@@ -294,20 +283,14 @@ const confirmBooking = async (req, res) => {
       }
 
       if (gateway === "wallet") {
-        const walletPaymentResult = await debitPassengerWalletPayment({
-          userId,
-          amount: smMoneyApplied,
-          tempBookingId,
-        });
-
+        const walletPaymentResult = await debitPassengerWalletPayment({ userId, amount: smMoneyApplied, tempBookingId });
         if (!walletPaymentResult.ok) {
-          return res
-            .status(walletPaymentResult.statusCode)
-            .json(walletPaymentResult.body);
+          return res.status(walletPaymentResult.statusCode).json(walletPaymentResult.body);
         }
-
-        smDebitEntryId = walletPaymentResult.debitEntryId;
+        walletDebitEntryId = walletPaymentResult.debitEntryId;
       }
+
+      const internalMoneyDebitEntryId = walletDebitEntryId || splitPaymentDebitEntryId || null;
 
       // ================================================================
       // STEP 4: WRITE TRANSACTION RECORD — PAYMENT_RECEIVED
@@ -334,7 +317,7 @@ const confirmBooking = async (req, res) => {
           bookedVia:     "APP",
           smMoneyUsed:   smMoneyApplied,
           gatewayAmount: gatewayAmount,
-          smDebitEntryId: smDebitEntryId,
+          smDebitEntryId: internalMoneyDebitEntryId,
           gatewayFeeRate: currentGatewayFeeRate,
         },
       });
@@ -357,7 +340,7 @@ const confirmBooking = async (req, res) => {
           status: "DISPUTED",
           disputeReason: "Trip not found after payment verification",
         });
-        await _reverseSmDebitIfNeeded("Trip not found after payment");
+        await _reverseInternalMoneyDebitIfNeeded("Trip not found after payment");
         await _sendDisputeAdminAlert(txnRecord, "Trip not found after payment verification");
         return res.status(404).json({
           success: false,
@@ -372,7 +355,7 @@ const confirmBooking = async (req, res) => {
           status: "DISPUTED",
           disputeReason: "Booking window closed after payment was processed",
         });
-        await _reverseSmDebitIfNeeded("Booking window closed after payment");
+        await _reverseInternalMoneyDebitIfNeeded("Booking window closed after payment");
         await _sendDisputeAdminAlert(txnRecord, "Booking window closed after payment was processed");
         return res.status(400).json({
           success: false,
@@ -387,7 +370,7 @@ const confirmBooking = async (req, res) => {
           status: "DISPUTED",
           disputeReason: `Trip status is "${trip.status}" — not bookable after payment`,
         });
-        await _reverseSmDebitIfNeeded(`Trip status "${trip.status}" not bookable`);
+        await _reverseInternalMoneyDebitIfNeeded(`Trip status "${trip.status}" not bookable`);
         await _sendDisputeAdminAlert(txnRecord, `Trip status is "${trip.status}" — not bookable`);
         return res.status(400).json({
           success: false,
@@ -406,7 +389,7 @@ const confirmBooking = async (req, res) => {
           status: "DISPUTED",
           disputeReason: "Seat data not found for trip after payment",
         });
-        await _reverseSmDebitIfNeeded("Seat data not found after payment");
+        await _reverseInternalMoneyDebitIfNeeded("Seat data not found after payment");
         await _sendDisputeAdminAlert(txnRecord, "Seat data not found for trip after payment");
         return res.status(404).json({
           success: false,
@@ -481,7 +464,7 @@ const confirmBooking = async (req, res) => {
           status: "DISPUTED",
           disputeReason: `Seat lock failed after payment: ${fullReason}`,
         });
-        await _reverseSmDebitIfNeeded(`Seat lock failed: ${fullReason}`);
+        await _reverseInternalMoneyDebitIfNeeded(`Seat lock failed: ${fullReason}`);
         await _sendDisputeAdminAlert(txnRecord, `Seat lock failed: ${fullReason}`);
 
         return res.status(409).json({
@@ -538,7 +521,7 @@ const confirmBooking = async (req, res) => {
           smMoneyUsed: smMoneyApplied,
           gatewayAmount: gatewayAmount,
           gatewayFeeRate: currentGatewayFeeRate,
-          smDebitEntryId: smDebitEntryId,
+          smDebitEntryId: internalMoneyDebitEntryId,
           paymentMethod: paymentMethodLabel,
           transactionId: paymentId || `sm_wallet_${Date.now()}`,
           bookedVia: "APP",
@@ -564,7 +547,7 @@ const confirmBooking = async (req, res) => {
         });
 
         await _rollbackSeatLocks(scheduleId, normalizedSeats, userId);
-        await _reverseSmDebitIfNeeded(failReason);
+        await _reverseInternalMoneyDebitIfNeeded(failReason);
         await _sendDisputeAdminAlert(txnRecord, failReason);
 
         try {
@@ -663,11 +646,11 @@ const confirmBooking = async (req, res) => {
         logger.warn("confirmBooking: Hold completion failed post-commit", { error: holdErr.message });
       }
 
-      if (smDebitEntryId) {
+      if (internalMoneyDebitEntryId) {
         try {
           const SMLedger = require("../../models/smLedgerModel");
           await SMLedger.updateOne(
-            { _id: smDebitEntryId },
+            { _id: internalMoneyDebitEntryId },
             { $set: { bookingId: booking._id } }
           );
         } catch (linkErr) {
@@ -730,7 +713,8 @@ const confirmBooking = async (req, res) => {
       error: error.message,
       stack: error.stack,
       txnId: txnRecord?._id,
-      smDebitEntryId,
+      walletDebitEntryId,
+      splitPaymentDebitEntryId,
       bookingCreated,
       bookingCommitted,
     });
@@ -755,7 +739,7 @@ const confirmBooking = async (req, res) => {
     }
 
     // PRE_BOOKING: Perform compensation
-    await _reverseSmDebitIfNeeded(`Unexpected crash: ${error.message}`);
+    await _reverseInternalMoneyDebitIfNeeded(`Unexpected crash: ${error.message}`);
 
     if (txnRecord) {
       try {
