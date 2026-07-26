@@ -1,5 +1,4 @@
 // busScheduleModel removed — seats are indexed by tripId in the new Trip-based model
-const Seat                   = require("../../models/seatsModel.js");
 const CouponHelper           = require("../../handlers/couponHelper.js");
 // YatraPointsHistory removed — YatraPoints deprecated in favour of SM Ledger cashback
 const Transaction            = require("../../models/transactionModel.js");
@@ -44,6 +43,7 @@ const {
 
 const {
   commitPassengerSeats,
+  rollbackPassengerSeatLocks,
 } = require("../../src/modules/booking/passenger-seat-commitment");
 
 const {
@@ -58,49 +58,6 @@ const {
 const prepareBooking = preparePassengerBooking;
 
 
-// ================================================================
-// HELPER: Release atomically-locked seats (rollback on failure)
-// ================================================================
-const _rollbackSeatLocks = async (tripId, seatNumbers, userId) => {
-  const seatDoc = await Seat.findOne({ tripId });
-  if (!seatDoc) return;
-  const allSeats = [...seatDoc.seata, ...seatDoc.seatb, ...seatDoc.seatc];
-
-  for (const reqSeat of seatNumbers) {
-    try {
-      const exactSeat = allSeats.find((s) => s.seatNo.toLowerCase() === reqSeat.toLowerCase());
-      if (!exactSeat) continue;
-      const seatNo = exactSeat.seatNo;
-
-      let arrayField = null;
-      if (seatDoc.seata.some((s) => s.seatNo === seatNo)) {
-        arrayField = "seata";
-      } else if (seatDoc.seatb.some((s) => s.seatNo === seatNo)) {
-        arrayField = "seatb";
-      } else if (seatDoc.seatc.some((s) => s.seatNo === seatNo)) {
-        arrayField = "seatc";
-      }
-
-      if (!arrayField) continue;
-
-      await Seat.findOneAndUpdate(
-        { tripId, [arrayField]: { $elemMatch: { seatNo, bookedBy: userId } } },
-        {
-          $set: {
-            [`${arrayField}.$[elem].booked`]:    false,
-            [`${arrayField}.$[elem].bookedBy`]:  null,
-            [`${arrayField}.$[elem].bookedAt`]:  null,
-          },
-        },
-        { arrayFilters: [{ "elem.seatNo": seatNo, "elem.bookedBy": userId }] }
-      );
-    } catch (rollbackErr) {
-      logger.error("confirmBooking: seat rollback failed for individual seat", {
-        tripId, seatNo: reqSeat, userId, error: rollbackErr.message,
-      });
-    }
-  }
-};
 
 // ================================================================
 // HELPER: Send admin alert for disputed payment
@@ -354,7 +311,11 @@ const confirmBooking = async (req, res) => {
 
       if (!seatCommitmentResult.ok) {
         if (seatCommitmentResult.rollbackRequired) {
-          await _rollbackSeatLocks(scheduleId, normalizedSeats, userId);
+          await rollbackPassengerSeatLocks({
+            tripId: scheduleId,
+            seatNumbers: normalizedSeats,
+            userId,
+          });
         }
 
         await Transaction.findByIdAndUpdate(txnRecord._id, {
@@ -429,7 +390,11 @@ const confirmBooking = async (req, res) => {
           failureReason: bookingError.message,
         });
 
-        await _rollbackSeatLocks(scheduleId, normalizedSeats, userId);
+        await rollbackPassengerSeatLocks({
+          tripId: scheduleId,
+          seatNumbers: normalizedSeats,
+          userId,
+        });
         await _reverseInternalMoneyDebitIfNeeded(failReason);
         await _sendDisputeAdminAlert(txnRecord, failReason);
 
@@ -631,7 +596,11 @@ const confirmBooking = async (req, res) => {
 
     if (seatsLocked && lockedSeatNumbers.length > 0 && lockUserId && lockTripId) {
       try {
-        await _rollbackSeatLocks(lockTripId, lockedSeatNumbers, lockUserId);
+        await rollbackPassengerSeatLocks({
+          tripId: lockTripId,
+          seatNumbers: lockedSeatNumbers,
+          userId: lockUserId,
+        });
       } catch (rollbackErr) {
         logger.error("confirmBooking: seat rollback failed in outer catch", { error: rollbackErr.message });
       }
