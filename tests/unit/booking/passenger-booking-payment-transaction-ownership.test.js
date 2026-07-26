@@ -45,7 +45,7 @@ test('passengerBookingPaymentTransaction ownership static tests', async (t) => {
       'paymentTransactionResult',
       'paymentTransactionResult.transaction',
       'paymentTransactionResult.gatewayFeeRate',
-      'Transaction.findByIdAndUpdate',
+      'markPassengerPaymentDisputed',
     ];
     for (const sym of requiredSymbols) {
       assert.equal(

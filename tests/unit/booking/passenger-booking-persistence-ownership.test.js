@@ -60,11 +60,11 @@ test('passengerBookingPersistence ownership static tests', async (t) => {
       'bookingPersistenceResult.ticketId',
       'bookingCreated = true',
       'Booking.create() failed:',
-      'Transaction.findByIdAndUpdate',
+      'markPassengerPaymentDisputed',
       'rollbackPassengerSeatLocks',
       '_reverseInternalMoneyDebitIfNeeded',
-      '_sendDisputeAdminAlert',
-      'createLocalNotification',
+      'sendPassengerPaymentDisputeAdminAlert',
+      'notifyPassengerPaymentDispute',
     ];
     for (const str of requiredInController) {
       assert.ok(
