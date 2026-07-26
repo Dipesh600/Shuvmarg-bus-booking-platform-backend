@@ -44,6 +44,10 @@ const {
   validatePassengerPostPaymentTrip,
 } = require("../../src/modules/booking/passenger-post-payment-trip-validation");
 
+const {
+  commitPassengerSeats,
+} = require("../../src/modules/booking/passenger-seat-commitment");
+
 // Step 1: Prepare booking with coupon validation (before payment)
 const prepareBooking = preparePassengerBooking;
 
@@ -334,100 +338,39 @@ const confirmBooking = async (req, res) => {
       // ================================================================
       // STEP 6: ATOMIC SEAT LOCK
       // ================================================================
-      const seatDoc = await Seat.findOne({ tripId: scheduleId });
-      if (!seatDoc) {
+      const seatCommitmentResult = await commitPassengerSeats({
+        scheduleId,
+        userId,
+        seatNumbers: normalizedSeats,
+        transactionId: txnRecord._id,
+      });
+
+      if (!seatCommitmentResult.ok) {
+        if (seatCommitmentResult.rollbackRequired) {
+          await _rollbackSeatLocks(scheduleId, normalizedSeats, userId);
+        }
+
         await Transaction.findByIdAndUpdate(txnRecord._id, {
           status: "DISPUTED",
-          disputeReason: "Seat data not found for trip after payment",
+          disputeReason: seatCommitmentResult.disputeReason,
         });
-        await _reverseInternalMoneyDebitIfNeeded("Seat data not found after payment");
-        await _sendDisputeAdminAlert(txnRecord, "Seat data not found for trip after payment");
-        return res.status(404).json({
-          success: false,
-          message: `Your payment was received but seat data is missing. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
-          caseId: txnRecord._id,
-          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-        });
-      }
 
-      const allSeats = [...seatDoc.seata, ...seatDoc.seatb, ...seatDoc.seatc];
-
-      const exactSeatsToLock = [];
-      for (const reqSeat of normalizedSeats) {
-        const exactSeat = allSeats.find((s) => s.seatNo.toLowerCase() === reqSeat);
-        if (exactSeat) {
-          exactSeatsToLock.push(exactSeat.seatNo);
-        } else {
-          exactSeatsToLock.push(reqSeat.toUpperCase());
-        }
-      }
-
-      const alreadyBookedSeats = [];
-      const invalidSeats = [];
-
-      for (const seatNo of exactSeatsToLock) {
-        let arrayField = null;
-        if (seatDoc.seata.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
-          arrayField = "seata";
-        } else if (seatDoc.seatb.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
-          arrayField = "seatb";
-        } else if (seatDoc.seatc.some((s) => s.seatNo.toLowerCase() === seatNo.toLowerCase())) {
-          arrayField = "seatc";
-        }
-
-        if (!arrayField) {
-          invalidSeats.push(seatNo.toUpperCase());
-          continue;
-        }
-
-        const updated = await Seat.findOneAndUpdate(
-          {
-            tripId: scheduleId,
-            [arrayField]: { $elemMatch: { seatNo: seatNo, booked: false } }
-          },
-          {
-            $set: {
-              [`${arrayField}.$[elem].booked`]:    true,
-              [`${arrayField}.$[elem].bookedBy`]:  userId,
-              [`${arrayField}.$[elem].bookedAt`]:  new Date(),
-            }
-          },
-          {
-            arrayFilters: [{ "elem.seatNo": seatNo, "elem.booked": false }],
-            new: true,
-          }
+        await _reverseInternalMoneyDebitIfNeeded(
+          seatCommitmentResult.compensationReason
         );
 
-        if (!updated) {
-          alreadyBookedSeats.push(seatNo.toUpperCase());
-        }
-      }
+        await _sendDisputeAdminAlert(
+          txnRecord,
+          seatCommitmentResult.adminAlertReason
+        );
 
-      if (invalidSeats.length > 0 || alreadyBookedSeats.length > 0) {
-        await _rollbackSeatLocks(scheduleId, normalizedSeats, userId);
-
-        const reasons = [];
-        if (invalidSeats.length > 0) reasons.push(`Invalid seat(s): ${invalidSeats.join(", ")}`);
-        if (alreadyBookedSeats.length > 0) reasons.push(`Already booked: ${alreadyBookedSeats.join(", ")} — taken during payment`);
-        const fullReason = reasons.join(" | ");
-
-        await Transaction.findByIdAndUpdate(txnRecord._id, {
-          status: "DISPUTED",
-          disputeReason: `Seat lock failed after payment: ${fullReason}`,
-        });
-        await _reverseInternalMoneyDebitIfNeeded(`Seat lock failed: ${fullReason}`);
-        await _sendDisputeAdminAlert(txnRecord, `Seat lock failed: ${fullReason}`);
-
-        return res.status(409).json({
-          success: false,
-          message: `Your payment was received but the requested seats are no longer available. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours. (${fullReason})`,
-          caseId: txnRecord._id,
-          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-        });
+        return res
+          .status(seatCommitmentResult.statusCode)
+          .json(seatCommitmentResult.body);
       }
 
       seatsLocked = true;
-      lockedSeatNumbers = normalizedSeats;
+      lockedSeatNumbers = seatCommitmentResult.lockedSeatNumbers;
 
       // ================================================================
       // STEP 8: CREATE BOOKING RECORD

@@ -13,18 +13,15 @@ const esewaVerificationServicePath = require.resolve('../../src/modules/booking/
 const paymentTransactionIndexPath = require.resolve('../../src/modules/booking/passenger-booking-payment-transaction');
 const paymentTransactionServicePath = require.resolve('../../src/modules/booking/passenger-booking-payment-transaction/passenger-booking-payment-transaction.service.js');
 const paymentTransactionRepoPath = require.resolve('../../src/modules/booking/passenger-booking-payment-transaction/passenger-booking-payment-transaction.repository.js');
+const tripValidationIndexPath = require.resolve('../../src/modules/booking/passenger-post-payment-trip-validation');
+const tripValidationServicePath = require.resolve('../../src/modules/booking/passenger-post-payment-trip-validation/passenger-post-payment-trip-validation.service.js');
+const seatCommitmentIndexPath = require.resolve('../../src/modules/booking/passenger-seat-commitment');
+const seatCommitmentServicePath = require.resolve('../../src/modules/booking/passenger-seat-commitment/passenger-seat-commitment.service.js');
 const controllerPath = require.resolve('../../controllers/ticketController/paymentBookingController.js');
 
-const notifStub = {
-  createLocalNotification: async () => {},
-  notificationManager: async () => {}
-};
+const notifStub = { createLocalNotification: async () => {}, notificationManager: async () => {} };
 const userDeviceInfoStub = { find: async () => [] };
-const esewaStub = {
-  verifyEsewaPayment: async (id, amt) => esewaStub._impl(id, amt),
-  _impl: async () => ({ verified: true }),
-  ESEWA_CONFIG: {}
-};
+const esewaStub = { verifyEsewaPayment: async (id, amt) => esewaStub._impl(id, amt), _impl: async () => ({ verified: true }), ESEWA_CONFIG: {} };
 
 require.cache[notifModulePath] = { id: notifModulePath, filename: notifModulePath, loaded: true, exports: notifStub, paths: [], children: [] };
 require.cache[userDeviceInfoPath] = { id: userDeviceInfoPath, filename: userDeviceInfoPath, loaded: true, exports: userDeviceInfoStub };
@@ -47,13 +44,14 @@ function setupConfirmHarness() {
   require.cache[userDeviceInfoPath] = { id: userDeviceInfoPath, filename: userDeviceInfoPath, loaded: true, exports: userDeviceInfoStub };
   require.cache[esewaPath] = { id: esewaPath, filename: esewaPath, loaded: true, exports: esewaStub, paths: [], children: [] };
 
-  delete require.cache[confirmationPath];
-  delete require.cache[confirmationIndexPath];
-  delete require.cache[esewaVerificationIndexPath];
-  delete require.cache[esewaVerificationServicePath];
-  delete require.cache[paymentTransactionIndexPath];
-  delete require.cache[paymentTransactionServicePath];
-  delete require.cache[paymentTransactionRepoPath];
+  [
+    confirmationPath, confirmationIndexPath,
+    esewaVerificationIndexPath, esewaVerificationServicePath,
+    paymentTransactionIndexPath, paymentTransactionServicePath, paymentTransactionRepoPath,
+    tripValidationIndexPath, tripValidationServicePath,
+    seatCommitmentIndexPath, seatCommitmentServicePath
+  ].forEach(p => delete require.cache[p]);
+
   const bookingConfirmation = require('../../src/modules/booking/booking-confirmation');
 
   const defaults = {
@@ -108,17 +106,13 @@ function setupConfirmHarness() {
 
   function restore() {
     patches.forEach(fn => fn());
-    delete require.cache[notifModulePath];
-    delete require.cache[userDeviceInfoPath];
-    delete require.cache[esewaPath];
-    delete require.cache[confirmationPath];
-    delete require.cache[confirmationIndexPath];
-    delete require.cache[esewaVerificationIndexPath];
-    delete require.cache[esewaVerificationServicePath];
-    delete require.cache[paymentTransactionIndexPath];
-    delete require.cache[paymentTransactionServicePath];
-    delete require.cache[paymentTransactionRepoPath];
-    delete require.cache[controllerPath];
+    [
+      notifModulePath, userDeviceInfoPath, esewaPath, confirmationPath, confirmationIndexPath,
+      esewaVerificationIndexPath, esewaVerificationServicePath,
+      paymentTransactionIndexPath, paymentTransactionServicePath, paymentTransactionRepoPath,
+      tripValidationIndexPath, tripValidationServicePath,
+      seatCommitmentIndexPath, seatCommitmentServicePath, controllerPath
+    ].forEach(p => delete require.cache[p]);
   }
 
   return {
