@@ -61,7 +61,7 @@ test('passengerBookingPersistence ownership static tests', async (t) => {
       'bookingCreated = true',
       'Booking.create() failed:',
       'Transaction.findByIdAndUpdate',
-      '_rollbackSeatLocks',
+      'rollbackPassengerSeatLocks',
       '_reverseInternalMoneyDebitIfNeeded',
       '_sendDisputeAdminAlert',
       'createLocalNotification',

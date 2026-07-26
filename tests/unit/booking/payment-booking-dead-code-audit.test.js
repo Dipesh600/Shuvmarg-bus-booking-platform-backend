@@ -42,7 +42,7 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
       'commitPassengerSeats',
       'persistPassengerBooking',
       'Transaction.findByIdAndUpdate',
-      '_rollbackSeatLocks',
+      'rollbackPassengerSeatLocks',
       '_sendDisputeAdminAlert',
       '_reverseInternalMoneyDebitIfNeeded',
     ];
@@ -76,5 +76,6 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
     assert.ok(controllerSource.includes('commitPassengerSeats({'), 'commitPassengerSeats invoked');
     assert.ok(controllerSource.includes('persistPassengerBooking({'), 'persistPassengerBooking invoked');
     assert.ok(controllerSource.includes('reconcilePassengerTransactionSuccess({'), 'reconcilePassengerTransactionSuccess invoked');
+    assert.ok(controllerSource.includes('rollbackPassengerSeatLocks({'), 'rollbackPassengerSeatLocks invoked');
   });
 });

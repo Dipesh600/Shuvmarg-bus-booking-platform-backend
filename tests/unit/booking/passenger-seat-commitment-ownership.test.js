@@ -21,30 +21,24 @@ test('passengerSeatCommitment ownership static tests', async (t) => {
     __dirname,
     '../../../src/modules/booking/passenger-seat-commitment'
   );
-  const moduleFiles = fs.readdirSync(moduleDir).map((f) =>
-    fs.readFileSync(path.join(moduleDir, f), 'utf8')
-  );
-  const moduleCombinedContent = moduleFiles.join('\n');
+  const moduleFiles = fs.readdirSync(moduleDir);
+  const moduleCombinedContent = moduleFiles
+    .map((f) => fs.readFileSync(path.join(moduleDir, f), 'utf8'))
+    .join('\n');
 
-  await t.test('1. controller confirmBooking does NOT contain inline seat commitment logic/strings', () => {
-    const confirmBookingSource = controllerContent.slice(
-      controllerContent.indexOf('const confirmBooking')
-    );
-    const forbiddenInConfirmBooking = [
-      'Seat.findOne({ tripId: scheduleId })',
+  await t.test('1. controller does NOT contain seat model imports or inline seat commitment/rollback logic', () => {
+    const forbiddenInController = [
+      'require("../../models/seatsModel.js")',
+      'models/seatsModel',
+      'Seat.findOne',
       'Seat.findOneAndUpdate',
-      'const allSeats =',
-      'const exactSeatsToLock =',
-      'const alreadyBookedSeats =',
-      'const invalidSeats =',
-      'Seat data not found for trip after payment',
-      'Seat lock failed after payment:',
+      '_rollbackSeatLocks',
     ];
-    for (const str of forbiddenInConfirmBooking) {
+    for (const str of forbiddenInController) {
       assert.equal(
-        confirmBookingSource.includes(str),
+        controllerContent.includes(str),
         false,
-        `confirmBooking must not contain '${str}'`
+        `Controller must not contain '${str}'`
       );
     }
   });
@@ -52,6 +46,7 @@ test('passengerSeatCommitment ownership static tests', async (t) => {
   await t.test('2. controller contains required orchestration symbols and side effects', () => {
     const requiredInController = [
       'commitPassengerSeats',
+      'rollbackPassengerSeatLocks',
       'seatCommitmentResult',
       'seatCommitmentResult.rollbackRequired',
       'seatCommitmentResult.disputeReason',
@@ -60,7 +55,6 @@ test('passengerSeatCommitment ownership static tests', async (t) => {
       'seatCommitmentResult.statusCode',
       'seatCommitmentResult.body',
       'seatCommitmentResult.lockedSeatNumbers',
-      '_rollbackSeatLocks',
       'Transaction.findByIdAndUpdate',
     ];
     for (const str of requiredInController) {
@@ -72,8 +66,20 @@ test('passengerSeatCommitment ownership static tests', async (t) => {
     }
   });
 
-  await t.test('3. new module owns seat commitment domain details and response/log strings', () => {
+  await t.test('3. new module owns seat commitment and rollback files, domain details, and response/log strings', () => {
+    assert.equal(
+      moduleFiles.includes('passenger-seat-rollback.repository.js'),
+      true,
+      'Module directory must contain passenger-seat-rollback.repository.js'
+    );
+    assert.equal(
+      moduleFiles.includes('passenger-seat-rollback.service.js'),
+      true,
+      'Module directory must contain passenger-seat-rollback.service.js'
+    );
+
     const requiredInModule = [
+      'rollbackPassengerSeatLocks',
       'Seat.findOne',
       'Seat.findOneAndUpdate',
       'seata',
