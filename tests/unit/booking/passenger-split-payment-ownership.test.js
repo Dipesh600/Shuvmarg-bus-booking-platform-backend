@@ -81,7 +81,11 @@ test('passengerSplitPaymentOwnership unit tests', async (t) => {
       return (source.match(regex) || []).length;
     };
 
-    const devCount = countInvocations(devControllerSource, '_reverseSmDebitIfNeeded');
+    const devHelperName = devControllerSource.includes('_reverseInternalMoneyDebitIfNeeded')
+      ? '_reverseInternalMoneyDebitIfNeeded'
+      : '_reverseSmDebitIfNeeded';
+
+    const devCount = countInvocations(devControllerSource, devHelperName);
     const branchCount = countInvocations(controllerSource, '_reverseInternalMoneyDebitIfNeeded');
 
     assert.equal(devCount, 9, 'origin/dev has 9 reversal call sites');
