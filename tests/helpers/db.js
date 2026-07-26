@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
+const { resetAll: resetOtpLimiters }   = require('../../middleware/otpRateLimiter.js');
+const { resetAll: resetLoginLimiters } = require('../../middleware/loginRateLimiters.js');
 
 let mongoServer;
 
@@ -15,6 +17,8 @@ const clearAll = async () => {
     const collection = collections[key];
     await collection.deleteMany();
   }
+  resetOtpLimiters();
+  resetLoginLimiters();
 };
 
 const disconnect = async () => {

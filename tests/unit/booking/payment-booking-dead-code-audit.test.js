@@ -65,7 +65,7 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
     }
   });
 
-  await t.test('5. confirmation, wallet, split, esewa, transaction, trip validation, seat commitment, and booking persistence operations are invoked via modular boundaries', () => {
+  await t.test('5. confirmation, wallet, split, esewa, transaction, trip validation, seat commitment, booking persistence, and transaction success reconciliation operations are invoked via modular boundaries', () => {
     assert.ok(controllerSource.includes('buildPassengerBookingConfirmationQuote({'), 'buildPassengerBookingConfirmationQuote invoked');
     assert.ok(controllerSource.includes('debitPassengerWalletPayment({'), 'debitPassengerWalletPayment invoked');
     assert.ok(controllerSource.includes('debitPassengerSplitPayment({'), 'debitPassengerSplitPayment invoked');
@@ -75,5 +75,6 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
     assert.ok(controllerSource.includes('validatePassengerPostPaymentTrip({'), 'validatePassengerPostPaymentTrip invoked');
     assert.ok(controllerSource.includes('commitPassengerSeats({'), 'commitPassengerSeats invoked');
     assert.ok(controllerSource.includes('persistPassengerBooking({'), 'persistPassengerBooking invoked');
+    assert.ok(controllerSource.includes('reconcilePassengerTransactionSuccess({'), 'reconcilePassengerTransactionSuccess invoked');
   });
 });

@@ -19,6 +19,8 @@ const seatCommitmentIndexPath = require.resolve('../../src/modules/booking/passe
 const seatCommitmentServicePath = require.resolve('../../src/modules/booking/passenger-seat-commitment/passenger-seat-commitment.service.js');
 const bookingPersistenceIndexPath = require.resolve('../../src/modules/booking/passenger-booking-persistence');
 const bookingPersistenceServicePath = require.resolve('../../src/modules/booking/passenger-booking-persistence/passenger-booking-persistence.service.js');
+const reconciliationIndexPath = require.resolve('../../src/modules/booking/passenger-transaction-success-reconciliation');
+const reconciliationServicePath = require.resolve('../../src/modules/booking/passenger-transaction-success-reconciliation/passenger-transaction-success-reconciliation.service.js');
 const controllerPath = require.resolve('../../controllers/ticketController/paymentBookingController.js');
 
 const notifStub = { createLocalNotification: async () => {}, notificationManager: async () => {} };
@@ -42,9 +44,7 @@ const esewaService = require('../../services/esewaVerificationService.js');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
 
 function setupConfirmHarness() {
-  require.cache[notifModulePath] = { id: notifModulePath, filename: notifModulePath, loaded: true, exports: notifStub, paths: [], children: [] };
-  require.cache[userDeviceInfoPath] = { id: userDeviceInfoPath, filename: userDeviceInfoPath, loaded: true, exports: userDeviceInfoStub };
-  require.cache[esewaPath] = { id: esewaPath, filename: esewaPath, loaded: true, exports: esewaStub, paths: [], children: [] };
+  [notifModulePath, userDeviceInfoPath, esewaPath].forEach(p => { require.cache[p] = require.cache[p] || { id: p, filename: p, loaded: true, exports: p === notifModulePath ? notifStub : (p === userDeviceInfoPath ? userDeviceInfoStub : esewaStub) }; });
 
   [
     confirmationPath, confirmationIndexPath,
@@ -52,7 +52,8 @@ function setupConfirmHarness() {
     paymentTransactionIndexPath, paymentTransactionServicePath, paymentTransactionRepoPath,
     tripValidationIndexPath, tripValidationServicePath,
     seatCommitmentIndexPath, seatCommitmentServicePath,
-    bookingPersistenceIndexPath, bookingPersistenceServicePath
+    bookingPersistenceIndexPath, bookingPersistenceServicePath,
+    reconciliationIndexPath, reconciliationServicePath
   ].forEach(p => delete require.cache[p]);
 
   const bookingConfirmation = require('../../src/modules/booking/booking-confirmation');
@@ -115,7 +116,8 @@ function setupConfirmHarness() {
       paymentTransactionIndexPath, paymentTransactionServicePath, paymentTransactionRepoPath,
       tripValidationIndexPath, tripValidationServicePath,
       seatCommitmentIndexPath, seatCommitmentServicePath,
-      bookingPersistenceIndexPath, bookingPersistenceServicePath, controllerPath
+      bookingPersistenceIndexPath, bookingPersistenceServicePath,
+      reconciliationIndexPath, reconciliationServicePath, controllerPath
     ].forEach(p => delete require.cache[p]);
   }
 

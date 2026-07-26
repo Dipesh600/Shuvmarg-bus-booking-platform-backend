@@ -15,7 +15,6 @@
 "use strict";
 
 const express = require("express");
-const rateLimit = require("express-rate-limit");
 const router = express.Router();
 const busOwnerLogin = require("../../src/modules/bus-owner/auth/login");
 const busOwnerPasswordReset = require("../../src/modules/bus-owner/auth/password-reset");
@@ -23,24 +22,7 @@ const busOwnerRegistration = require("../../src/modules/bus-owner/auth/registrat
 const busOwnerSession = require("../../src/modules/bus-owner/auth/session");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter, otpSendLimiter } = require("../../middleware/otpRateLimiter.js");
-
-// Strict rate limiter for login attempts — 10 attempts per 15 minutes per account
-const loginRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  keyGenerator: (req) => {
-    const identifier = req.body?.phone || req.body?.emailOrPhone || req.ip;
-    return String(identifier).replace(/\s+/g, "").toLowerCase();
-  },
-  message: {
-    success: false,
-    message: "Too many login attempts for this account. Please wait 15 minutes.",
-    errorCode: "LOGIN_RATE_LIMIT_EXCEEDED",
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: false, // Count every attempt, not just failures
-});
+const { busOwnerLoginRateLimiter: loginRateLimiter } = require("../../middleware/loginRateLimiters.js");
 
 // 3-step self-registration
 router.post("/sendOTP",   otpSendLimiter, otpRateLimiter, busOwnerRegistration.sendOTP);

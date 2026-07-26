@@ -50,6 +50,10 @@ const {
   persistPassengerBooking,
 } = require("../../src/modules/booking/passenger-booking-persistence");
 
+const {
+  reconcilePassengerTransactionSuccess,
+} = require("../../src/modules/booking/passenger-transaction-success-reconciliation");
+
 // Step 1: Prepare booking with coupon validation (before payment)
 const prepareBooking = preparePassengerBooking;
 
@@ -457,25 +461,14 @@ const confirmBooking = async (req, res) => {
       // STEP 9: TRANSITION TRANSACTION TO SUCCESS WITH VERIFICATION
       // ================================================================
       try {
-        const successfulTransaction = await Transaction.findOneAndUpdate(
-          {
-            _id: txnRecord._id,
-            status: "PAYMENT_RECEIVED",
-          },
-          {
-            $set: {
-              status: "SUCCESS",
-              bookingId: booking._id,
-              ticketId,
-            },
-          },
-          {
-            new: true,
-            runValidators: true,
-          }
-        );
+        const reconciliationResult =
+          await reconcilePassengerTransactionSuccess({
+            transactionId: txnRecord._id,
+            bookingId: booking._id,
+            ticketId,
+          });
 
-        if (!successfulTransaction) {
+        if (!reconciliationResult.ok) {
           logger.error("🚨 confirmBooking: Transaction SUCCESS transition failed (returned null)", {
             txnId: txnRecord._id,
             bookingId: booking._id,

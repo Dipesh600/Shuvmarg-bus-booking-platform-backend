@@ -32,9 +32,16 @@
  *
  *    This is a defence-in-depth complement to the per-phone cooldown and block
  *    logic inside createAndSendOTP(). Both layers must be satisfied to send an OTP.
+ *
+ * Test isolation:
+ *    resetAll() clears all in-memory limiter state. It must only be called from
+ *    test helpers and is never reachable over HTTP.
  */
 
-const rateLimit = require("express-rate-limit");
+'use strict';
+
+const rateLimit = require('express-rate-limit');
+const { MemoryStore } = rateLimit;
 
 // ── 1. Phone-presence sanity check (for send/resend routes) ──────────────────
 
@@ -44,7 +51,7 @@ const validatePhonePresent = (req, res, next) => {
   if (!phone) {
     return res.status(400).json({
       success: false,
-      message: "Phone number is required.",
+      message: 'Phone number is required.',
     });
   }
 
@@ -53,18 +60,21 @@ const validatePhonePresent = (req, res, next) => {
 
 // ── 2. Phone-keyed rate limiter for OTP verify routes ────────────────────────
 
+const _verifyStore = new MemoryStore();
+
 const otpVerifyLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,   // 10-minute window
   max: 10,                     // 10 attempts per phone per window
+  store: _verifyStore,
   keyGenerator: (req) => {
     // Key by phone number, not IP — IP rotation provides zero benefit
     const phone = req.body?.phone || req.body?.emailOrPhone || req.ip;
-    return String(phone).replace(/\s+/g, "").toLowerCase();
+    return String(phone).replace(/\s+/g, '').toLowerCase();
   },
   message: {
     success: false,
-    message: "Too many verification attempts for this phone number. Please wait 10 minutes.",
-    errorCode: "OTP_VERIFY_RATE_LIMIT",
+    message: 'Too many verification attempts for this phone number. Please wait 10 minutes.',
+    errorCode: 'OTP_VERIFY_RATE_LIMIT',
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -77,20 +87,32 @@ const otpVerifyLimiter = rateLimit({
 // 20 OTP-send requests per IP per 15 minutes.
 // This is distinct from the per-phone cooldown/block enforced by createAndSendOTP().
 
+const _sendStore = new MemoryStore();
+
 const otpSendLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,   // 15-minute window
   max: 20,                     // 20 OTP send requests per IP
+  store: _sendStore,
   keyGenerator: (req) => req.ip,
   message: {
     success: false,
-    message: "Too many OTP requests from this device. Please wait 15 minutes.",
-    errorCode: "OTP_SEND_IP_RATE_LIMIT",
+    message: 'Too many OTP requests from this device. Please wait 15 minutes.',
+    errorCode: 'OTP_SEND_IP_RATE_LIMIT',
   },
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
 });
 
+// ── Test-only: reset all in-memory limiter state ──────────────────────────────
+// NOT reachable over HTTP. Call only from test helpers (e.g. db.clearAll).
+
+const resetAll = () => {
+  _verifyStore.resetAll();
+  _sendStore.resetAll();
+};
+
 module.exports = validatePhonePresent;
 module.exports.otpVerifyLimiter = otpVerifyLimiter;
 module.exports.otpSendLimiter = otpSendLimiter;
+module.exports.resetAll = resetAll;

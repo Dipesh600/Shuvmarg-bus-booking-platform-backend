@@ -15,31 +15,7 @@ const userCouponController = require("../../controllers/couponController/userCou
 const recordCouponUsageController = require("../../controllers/couponController/recordCouponUsageController.js");
 const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
 const { otpVerifyLimiter, otpSendLimiter } = require("../../middleware/otpRateLimiter.js");
-const rateLimit = require("express-rate-limit");
-
-// Strict rate limiter for login attempts (per account — 10 per 15 min)
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  keyGenerator: (req) => {
-    const identifier = req.body?.phone || req.body?.emailOrPhone || req.ip;
-    return String(identifier).replace(/\s+/g, "").toLowerCase();
-  },
-  message: { success: false, message: "Too many login attempts. Please wait 15 minutes.", errorCode: "LOGIN_RATE_LIMIT" },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: false,
-});
-
-// Strict rate limiter for password changes (5 per 15 min per account)
-const passwordChangeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  keyGenerator: (req) => `${req.ip}_${req.userInfo?.id || ''}`,
-  message: { success: false, message: "Too many password change attempts. Please wait 15 minutes." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const { loginRateLimiter: loginLimiter, passwordChangeLimiter } = require("../../middleware/loginRateLimiters.js");
 
 // ── PUBLIC AUTH ROUTES (no JWT needed) ────────────────────────────────────────
 // New three-step registration process
