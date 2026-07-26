@@ -17,6 +17,8 @@ const tripValidationIndexPath = require.resolve('../../src/modules/booking/passe
 const tripValidationServicePath = require.resolve('../../src/modules/booking/passenger-post-payment-trip-validation/passenger-post-payment-trip-validation.service.js');
 const seatCommitmentIndexPath = require.resolve('../../src/modules/booking/passenger-seat-commitment');
 const seatCommitmentServicePath = require.resolve('../../src/modules/booking/passenger-seat-commitment/passenger-seat-commitment.service.js');
+const bookingPersistenceIndexPath = require.resolve('../../src/modules/booking/passenger-booking-persistence');
+const bookingPersistenceServicePath = require.resolve('../../src/modules/booking/passenger-booking-persistence/passenger-booking-persistence.service.js');
 const controllerPath = require.resolve('../../controllers/ticketController/paymentBookingController.js');
 
 const notifStub = { createLocalNotification: async () => {}, notificationManager: async () => {} };
@@ -49,7 +51,8 @@ function setupConfirmHarness() {
     esewaVerificationIndexPath, esewaVerificationServicePath,
     paymentTransactionIndexPath, paymentTransactionServicePath, paymentTransactionRepoPath,
     tripValidationIndexPath, tripValidationServicePath,
-    seatCommitmentIndexPath, seatCommitmentServicePath
+    seatCommitmentIndexPath, seatCommitmentServicePath,
+    bookingPersistenceIndexPath, bookingPersistenceServicePath
   ].forEach(p => delete require.cache[p]);
 
   const bookingConfirmation = require('../../src/modules/booking/booking-confirmation');
@@ -111,7 +114,8 @@ function setupConfirmHarness() {
       esewaVerificationIndexPath, esewaVerificationServicePath,
       paymentTransactionIndexPath, paymentTransactionServicePath, paymentTransactionRepoPath,
       tripValidationIndexPath, tripValidationServicePath,
-      seatCommitmentIndexPath, seatCommitmentServicePath, controllerPath
+      seatCommitmentIndexPath, seatCommitmentServicePath,
+      bookingPersistenceIndexPath, bookingPersistenceServicePath, controllerPath
     ].forEach(p => delete require.cache[p]);
   }
 
