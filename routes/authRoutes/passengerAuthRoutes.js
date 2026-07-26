@@ -12,19 +12,19 @@
 'use strict';
 
 const express = require('express');
-const router = express.Router();
 const passengerOtpAuth = require('../../src/modules/auth/passenger-otp-auth');
-const otpRateLimiter = require('../../middleware/otpRateLimiter.js');
-const { otpVerifyLimiter } = require('../../middleware/otpRateLimiter.js');
+const otpLimiters = require('../../middleware/otpRateLimiter.js');
 
-// otpRateLimiter validates that a phone is present in the request body
-// (validatePhonePresent middleware) — prevents blank requests reaching the service.
-// The per-phone 60-second cooldown and 3-send block are enforced atomically inside
-// createAndSendOTP(); stacking otpSendLimiter on top is not necessary here.
-router.post('/sendOTP', otpRateLimiter, passengerOtpAuth.sendOTP);
+const createPassengerAuthRouter = ({
+  otpVerifyLimiter = otpLimiters.otpVerifyLimiter,
+  otpPresenceLimiter = otpLimiters.validatePhonePresent,
+} = {}) => {
+  const router = express.Router();
 
-// otpVerifyLimiter keys by phone number (not IP) — rate-limits to 10 verify
-// attempts per phone per 10 minutes, complementing the 5-attempt atomic DB cap.
-router.post('/verifyOTP', otpVerifyLimiter, passengerOtpAuth.verifyOTP);
+  router.post('/sendOTP', otpPresenceLimiter, passengerOtpAuth.sendOTP);
+  router.post('/verifyOTP', otpVerifyLimiter, passengerOtpAuth.verifyOTP);
+  return router;
+};
 
-module.exports = router;
+module.exports = createPassengerAuthRouter();
+module.exports.createPassengerAuthRouter = createPassengerAuthRouter;

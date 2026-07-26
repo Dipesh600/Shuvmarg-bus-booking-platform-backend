@@ -1,5 +1,4 @@
 const express = require("express");
-const router = express.Router();
 const loginModule = require("../../src/modules/auth/login");
 const registrationModule = require("../../src/modules/auth/registration");
 const sessionController = require("../../src/modules/auth/session/index.js");
@@ -13,23 +12,33 @@ const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
 const userCouponController = require("../../controllers/couponController/userCouponController.js");
 const recordCouponUsageController = require("../../controllers/couponController/recordCouponUsageController.js");
-const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
-const { otpVerifyLimiter, otpSendLimiter } = require("../../middleware/otpRateLimiter.js");
-const { loginRateLimiter: loginLimiter, passwordChangeLimiter } = require("../../middleware/loginRateLimiters.js");
+const walletController = require("../../controllers/walletController/walletController.js");
+const scratchCardController = require("../../controllers/walletController/scratchCardController.js");
+const otpLimiters = require("../../middleware/otpRateLimiter.js");
+const loginLimiters = require("../../middleware/loginRateLimiters.js");
+
+const createUserRouter = ({
+  otpVerifyLimiter = otpLimiters.otpVerifyLimiter,
+  otpSendLimiter = otpLimiters.otpSendLimiter,
+  otpPresenceLimiter = otpLimiters.validatePhonePresent,
+  loginRateLimiter = loginLimiters.loginRateLimiter,
+  passwordChangeLimiter = loginLimiters.passwordChangeLimiter,
+} = {}) => {
+const router = express.Router();
 
 // ── PUBLIC AUTH ROUTES (no JWT needed) ────────────────────────────────────────
 // New three-step registration process
-router.post("/sendPhoneOTP",       otpSendLimiter, otpRateLimiter, registrationModule.sendPhoneOTP);    // ← IP limit + phone-presence
+router.post("/sendPhoneOTP",       otpSendLimiter, otpPresenceLimiter, registrationModule.sendPhoneOTP);    // ← IP limit + phone-presence
 router.post("/verifyPhoneOTP",     otpVerifyLimiter, registrationModule.verifyPhoneOTP); // ← phone-keyed verify limit
 router.post("/completeRegistration", registrationModule.completeRegistration);
 
-router.post("/login",              loginLimiter, loginModule.login);              // ← Login rate limit
+router.post("/login",              loginRateLimiter, loginModule.login);              // ← Login rate limit
 // SECURITY: /verifyOtp (legacy) removed — no brute-force limit, plain === comparison, no purpose enforcement.
 // Use verifyPhoneOTP for registration OTP verification.
-router.post("/requestPasswordReset", otpSendLimiter, otpRateLimiter, passwordResetModule.requestPasswordReset); // ← IP limit + phone-presence
+router.post("/requestPasswordReset", otpSendLimiter, otpPresenceLimiter, passwordResetModule.requestPasswordReset); // ← IP limit + phone-presence
 router.post("/verifyOtpForReset",  otpVerifyLimiter, passwordResetModule.verifyOtpForReset); // ← phone-keyed verify limit
 router.post("/resetPassword",      otpVerifyLimiter, passwordResetModule.resetPassword);    // ← phone-keyed verify limit
-router.post("/resendOtp",          otpSendLimiter, otpRateLimiter, otpResendModule.resendOtp);        // ← IP limit + phone-presence
+router.post("/resendOtp",          otpSendLimiter, otpPresenceLimiter, otpResendModule.resendOtp);        // ← IP limit + phone-presence
 
 // Token management (refresh, logout, force password change)
 router.post("/refresh",            sessionController.refreshAccessToken);               // ← No auth needed (uses refresh token)
@@ -110,9 +119,6 @@ router.get(
 );
 
 // Wallet Routes
-const walletController = require("../../controllers/walletController/walletController.js");
-const scratchCardController = require("../../controllers/walletController/scratchCardController.js");
-
 router.get("/wallet/details", auth, verifyRoleFromDB, walletController.getWalletDetails);
 router.post("/wallet/setup-pin", auth, verifyRoleFromDB, walletController.setupWalletPin);
 router.post("/wallet/verify-pin", auth, verifyRoleFromDB, walletController.verifyWalletPin);
@@ -121,4 +127,8 @@ router.post("/wallet/verify-pin", auth, verifyRoleFromDB, walletController.verif
 router.get("/wallet/scratch-cards", auth, verifyRoleFromDB, scratchCardController.getScratchCards);
 router.post("/wallet/scratch/:cardId", auth, verifyRoleFromDB, scratchCardController.scratchCard);
 
-module.exports = router;
+return router;
+};
+
+module.exports = createUserRouter();
+module.exports.createUserRouter = createUserRouter;
