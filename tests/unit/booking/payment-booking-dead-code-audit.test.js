@@ -18,6 +18,7 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
   await t.test('1. controller does NOT contain removed dead imports', () => {
     assert.ok(!controllerSource.includes('require("../../models/userModel.js")'), 'User model import removed');
     assert.ok(!controllerSource.includes('require("../../models/seatHoldModel.js")'), 'SeatHold model import removed');
+    assert.ok(!controllerSource.includes('services/esewaVerificationService.js'), 'direct esewaVerificationService import removed');
   });
 
   await t.test('2. controller does NOT bind removed dead locals', () => {
@@ -35,7 +36,7 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
       'debitPassengerWalletPayment',
       'debitPassengerSplitPayment',
       'reversePassengerSplitPaymentDebit',
-      'verifyEsewaPayment',
+      'verifyPassengerEsewaPayment',
       'Transaction.create',
       'Booking.create',
       '_rollbackSeatLocks',
@@ -53,16 +54,19 @@ test('paymentBookingDeadCodeAudit unit tests', async (t) => {
       'SM Money spent at checkout',
       'SM_MONEY_DEBIT_FAILED',
       '_reverseSmDebitIfNeeded',
+      'ESEWA_PARAMS_MISSING',
+      'ESEWA_VERIFICATION_FAILED',
     ];
     for (const str of extractedStrings) {
       assert.ok(!controllerSource.includes(str), `controller does NOT contain ${str}`);
     }
   });
 
-  await t.test('5. confirmation, wallet, and split operations are invoked via modular boundaries', () => {
+  await t.test('5. confirmation, wallet, split, and esewa operations are invoked via modular boundaries', () => {
     assert.ok(controllerSource.includes('buildPassengerBookingConfirmationQuote({'), 'buildPassengerBookingConfirmationQuote invoked');
     assert.ok(controllerSource.includes('debitPassengerWalletPayment({'), 'debitPassengerWalletPayment invoked');
     assert.ok(controllerSource.includes('debitPassengerSplitPayment({'), 'debitPassengerSplitPayment invoked');
     assert.ok(controllerSource.includes('reversePassengerSplitPaymentDebit({'), 'reversePassengerSplitPaymentDebit invoked');
+    assert.ok(controllerSource.includes('verifyPassengerEsewaPayment({'), 'verifyPassengerEsewaPayment invoked');
   });
 });
