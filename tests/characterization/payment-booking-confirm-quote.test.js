@@ -94,7 +94,7 @@ test('confirmBooking quote & context characterization', async (t) => {
     let debitedAmount = null;
     h.mockMethod(h.smLedgerService, 'debitLedgerFIFO', (args) => { debitedAmount = args.amount; return Promise.resolve({ _id: 'd1' }); });
     const res = makeMockConfirmRes();
-    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', walletPin: '1234', paymentAmount: 1000, originalAmount: 1000 }), res);
+    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', paymentAmount: 1000, originalAmount: 1000 }), res);
     assert.equal(res.getStatus(), 201);
     assert.equal(debitedAmount, 1000);
   });

@@ -36,7 +36,6 @@ const CouponHelper = require('../../handlers/couponHelper.js');
 const smLedgerService = require('../../services/smLedgerService.js');
 const esewaService = require('../../services/esewaVerificationService.js');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
-const bcrypt = require('bcryptjs');
 
 function setupConfirmHarness() {
   require.cache[notifModulePath] = { id: notifModulePath, filename: notifModulePath, loaded: true, exports: notifStub, paths: [], children: [] };
@@ -56,8 +55,7 @@ function setupConfirmHarness() {
     debitEntry: { _id: 'debit-123' },
     transaction: { _id: '507f1f77bcf86cd799439011', status: 'PAYMENT_RECEIVED', totalAmount: 1000, transactionId: 'p1', userId: '507f1f77bcf86cd799439012', tripId: '507f1f77bcf86cd799439011', seats: ['a1'] },
     booking: [{ _id: '507f1f77bcf86cd799439033', ticketId: 'TKT1' }],
-    wallet: { status: 'active', isPinSet: true, pin: '$2a$10$hashedpin' },
-    pinMatch: true,
+    wallet: { status: 'active' },
     onNotifSent: null
   };
 
@@ -96,7 +94,6 @@ function setupConfirmHarness() {
   mockMethod(Booking, 'create', () => Promise.resolve(defaults.booking));
   mockMethod(Wallet, 'findOne', () => Promise.resolve(defaults.wallet));
   mockMethod(SMLedger, 'updateOne', () => Promise.resolve());
-  mockMethod(bcrypt, 'compare', () => Promise.resolve(defaults.pinMatch));
   mockMethod(passengerSeatHold, 'completePassengerHold', () => Promise.resolve());
 
   function restore() {
@@ -111,7 +108,7 @@ function setupConfirmHarness() {
 
   return {
     confirmBooking, mockMethod, defaults, restore, esewaStub, esewaService, notifStub,
-    Transaction, Booking, PlatformConfig, Trip, Seat, Wallet, SMLedger, CouponHelper, smLedgerService, passengerSeatHold, bookingConfirmation, bcrypt
+    Transaction, Booking, PlatformConfig, Trip, Seat, Wallet, SMLedger, CouponHelper, smLedgerService, passengerSeatHold, bookingConfirmation
   };
 }
 

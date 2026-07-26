@@ -58,37 +58,27 @@ test('confirmBooking validation characterization', async (t) => {
     assert.deepEqual(res.getJson(), { success: false, message: 'Missing paymentId or paymentAmount for eSewa confirmation', errorCode: 'ESEWA_PARAMS_MISSING' });
   });
 
-  await t.test('7. wallet PIN required & malformed', async () => {
-    const cases = [null, '123', 'abcd', '12345'];
-    for (const pin of cases) {
-      const res = makeMockConfirmRes();
-      await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', walletPin: pin }), res);
-      assert.equal(res.getStatus(), 401);
-      assert.deepEqual(res.getJson(), { success: false, message: 'Wallet PIN is required for wallet payments.', errorCode: 'WALLET_PIN_REQUIRED' });
-    }
-  });
-
-  await t.test('8. wallet PIN not set', async () => {
-    h.mockMethod(h.Wallet, 'findOne', () => Promise.resolve({ isPinSet: false, status: 'active' }));
+  await t.test('7. missing wallet returns WALLET_NOT_AVAILABLE', async () => {
+    h.mockMethod(h.Wallet, 'findOne', () => Promise.resolve(null));
     const res = makeMockConfirmRes();
-    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', walletPin: '1234' }), res);
+    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', paymentAmount: 1000, originalAmount: 1000 }), res);
     assert.equal(res.getStatus(), 400);
-    assert.deepEqual(res.getJson(), { success: false, message: 'Wallet PIN is not set. Please set up your wallet first.', errorCode: 'WALLET_PIN_NOT_SET' });
+    assert.deepEqual(res.getJson(), { success: false, message: 'Wallet is not available for this account.', errorCode: 'WALLET_NOT_AVAILABLE' });
   });
 
-  await t.test('9. wallet frozen', async () => {
-    h.mockMethod(h.Wallet, 'findOne', () => Promise.resolve({ isPinSet: true, status: 'frozen' }));
+  await t.test('8. frozen wallet returns WALLET_FROZEN (no PIN needed)', async () => {
+    h.mockMethod(h.Wallet, 'findOne', () => Promise.resolve({ status: 'frozen' }));
     const res = makeMockConfirmRes();
-    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', walletPin: '1234' }), res);
+    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', paymentAmount: 1000, originalAmount: 1000 }), res);
     assert.equal(res.getStatus(), 403);
     assert.deepEqual(res.getJson(), { success: false, message: 'Wallet is frozen. Please contact support.', errorCode: 'WALLET_FROZEN' });
   });
 
-  await t.test('10. incorrect wallet PIN', async () => {
-    h.mockMethod(h.bcrypt, 'compare', () => Promise.resolve(false));
+  await t.test('9. active wallet proceeds without PIN', async () => {
+    h.mockMethod(h.Wallet, 'findOne', () => Promise.resolve({ status: 'active' }));
     const res = makeMockConfirmRes();
-    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', walletPin: '1234' }), res);
-    assert.equal(res.getStatus(), 401);
-    assert.deepEqual(res.getJson(), { success: false, message: 'Incorrect wallet PIN.', errorCode: 'WALLET_PIN_INVALID' });
+    await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', paymentAmount: 1000, originalAmount: 1000 }), res);
+    assert.equal(res.getStatus(), 201);
+    assert.equal(res.getJson().success, true);
   });
 });
