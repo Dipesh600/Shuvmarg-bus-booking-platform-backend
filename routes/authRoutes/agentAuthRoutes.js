@@ -10,46 +10,37 @@
 "use strict";
 
 const express = require("express");
-const router  = express.Router();
-const rateLimit = require("express-rate-limit");
 const agentSession  = require("../../src/modules/agent/auth/session");
 const agentLogin    = require("../../src/modules/agent/auth/login");
 const agentRegistration = require("../../src/modules/agent/auth/registration");
 const agentPasswordReset = require("../../src/modules/agent/auth/password-reset");
-const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
-const { otpVerifyLimiter, otpSendLimiter } = require("../../middleware/otpRateLimiter.js");
+const otpLimiters = require("../../middleware/otpRateLimiter.js");
+const { agentLoginRateLimiter: productionLoginLimiter } = require("../../middleware/loginRateLimiters.js");
 
-// Strict rate limiter for login attempts (per account — 10 per 15 min)
-const loginRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  keyGenerator: (req) => {
-    const identifier = req.body?.phone || req.body?.emailOrPhone || req.ip;
-    return String(identifier).replace(/\s+/g, "").toLowerCase();
-  },
-  message: { success: false, message: "Too many login attempts. Please wait 15 minutes.", errorCode: "LOGIN_RATE_LIMIT" },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: false,
-});
+const createAgentAuthRouter = ({
+  otpVerifyLimiter = otpLimiters.otpVerifyLimiter,
+  otpSendLimiter = otpLimiters.otpSendLimiter,
+  otpPresenceLimiter = otpLimiters.validatePhonePresent,
+  loginRateLimiter = productionLoginLimiter,
+} = {}) => {
+  const router = express.Router();
 
-// ── 3-step self-registration ──────────────────────────────────────────────────
-router.post("/sendOTP",    otpSendLimiter, otpRateLimiter, agentRegistration.sendOTP);
-router.post("/verifyOTP",  otpVerifyLimiter, agentRegistration.verifyOTP);     // ← phone-keyed verify limit
-router.post("/register",   agentRegistration.register);
-router.post("/resendOTP",  otpSendLimiter, otpRateLimiter, agentRegistration.resendOTP);
+  router.post("/sendOTP", otpSendLimiter, otpPresenceLimiter, agentRegistration.sendOTP);
+  router.post("/verifyOTP", otpVerifyLimiter, agentRegistration.verifyOTP);
+  router.post("/register", agentRegistration.register);
+  router.post("/resendOTP", otpSendLimiter, otpPresenceLimiter, agentRegistration.resendOTP);
+  router.post("/login", loginRateLimiter, agentLogin.login);
 
-// ── Login ─────────────────────────────────────────────────────────────────────
-router.post("/login", loginRateLimiter, agentLogin.login);
+  router.post("/refresh", agentSession.refresh);
+  router.post("/logout", agentSession.logout);
 
-// ── Token management ──────────────────────────────────────────────────────────
-router.post("/refresh", agentSession.refresh);
-router.post("/logout",  agentSession.logout);
+  router.post("/requestPasswordReset", otpSendLimiter, otpPresenceLimiter, agentPasswordReset.requestPasswordReset);
+  router.post("/verifyOtpForReset", otpVerifyLimiter, agentPasswordReset.verifyOtpForReset);
+  router.post("/resetPassword", otpVerifyLimiter, agentPasswordReset.resetPassword);
+  router.post("/resendOtpForReset", otpSendLimiter, otpPresenceLimiter, agentPasswordReset.resendOtpForReset);
 
-// ── Password reset ───────────────────────────────────────────────────────────
-router.post("/requestPasswordReset", otpSendLimiter, otpRateLimiter, agentPasswordReset.requestPasswordReset);
-router.post("/verifyOtpForReset",    otpVerifyLimiter, agentPasswordReset.verifyOtpForReset); // ← phone-keyed verify limit
-router.post("/resetPassword",        otpVerifyLimiter, agentPasswordReset.resetPassword);      // ← phone-keyed verify limit
-router.post("/resendOtpForReset",    otpSendLimiter, otpRateLimiter, agentPasswordReset.resendOtpForReset);
+  return router;
+};
 
-module.exports = router;
+module.exports = createAgentAuthRouter();
+module.exports.createAgentAuthRouter = createAgentAuthRouter;

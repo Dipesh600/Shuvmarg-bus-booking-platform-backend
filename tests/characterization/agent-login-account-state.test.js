@@ -12,11 +12,12 @@ const app = require('../helpers/app');
 const User = require('../../models/userModel');
 
 const password = 'AgentPass123!';
+const passwordHash = bcrypt.hashSync(password, 10);
 let n = 0;
 const seed = (fields = {}) => User.create({
   name: 'Agent State',
   phone: `98132${String(++n).padStart(5, '0')}`,
-  password: bcrypt.hashSync(password, 10),
+  password: passwordHash,
   role: 'agent',
   roles: ['agent'],
   status: 'active',
@@ -30,7 +31,11 @@ test('Agent login account-state characterization', async (t) => {
   t.beforeEach(async () => db.clearAll());
 
   await t.test('active future lock returns exact 429 with ceiling minutes', async () => {
-    const u = await seed({ lockedUntil: new Date(Date.now() + 61 * 1000) });
+    const u = await seed();
+    await User.updateOne(
+      { _id: u._id },
+      { $set: { lockedUntil: new Date(Date.now() + 119 * 1000) } },
+    );
     const res = await login(u.phone);
     assert.equal(res.status, 429);
     assert.equal(res.body.errorCode, 'ACCOUNT_LOCKED');

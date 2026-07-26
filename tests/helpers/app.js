@@ -15,3 +15,4 @@ process.env.FCM_PRIVATE_KEY = '';
 const app = require('../../index');
 
 module.exports = app;
+module.exports.createAuthTestApp = require('./auth-app');
