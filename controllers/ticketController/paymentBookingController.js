@@ -1,7 +1,6 @@
 // busScheduleModel removed — seats are indexed by tripId in the new Trip-based model
 const Seat                   = require("../../models/seatsModel.js");
 const Booking                = require("../../models/bookTicketModel.js");
-const User                   = require("../../models/userModel.js");
 const CouponHelper           = require("../../handlers/couponHelper.js");
 // YatraPointsHistory removed — YatraPoints deprecated in favour of SM Ledger cashback
 const Transaction            = require("../../models/transactionModel.js");
@@ -10,7 +9,6 @@ const logger                 = require("../../utils/logger.js");
 const {
   createLocalNotification,
 } = require("../notificationController/notification_manager.js");
-const SeatHold               = require("../../models/seatHoldModel.js");
 const passengerSeatHold      = require("../../src/modules/booking/passenger-seat-hold");
 const {
   sendBookingConfirmedNotification,
@@ -125,21 +123,16 @@ const _sendDisputeAdminAlert = async (transaction, reason) => {
 
 // Step 2: Confirm booking after successful payment — SPLIT PAYMENT + ATOMIC seat lock
 // ================================================================
-// EXECUTION ORDER (split-payment with reverseDebit safety net):
-//   1. Validate inputs (accept smMoneyToUse)
-//   2. Re-validate SM Money balance (live) + enforce 80% cap
-//   3. Debit SM Money via FIFO (if smMoneyToUse > 0)
-//   4. Verify gateway payment (if gatewayAmount > 0)
-//      → On failure: reverseDebit, return error
-//   5. Write Transaction record (PAYMENT_RECEIVED)
-//   6. Verify trip status & booking cutoff
-//      → On failure: reverseDebit, mark DISPUTED
-//   7. Atomic seat lock
-//      → On failure: reverseDebit, mark DISPUTED
-//   8. Re-validate coupon + amount verification (updated for split)
-//   9. Create Booking (with smMoneyUsed, gatewayAmount, gatewayFeeRate)
-//      → On failure: reverseDebit, rollback seats, mark DISPUTED
-//  10. Post-booking: cashback, notifications
+// EXECUTION ORDER (orchestrating modules with compensation safety net):
+//   1. Pre-side-effect validation & build confirmation quote via module
+//   2. Debit split-payment SM Money via module (if applicable)
+//   3. Verify gateway payment (eSewa inline or wallet via module)
+//   4. Write Transaction record (PAYMENT_RECEIVED)
+//   5. Verify trip status & booking cutoff
+//   6. Atomic seat lock
+//   7. Create Booking
+//      → On pre-booking failure: compensate internal money debits, rollback seats, mark DISPUTED
+//   8. Post-commit completion & notifications
 // ================================================================
 const confirmBooking = async (req, res) => {
   let walletDebitEntryId = null;
@@ -184,8 +177,6 @@ const confirmBooking = async (req, res) => {
         paymentId,
         paymentAmount,
         gateway,
-        scheduleId: clientScheduleId,
-        seatNumbers: clientSeats,
         originalAmount,
         couponCode,
         boardingPoint,    // { name, time, lat, lng } — now persisted
@@ -238,7 +229,6 @@ const confirmBooking = async (req, res) => {
         finalAmount,
         couponUsed,
         appliedCouponCode,
-        requestedSmMoney,
         smMoneyApplied,
         gatewayAmount,
       } = confirmationQuoteResult.quote;
