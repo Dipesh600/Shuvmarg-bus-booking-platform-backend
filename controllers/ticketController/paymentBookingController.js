@@ -40,6 +40,10 @@ const {
   createPassengerBookingPaymentTransaction,
 } = require("../../src/modules/booking/passenger-booking-payment-transaction");
 
+const {
+  validatePassengerPostPaymentTrip,
+} = require("../../src/modules/booking/passenger-post-payment-trip-validation");
+
 // Step 1: Prepare booking with coupon validation (before payment)
 const prepareBooking = preparePassengerBooking;
 
@@ -303,52 +307,29 @@ const confirmBooking = async (req, res) => {
       // ================================================================
       // STEP 5: VERIFY TRIP STATUS & BOOKING CUTOFF
       // ================================================================
-      const Trip = require("../../models/tripModel.js");
-      const trip = await Trip.findById(scheduleId).lean();
-      if (!trip) {
+      const postPaymentTripResult = await validatePassengerPostPaymentTrip({
+        scheduleId,
+        transactionId: txnRecord._id,
+      });
+
+      if (!postPaymentTripResult.ok) {
         await Transaction.findByIdAndUpdate(txnRecord._id, {
           status: "DISPUTED",
-          disputeReason: "Trip not found after payment verification",
+          disputeReason: postPaymentTripResult.disputeReason,
         });
-        await _reverseInternalMoneyDebitIfNeeded("Trip not found after payment");
-        await _sendDisputeAdminAlert(txnRecord, "Trip not found after payment verification");
-        return res.status(404).json({
-          success: false,
-          message: `Your payment was received but the trip was not found. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
-          caseId: txnRecord._id,
-          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-        });
+        await _reverseInternalMoneyDebitIfNeeded(
+          postPaymentTripResult.compensationReason
+        );
+        await _sendDisputeAdminAlert(
+          txnRecord,
+          postPaymentTripResult.adminAlertReason
+        );
+        return res
+          .status(postPaymentTripResult.statusCode)
+          .json(postPaymentTripResult.body);
       }
 
-      if (trip.bookingClosesAt && new Date(trip.bookingClosesAt) < new Date()) {
-        await Transaction.findByIdAndUpdate(txnRecord._id, {
-          status: "DISPUTED",
-          disputeReason: "Booking window closed after payment was processed",
-        });
-        await _reverseInternalMoneyDebitIfNeeded("Booking window closed after payment");
-        await _sendDisputeAdminAlert(txnRecord, "Booking window closed after payment was processed");
-        return res.status(400).json({
-          success: false,
-          message: `Your payment was received but booking has closed for this trip. Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
-          caseId: txnRecord._id,
-          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-        });
-      }
-
-      if (trip.status !== "scheduled" && trip.status !== "boarding") {
-        await Transaction.findByIdAndUpdate(txnRecord._id, {
-          status: "DISPUTED",
-          disputeReason: `Trip status is "${trip.status}" — not bookable after payment`,
-        });
-        await _reverseInternalMoneyDebitIfNeeded(`Trip status "${trip.status}" not bookable`);
-        await _sendDisputeAdminAlert(txnRecord, `Trip status is "${trip.status}" — not bookable`);
-        return res.status(400).json({
-          success: false,
-          message: `Your payment was received but the trip is no longer available (status: ${trip.status}). Your case ID is ${txnRecord._id}. We will resolve this within 2 hours.`,
-          caseId: txnRecord._id,
-          errorCode: "BOOKING_CREATION_FAILED_PAYMENT_RECEIVED",
-        });
-      }
+      const trip = postPaymentTripResult.trip;
 
       // ================================================================
       // STEP 6: ATOMIC SEAT LOCK

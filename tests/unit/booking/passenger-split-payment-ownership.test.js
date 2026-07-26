@@ -73,14 +73,14 @@ test('passengerSplitPaymentOwnership unit tests', async (t) => {
     }
   });
 
-  await t.test('5. static reversal call-site count matches expected (8 call sites in controller)', () => {
+  await t.test('5. static reversal call-site count matches expected (6 call sites in controller)', () => {
     const countInvocations = (source, name) => {
       const regex = new RegExp(name + '\\s*\\(', 'g');
       return (source.match(regex) || []).length;
     };
 
     const branchCount = countInvocations(controllerSource, '_reverseInternalMoneyDebitIfNeeded');
-    assert.equal(branchCount, 8, 'controller has 8 reversal call sites (1 for eSewa module result, 7 for later stages)');
+    assert.equal(branchCount, 6, 'controller has 6 reversal call sites (1 for eSewa module result, 1 for trip validation module result, 4 for later stages)');
   });
 
   await t.test('6. old code cleanup proof (no dead files created)', () => {
