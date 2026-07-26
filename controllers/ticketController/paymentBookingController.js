@@ -1,6 +1,5 @@
 // busScheduleModel removed — seats are indexed by tripId in the new Trip-based model
 const Seat                   = require("../../models/seatsModel.js");
-const Booking                = require("../../models/bookTicketModel.js");
 const CouponHelper           = require("../../handlers/couponHelper.js");
 // YatraPointsHistory removed — YatraPoints deprecated in favour of SM Ledger cashback
 const Transaction            = require("../../models/transactionModel.js");
@@ -14,7 +13,6 @@ const {
 const passengerSeatHold      = require("../../src/modules/booking/passenger-seat-hold");
 const {
   sendBookingConfirmedNotification,
-  generateBookingTicketId,
   buildCommittedBookingResponse,
 } = require("../../src/modules/booking/booking-confirmation");
 
@@ -47,6 +45,10 @@ const {
 const {
   commitPassengerSeats,
 } = require("../../src/modules/booking/passenger-seat-commitment");
+
+const {
+  persistPassengerBooking,
+} = require("../../src/modules/booking/passenger-booking-persistence");
 
 // Step 1: Prepare booking with coupon validation (before payment)
 const prepareBooking = preparePassengerBooking;
@@ -159,6 +161,7 @@ const confirmBooking = async (req, res) => {
   let bookingCreated = false;
   let bookingCommitted = false;
   let booking = null;
+  let ticketId = null;
   // Snapshot of all response fields captured before bookingCommitted=true.
   // The outer catch reads ONLY this so a post-commit ReferenceError is impossible.
   let committedBookingResponse = null;
@@ -375,52 +378,34 @@ const confirmBooking = async (req, res) => {
       // ================================================================
       // STEP 8: CREATE BOOKING RECORD
       // ================================================================
-      const ticketId = generateBookingTicketId();
-
-      const formattedPassengers = (passengerDetails || []).map(p => ({
-        name: p.name || "Passenger",
-        age: p.age || 0,
-        gender: p.gender || "other",
-        seatNo: (Array.isArray(p.seatNo) ? p.seatNo[0] : p.seatNo) || normalizedSeats[0] || "N/A"
-      }));
-
-      let paymentMethodLabel;
-      if (gateway === "wallet") {
-        paymentMethodLabel = "SM_WALLET";
-      } else if (smMoneyApplied > 0) {
-        paymentMethodLabel = "SM_WALLET_SPLIT";
-      } else {
-        paymentMethodLabel = gateway.toUpperCase();
-      }
-
       try {
-        booking = await Booking.create({
+        const bookingPersistenceResult = await persistPassengerBooking({
           userId,
-          tripId: scheduleId,
-          brandId: trip.brandId || null,
-          busId:   trip.busId   || null,
-          bookedFrom: bookedFrom || null,
-          bookedTo:   bookedTo   || null,
-          bookedDepartureTime: bookedDepartureTime || null,
-          bookedArrivalTime:   bookedArrivalTime   || null,
-          seats: normalizedSeats,
-          passengerDetails: formattedPassengers,
-          boardingPoint: boardingPoint || {},
-          droppingPoint: droppingPoint || {},
+          scheduleId,
+          trip,
+          bookedFrom,
+          bookedTo,
+          bookedDepartureTime,
+          bookedArrivalTime,
+          seatNumbers: normalizedSeats,
+          passengerDetails,
+          boardingPoint,
+          droppingPoint,
           originalAmount,
           couponUsed,
-          couponCode: appliedCouponCode,
+          appliedCouponCode,
           discountAmount,
-          totalAmount: finalAmount,
-          smMoneyUsed: smMoneyApplied,
-          gatewayAmount: gatewayAmount,
+          finalAmount,
+          smMoneyApplied,
+          gatewayAmount,
           gatewayFeeRate: currentGatewayFeeRate,
-          smDebitEntryId: internalMoneyDebitEntryId,
-          paymentMethod: paymentMethodLabel,
-          transactionId: paymentId || `sm_wallet_${Date.now()}`,
-          bookedVia: "APP",
-          ticketId,
+          internalMoneyDebitEntryId,
+          gateway,
+          paymentId,
         });
+
+        booking = bookingPersistenceResult.booking;
+        ticketId = bookingPersistenceResult.ticketId;
         bookingCreated = true;
       } catch (bookingError) {
         const failReason = `Booking.create() failed: ${bookingError.message}`;
