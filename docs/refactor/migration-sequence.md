@@ -452,7 +452,7 @@ services/tripGeneratorCron.js   → src/modules/trips/tripGeneratorCron.js
 services/tripExceptionService.js → src/modules/trips/tripExceptionService.js
 controllers/adminController/scheduleController.js → src/modules/trips/
 controllers/adminController/tripExceptionController.js → src/modules/trips/
-controllers/adminController/tripOverviewController.js → src/modules/trips/ (split if possible)
+controllers/adminController/tripOverviewController.js → src/modules/admin/trip-overview/ (completed)
 ```
 
 **Tests required first:**
