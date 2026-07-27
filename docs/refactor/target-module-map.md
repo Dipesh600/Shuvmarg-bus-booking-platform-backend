@@ -510,10 +510,9 @@ models/seatsModel.js
 ```
 controllers/busOwnerController/busTripController.js          (162 lines)
 controllers/adminController/busOwnerController/tripController.js   (259 lines)
-controllers/adminController/scheduleController.js            (360 lines)
+src/modules/admin/schedule-management/                        (modularized)
 controllers/adminController/tripExceptionController.js       (109 lines)
 src/modules/admin/trip-overview/                              (modularized)
-services/scheduleService.js      (898 lines)
 services/tripService.js          (394 lines)
 services/tripGeneratorCron.js    (504 lines)
 services/tripExceptionService.js (301 lines)

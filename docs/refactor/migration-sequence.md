@@ -445,12 +445,12 @@ routes/busOwner/busOwner.js         (route portion)
 
 **Files affected:**
 ```
-services/scheduleService.js     → src/modules/trips/scheduleService.js
+services/scheduleService.js     → src/modules/admin/schedule-management/ (completed)
 services/tripService.js         → src/modules/trips/tripService.js
 services/tripGeneratorCron.js   → src/modules/trips/tripGeneratorCron.js
                                    src/modules/trips/tripGenerationService.js  (logic extracted)
 services/tripExceptionService.js → src/modules/trips/tripExceptionService.js
-controllers/adminController/scheduleController.js → src/modules/trips/
+controllers/adminController/scheduleController.js → src/modules/admin/schedule-management/ (completed)
 controllers/adminController/tripExceptionController.js → src/modules/trips/
 controllers/adminController/tripOverviewController.js → src/modules/admin/trip-overview/ (completed)
 ```

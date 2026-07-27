@@ -9,7 +9,6 @@
     "filesOver150": 90,
     "_note_filesOver150": "Violation = strictly over 150 lines (151+). Exactly 150 is compliant."
   },
-  "services/scheduleService.js": 898,
   "controllers/adminController/busOwnerController/adminBusOwnerController.js": 860,
   "services/smLedgerService.js": 789,
   "controllers/adminController/coupon-controller/adminCouponController.js": 777,
@@ -35,7 +34,6 @@
   "controllers/referralController/referralController.js": 392,
   "tests/authSecurityTest.js": 386,
   "controllers/partnerLeadController.js": 362,
-  "controllers/adminController/scheduleController.js": 360,
   "controllers/adminController/operatorRouteConfigController.js": 355,
   "models/agentModel.js": 351,
   "models/fleetModel.js": 335,
