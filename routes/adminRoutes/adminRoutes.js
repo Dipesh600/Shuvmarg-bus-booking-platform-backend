@@ -44,7 +44,7 @@ const fleetWorkstation     = require("../../controllers/adminController/fleetWor
 const tripOverviewCtrl     = require("../../controllers/adminController/tripOverviewController.js");
 const adminWalletCtrl      = require("../../controllers/adminController/walletController/adminWalletController.js");
 const transactionCtrl      = require("../../controllers/adminController/transactionController/transactionController.js");
-const routeDiscoveryCtrl   = require("../../controllers/adminController/routeDiscoveryController.js");
+const routeDiscoveryCtrl   = require("../../src/modules/admin/route-discovery");
 // Auth Routes
 router.post("/auth/login",   authController.login);
 router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);

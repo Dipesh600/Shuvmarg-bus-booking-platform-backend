@@ -322,10 +322,9 @@ controllers/adminController/documentProxyController.js  (141 lines)
 **Existing files:**
 ```
 controllers/adminController/platformRegistryController.js   (276 lines) — stop portion
-controllers/adminController/routeDiscoveryController.js     (248 lines)
+src/modules/admin/route-discovery/                           (modularized)
 controllers/public/stopSearchController.js                  (138 lines)
 services/platformRegistryService.js    (624 lines) — stop portion
-services/routeDiscoveryService.js      (1,108 lines)
 services/googlePlacesClient.js         (278 lines)
 services/mapboxClient.js               (187 lines)
 services/minimaxClient.js              (201 lines)

@@ -331,13 +331,15 @@ models/seatTemplateModel.js (110 lines)
 - `controllers/adminController/busOwnerController/busRouteController.js` (196 lines)
 - `controllers/adminController/platformRegistryController.js` (276 lines)
 - `controllers/adminController/routeRequestController.js` (277 lines)
-- `controllers/adminController/routeDiscoveryController.js` (248 lines)
+- `src/modules/admin/route-discovery/session.controller.js`
+- `src/modules/admin/route-discovery/review.controller.js`
+- `src/modules/admin/route-discovery/refinement.controller.js`
 
 **Services:**
 - `services/platformRegistryService.js` (624 lines) — canonical stop registry management
 - `services/busRouteService.js` (140 lines)
 - `services/operatorRouteConfigService.js` (409 lines)
-- `services/routeDiscoveryService.js` (1,108 lines) — AI-assisted route discovery (Mapbox + Google Places + Minimax LLM)
+- `src/modules/admin/route-discovery/` — modular AI-assisted route discovery, stop review, matching, refinement, and publishing
 - `services/googlePlacesClient.js` (278 lines), `services/mapboxClient.js` (187 lines), `services/minimaxClient.js` (201 lines)
 
 **Models:** `stopModel`, `stopPointModel`, `routeStopModel`, `busRouteModel`, `routeCorridorModel`, `routeVariantModel`, `routeRequestModel`, `routeDiscoveryModel`, `operatorRouteConfigModel`

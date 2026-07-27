@@ -12,7 +12,7 @@
  *   MAPBOX_SECRET_TOKEN   — your Mapbox secret token (sk.*)
  *
  * Called by:
- *   routeDiscoveryService.createDiscoverySession()  (auto-triggered after session creation)
+ *   admin/route-discovery createDiscoverySession()  (auto-triggered after session creation)
  *   PATCH /registry/discovery/:id/route-options     (manual re-fetch)
  */
 
