@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const admin = require("../../controllers/adminController/adminController.js");
+const admin = require("../../src/modules/admin/user-management");
 const bookings = require("../../controllers/adminController/booking/bookingController.js");
 const couponAdminRoutes = require("../../src/modules/coupon/admin");
 const autoSeat = require("../../controllers/adminController/seat-controller/adminAutoSeatController.js");
