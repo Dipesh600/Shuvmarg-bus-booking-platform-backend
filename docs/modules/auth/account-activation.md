@@ -83,7 +83,7 @@ No dedicated npm script was found for activation during this documentation pass.
 
 ## Known limitations or inconsistencies
 
-The route and controller comments describe conductors, drivers, and admin-onboarded bus-owner activation. The code only accepts users with `status: "invited"`. The verified admin bus-owner creation path in `controllers/adminController/busOwnerController/adminBusOwnerController.js` creates new bus-owner users with `status: "active"` and `forcePasswordChange: true`, so this activation endpoint should not be documented as currently handling those active admin-created bus owners.
+The route and controller comments describe conductors, drivers, and admin-onboarded bus-owner activation. The code only accepts users with `status: "invited"`. The verified admin bus-owner creation path in `src/modules/admin/bus-owner-management/` creates new bus-owner users with `status: "active"` and `forcePasswordChange: true`, so this activation endpoint should not be documented as currently handling those active admin-created bus owners.
 
 ## Safe extension guidance
 
@@ -98,7 +98,7 @@ If this flow is modularized or expanded, first add characterization tests for cu
 - Entry point: `controllers/authControllers.js/activateAccountController.js`
 - Implementation:
   - `controllers/authControllers.js/activateAccountController.js`
-  - `controllers/adminController/busOwnerController/adminBusOwnerController.js`
+  - `src/modules/admin/bus-owner-management/`
   - `src/modules/auth/login/login.policy.js`
 - Middleware:
   - `middleware/otpRateLimiter.js`

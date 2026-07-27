@@ -370,7 +370,7 @@ routes/authRoutes/busOwnerAuthRoutes.js
 **Files affected:**
 ```
 controllers/adminController/adminAgentController/   → src/modules/kyc/agentKycController.js
-controllers/adminController/busOwnerController/adminBusOwnerController.js → src/modules/kyc/operatorKycController.js
+controllers/adminController/busOwnerController/adminBusOwnerController.js → src/modules/admin/bus-owner-management/
 controllers/adminController/documentProxyController.js → src/modules/kyc/documentProxyController.js
 routes/adminRoutes/adminRoutes.js  (kyc portion)
 ```

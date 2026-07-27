@@ -136,7 +136,7 @@ A shared `asyncHandler(fn)` wrapper would eliminate all of them.
 | `ticketController.js` | Email send after cancellation | Booking controller owns email logic |
 | `agentAuthController.js` | Email via emailManager on registration | Auth controller owns email |
 | `busOwnerAuthController.js` | Email on registration/status | Auth controller owns email |
-| `adminBusOwnerController.js` | Email status notification | Admin controller owns email |
+| `src/modules/admin/bus-owner-management/kyc-notification.service.js` | Email status notification | Admin bus-owner module owns KYC notification |
 | `adminAgentController.js` | Email status notification | Admin controller owns email |
 
 None of these should be in business controllers. A `notifications` module with a simple `notify(userId, event, data)` interface would decouple all of them.

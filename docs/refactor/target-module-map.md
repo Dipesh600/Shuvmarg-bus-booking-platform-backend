@@ -297,7 +297,7 @@ models/driverProfileModel.js
 **Existing files:**
 ```
 controllers/adminController/adminAgentController/adminAgentController.js   (692 lines)
-controllers/adminController/busOwnerController/adminBusOwnerController.js  (860 lines)
+src/modules/admin/bus-owner-management/                           (modularized)
 controllers/adminController/kycVerificationController/kycVerificationcontroller.js (106 lines)
 controllers/adminController/documentProxyController.js  (141 lines)
 ```
