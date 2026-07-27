@@ -7,7 +7,7 @@
  */
 
 const Wallet = require('../../../../models/walletModel');
-const smLedgerService = require('../../../../services/smLedgerService');
+const smLedgerService = require('../../wallet/sm-ledger');
 const logger = require('../../../../utils/logger');
 const { createPassengerWalletPaymentRepository } = require('./passenger-wallet-payment.repository');
 const mapper = require('./passenger-wallet-payment.mapper');

@@ -9,7 +9,6 @@
     "filesOver150": 90,
     "_note_filesOver150": "Violation = strictly over 150 lines (151+). Exactly 150 is compliant."
   },
-  "services/smLedgerService.js": 789,
   "controllers/adminController/adminController.js": 717,
   "controllers/busOwnerController/busOwnerController.js": 673,
   "services/fleetService.js": 667,

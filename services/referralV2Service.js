@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const ReferralV2 = require("../models/referralV2Model");
 const User = require("../models/userModel");
 const Booking = require("../models/bookTicketModel");
-const smLedgerService = require("./smLedgerService");
+const smLedgerService = require("../src/modules/wallet/sm-ledger");
 const {
   createLocalNotification,
 } = require("../controllers/notificationController/notification_manager");
@@ -17,7 +17,7 @@ const {
  * documents or SM Ledger entries directly.
  *
  * ARCHITECTURE:
- *   referralController.js → referralV2Service.js → smLedgerService.js
+ *   referralController.js → referralV2Service.js → wallet/sm-ledger
  *                                                → ReferralV2 model
  *                                                → notification_manager
  */

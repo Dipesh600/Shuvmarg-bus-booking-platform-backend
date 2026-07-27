@@ -1,7 +1,7 @@
 'use strict';
 
 const CouponHelper    = require('../../../../handlers/couponHelper.js');
-const smLedgerService = require('../../../../services/smLedgerService.js');
+const smLedgerService = require('../../wallet/sm-ledger');
 const PlatformConfig  = require('../../../../models/platformConfigModel.js');
 const logger          = require('../../../../utils/logger.js');
 

@@ -38,7 +38,7 @@ const Seat = require('../../models/seatsModel.js');
 const Wallet = require('../../models/walletModel.js');
 const SMLedger = require('../../models/smLedgerModel.js');
 const CouponHelper = require('../../handlers/couponHelper.js');
-const smLedgerService = require('../../services/smLedgerService.js');
+const smLedgerService = require('../../src/modules/wallet/sm-ledger');
 const esewaService = require('../../services/esewaVerificationService.js');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
 

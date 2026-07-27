@@ -1,6 +1,6 @@
 const Wallet = require("../models/walletModel");
 const WalletTransaction = require("../models/walletTransactionModel");
-const smLedgerService = require("./smLedgerService");
+const smLedgerService = require("../src/modules/wallet/sm-ledger");
 
 /**
  * Wallet Service — Bridge layer between old Wallet model and new SM Ledger.

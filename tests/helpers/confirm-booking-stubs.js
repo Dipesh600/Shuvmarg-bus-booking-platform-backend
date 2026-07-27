@@ -42,7 +42,7 @@ const Booking           = require('../../models/bookTicketModel');
 const PlatformConfig    = require('../../models/platformConfigModel');
 const Trip              = require('../../models/tripModel');
 const Seat              = require('../../models/seatsModel');
-const smLedgerService   = require('../../services/smLedgerService');
+const smLedgerService   = require('../../src/modules/wallet/sm-ledger');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
 
 // ── Patch helpers ─────────────────────────────────────────────────────────────

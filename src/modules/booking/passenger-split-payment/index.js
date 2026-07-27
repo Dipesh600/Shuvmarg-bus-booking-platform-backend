@@ -5,7 +5,7 @@
  * Production composition root for passenger split-payment SM Money module.
  */
 
-const smLedgerService = require('../../../../services/smLedgerService');
+const smLedgerService = require('../../wallet/sm-ledger');
 const logger = require('../../../../utils/logger');
 const mapper = require('./passenger-split-payment.mapper');
 const { createPassengerSplitPaymentService } = require('./passenger-split-payment.service');
