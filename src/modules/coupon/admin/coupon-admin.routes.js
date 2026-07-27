@@ -1,6 +1,6 @@
 const express = require("express");
 const adminMiddleware = require("../../../../middleware/adminMiddleware.js");
-const couponController = require("../../../../controllers/adminController/coupon-controller/adminCouponController.js");
+const couponController = require("./management");
 const { getCouponAnalytics } = require("./analytics");
 const { getCouponUsageStats } = require("./statistics");
 

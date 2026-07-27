@@ -755,7 +755,9 @@ models/scratchCardModel.js
 ```
 controllers/couponController/userCouponController.js           (431 lines)
 controllers/couponController/recordCouponUsageController.js    (190 lines)
-controllers/adminController/coupon-controller/adminCouponController.js  (777 lines)
+src/modules/coupon/admin/management/
+src/modules/coupon/admin/analytics/
+src/modules/coupon/admin/statistics/
 controllers/adminController/scratchThemeController.js          (403 lines)
 handlers/couponHelper.js    (395 lines)
 models/couponModel.js
