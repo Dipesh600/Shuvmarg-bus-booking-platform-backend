@@ -291,7 +291,7 @@ All other admin routes use `adminMiddleware` (not `auth` + `verifyRoleFromDB`).
 - `controllers/busOwnerController/busOwnerController.js` (673 lines) — owner-facing
 - `controllers/adminController/busOwnerController/adminBusOwnerFleetController.js` (447 lines)
 - `controllers/adminController/busOwnerController/fleetController.js` (246 lines)
-- `controllers/adminController/fleetWorkstationController.js` (763 lines)  
+- `src/modules/admin/fleet-workstation/` (modularized)
 **Service:** `services/fleetService.js` (667 lines)  
 **Model:** `models/fleetModel.js` (335 lines)
 
@@ -308,11 +308,13 @@ Bus Owner manages own fleets:
   DELETE /api/busowner/deleteFleet
 
 Admin fleet workstation:
-  GET/PATCH on /api/admin/workstation/fleets/*
-    → fleetWorkstationController (763 lines) orchestrates:
-      approve / reject / suspend / activate
-      seat template assignment
-      document expiry tracking (cron: fleetDocumentExpiryCron.js)
+  GET   /api/admin/fleet/:id/workstation
+  GET   /api/admin/fleet/:fleetId/trips/:tripId/manifest
+  PATCH /api/admin/fleet/:fleetId/trips/:tripId/status
+  PATCH /api/admin/fleet/:fleetId/trips/:tripId/driver
+    → src/modules/admin/fleet-workstation/ orchestrates dashboard reporting,
+      passenger manifests, trip lifecycle, refunds, referral unlocks,
+      and driver reassignment
 ```
 
 Seat templates:
