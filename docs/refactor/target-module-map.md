@@ -433,7 +433,7 @@ models/routeRequestModel.js
 controllers/busOwnerController/busOwnerController.js          (fleet portion)
 controllers/adminController/busOwnerController/adminBusOwnerFleetController.js  (447 lines)
 controllers/adminController/busOwnerController/fleetController.js               (246 lines)
-controllers/adminController/fleetWorkstationController.js                       (763 lines)
+src/modules/admin/fleet-workstation/                                             (modularized)
 services/fleetService.js                  (667 lines)
 services/fleetDocumentExpiryCron.js       (124 lines)
 models/fleetModel.js

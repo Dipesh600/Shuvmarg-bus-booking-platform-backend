@@ -395,7 +395,7 @@ routes/adminRoutes/adminRoutes.js  (kyc portion)
 **Files affected:**
 ```
 services/fleetService.js  → src/modules/fleets/fleetService.js
-controllers/adminController/fleetWorkstationController.js → src/modules/fleets/
+controllers/adminController/fleetWorkstationController.js → src/modules/admin/fleet-workstation/
 controllers/busOwnerController/busOwnerController.js  (fleet + amenities portions)
 routes/busOwner/busOwner.js  (fleet + amenities portion)
 ```
