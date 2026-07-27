@@ -35,6 +35,7 @@
     "test:account-role-policy": "node --test tests/unit/shared/account-role-policy.test.js",
     "test:admin-coupon-routes": "node --test tests/characterization/admin-coupon-route-wiring.test.js",
     "test:admin-coupon-management": "node --test --test-concurrency=1 tests/characterization/admin-coupon-route-wiring.test.js tests/unit/coupon/admin/coupon-management-*.test.js tests/unit/coupon/admin/coupon-analytics.controller.test.js tests/unit/coupon/admin/coupon-statistics-*.test.js",
+    "test:admin-user-management": "node --test --test-concurrency=1 tests/characterization/admin-user-management-route-contract.test.js tests/unit/admin-user-management/*.test.js",
     "test:admin-route-discovery": "node --test --test-concurrency=1 tests/unit/admin-route-discovery-*.test.js tests/characterization/admin-route-discovery-*.test.js",
     "test:admin-trip-overview": "node --test --test-concurrency=1 tests/unit/admin-trip-overview-*.test.js tests/characterization/admin-trip-overview-*.test.js",
     "test:admin-schedule-management": "node --test --test-concurrency=1 tests/unit/admin-schedule-management-*.test.js tests/characterization/admin-schedule-management-*.test.js",
