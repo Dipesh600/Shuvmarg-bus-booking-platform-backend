@@ -1,8 +1,5 @@
 'use strict';
-/**
- * tests/helpers/payment-booking-confirm-harness.js
- * Harness for confirmBooking characterization tests.
- */
+// Harness for confirmPassengerBooking characterization tests.
 const notifModulePath = require.resolve('../../controllers/notificationController/notification_manager.js');
 const userDeviceInfoPath = require.resolve('../../models/userDeviceInfoModel.js');
 const esewaPath = require.resolve('../../services/esewaVerificationService.js');
@@ -21,12 +18,14 @@ const bookingPersistenceIndexPath = require.resolve('../../src/modules/booking/p
 const bookingPersistenceServicePath = require.resolve('../../src/modules/booking/passenger-booking-persistence/passenger-booking-persistence.service.js');
 const reconciliationIndexPath = require.resolve('../../src/modules/booking/passenger-transaction-success-reconciliation');
 const reconciliationServicePath = require.resolve('../../src/modules/booking/passenger-transaction-success-reconciliation/passenger-transaction-success-reconciliation.service.js');
-const controllerPath = require.resolve('../../controllers/ticketController/paymentBookingController.js');
+const orchestratorPath = require.resolve('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
+const orchestratorDir = require('node:path').dirname(orchestratorPath);
+const clearOrchestratorCache = () => Object.keys(require.cache)
+  .filter(p => p.startsWith(orchestratorDir)).forEach(p => delete require.cache[p]);
 
 const notifStub = { createLocalNotification: async () => {}, notificationManager: async () => {} };
 const userDeviceInfoStub = { find: async () => [] };
 const esewaStub = { verifyEsewaPayment: async (id, amt) => esewaStub._impl(id, amt), _impl: async () => ({ verified: true }), ESEWA_CONFIG: {} };
-
 require.cache[notifModulePath] = { id: notifModulePath, filename: notifModulePath, loaded: true, exports: notifStub, paths: [], children: [] };
 require.cache[userDeviceInfoPath] = { id: userDeviceInfoPath, filename: userDeviceInfoPath, loaded: true, exports: userDeviceInfoStub };
 require.cache[esewaPath] = { id: esewaPath, filename: esewaPath, loaded: true, exports: esewaStub, paths: [], children: [] };
@@ -87,8 +86,8 @@ function setupConfirmHarness() {
     return Promise.resolve();
   });
 
-  delete require.cache[controllerPath];
-  const { confirmBooking } = require('../../controllers/ticketController/paymentBookingController.js');
+  clearOrchestratorCache();
+  const { confirmPassengerBooking: confirmBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 
   mockMethod(Trip, 'findById', () => ({ lean: () => Promise.resolve(defaults.trip) }));
   mockMethod(Seat, 'findOne', () => Promise.resolve(defaults.seatDoc));
@@ -117,8 +116,9 @@ function setupConfirmHarness() {
       tripValidationIndexPath, tripValidationServicePath,
       seatCommitmentIndexPath, seatCommitmentServicePath,
       bookingPersistenceIndexPath, bookingPersistenceServicePath,
-      reconciliationIndexPath, reconciliationServicePath, controllerPath
+      reconciliationIndexPath, reconciliationServicePath
     ].forEach(p => delete require.cache[p]);
+    clearOrchestratorCache();
   }
 
   return {

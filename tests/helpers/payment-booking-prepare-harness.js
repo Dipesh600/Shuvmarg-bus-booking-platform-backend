@@ -9,7 +9,7 @@ const PlatformConfig = require('../../models/platformConfigModel.js');
 const CouponHelper = require('../../handlers/couponHelper.js');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
 const smLedgerService = require('../../services/smLedgerService.js');
-const controllerPath = require.resolve('../../controllers/ticketController/paymentBookingController.js');
+const preparationPath = require.resolve('../../src/modules/booking/passenger-booking-preparation');
 
 function setupPrepareHarness() {
   const patches = [];
@@ -25,8 +25,8 @@ function setupPrepareHarness() {
     });
   }
 
-  delete require.cache[controllerPath];
-  const { prepareBooking } = require('../../controllers/ticketController/paymentBookingController.js');
+  delete require.cache[preparationPath];
+  const { preparePassengerBooking: prepareBooking } = require('../../src/modules/booking/passenger-booking-preparation');
 
   const defaults = {
     trip: { _id: '507f1f77bcf86cd799439011', status: 'scheduled', bookingClosesAt: null },
@@ -49,7 +49,7 @@ function setupPrepareHarness() {
 
   function restore() {
     patches.forEach(fn => fn());
-    delete require.cache[controllerPath];
+    delete require.cache[preparationPath];
   }
 
   return { prepareBooking, mockMethod, defaults, restore, Trip, Seat, CouponHelper, smLedgerService, PlatformConfig, passengerSeatHold };

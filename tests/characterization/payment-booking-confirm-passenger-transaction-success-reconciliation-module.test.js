@@ -33,7 +33,7 @@ test('confirmBooking passenger transaction success reconciliation module charact
 
       const req = makeConfirmReq();
       const res = makeMockConfirmRes();
-      const { confirmBooking } = require('../../controllers/ticketController/paymentBookingController.js');
+      const { confirmPassengerBooking: confirmBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 
       await confirmBooking(req, res);
 
@@ -74,7 +74,7 @@ test('confirmBooking passenger transaction success reconciliation module charact
 
       const req = makeConfirmReq();
       const res = makeMockConfirmRes();
-      const { confirmBooking } = require('../../controllers/ticketController/paymentBookingController.js');
+      const { confirmPassengerBooking: confirmBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 
       await confirmBooking(req, res);
 
@@ -112,7 +112,7 @@ test('confirmBooking passenger transaction success reconciliation module charact
 
       const req = makeConfirmReq();
       const res = makeMockConfirmRes();
-      const { confirmBooking } = require('../../controllers/ticketController/paymentBookingController.js');
+      const { confirmPassengerBooking: confirmBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 
       await confirmBooking(req, res);
 

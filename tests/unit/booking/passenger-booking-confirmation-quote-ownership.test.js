@@ -4,12 +4,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 
 test('confirmation quote single-owner static architecture contract', async (t) => {
-  const controllerPath = path.resolve(__dirname, '../../../controllers/ticketController/paymentBookingController.js');
   const policyPath = path.resolve(__dirname, '../../../src/modules/booking/passenger-booking-confirmation-quote/passenger-booking-confirmation-quote.policy.js');
 
-  const controllerSource = fs.readFileSync(controllerPath, 'utf8');
+  const controllerSource = readPassengerBookingConfirmationOrchestratorSource();
   const policySource = fs.readFileSync(policyPath, 'utf8');
 
   await t.test('controller does not contain duplicated validation rules or strings', () => {

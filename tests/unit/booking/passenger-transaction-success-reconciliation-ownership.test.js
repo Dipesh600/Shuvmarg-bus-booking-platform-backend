@@ -9,30 +9,23 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-
-const controllerPath = path.join(
-  __dirname,
-  '../../../controllers/ticketController/paymentBookingController.js'
-);
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 const moduleDirPath = path.join(
   __dirname,
   '../../../src/modules/booking/passenger-transaction-success-reconciliation'
 );
 
 test('passengerTransactionSuccessReconciliation ownership static tests', async (t) => {
-  const controllerContent = fs.readFileSync(controllerPath, 'utf8');
+  const controllerContent =
+    readPassengerBookingConfirmationOrchestratorSource();
 
   await t.test('1. controller STEP 9 block does NOT contain direct findOneAndUpdate status update strings', () => {
-    const step9Match = controllerContent.match(
-      /\/\/ STEP 9: TRANSITION TRANSACTION TO SUCCESS WITH VERIFICATION[\s\S]*?\/\/ Capture all response fields/
-    );
-    assert.ok(step9Match, 'STEP 9 block must be present');
-    const step9Content = step9Match[0];
-
-    assert.equal(step9Content.includes('Transaction.findOneAndUpdate('), false);
-    assert.equal(step9Content.includes('status: "PAYMENT_RECEIVED"'), false);
-    assert.equal(step9Content.includes('status: "SUCCESS"'), false);
-    assert.equal(step9Content.includes('runValidators: true'), false);
+    assert.equal(controllerContent.includes('Transaction.findOneAndUpdate('), false);
+    assert.equal(controllerContent.includes('status: "PAYMENT_RECEIVED"'), false);
+    assert.equal(controllerContent.includes('status: "SUCCESS"'), false);
+    assert.equal(controllerContent.includes('runValidators: true'), false);
   });
 
   await t.test('2. controller contains required orchestration symbols and log/response tokens', () => {

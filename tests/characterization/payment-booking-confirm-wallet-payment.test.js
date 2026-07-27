@@ -96,9 +96,10 @@ test('confirmBooking: wallet payment module integration', async (t) => {
   });
 
   await t.test('12. no wallet model dependency remains in controller', () => {
-    const fs = require('node:fs');
-    const path = require('node:path');
-    const ctrlSrc = fs.readFileSync(path.resolve(__dirname, '../../controllers/ticketController/paymentBookingController.js'), 'utf8');
+    const {
+      readPassengerBookingConfirmationOrchestratorSource,
+    } = require('../helpers/passenger-booking-confirmation-orchestrator-source');
+    const ctrlSrc = readPassengerBookingConfirmationOrchestratorSource();
     assert.equal(ctrlSrc.includes('models/walletModel'), false);
     assert.equal(ctrlSrc.includes('Wallet.findOne'), false);
   });

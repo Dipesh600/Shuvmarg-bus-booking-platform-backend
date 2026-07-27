@@ -16,7 +16,8 @@ const router = require('../../routes/ticketRoutes/ticketRoutes');
 const auth   = require('../../middleware/authMiddleware');
 const verifyRoleFromDB = require('../../middleware/verifyRoleFromDB');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
-const paymentBooking    = require('../../controllers/ticketController/paymentBookingController');
+const { preparePassengerBooking } = require('../../src/modules/booking/passenger-booking-preparation');
+const { confirmPassengerBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 const bookingVerification = require('../../src/modules/booking/booking-verification');
 const tripSeatAvailability = require('../../src/modules/booking/trip-seat-availability');
 const passengerBookingHistory = require('../../src/modules/booking/passenger-booking-history');
@@ -74,10 +75,10 @@ test('Legacy Ticket API Retirement', async (t) => {
   });
 
   await t.test('payment booking handler identities', () => {
-    assert.equal(handles(find('/prepareBooking', 'post')).at(-1), paymentBooking.prepareBooking);
+    assert.equal(handles(find('/prepareBooking', 'post')).at(-1), preparePassengerBooking);
     const ch = handles(find('/confirmBooking', 'post'));
     assert.equal(ch.at(-2), passengerSeatHold.requireOwnedActivePassengerSeatHold);
-    assert.equal(ch.at(-1), paymentBooking.confirmBooking);
+    assert.equal(ch.at(-1), confirmPassengerBooking);
   });
 
   await t.test('booking verification handler identity', () => {

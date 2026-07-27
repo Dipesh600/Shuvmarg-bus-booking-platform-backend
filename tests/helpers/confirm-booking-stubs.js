@@ -32,9 +32,9 @@ require.cache[userDeviceInfoPath] = {
 };
 
 // Load controller AFTER stubs are registered
-const controllerPath = require.resolve('../../controllers/ticketController/paymentBookingController');
+const controllerPath = require.resolve('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 delete require.cache[controllerPath];
-const { confirmBooking } = require('../../controllers/ticketController/paymentBookingController');
+const { confirmPassengerBooking: confirmBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 
 // ── Dependencies ──────────────────────────────────────────────────────────────
 const Transaction       = require('../../models/transactionModel');

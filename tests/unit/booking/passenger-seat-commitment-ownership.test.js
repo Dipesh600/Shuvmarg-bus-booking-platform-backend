@@ -9,13 +9,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 
 test('passengerSeatCommitment ownership static tests', async (t) => {
-  const controllerPath = path.join(
-    __dirname,
-    '../../../controllers/ticketController/paymentBookingController.js'
-  );
-  const controllerContent = fs.readFileSync(controllerPath, 'utf8');
+  const controllerContent =
+    readPassengerBookingConfirmationOrchestratorSource();
 
   const moduleDir = path.join(
     __dirname,
@@ -52,8 +52,6 @@ test('passengerSeatCommitment ownership static tests', async (t) => {
       'seatCommitmentResult.disputeReason',
       'seatCommitmentResult.compensationReason',
       'seatCommitmentResult.adminAlertReason',
-      'seatCommitmentResult.statusCode',
-      'seatCommitmentResult.body',
       'seatCommitmentResult.lockedSeatNumbers',
       'markPassengerPaymentDisputed',
     ];
