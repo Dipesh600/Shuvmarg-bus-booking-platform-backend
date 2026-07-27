@@ -247,7 +247,7 @@ Fleet, routes, trips, settlements, fare rules, staff assignment
 
 Admin KYC review:
 ```
-controllers/adminController/busOwnerController/adminBusOwnerController.js (860 lines)
+src/modules/admin/bus-owner-management/ (modularized)
   → list, view, approve, reject, suspend bus owners
   → status transitions fire email notifications
 ```
