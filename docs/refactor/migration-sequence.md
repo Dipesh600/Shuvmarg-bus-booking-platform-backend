@@ -591,7 +591,8 @@ controllers/adminController/walletController/ → src/modules/wallet/admin/
 
 ## PR-21 — Coupons and Referrals
 
-**Scope:** Move coupon and referral modules cleanly.
+**Scope:** Continue coupon and referral modularization. Admin coupon management,
+analytics, and statistics now live under `src/modules/coupon/admin/`.
 
 **Tests required first:**
 - `POST /api/coupons/validate` returns correct discount amount

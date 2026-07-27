@@ -546,7 +546,11 @@ Models: walletModel, walletTransactionModel, scratchCardModel
 **Controllers:**
 - `controllers/couponController/userCouponController.js` (431 lines)
 - `controllers/couponController/recordCouponUsageController.js` (190 lines)
-- `controllers/adminController/coupon-controller/adminCouponController.js` (777 lines)
+
+**Admin modules:**
+- `src/modules/coupon/admin/management/` (CRUD, catalogue, media, offer notifications)
+- `src/modules/coupon/admin/analytics/`
+- `src/modules/coupon/admin/statistics/`
 
 **Helper:** `handlers/couponHelper.js` (395 lines)
 
@@ -625,6 +629,6 @@ notification service layer. [Coupling concern — see dependency analysis]
 | `busOwnerAuthController.js` (914) | Same as agent auth |
 | `busOwnerController.js` (673) | KYC submission, fleet ops, boarding points, amenities — three unrelated domains |
 | `smLedgerService.js` (789) | Ledger entries for bookings, refunds, settlements, wallet — all financial events mixed |
-| `adminCouponController.js` (777) | Coupon CRUD, scratch card management, usage analytics |
+| `src/modules/coupon/admin/management/` | Modular admin coupon CRUD, catalogue, media, and offer notifications |
 | `adminController.js` (717) | User management, commission config, announcements, dashboard metrics |
 | `tripGeneratorCron.js` (504) | Cron scheduling + trip generation business logic embedded together |
