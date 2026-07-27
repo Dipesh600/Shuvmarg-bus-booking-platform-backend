@@ -373,12 +373,12 @@ DELETE /api/busowner/deleteRoute
 **Controllers:**
 - `controllers/busOwnerController/busTripController.js` (162 lines) — owner CRUD
 - `controllers/adminController/busOwnerController/tripController.js` (259 lines) — admin view
-- `controllers/adminController/scheduleController.js` (360 lines) — schedule management
+- `src/modules/admin/schedule-management/` — authoritative admin recurring-schedule lifecycle
 - `controllers/adminController/tripExceptionController.js` (109 lines)
 - `src/modules/admin/trip-overview/` — exception overview, schedule health, global trip search, and route performance
 
 **Services:**
-- `services/scheduleService.js` (898 lines) — schedule CRUD + trip burst generation
+- `src/modules/admin/schedule-management/` — schedule validation, lifecycle, queries, versioning, and trip generation
 - `services/tripService.js` (394 lines) — individual trip operations
 - `services/tripGeneratorCron.js` (504 lines) — daily cron: generates trips from active schedules
 - `services/tripExceptionService.js` (301 lines) — cancel, reschedule, extra-run, date-range cancel
