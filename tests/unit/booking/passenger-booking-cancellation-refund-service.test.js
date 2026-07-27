@@ -1,6 +1,6 @@
 const { test, mock } = require("node:test");
 const assert = require("node:assert");
-const smLedger = require("../../../services/smLedgerService");
+const smLedger = require("../../../src/modules/wallet/sm-ledger");
 const walletService = require("../../../services/walletService");
 
 const { createPassengerBookingCancellationRefundService } = require("../../../src/modules/booking/passenger-booking-cancellation/passenger-booking-cancellation-refund.service.js");

@@ -10,7 +10,8 @@ const { createPassengerBookingCancellationController } = require("./passenger-bo
 const repository = createPassengerBookingCancellationRepository();
 const seatService = createPassengerBookingCancellationSeatService();
 
-const loadClawbackCashback = () => require("../../../../services/smLedgerService").clawbackCashback;
+const loadClawbackCashback = () =>
+  require("../../wallet/sm-ledger").clawbackCashback;
 const loadCreditWallet = () => require("../../../../services/walletService").creditWallet;
 
 const cancellationRefundService = createPassengerBookingCancellationRefundService(

@@ -5,7 +5,7 @@
  */
 const CouponHelper = require('../../../../handlers/couponHelper');
 const SMLedger = require('../../../../models/smLedgerModel');
-const smLedgerService = require('../../../../services/smLedgerService');
+const smLedgerService = require('../../wallet/sm-ledger');
 const logger = require('../../../../utils/logger');
 const passengerSeatHold = require('../passenger-seat-hold');
 const bookingConfirmation = require('../booking-confirmation');

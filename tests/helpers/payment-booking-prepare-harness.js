@@ -8,7 +8,7 @@ const Trip = require('../../models/tripModel.js');
 const PlatformConfig = require('../../models/platformConfigModel.js');
 const CouponHelper = require('../../handlers/couponHelper.js');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
-const smLedgerService = require('../../services/smLedgerService.js');
+const smLedgerService = require('../../src/modules/wallet/sm-ledger');
 const preparationPath = require.resolve('../../src/modules/booking/passenger-booking-preparation');
 
 function setupPrepareHarness() {

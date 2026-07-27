@@ -7,7 +7,7 @@ const Refund = require("../../models/refundModel");
 const UserDeviceInfo = require("../../models/userDeviceInfoModel.js");
 const refundCalculatorService = require("../../services/refundCalculatorService");
 const notificationManagerApi = require("../../controllers/notificationController/notification_manager.js");
-const smLedgerService = require("../../services/smLedgerService");
+const smLedgerService = require("../../src/modules/wallet/sm-ledger");
 const walletService = require("../../services/walletService");
 
 function setupHarness() {

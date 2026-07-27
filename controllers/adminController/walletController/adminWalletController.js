@@ -16,7 +16,7 @@ const Wallet = require("../../../models/walletModel.js");
 const SMLedger = require("../../../models/smLedgerModel.js");
 const User = require("../../../models/userModel.js");
 const { creditWallet, debitWallet, getOrCreateWallet, getFullBalance } = require("../../../services/walletService.js");
-const smLedgerService = require("../../../services/smLedgerService.js");
+const smLedgerService = require("../../../src/modules/wallet/sm-ledger");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. PLATFORM OBSERVATORY

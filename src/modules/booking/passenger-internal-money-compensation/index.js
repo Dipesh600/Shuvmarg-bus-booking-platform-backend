@@ -3,7 +3,7 @@
 /**
  * Production composition for passenger internal-money compensation.
  */
-const smLedgerService = require('../../../../services/smLedgerService');
+const smLedgerService = require('../../wallet/sm-ledger');
 const logger = require('../../../../utils/logger');
 const splitPayment = require('../passenger-split-payment');
 const {

@@ -2,7 +2,7 @@ const Trip = require("../../../../models/tripModel.js");
 const Seat = require("../../../../models/seatsModel.js");
 const PlatformConfig = require("../../../../models/platformConfigModel.js");
 const CouponHelper = require("../../../../handlers/couponHelper.js");
-const smLedgerService = require("../../../../services/smLedgerService.js");
+const smLedgerService = require("../../wallet/sm-ledger");
 const passengerSeatHold = require("../passenger-seat-hold");
 
 const { createPassengerBookingPreparationRepository } = require("./passenger-booking-preparation.repository.js");
