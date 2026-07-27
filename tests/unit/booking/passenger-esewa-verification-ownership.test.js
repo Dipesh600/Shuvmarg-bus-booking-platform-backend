@@ -9,12 +9,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 
 const rootDir = path.resolve(__dirname, '../../../');
-const controllerPath = path.join(rootDir, 'controllers/ticketController/paymentBookingController.js');
 const moduleDir = path.join(rootDir, 'src/modules/booking/passenger-esewa-verification');
 
-const controllerSource = fs.readFileSync(controllerPath, 'utf8');
+const controllerSource = readPassengerBookingConfirmationOrchestratorSource();
 
 const indexSource = fs.readFileSync(path.join(moduleDir, 'index.js'), 'utf8');
 const serviceSource = fs.readFileSync(path.join(moduleDir, 'passenger-esewa-verification.service.js'), 'utf8');

@@ -7,10 +7,11 @@ const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const role = require("../../middleware/checkRole.js");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner.js");
-const paymentBooking = require("../../controllers/ticketController/paymentBookingController.js");
 const passengerSeatHold = require("../../src/modules/booking/passenger-seat-hold");
 const bookingVerification = require("../../src/modules/booking/booking-verification");
 const busOwnerScheduleManagement = require("../../src/modules/bus-owner/schedule-management");
+const { preparePassengerBooking } = require("../../src/modules/booking/passenger-booking-preparation");
+const { confirmPassengerBooking } = require("../../src/modules/booking/passenger-booking-confirmation-orchestrator");
 
 test("bus-owner schedule management route wiring characterization", async (t) => {
   await t.test("all four schedule endpoints use new schedule-management handlers with intact middleware order", () => {
@@ -56,9 +57,9 @@ test("bus-owner schedule management route wiring characterization", async (t) =>
     assert.equal(getHandles(deleteRoute).at(-1),  busOwnerScheduleManagement.deleteSchedule);
     assert.equal(getHandles(getByIdRoute).at(-1), busOwnerScheduleManagement.getScheduleById);
 
-    assert.equal(getHandles(prepareRoute).at(-1), paymentBooking.prepareBooking);
+    assert.equal(getHandles(prepareRoute).at(-1), preparePassengerBooking);
     assert.equal(getHandles(confirmRoute).at(-2), passengerSeatHold.requireOwnedActivePassengerSeatHold);
-    assert.equal(getHandles(confirmRoute).at(-1), paymentBooking.confirmBooking);
+    assert.equal(getHandles(confirmRoute).at(-1), confirmPassengerBooking);
     assert.equal(getHandles(verifyRoute).at(-1),  bookingVerification.verifyBooking);
   });
 });

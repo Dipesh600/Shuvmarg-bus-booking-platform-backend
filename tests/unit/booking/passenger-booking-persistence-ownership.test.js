@@ -4,13 +4,13 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 
 test('passengerBookingPersistence ownership static tests', async (t) => {
-  const controllerPath = path.resolve(
-    __dirname,
-    '../../../controllers/ticketController/paymentBookingController.js'
-  );
-  const controllerContent = fs.readFileSync(controllerPath, 'utf8');
+  const controllerContent =
+    readPassengerBookingConfirmationOrchestratorSource();
 
   const moduleFiles = [
     'index.js',
@@ -30,9 +30,7 @@ test('passengerBookingPersistence ownership static tests', async (t) => {
   const moduleCombinedContent = moduleFiles.join('\n');
 
   await t.test('1. controller confirmBooking does NOT contain inline booking persistence logic/strings', () => {
-    const confirmBookingSource = controllerContent.slice(
-      controllerContent.indexOf('const confirmBooking')
-    );
+    const confirmBookingSource = controllerContent;
     const forbiddenInConfirmBooking = [
       'Booking.create({',
       'const formattedPassengers =',

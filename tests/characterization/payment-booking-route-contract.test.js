@@ -9,7 +9,8 @@ const ticketRoutes = require('../../routes/ticketRoutes/ticketRoutes.js');
 const auth = require('../../middleware/authMiddleware.js');
 const verifyRoleFromDB = require('../../middleware/verifyRoleFromDB.js');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
-const paymentBooking = require('../../controllers/ticketController/paymentBookingController.js');
+const { preparePassengerBooking } = require('../../src/modules/booking/passenger-booking-preparation');
+const { confirmPassengerBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 
 test('payment booking Express router contract characterization', async (t) => {
   const routed = ticketRoutes.stack.filter(l => l.route);
@@ -36,7 +37,7 @@ test('payment booking Express router contract characterization', async (t) => {
     stackHandlers[2]({ userInfo: { activeRole: 'agent' } }, res, () => {});
     assert.equal(forbidden, true);
 
-    assert.equal(stackHandlers[3], paymentBooking.prepareBooking);
+    assert.equal(stackHandlers[3], preparePassengerBooking);
   });
 
   await t.test('2. POST /confirmBooking route contract', () => {
@@ -54,6 +55,6 @@ test('payment booking Express router contract characterization', async (t) => {
     assert.equal(nextCalled, true);
 
     assert.equal(stackHandlers[3], passengerSeatHold.requireOwnedActivePassengerSeatHold);
-    assert.equal(stackHandlers[4], paymentBooking.confirmBooking);
+    assert.equal(stackHandlers[4], confirmPassengerBooking);
   });
 });

@@ -10,13 +10,19 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const moduleExports = require('../../../src/modules/booking/passenger-split-payment');
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 
 const rootDir = path.resolve(__dirname, '../../../');
-const controllerPath = path.join(rootDir, 'controllers/ticketController/paymentBookingController.js');
+const legacyControllerPath = path.join(
+  rootDir,
+  'controllers/ticketController/paymentBookingController.js'
+);
 const servicePath = path.join(rootDir, 'src/modules/booking/passenger-split-payment/passenger-split-payment.service.js');
 const mapperPath = path.join(rootDir, 'src/modules/booking/passenger-split-payment/passenger-split-payment.mapper.js');
 
-const controllerSource = fs.readFileSync(controllerPath, 'utf8');
+const controllerSource = readPassengerBookingConfirmationOrchestratorSource();
 const serviceSource = fs.readFileSync(servicePath, 'utf8');
 const mapperSource = fs.readFileSync(mapperPath, 'utf8');
 const combinedModuleSource = serviceSource + '\n' + mapperSource;
@@ -89,7 +95,7 @@ test('passengerSplitPaymentOwnership unit tests', async (t) => {
     assert.ok(!controllerSource.includes('errorCode: "SM_MONEY_DEBIT_FAILED"'));
     assert.ok(!controllerSource.includes('SM Money spent at checkout'));
     assert.ok(!controllerSource.includes('reversePassengerSplitPaymentDebit'));
-    assert.ok(fs.existsSync(controllerPath), 'controller exists');
+    assert.equal(fs.existsSync(legacyControllerPath), false, 'legacy controller deleted');
     assert.ok(fs.existsSync(servicePath), 'service exists');
   });
 });

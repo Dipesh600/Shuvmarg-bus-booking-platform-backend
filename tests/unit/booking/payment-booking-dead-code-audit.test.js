@@ -9,9 +9,12 @@ const test   = require('node:test');
 const assert = require('node:assert/strict');
 const fs     = require('node:fs');
 const path   = require('node:path');
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 
-const controllerPath   = path.resolve(__dirname, '../../../controllers/ticketController/paymentBookingController.js');
-const controllerSource = fs.readFileSync(controllerPath, 'utf8');
+const controllerSource =
+  readPassengerBookingConfirmationOrchestratorSource();
 
 test('paymentBookingDeadCodeAudit unit tests', async (t) => {
 

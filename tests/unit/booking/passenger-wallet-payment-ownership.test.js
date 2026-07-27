@@ -9,18 +9,16 @@ const test   = require('node:test');
 const assert = require('node:assert/strict');
 const fs     = require('node:fs');
 const path   = require('node:path');
-
-const CONTROLLER_PATH = path.resolve(
-  __dirname,
-  '../../../controllers/ticketController/paymentBookingController.js',
-);
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 
 const MODULE_DIR = path.resolve(
   __dirname,
   '../../../src/modules/booking/passenger-wallet-payment',
 );
 
-const controllerSrc = fs.readFileSync(CONTROLLER_PATH, 'utf8');
+const controllerSrc = readPassengerBookingConfirmationOrchestratorSource();
 
 const moduleRepoSrc = fs.readFileSync(path.join(MODULE_DIR, 'passenger-wallet-payment.repository.js'), 'utf8');
 const moduleMapperSrc = fs.readFileSync(path.join(MODULE_DIR, 'passenger-wallet-payment.mapper.js'), 'utf8');

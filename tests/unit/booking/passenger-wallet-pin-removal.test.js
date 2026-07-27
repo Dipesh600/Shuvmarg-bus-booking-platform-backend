@@ -8,11 +8,9 @@ const test   = require('node:test');
 const assert = require('node:assert/strict');
 const fs     = require('node:fs');
 const path   = require('node:path');
-
-const CONTROLLER = path.resolve(
-  __dirname,
-  '../../../controllers/ticketController/paymentBookingController.js',
-);
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 
 const WALLET_MODULE = path.resolve(
   __dirname,
@@ -24,7 +22,7 @@ const WALLET_MODEL = path.resolve(
   '../../../models/walletModel.js',
 );
 
-const controllerSrc = fs.readFileSync(CONTROLLER, 'utf8');
+const controllerSrc = readPassengerBookingConfirmationOrchestratorSource();
 
 const moduleSrc = fs.readdirSync(WALLET_MODULE)
   .filter(f => f.endsWith('.js'))
@@ -33,7 +31,7 @@ const moduleSrc = fs.readdirSync(WALLET_MODULE)
 
 const allCode = controllerSrc + '\n' + moduleSrc;
 
-test('paymentBookingController: runtime wallet PIN removal', async (t) => {
+test('payment booking flow: runtime wallet PIN removal', async (t) => {
 
   // ── Removed references ────────────────────────────────────────────────────
   await t.test('does not contain walletPin', () => {

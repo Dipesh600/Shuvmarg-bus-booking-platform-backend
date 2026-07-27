@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const paymentBooking = require("../../controllers/ticketController/paymentBookingController.js");
 const role = require("../../middleware/checkRole.js");
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
@@ -10,6 +9,12 @@ const bookingVerification = require("../../src/modules/booking/booking-verificat
 const busOwnerScheduleManagement = require("../../src/modules/bus-owner/schedule-management");
 const tripSeatAvailability = require("../../src/modules/booking/trip-seat-availability");
 const passengerBookingHistory = require("../../src/modules/booking/passenger-booking-history");
+const {
+  preparePassengerBooking,
+} = require("../../src/modules/booking/passenger-booking-preparation");
+const {
+  confirmPassengerBooking,
+} = require("../../src/modules/booking/passenger-booking-confirmation-orchestrator");
 
 const busOwnerGuard = [auth, verifyRoleFromDB, role.busOwnerMiddleware, requireApprovedBusOwner];
 const passengerBookingGuard = [auth, verifyRoleFromDB, role.requireRole("passenger")];
@@ -22,12 +27,12 @@ router.delete("/deleteTicket", busOwnerGuard, busOwnerScheduleManagement.deleteS
 router.post("/getTicketById", busOwnerGuard, busOwnerScheduleManagement.getScheduleById);
 
 // Payment Gateway Booking Flow
-router.post("/prepareBooking", ...passengerBookingGuard, paymentBooking.prepareBooking);
+router.post("/prepareBooking", ...passengerBookingGuard, preparePassengerBooking);
 router.post(
   "/confirmBooking",
   ...passengerBookingGuard,
   passengerSeatHold.requireOwnedActivePassengerSeatHold,
-  paymentBooking.confirmBooking
+  confirmPassengerBooking
 );
 router.get("/verifyBooking/:ticketId", ...passengerBookingGuard, bookingVerification.verifyBooking);
 

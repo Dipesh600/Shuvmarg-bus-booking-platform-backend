@@ -16,6 +16,9 @@ const {
 const {
   createPassengerBookingPostCommitService,
 } = require('../../../src/modules/booking/passenger-booking-post-commit/passenger-booking-post-commit.service');
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 
 test('payment booking orchestration cleanup modules', async (t) => {
   await t.test('1. compensation clears split debit after attempt and wallet debit after success', async () => {
@@ -82,8 +85,8 @@ test('payment booking orchestration cleanup modules', async (t) => {
     assert.equal(response.data.scratchCardId, 'sc-1');
   });
 
-  await t.test('4. controller no longer owns extracted orchestration details', () => {
-    const source = fs.readFileSync(path.resolve(__dirname, '../../../controllers/ticketController/paymentBookingController.js'), 'utf8');
+  await t.test('4. orchestrator does not reclaim extracted domain details', () => {
+    const source = readPassengerBookingConfirmationOrchestratorSource();
     for (const removed of [
       'createLocalNotification',
       'CouponHelper.applyCoupon',
