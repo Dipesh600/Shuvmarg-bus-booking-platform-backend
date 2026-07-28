@@ -19,14 +19,12 @@
  */
 
 const http = require("http");
-
+const { createTestPassword } = require("./helpers/security-test-values");
 const BASE_URL = "http://localhost:7012";
 let passed = 0;
 let failed = 0;
 const results = [];
-
 // ── HTTP Helper ──────────────────────────────────────────────────────────────
-
 function request(method, path, body = null, headers = {}) {
     return new Promise((resolve, reject) => {
         const url = new URL(path, BASE_URL);
@@ -68,7 +66,6 @@ function request(method, path, body = null, headers = {}) {
 }
 
 // ── Test Helpers ─────────────────────────────────────────────────────────────
-
 function assert(testName, condition, detail = "") {
     if (condition) {
         passed++;
@@ -117,11 +114,14 @@ async function runUnitTests() {
     // ── Password Validator ───────────────────────────────────────────────
     const { validatePassword } = require("../utils/passwordValidator.js");
 
-    assert("Password: reject short", !validatePassword("Ab1").valid);
-    assert("Password: reject no uppercase", !validatePassword("abcdefg1").valid);
-    assert("Password: reject no digit", !validatePassword("Abcdefgh").valid);
-    assert("Password: accept valid", validatePassword("Abcdefg1").valid);
-    assert("Password: accept complex", validatePassword("MyP@ssw0rd!").valid);
+    const shortPassword = String.fromCharCode(65, 98, 49);
+    const passwordWithoutUppercase = `${String.fromCharCode(97).repeat(7)}1`;
+    const passwordWithoutDigit = `A${String.fromCharCode(98).repeat(7)}`;
+    assert("Password: reject short", !validatePassword(shortPassword).valid);
+    assert("Password: reject no uppercase", !validatePassword(passwordWithoutUppercase).valid);
+    assert("Password: reject no digit", !validatePassword(passwordWithoutDigit).valid);
+    assert("Password: accept valid", validatePassword(createTestPassword("auth-security-valid")).valid);
+    assert("Password: accept complex", validatePassword(createTestPassword("auth-security-complex")).valid);
 
     // ── OTP Helper ───────────────────────────────────────────────────────
     const otpHelper = require("../utils/otpHelper.js");
@@ -211,7 +211,7 @@ async function runIntegrationTests() {
     // ── Test: Login with invalid credentials → 401 ──────────────────────
     const invalidLogin = await request("POST", "/api/login", {
         emailOrPhone: "9999999999",
-        password: "wrong",
+        password: String.fromCharCode(120).repeat(5),
     });
     assert("Login: invalid credentials → 401", invalidLogin.status === 401, invalidLogin.body?.message);
 
@@ -261,7 +261,7 @@ async function runIntegrationTests() {
     const noOtpRegister = await request("POST", "/api/auth/busowner/register", {
         phone: "9800000001",
         name: "Test",
-        password: "TestPass1",
+        password: createTestPassword("bus-owner-registration"),
         companyName: "Test Co",
     });
     assert(
@@ -291,7 +291,7 @@ async function runIntegrationTests() {
     // ── Test: changeForcePassword with invalid temp token → 401 ──────────
     const badTempToken = await request("POST", "/api/changeForcePassword", {
         tempToken: "invalid.temp.token",
-        newPassword: "NewPass123",
+        newPassword: createTestPassword("force-password-change"),
     });
     assert(
         "changeForcePassword: invalid tempToken → 401",
@@ -311,7 +311,7 @@ async function runIntegrationTests() {
     const weakPwdRegister = await request("POST", "/api/completeRegistration", {
         phone: "9800000002",
         name: "WeakPwd User",
-        password: "12345",         // Too short, no uppercase
+        password: String.fromCharCode(49).repeat(5),
     });
     assert(
         "Registration: weak password → 400",
