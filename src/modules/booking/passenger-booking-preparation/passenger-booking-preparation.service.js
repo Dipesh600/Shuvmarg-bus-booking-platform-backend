@@ -12,13 +12,12 @@ function createPassengerBookingPreparationService({
     async preparePassengerBooking({
       scheduleId,
       seatNumbers,
-      originalAmount,
       couponCode,
       smMoneyToUse,
       userId,
       activeRole,
     }) {
-      const inputVal = policy.validatePreparationInput({ scheduleId, seatNumbers, originalAmount });
+      const inputVal = policy.validatePreparationInput({ scheduleId, seatNumbers });
       if (!inputVal.isValid) return { statusCode: inputVal.statusCode, body: inputVal.responseBody };
 
       const now = clock();
@@ -38,21 +37,49 @@ function createPassengerBookingPreparationService({
         };
       }
 
+      const amountResult = policy.calculateAuthoritativeOriginalAmount(
+        trip,
+        normalizedSeats.length
+      );
+      if (!amountResult.isValid) {
+        return {
+          statusCode: amountResult.statusCode,
+          body: amountResult.responseBody,
+        };
+      }
+      const authoritativeOriginalAmount = amountResult.originalAmount;
+
       const seatDoc = await repository.findTripSeatDocument(scheduleId);
       if (!seatDoc) return { statusCode: 404, body: { success: false, message: "Seat data not found for schedule." } };
 
-      const { invalidSeats, alreadyBookedSeats } = policy.classifyRequestedSeats(seatDoc, normalizedSeats);
+      const {
+        invalidSeats,
+        alreadyBookedSeats,
+        blockedSeats,
+      } = policy.classifyRequestedSeats(seatDoc, normalizedSeats);
       if (invalidSeats.length > 0) {
         return { statusCode: 400, body: { success: false, message: `Invalid seat(s): ${invalidSeats.join(", ")}` } };
       }
       if (alreadyBookedSeats.length > 0) {
         return { statusCode: 400, body: { success: false, message: `Seat ${alreadyBookedSeats.join(", ")} is already booked!` } };
       }
+      if (blockedSeats.length > 0) {
+        return {
+          statusCode: 409,
+          body: {
+            success: false,
+            message: `Seat ${blockedSeats.join(", ")} is unavailable.`,
+            errorCode: "SEAT_UNAVAILABLE",
+          },
+        };
+      }
 
       let discountAmount = 0;
       let couponDetails = null;
       if (couponCode && couponCode.trim() !== "") {
-        const val = await couponHelper.validateCoupon(couponCode, userId, originalAmount, scheduleId, activeRole);
+        const val = await couponHelper.validateCoupon(
+          couponCode, userId, authoritativeOriginalAmount, scheduleId, activeRole
+        );
         if (!val.isValid) return { statusCode: 400, body: { success: false, message: val.error, errorCode: val.errorCode } };
         discountAmount = val.discountAmount;
         couponDetails = mapper.mapValidatedCoupon(val);
@@ -64,7 +91,7 @@ function createPassengerBookingPreparationService({
       ]);
 
       const quote = policy.calculatePreparationQuote({
-        originalAmount,
+        originalAmount: authoritativeOriginalAmount,
         couponDiscount: discountAmount,
         spendableBalance: balanceResult.display,
         requestedSmMoney: smMoneyToUse,
@@ -75,6 +102,7 @@ function createPassengerBookingPreparationService({
         userId,
         tripId: scheduleId,
         seatNumbers: normalizedSeats,
+        originalAmount: authoritativeOriginalAmount,
         now,
       });
 
@@ -83,7 +111,7 @@ function createPassengerBookingPreparationService({
         body: mapper.mapPassengerBookingPreparationResponse({
           hold,
           scheduleId,
-          originalAmount,
+          originalAmount: authoritativeOriginalAmount,
           couponDiscount: quote.couponDiscount,
           couponDetails,
           afterCouponAmount: quote.afterCouponAmount,

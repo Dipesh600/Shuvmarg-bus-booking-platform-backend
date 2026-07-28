@@ -23,6 +23,7 @@ test('Passenger Seat Hold Confirmation & Projection Contracts', async (t) => {
       tripId: '507f1f77bcf86cd799439011',
       userId: '507f1f77bcf86cd799439012',
       seatNumbers: ['a1'],
+      originalAmount: 100,
       tempBookingId: 'BH100',
       expiresAt: new Date(),
     });
@@ -44,6 +45,7 @@ test('Passenger Seat Hold Confirmation & Projection Contracts', async (t) => {
       await repository.completeOwnedHold('h1', 'u1', now);
       assert.equal(updateQuery._id, 'h1');
       assert.equal(updateQuery.userId, 'u1');
+      assert.deepEqual(updateQuery.status, { $in: ['held', 'processing'] });
       assert.equal(updateFields.$set.status, 'completed');
       assert.equal(updateFields.$set.completedAt, now);
       assert.ok('$unset' in updateFields);
@@ -60,6 +62,7 @@ test('Passenger Seat Hold Confirmation & Projection Contracts', async (t) => {
     try {
       const res = await service.createOrReusePassengerSeatHold({
         userId: 'u1', tripId: 't1', seatNumbers: ['a1'],
+        originalAmount: 100,
       });
       assert.equal(res.seatKeys, undefined);
       assert.equal(res.userTripKey, undefined);

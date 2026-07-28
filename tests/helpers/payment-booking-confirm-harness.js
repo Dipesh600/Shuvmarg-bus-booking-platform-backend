@@ -56,7 +56,6 @@ function setupConfirmHarness() {
   ].forEach(p => delete require.cache[p]);
 
   const bookingConfirmation = require('../../src/modules/booking/booking-confirmation');
-
   const defaults = {
     trip: { _id: '507f1f77bcf86cd799439011', status: 'scheduled', bookingClosesAt: null, brandId: 'b1', busId: 'bus1' },
     seatDoc: { seata: [{ seatNo: 'A1', booked: false }], seatb: [], seatc: [] },
@@ -79,13 +78,11 @@ function setupConfirmHarness() {
       else obj[key] = orig;
     });
   }
-
   esewaStub._impl = async () => ({ verified: true });
   mockMethod(bookingConfirmation, 'sendBookingConfirmedNotification', (...args) => {
     if (defaults.onNotifSent) defaults.onNotifSent(...args);
     return Promise.resolve();
   });
-
   clearOrchestratorCache();
   const { confirmPassengerBooking: confirmBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 
@@ -106,7 +103,8 @@ function setupConfirmHarness() {
   mockMethod(Wallet, 'findOne', () => Promise.resolve(defaults.wallet));
   mockMethod(SMLedger, 'updateOne', () => Promise.resolve());
   mockMethod(passengerSeatHold, 'completePassengerHold', () => Promise.resolve());
-
+  mockMethod(passengerSeatHold, 'claimPassengerHoldForConfirmation', () => Promise.resolve(true));
+  mockMethod(passengerSeatHold, 'restorePassengerHoldAfterFailedConfirmation', () => Promise.resolve());
   function restore() {
     patches.forEach(fn => fn());
     [
@@ -120,22 +118,25 @@ function setupConfirmHarness() {
     ].forEach(p => delete require.cache[p]);
     clearOrchestratorCache();
   }
-
   return {
     confirmBooking, mockMethod, defaults, restore, esewaStub, esewaService, notifStub,
     Transaction, Booking, PlatformConfig, Trip, Seat, Wallet, SMLedger, CouponHelper, smLedgerService, passengerSeatHold, bookingConfirmation
   };
 }
-
 function makeConfirmReq(body = {}) {
   return {
     body: { tempBookingId: 'BH1', gateway: 'esewa', paymentId: 'p1', paymentAmount: 1000, originalAmount: 1000, ...body },
     dbUser: { _id: '507f1f77bcf86cd799439012' },
     userInfo: { activeRole: 'passenger' },
-    bookingHold: { _id: '507f1f77bcf86cd799439099', tripId: '507f1f77bcf86cd799439011', seatNumbers: ['a1'] }
+    bookingHold: {
+      _id: '507f1f77bcf86cd799439099',
+      tripId: '507f1f77bcf86cd799439011',
+      seatNumbers: ['a1'],
+      originalAmount: 1000,
+      expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+    }
   };
 }
-
 function makeMockConfirmRes() {
   let _status, _json, _sent = false;
   return {
@@ -146,5 +147,4 @@ function makeMockConfirmRes() {
     getJson: () => _json
   };
 }
-
 module.exports = { setupConfirmHarness, makeConfirmReq, makeMockConfirmRes };

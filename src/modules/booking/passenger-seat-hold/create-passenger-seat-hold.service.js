@@ -9,8 +9,9 @@
 const repository = require('./passenger-seat-hold.repository');
 const policy = require('./passenger-seat-hold.policy');
 const errors = require('./passenger-seat-hold.errors');
-
-const DEFAULT_HOLD_DURATION_MS = 10 * 60 * 1000;
+const {
+  PASSENGER_SEAT_HOLD_DURATION_MS,
+} = require('./passenger-seat-hold.constants');
 
 const isDuplicateKeyError = (err) => err && (err.code === 11000 || (err.message && err.message.includes('E11000')));
 
@@ -22,6 +23,7 @@ const toCanonicalHoldObject = (doc) => ({
   tempBookingId: doc.tempBookingId,
   status: doc.status,
   expiresAt: doc.expiresAt,
+  originalAmount: doc.originalAmount,
   completedAt: doc.completedAt || null,
 });
 
@@ -36,10 +38,16 @@ const createOrReusePassengerSeatHold = async ({
   userId,
   tripId,
   seatNumbers,
+  originalAmount,
   now = new Date(),
-  holdDurationMs = DEFAULT_HOLD_DURATION_MS,
+  holdDurationMs = PASSENGER_SEAT_HOLD_DURATION_MS,
 }) => {
   const normalizedSeats = policy.normalizeSeatNumbers(seatNumbers);
+  if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
+    throw errors.invalidSeatSelectionError(
+      'A valid server-calculated booking amount is required.'
+    );
+  }
   const seatKeys = policy.buildSeatKeys(tripId, normalizedSeats);
   const userTripKey = policy.buildUserTripKey(userId, tripId);
 
@@ -53,13 +61,18 @@ const createOrReusePassengerSeatHold = async ({
   let existingHold = await repository.findActiveHoldForUserTrip(userId, tripId, userTripKey, now);
 
   if (existingHold) {
-    if (isCanonicalActiveHold(existingHold, now) && policy.sameSeatSet(existingHold.seatNumbers, normalizedSeats)) {
+    if (
+      isCanonicalActiveHold(existingHold, now) &&
+      policy.sameSeatSet(existingHold.seatNumbers, normalizedSeats) &&
+      existingHold.originalAmount === originalAmount
+    ) {
       return toCanonicalHoldObject(existingHold);
     }
 
     try {
       const updated = await repository.updateOwnedActiveHold(
-        existingHold._id, userId, tripId, normalizedSeats, seatKeys, userTripKey, now
+        existingHold._id, userId, tripId, normalizedSeats, seatKeys,
+        userTripKey, originalAmount, now
       );
       if (updated && isCanonicalActiveHold(updated, now)) return toCanonicalHoldObject(updated);
     } catch (err) {
@@ -72,7 +85,8 @@ const createOrReusePassengerSeatHold = async ({
     if (existingHold) {
       try {
         const retriedUpdate = await repository.updateOwnedActiveHold(
-          existingHold._id, userId, tripId, normalizedSeats, seatKeys, userTripKey, now
+          existingHold._id, userId, tripId, normalizedSeats, seatKeys,
+          userTripKey, originalAmount, now
         );
         if (retriedUpdate && isCanonicalActiveHold(retriedUpdate, now)) return toCanonicalHoldObject(retriedUpdate);
       } catch (err) {
@@ -81,7 +95,11 @@ const createOrReusePassengerSeatHold = async ({
       }
 
       const finalHold = await repository.findActiveHoldForUserTrip(userId, tripId, userTripKey, now);
-      if (isCanonicalActiveHold(finalHold, now) && policy.sameSeatSet(finalHold.seatNumbers, normalizedSeats)) {
+      if (
+        isCanonicalActiveHold(finalHold, now) &&
+        policy.sameSeatSet(finalHold.seatNumbers, normalizedSeats) &&
+        finalHold.originalAmount === originalAmount
+      ) {
         return toCanonicalHoldObject(finalHold);
       }
     }
@@ -100,12 +118,17 @@ const createOrReusePassengerSeatHold = async ({
       tempBookingId,
       status: 'held',
       expiresAt,
+      originalAmount,
     });
     return toCanonicalHoldObject(newHold);
   } catch (err) {
     if (isDuplicateKeyError(err)) {
       const reRead = await repository.findActiveHoldForUserTrip(userId, tripId, userTripKey, now);
-      if (isCanonicalActiveHold(reRead, now) && policy.sameSeatSet(reRead.seatNumbers, normalizedSeats)) {
+      if (
+        isCanonicalActiveHold(reRead, now) &&
+        policy.sameSeatSet(reRead.seatNumbers, normalizedSeats) &&
+        reRead.originalAmount === originalAmount
+      ) {
         return toCanonicalHoldObject(reRead);
       }
       throw errors.seatTemporarilyHeldError();

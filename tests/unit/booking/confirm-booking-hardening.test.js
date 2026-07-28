@@ -128,6 +128,8 @@ test('Passenger Booking Confirmation Hardening Contracts', async (t) => {
 
   await t.test('9. pre-booking failure → 500 with compensation', async () => {
     S.patch(S.PlatformConfig, 'getConfig', async () => ({ maxDiscountPercent: 80 }));
+    S.patch(S.passengerSeatHold, 'claimPassengerHoldForConfirmation', async () => true);
+    S.patch(S.passengerSeatHold, 'restorePassengerHoldAfterFailedConfirmation', async () => {});
     S.patch(S.Transaction, 'create', async () => ({ _id: '507f1f77bcf86cd799439011' }));
     S.patch(S.Trip, 'findById', () => ({ select: () => ({ lean: async () => { throw new Error('DB crash'); } }), lean: async () => { throw new Error('DB crash'); } }));
     S.patch(S.Transaction, 'findByIdAndUpdate', async () => {});

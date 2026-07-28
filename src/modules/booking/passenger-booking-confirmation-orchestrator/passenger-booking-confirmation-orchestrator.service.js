@@ -13,6 +13,9 @@ const createState = () => ({
   booking: null,
   ticketId: null,
   committedBookingResponse: null,
+  holdId: null,
+  holdExpiresAt: null,
+  holdClaimed: false,
 });
 
 function createPassengerBookingConfirmationOrchestrator(deps) {
