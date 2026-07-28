@@ -10,6 +10,9 @@ const bookingVerification = require("../../src/modules/booking/booking-verificat
 const busOwnerScheduleManagement = require("../../src/modules/bus-owner/schedule-management");
 const tripSeatAvailability = require("../../src/modules/booking/trip-seat-availability");
 const passengerBookingHistory = require("../../src/modules/booking/passenger-booking-history");
+const passengerEsewaCheckout = require(
+  "../../src/modules/booking/passenger-esewa-checkout"
+);
 const {
   preparePassengerBooking,
 } = require("../../src/modules/booking/passenger-booking-preparation");
@@ -30,6 +33,17 @@ router.post("/getTicketById", busOwnerGuard, busOwnerScheduleManagement.getSched
 // Payment Gateway Booking Flow
 router.post("/prepareBooking", ...passengerBookingGuard, preparePassengerBooking);
 router.post(
+  "/esewa/initiate",
+  ...passengerBookingGuard,
+  passengerSeatHold.requireOwnedActivePassengerSeatHold,
+  passengerEsewaCheckout.initiatePassengerEsewaCheckout
+);
+router.post(
+  "/esewa/finalize",
+  ...passengerBookingGuard,
+  passengerEsewaCheckout.finalizePassengerEsewaCheckout
+);
+router.post(
   "/releaseBookingHold",
   ...passengerBookingGuard,
   passengerSeatHold.releasePassengerSeatHold
@@ -37,6 +51,7 @@ router.post(
 router.post(
   "/confirmBooking",
   ...passengerBookingGuard,
+  passengerEsewaCheckout.requireServerOwnedEsewaCheckout,
   passengerSeatHold.requireOwnedActivePassengerSeatHold,
   confirmPassengerBooking
 );
