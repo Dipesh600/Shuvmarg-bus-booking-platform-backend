@@ -67,7 +67,9 @@ Both keys use `select: false` and `default: undefined` so legacy documents remai
 - `/api/ticket/bookTicket` is retired via explicit `retireLegacyBookingFlow` handler and returns `410 LEGACY_BOOKING_FLOW_RETIRED`.
 
 - **Known Limitations**:
-  - `/api/ticket/getSeats` still requires authentication.
+  - `/api/ticket/getSeats` is public with optional access-token authentication.
+    Anonymous passengers see every active hold as reserved; authenticated
+    passengers do not have their own active holds masked as unavailable.
   - `prepareBooking` still does not validate `boardingPoint`.
   - `prepareBooking` still does not validate `droppingPoint`.
   - `prepareBooking` still does not validate `passengerDetails`.
