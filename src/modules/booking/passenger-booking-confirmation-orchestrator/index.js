@@ -13,6 +13,7 @@ const bookingPersistence = require('../passenger-booking-persistence');
 const reconciliation = require('../passenger-transaction-success-reconciliation');
 const paymentDispute = require('../passenger-payment-dispute');
 const postCommit = require('../passenger-booking-post-commit');
+const passengerSeatHold = require('../passenger-seat-hold');
 const {
   createPassengerBookingConfirmationCompensation,
 } = require('./passenger-booking-confirmation-compensation.service');
@@ -46,6 +47,9 @@ const shared = {
   ...seatCommitment,
   _reverseInternalMoneyDebitIfNeeded,
   logger,
+  restorePassengerHoldAfterFailedConfirmation:
+    (input) =>
+      passengerSeatHold.restorePassengerHoldAfterFailedConfirmation(input),
 };
 
 const runPaymentStage = createPassengerBookingConfirmationPaymentStage({
@@ -54,6 +58,11 @@ const runPaymentStage = createPassengerBookingConfirmationPaymentStage({
   ...splitPayment,
   ...esewaVerification,
   ...paymentTransaction,
+  claimPassengerHoldForConfirmation:
+    (input) => passengerSeatHold.claimPassengerHoldForConfirmation(input),
+  restorePassengerHoldAfterFailedConfirmation:
+    (input) =>
+      passengerSeatHold.restorePassengerHoldAfterFailedConfirmation(input),
   _reverseInternalMoneyDebitIfNeeded,
 });
 const runFulfillmentStage =

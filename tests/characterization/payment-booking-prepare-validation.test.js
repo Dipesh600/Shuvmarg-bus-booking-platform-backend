@@ -1,8 +1,4 @@
 'use strict';
-/**
- * tests/characterization/payment-booking-prepare-validation.test.js
- * Characterizes prepareBooking validation and seat-hold normalization integration.
- */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
@@ -21,17 +17,21 @@ test('prepareBooking validation characterization', async (t) => {
   });
 
   await t.test('2. missing required fields', async () => {
-    const cases = [{ seatNumbers: ['A1'], originalAmount: 100 }, { scheduleId: 't1', originalAmount: 100 }, { scheduleId: 't1', seatNumbers: [], originalAmount: 100 }, { scheduleId: 't1', seatNumbers: ['A1'] }];
+    const cases = [{ seatNumbers: ['A1'] }, { scheduleId: 't1' },
+      { scheduleId: 't1', seatNumbers: [] }];
     for (const b of cases) {
       const { res, getStatus, getJson } = makeMockRes();
       await h.prepareBooking(makePrepareReq(b), res);
       assert.equal(getStatus(), 400);
-      assert.deepEqual(getJson(), { success: false, message: 'Missing required fields: scheduleId, seatNumbers, originalAmount' });
+      assert.deepEqual(getJson(), { success: false, message: 'Missing required fields: scheduleId, seatNumbers' });
     }
   });
 
   await t.test('3. trip not found', async () => {
-    h.mockMethod(h.Trip, 'findById', () => ({ select: () => ({ lean: () => Promise.resolve(null) }) }));
+    h.mockMethod(h.Trip, 'findById', () => {
+      const query = { select: () => query, populate: () => query, lean: () => Promise.resolve(null) };
+      return query;
+    });
     const { res, getStatus, getJson } = makeMockRes();
     await h.prepareBooking(makePrepareReq({ scheduleId: 't1', seatNumbers: ['A1'], originalAmount: 100 }), res);
     assert.equal(getStatus(), 404);
@@ -39,7 +39,10 @@ test('prepareBooking validation characterization', async (t) => {
   });
 
   await t.test('4. booking window closed', async () => {
-    h.mockMethod(h.Trip, 'findById', () => ({ select: () => ({ lean: () => Promise.resolve({ status: 'scheduled', bookingClosesAt: new Date(Date.now() - 1000) }) }) }));
+    h.mockMethod(h.Trip, 'findById', () => {
+      const query = { select: () => query, populate: () => query, lean: () => Promise.resolve({ status: 'scheduled', bookingClosesAt: new Date(Date.now() - 1000) }) };
+      return query;
+    });
     const { res, getStatus, getJson } = makeMockRes();
     await h.prepareBooking(makePrepareReq({ scheduleId: 't1', seatNumbers: ['A1'], originalAmount: 100 }), res);
     assert.equal(getStatus(), 400);
@@ -47,7 +50,10 @@ test('prepareBooking validation characterization', async (t) => {
   });
 
   await t.test('5. trip status not bookable', async () => {
-    h.mockMethod(h.Trip, 'findById', () => ({ select: () => ({ lean: () => Promise.resolve({ status: 'completed' }) }) }));
+    h.mockMethod(h.Trip, 'findById', () => {
+      const query = { select: () => query, populate: () => query, lean: () => Promise.resolve({ status: 'completed' }) };
+      return query;
+    });
     const { res, getStatus, getJson } = makeMockRes();
     await h.prepareBooking(makePrepareReq({ scheduleId: 't1', seatNumbers: ['A1'], originalAmount: 100 }), res);
     assert.equal(getStatus(), 400);
@@ -57,7 +63,6 @@ test('prepareBooking validation characterization', async (t) => {
   await t.test('valid prepare request crosses the seat-normalization facade boundary', async () => {
     assert.equal(typeof h.passengerSeatHold.normalizeSeatNumbers, 'function');
     assert.equal(h.passengerSeatHold.normalizeSeatNumbers, passengerSeatHold.policy.normalizeSeatNumbers);
-
     let seatFindCount = 0, validateCouponCount = 0, computeBalanceCount = 0, getConfigCount = 0, createHoldCount = 0;
     let createHoldArgs = null;
 
@@ -71,7 +76,7 @@ test('prepareBooking validation characterization', async (t) => {
       return Promise.resolve(h.defaults.hold);
     });
 
-    const req = makePrepareReq({ scheduleId: '507f1f77bcf86cd799439011', seatNumbers: ['A1'], originalAmount: 100, smMoneyToUse: 0 });
+    const req = makePrepareReq({ scheduleId: '507f1f77bcf86cd799439011', seatNumbers: ['A1'], originalAmount: 1, smMoneyToUse: 0 });
     const { res, getStatus, getJson } = makeMockRes();
     await h.prepareBooking(req, res);
 
@@ -89,12 +94,12 @@ test('prepareBooking validation characterization', async (t) => {
     assert.equal(d.tempBookingId, 'TB1');
     assert.equal(d.scheduleId, '507f1f77bcf86cd799439011');
     assert.deepEqual(d.seats, ['a1']);
-    assert.equal(d.originalAmount, 100);
+    assert.equal(d.originalAmount, 1000);
     assert.equal(d.couponDiscount, 0);
-    assert.equal(d.afterCouponAmount, 100);
+    assert.equal(d.afterCouponAmount, 1000);
     assert.equal(d.smMoneyApplied, 0);
-    assert.equal(d.gatewayAmount, 100);
-    assert.equal(d.paymentAmount, 100);
+    assert.equal(d.gatewayAmount, 1000);
+    assert.equal(d.paymentAmount, 1000);
     assert.ok(d.expiresAt);
   });
 

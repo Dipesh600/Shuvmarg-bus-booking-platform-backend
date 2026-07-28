@@ -1,11 +1,5 @@
 'use strict';
 
-/**
- * src/modules/booking/passenger-seat-hold/passenger-seat-hold.repository.js
- *
- * Database access layer for SeatHold model.
- */
-
 const SeatHold = require('../../../../models/seatHoldModel');
 
 const deleteExpiredConflicts = async (userTripKey, seatKeys, userId, tripId, now = new Date()) => {
@@ -48,7 +42,10 @@ const createHold = async (data) => {
   return doc;
 };
 
-const updateOwnedActiveHold = async (holdId, userId, tripId, normalizedSeats, seatKeys, userTripKey, now = new Date()) => {
+const updateOwnedActiveHold = async (
+  holdId, userId, tripId, normalizedSeats, seatKeys,
+  userTripKey, originalAmount, now = new Date()
+) => {
   return SeatHold.findOneAndUpdate(
     {
       _id: holdId,
@@ -62,6 +59,7 @@ const updateOwnedActiveHold = async (holdId, userId, tripId, normalizedSeats, se
         seatNumbers: normalizedSeats,
         seatKeys,
         userTripKey,
+        originalAmount,
       },
     },
     { new: true, runValidators: true }
@@ -82,7 +80,7 @@ const completeOwnedHold = async (holdId, userId, now = new Date()) => {
     {
       _id: holdId,
       userId,
-      status: 'held',
+      status: { $in: ['held', 'processing'] },
     },
     {
       $set: {
@@ -97,6 +95,16 @@ const completeOwnedHold = async (holdId, userId, now = new Date()) => {
   );
 };
 
+const releaseOwnedHold = async (tempBookingId, userId, now = new Date()) => {
+  return SeatHold.updateOne(
+    { tempBookingId, userId, status: 'held' },
+    {
+      $set: { status: 'released', releasedAt: now },
+      $unset: { seatKeys: '', userTripKey: '' },
+    }
+  );
+};
+
 module.exports = {
   deleteExpiredConflicts,
   findActiveHoldForUserTrip,
@@ -105,4 +113,5 @@ module.exports = {
   updateOwnedActiveHold,
   findOwnedActiveHoldByTempId,
   completeOwnedHold,
+  releaseOwnedHold,
 };

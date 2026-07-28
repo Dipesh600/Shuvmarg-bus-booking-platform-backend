@@ -30,6 +30,11 @@ router.post("/getTicketById", busOwnerGuard, busOwnerScheduleManagement.getSched
 // Payment Gateway Booking Flow
 router.post("/prepareBooking", ...passengerBookingGuard, preparePassengerBooking);
 router.post(
+  "/releaseBookingHold",
+  ...passengerBookingGuard,
+  passengerSeatHold.releasePassengerSeatHold
+);
+router.post(
   "/confirmBooking",
   ...passengerBookingGuard,
   passengerSeatHold.requireOwnedActivePassengerSeatHold,

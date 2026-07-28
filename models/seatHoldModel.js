@@ -34,8 +34,13 @@ const seatHoldSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["held", "completed"],
+      enum: ["held", "processing", "completed", "released"],
       default: "held",
+    },
+    originalAmount: {
+      type: Number,
+      default: null,
+      min: 0,
     },
     expiresAt: {
       type: Date,
@@ -43,6 +48,18 @@ const seatHoldSchema = new mongoose.Schema(
       index: { expires: 0 },
     },
     completedAt: {
+      type: Date,
+      default: null,
+    },
+    processingAt: {
+      type: Date,
+      default: null,
+    },
+    heldExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    releasedAt: {
       type: Date,
       default: null,
     },

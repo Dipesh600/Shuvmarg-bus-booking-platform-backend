@@ -26,7 +26,8 @@ test('createOrReusePassengerSeatHold Service', async (t) => {
     patch(repository, 'createHold', async (d) => { createdData = d; return { ...d, _id: 'h1' }; }, restore);
     try {
       const res = await service.createOrReusePassengerSeatHold({
-        userId: 'u1', tripId: 't1', seatNumbers: ['a1', 'a2'], now: new Date(),
+        userId: 'u1', tripId: 't1', seatNumbers: ['a1', 'a2'],
+        originalAmount: 200, now: new Date(),
       });
       assert.equal(res.tempBookingId.startsWith('BH'), true);
       assert.deepEqual(res.seatNumbers, ['a1', 'a2']);
@@ -40,13 +41,14 @@ test('createOrReusePassengerSeatHold Service', async (t) => {
   await t.test('exact retry returns existing hold idempotently without extending expiry', async () => {
     const restore = [];
     const exp = new Date(Date.now() + 300000);
-    const existing = { _id: 'h1', userId: 'u1', tripId: 't1', seatNumbers: ['a1'], tempBookingId: 'BH123', status: 'held', expiresAt: exp, seatKeys: ['t1:a1'], userTripKey: 'u1:t1' };
+    const existing = { _id: 'h1', userId: 'u1', tripId: 't1', seatNumbers: ['a1'], originalAmount: 100, tempBookingId: 'BH123', status: 'held', expiresAt: exp, seatKeys: ['t1:a1'], userTripKey: 'u1:t1' };
     patch(repository, 'deleteExpiredConflicts', async () => {}, restore);
     patch(repository, 'findActiveLegacyConflicts', async () => [], restore);
     patch(repository, 'findActiveHoldForUserTrip', async () => existing, restore);
     try {
       const res = await service.createOrReusePassengerSeatHold({
-        userId: 'u1', tripId: 't1', seatNumbers: ['A1'], now: new Date(),
+        userId: 'u1', tripId: 't1', seatNumbers: ['A1'],
+        originalAmount: 100, now: new Date(),
       });
       assert.equal(res.tempBookingId, 'BH123');
       assert.equal(res.expiresAt, exp);
@@ -57,7 +59,7 @@ test('createOrReusePassengerSeatHold Service', async (t) => {
   await t.test('seat selection change updates existing hold preserving tempBookingId and expiresAt', async () => {
     const restore = [];
     const exp = new Date(Date.now() + 300000);
-    const existing = { _id: 'h1', userId: 'u1', tripId: 't1', seatNumbers: ['a1'], tempBookingId: 'BH123', status: 'held', expiresAt: exp, seatKeys: ['t1:a1'], userTripKey: 'u1:t1' };
+    const existing = { _id: 'h1', userId: 'u1', tripId: 't1', seatNumbers: ['a1'], originalAmount: 100, tempBookingId: 'BH123', status: 'held', expiresAt: exp, seatKeys: ['t1:a1'], userTripKey: 'u1:t1' };
     let updateCalled = false;
     patch(repository, 'deleteExpiredConflicts', async () => {}, restore);
     patch(repository, 'findActiveLegacyConflicts', async () => [], restore);
@@ -65,7 +67,8 @@ test('createOrReusePassengerSeatHold Service', async (t) => {
     patch(repository, 'updateOwnedActiveHold', async () => { updateCalled = true; return { ...existing, seatNumbers: ['a2'], seatKeys: ['t1:a2'] }; }, restore);
     try {
       const res = await service.createOrReusePassengerSeatHold({
-        userId: 'u1', tripId: 't1', seatNumbers: ['a2'], now: new Date(),
+        userId: 'u1', tripId: 't1', seatNumbers: ['a2'],
+        originalAmount: 100, now: new Date(),
       });
       assert.equal(updateCalled, true);
       assert.equal(res.tempBookingId, 'BH123');
@@ -86,7 +89,8 @@ test('createOrReusePassengerSeatHold Service', async (t) => {
     }, restore);
     try {
       const res = await service.createOrReusePassengerSeatHold({
-        userId: 'u1', tripId: 't1', seatNumbers: ['a1'], now: new Date(),
+        userId: 'u1', tripId: 't1', seatNumbers: ['a1'],
+        originalAmount: 100, now: new Date(),
       });
       assert.equal(res.tempBookingId, 'BHLEG');
       assert.deepEqual(upgradedData.keys, ['t1:a1']);
@@ -108,7 +112,10 @@ test('createOrReusePassengerSeatHold Service', async (t) => {
     }, restore);
     try {
       await assert.rejects(
-        () => service.createOrReusePassengerSeatHold({ userId: 'u1', tripId: 't1', seatNumbers: ['a1'] }),
+        () => service.createOrReusePassengerSeatHold({
+          userId: 'u1', tripId: 't1', seatNumbers: ['a1'],
+          originalAmount: 100,
+        }),
         (err) => {
           assert.equal(err.statusCode, 409);
           assert.equal(err.responseBody.errorCode, 'SEAT_TEMPORARILY_HELD');
@@ -121,7 +128,7 @@ test('createOrReusePassengerSeatHold Service', async (t) => {
   await t.test('second update null performs final authoritative re-read and never returns stale state', async () => {
     const restore = [];
     const initialDoc = { _id: 'h1', userId: 'u1', tripId: 't1', seatNumbers: ['a2'], tempBookingId: 'BH123', status: 'held', expiresAt: new Date(Date.now() + 300000), seatKeys: ['t1:a2'], userTripKey: 'u1:t1' };
-    const canonicalDoc = { _id: 'h1', userId: 'u1', tripId: 't1', seatNumbers: ['a1'], tempBookingId: 'BH123', status: 'held', expiresAt: new Date(Date.now() + 300000), seatKeys: ['t1:a1'], userTripKey: 'u1:t1' };
+    const canonicalDoc = { _id: 'h1', userId: 'u1', tripId: 't1', seatNumbers: ['a1'], originalAmount: 100, tempBookingId: 'BH123', status: 'held', expiresAt: new Date(Date.now() + 300000), seatKeys: ['t1:a1'], userTripKey: 'u1:t1' };
     let reReadCount = 0;
     patch(repository, 'deleteExpiredConflicts', async () => {}, restore);
     patch(repository, 'findActiveLegacyConflicts', async () => [], restore);
@@ -132,7 +139,8 @@ test('createOrReusePassengerSeatHold Service', async (t) => {
     patch(repository, 'updateOwnedActiveHold', async () => null, restore);
     try {
       const res = await service.createOrReusePassengerSeatHold({
-        userId: 'u1', tripId: 't1', seatNumbers: ['a1'], now: new Date(),
+        userId: 'u1', tripId: 't1', seatNumbers: ['a1'],
+        originalAmount: 100, now: new Date(),
       });
       assert.equal(res.tempBookingId, 'BH123');
       assert.equal(reReadCount >= 2, true);

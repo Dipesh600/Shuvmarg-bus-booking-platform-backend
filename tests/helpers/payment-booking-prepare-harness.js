@@ -29,18 +29,22 @@ function setupPrepareHarness() {
   const { preparePassengerBooking: prepareBooking } = require('../../src/modules/booking/passenger-booking-preparation');
 
   const defaults = {
-    trip: { _id: '507f1f77bcf86cd799439011', status: 'scheduled', bookingClosesAt: null },
+    trip: { _id: '507f1f77bcf86cd799439011', status: 'scheduled', bookingClosesAt: null, tripFare: 1000 },
     seatDoc: { seata: [{ seatNo: 'A1', booked: false }], seatb: [], seatc: [] },
     couponValidation: { isValid: true, discountAmount: 0, finalAmount: 100, coupon: { _id: 'c1', couponCode: 'SAVE10', title: 'Save', discountType: 'fixed', discountValue: 10 } },
     spendableBalance: { display: 1000 },
     smConfig: { maxDiscountPercent: 80 },
-    hold: { tempBookingId: 'TB1', seatNumbers: ['a1'], expiresAt: new Date('2026-12-31') }
+    hold: { tempBookingId: 'TB1', seatNumbers: ['a1'], originalAmount: 1000, expiresAt: new Date('2026-12-31') }
   };
 
-  mockMethod(Trip, 'findById', () => ({
-    select: () => ({ lean: () => Promise.resolve(defaults.trip) }),
-    lean: () => Promise.resolve(defaults.trip)
-  }));
+  mockMethod(Trip, 'findById', () => {
+    const query = {
+      select: () => query,
+      populate: () => query,
+      lean: () => Promise.resolve(defaults.trip),
+    };
+    return query;
+  });
   mockMethod(Seat, 'findOne', () => Promise.resolve(defaults.seatDoc));
   mockMethod(CouponHelper, 'validateCoupon', () => Promise.resolve(defaults.couponValidation));
   mockMethod(smLedgerService, 'computeSpendableBalance', () => Promise.resolve(defaults.spendableBalance));

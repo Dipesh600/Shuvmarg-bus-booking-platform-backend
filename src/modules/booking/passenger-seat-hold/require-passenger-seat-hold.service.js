@@ -7,6 +7,9 @@
  */
 
 const repository = require('./passenger-seat-hold.repository');
+const confirmationRepository = require(
+  './passenger-seat-hold-confirmation.repository'
+);
 const policy = require('./passenger-seat-hold.policy');
 const errors = require('./passenger-seat-hold.errors');
 
@@ -23,6 +26,9 @@ const validateConfirmationHold = async ({
 
   const hold = await repository.findOwnedActiveHoldByTempId(tempBookingId, userId, now);
   if (!hold || !policy.isActiveHold(hold, now)) {
+    throw errors.bookingHoldInvalidError();
+  }
+  if (!Number.isFinite(hold.originalAmount) || hold.originalAmount <= 0) {
     throw errors.bookingHoldInvalidError();
   }
 
@@ -54,6 +60,7 @@ const validateConfirmationHold = async ({
     tempBookingId: hold.tempBookingId,
     status: hold.status,
     expiresAt: hold.expiresAt,
+    originalAmount: hold.originalAmount,
   };
 };
 
@@ -70,7 +77,39 @@ const completePassengerHold = async ({ holdId, userId, now = new Date() }) => {
   }
 };
 
+const claimPassengerHoldForConfirmation = async ({
+  holdId,
+  userId,
+  heldExpiresAt,
+  now = new Date(),
+}) => {
+  return Boolean(await confirmationRepository.claimOwnedActiveHold(
+    holdId, userId, heldExpiresAt, now
+  ));
+};
+
+const restorePassengerHoldAfterFailedConfirmation = async ({
+  holdId,
+  userId,
+  heldExpiresAt,
+  now = new Date(),
+}) => {
+  try {
+    return await confirmationRepository.restoreOwnedProcessingHold(
+      holdId, userId, heldExpiresAt, now
+    );
+  } catch (error) {
+    console.error(
+      `[passenger-seat-hold] Failed to restore hold ${holdId}:`,
+      error.message
+    );
+    return null;
+  }
+};
+
 module.exports = {
   validateConfirmationHold,
   completePassengerHold,
+  claimPassengerHoldForConfirmation,
+  restorePassengerHoldAfterFailedConfirmation,
 };

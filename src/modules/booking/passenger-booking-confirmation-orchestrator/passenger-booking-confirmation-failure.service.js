@@ -38,6 +38,15 @@ function createPassengerBookingConfirmationFailureHandler(deps) {
     const reason = `Unexpected crash: ${error.message}`;
     await deps._reverseInternalMoneyDebitIfNeeded(state, reason);
 
+    if (state.holdClaimed && !state.txnRecord) {
+      await deps.restorePassengerHoldAfterFailedConfirmation({
+        holdId: state.holdId,
+        userId: state.userId,
+        heldExpiresAt: state.holdExpiresAt,
+      });
+      state.holdClaimed = false;
+    }
+
     if (state.txnRecord) {
       try {
         await deps.markPassengerPaymentDisputed({

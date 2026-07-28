@@ -57,4 +57,16 @@ test('payment booking Express router contract characterization', async (t) => {
     assert.equal(stackHandlers[3], passengerSeatHold.requireOwnedActivePassengerSeatHold);
     assert.equal(stackHandlers[4], confirmPassengerBooking);
   });
+
+  await t.test('3. POST /releaseBookingHold uses the passenger guard', () => {
+    const matches = routed.filter(
+      l => l.route.path === '/releaseBookingHold' && l.route.methods.post
+    );
+    assert.equal(matches.length, 1);
+    const stackHandlers = handles(findRoute('/releaseBookingHold', 'post'));
+    assert.equal(stackHandlers.length, 4);
+    assert.equal(stackHandlers[0], auth);
+    assert.equal(stackHandlers[1], verifyRoleFromDB);
+    assert.equal(stackHandlers[3], passengerSeatHold.releasePassengerSeatHold);
+  });
 });

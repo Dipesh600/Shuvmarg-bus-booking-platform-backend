@@ -5,9 +5,26 @@ const policy = require('../../../src/modules/booking/passenger-booking-preparati
 test('passenger-booking-preparation policy tests', async (t) => {
   await t.test('1. validatePreparationInput rejects missing fields', () => {
     assert.equal(policy.validatePreparationInput({}).isValid, false);
-    assert.equal(policy.validatePreparationInput({ scheduleId: 't1', seatNumbers: ['a1'] }).isValid, false);
+    assert.equal(policy.validatePreparationInput({ scheduleId: 't1', seatNumbers: ['a1'] }).isValid, true);
     assert.equal(policy.validatePreparationInput({ scheduleId: 't1', seatNumbers: [], originalAmount: 100 }).isValid, false);
     assert.equal(policy.validatePreparationInput({ scheduleId: 't1', seatNumbers: ['a1'], originalAmount: 100 }).isValid, true);
+  });
+
+  await t.test('server fare is authoritative and multiplies by seat count', () => {
+    const tripFare = policy.calculateAuthoritativeOriginalAmount(
+      { tripFare: 750, routeId: { basePrice: 500 } },
+      2
+    );
+    assert.deepEqual(tripFare, { isValid: true, originalAmount: 1500 });
+
+    const routeFare = policy.calculateAuthoritativeOriginalAmount(
+      { tripFare: null, routeId: { basePrice: 500 } },
+      3
+    );
+    assert.equal(routeFare.originalAmount, 1500);
+
+    const missing = policy.calculateAuthoritativeOriginalAmount({}, 1);
+    assert.equal(missing.responseBody.errorCode, 'TRIP_FARE_UNAVAILABLE');
   });
 
   await t.test('2. validateTripForOnlineBooking handles missing trip', () => {

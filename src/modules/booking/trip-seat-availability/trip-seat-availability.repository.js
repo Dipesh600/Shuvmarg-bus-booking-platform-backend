@@ -13,6 +13,7 @@ const findTripWithSeatConfig = async (tripId) => {
 const findActiveSeatHolds = async (tripId, currentUserId) => {
   const query = {
     tripId: tripId,
+    status: { $in: ["held", "processing"] },
     expiresAt: { $gt: new Date() }
   };
   

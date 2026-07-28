@@ -4,7 +4,7 @@ const { createPassengerBookingPreparationService } = require('../../../src/modul
 const policy = require('../../../src/modules/booking/passenger-booking-preparation/passenger-booking-preparation.policy.js');
 const mapper = require('../../../src/modules/booking/passenger-booking-preparation/passenger-booking-preparation.mapper.js');
 
-const fakeTrip = { _id: 't1', status: 'scheduled' };
+const fakeTrip = { _id: 't1', status: 'scheduled', tripFare: 1000 };
 const fakeSeatDoc = { seata: [{ seatNo: 'A1', booked: false }], seatb: [], seatc: [] };
 
 function makeService(balanceResult) {

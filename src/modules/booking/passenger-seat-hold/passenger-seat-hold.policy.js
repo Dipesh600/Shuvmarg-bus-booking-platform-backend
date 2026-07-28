@@ -8,10 +8,18 @@
 
 const crypto = require('node:crypto');
 const errors = require('./passenger-seat-hold.errors');
+const {
+  MAX_PASSENGER_SEATS_PER_BOOKING,
+} = require('./passenger-seat-hold.constants');
 
 const normalizeSeatNumbers = (seatNumbers) => {
   if (!Array.isArray(seatNumbers) || seatNumbers.length === 0) {
     throw errors.invalidSeatSelectionError('seatNumbers must be a non-empty array.');
+  }
+  if (seatNumbers.length > MAX_PASSENGER_SEATS_PER_BOOKING) {
+    throw errors.invalidSeatSelectionError(
+      `A maximum of ${MAX_PASSENGER_SEATS_PER_BOOKING} seats can be booked at once.`
+    );
   }
 
   const seen = new Set();

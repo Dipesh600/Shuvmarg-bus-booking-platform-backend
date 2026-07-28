@@ -1,20 +1,35 @@
-function validatePreparationInput({ scheduleId, seatNumbers, originalAmount }) {
+function validatePreparationInput({ scheduleId, seatNumbers }) {
   if (
     !scheduleId ||
     !seatNumbers ||
-    seatNumbers.length === 0 ||
-    !originalAmount
+    seatNumbers.length === 0
   ) {
     return {
       isValid: false,
       statusCode: 400,
       responseBody: {
         success: false,
-        message: "Missing required fields: scheduleId, seatNumbers, originalAmount",
+        message: "Missing required fields: scheduleId, seatNumbers",
       },
     };
   }
   return { isValid: true };
+}
+
+function calculateAuthoritativeOriginalAmount(trip, seatCount) {
+  const fare = trip?.tripFare ?? trip?.routeId?.basePrice;
+  if (!Number.isFinite(fare) || fare <= 0) {
+    return {
+      isValid: false,
+      statusCode: 409,
+      responseBody: {
+        success: false,
+        message: "A valid fare is not configured for this trip.",
+        errorCode: "TRIP_FARE_UNAVAILABLE",
+      },
+    };
+  }
+  return { isValid: true, originalAmount: fare * seatCount };
 }
 
 function validateTripForOnlineBooking(trip, now) {
@@ -53,6 +68,7 @@ function validateTripForOnlineBooking(trip, now) {
 function classifyRequestedSeats(seatDoc, normalizedSeats) {
   const allSeats = [...seatDoc.seata, ...seatDoc.seatb, ...seatDoc.seatc];
   const alreadyBookedSeats = [];
+  const blockedSeats = [];
   const invalidSeats = [];
 
   normalizedSeats.forEach((seatNo) => {
@@ -61,10 +77,12 @@ function classifyRequestedSeats(seatDoc, normalizedSeats) {
       invalidSeats.push(seatNo.toUpperCase());
     } else if (seat.booked) {
       alreadyBookedSeats.push(seatNo.toUpperCase());
+    } else if (seat.blockedFor && seat.blockedFor !== "none") {
+      blockedSeats.push(seatNo.toUpperCase());
     }
   });
 
-  return { invalidSeats, alreadyBookedSeats };
+  return { invalidSeats, alreadyBookedSeats, blockedSeats };
 }
 
 function calculatePreparationQuote({
@@ -105,4 +123,5 @@ module.exports = {
   validateTripForOnlineBooking,
   classifyRequestedSeats,
   calculatePreparationQuote,
+  calculateAuthoritativeOriginalAmount,
 };

@@ -5,7 +5,7 @@ const policy = require('../../../src/modules/booking/passenger-booking-preparati
 const mapper = require('../../../src/modules/booking/passenger-booking-preparation/passenger-booking-preparation.mapper.js');
 
 test('passenger-booking-preparation service tests', async (t) => {
-  const fakeTrip = { _id: 't1', status: 'scheduled' };
+  const fakeTrip = { _id: 't1', status: 'scheduled', tripFare: 1000 };
   const fakeSeatDoc = { seata: [{ seatNo: 'A1', booked: false }], seatb: [], seatc: [] };
 
   await t.test('1. preparePassengerBooking succeeds without coupon and clock is used once with identity', async () => {

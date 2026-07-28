@@ -62,6 +62,8 @@ const patchHappyPath = () => {
   patch(Booking, 'create', async () => ({ _id: '507f1f77bcf86cd799439033', ticketId: 'TKT1', seats: ['a1'] }));
   patch(Transaction, 'findOneAndUpdate', async () => ({ _id: '507f1f77bcf86cd799439011', status: 'SUCCESS' }));
   patch(passengerSeatHold, 'completePassengerHold', async () => {});
+  patch(passengerSeatHold, 'claimPassengerHoldForConfirmation', async () => true);
+  patch(passengerSeatHold, 'restorePassengerHoldAfterFailedConfirmation', async () => {});
   patch(smLedgerService, 'generateCashback', async () => ({}));
 };
 
@@ -70,7 +72,12 @@ const makeReq = () => ({
   body: { tempBookingId: 'BH1', gateway: 'esewa', paymentId: 'p1', paymentAmount: 1000, originalAmount: 1000 },
   dbUser:      { _id: '507f1f77bcf86cd799439012' },
   userInfo:    { activeRole: 'passenger' },
-  bookingHold: { _id: '507f1f77bcf86cd799439099', tripId: '507f1f77bcf86cd799439011', seatNumbers: ['a1'] },
+  bookingHold: {
+    _id: '507f1f77bcf86cd799439099',
+    tripId: '507f1f77bcf86cd799439011',
+    seatNumbers: ['a1'],
+    originalAmount: 1000,
+  },
 });
 
 // Captures the FIRST status()+json() call; sets headersSent=true after so the
