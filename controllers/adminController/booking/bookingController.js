@@ -23,20 +23,25 @@ const getAllBookings = async (req, res) => {
       .populate("couponUsed")
       .sort({ createdAt: -1 });
 
-    const formattedBookings = bookings.map((booking) => ({
-      _id: booking._id,
-      ticketId: booking.ticketId,
-      whoBooked: booking.userId?.name || "N/A",
-      route: booking.tripId?.routeId?.routeName || 
-             (booking.tripId?.routeId?.from && booking.tripId?.routeId?.to 
-               ? `${booking.tripId.routeId.from} - ${booking.tripId.routeId.to}` 
-               : "N/A"),
-      seats: booking.seats.join(", "),
-      passengers: booking.seats.length,
-      amount: booking.totalAmount,
-      date: booking.bookedAt,
-      status: booking.status,
-    }));
+    const formattedBookings = bookings.map((booking) => {
+      // Route priority: bookedFrom/bookedTo → trip route → legacy routeId → N/A
+      const tripFrom = booking.tripId?.fromStopName || booking.tripId?.routeId?.from;
+      const tripTo = booking.tripId?.toStopName || booking.tripId?.routeId?.to;
+      const from = booking.bookedFrom || tripFrom || "N/A";
+      const to = booking.bookedTo || tripTo || "N/A";
+
+      return {
+        _id: booking._id,
+        ticketId: booking.ticketId,
+        whoBooked: booking.userId?.name || "N/A",
+        route: `${from} - ${to}`,
+        seats: booking.seats.join(", "),
+        passengers: booking.seats.length,
+        amount: booking.totalAmount,
+        date: booking.bookedAt,
+        status: booking.status,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -125,13 +130,15 @@ const getBookingsByUser = async (req, res) => {
       .populate("userId", "name email phone")
       .populate({
         path: "tripId",
+        select: "busId routeId fromStopName toStopName directionLabel departureTime arrivalTime tripDate",
         populate: [
           {
             path: "busId",
             select: "busName busNumber busType"
           },
           {
-            path: "routeId"
+            path: "routeId",
+            select: "from to routeName"
           }
         ]
       })

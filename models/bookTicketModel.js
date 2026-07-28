@@ -38,6 +38,21 @@ const bookingSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+
+    // === USER'S BOOKED ROUTE (search context) ===
+    // The actual from/to the user searched & booked, NOT the bus's full route.
+    // e.g., "Bardibas" → "Kathmandu" even though the bus runs Janakpur → Kathmandu.
+    // Null for bookings created before this field was added — display falls back
+    // to boardingPoint/droppingPoint or trip route.
+    bookedFrom: { type: String, default: null, trim: true },
+    bookedTo:   { type: String, default: null, trim: true },
+
+    // Stop-specific departure/arrival times resolved from the search.
+    // e.g., bus departs Janakpur at 06:00 but Bardibas at 08:00 —
+    // stores "08:00" for a user who booked from Bardibas.
+    bookedDepartureTime: { type: String, default: null, trim: true },
+    bookedArrivalTime:   { type: String, default: null, trim: true },
+
     seats: [
       {
         type: String,
@@ -134,10 +149,27 @@ const bookingSchema = new mongoose.Schema(
       enum: ["APP", "WEB", "AGENT", "COUNTER"],
       default: "APP",
     },
+
+    // === AGENT BOOKING LINK ===
+    // Populated only when bookedVia = "AGENT"
+    agentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Agent",
+      default: null,
+      index: true,
+    },
+    // Links to the detailed AgentBooking record (commission, payment mode, etc.)
+    agentBookingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AgentBooking",
+      default: null,
+    },
+
     bookedAt: {
       type: Date,
       default: Date.now,
     },
+
     status: {
       type: String,
       enum: ["booked", "cancelled", "pending", "no_show"],
@@ -176,6 +208,7 @@ bookingSchema.index({ busId: 1, status: 1, createdAt: -1 });   // Fleet financia
 bookingSchema.index({ couponUsed: 1 });
 bookingSchema.index({ couponCode: 1 });
 bookingSchema.index({ ticketId: 1 });
+bookingSchema.index({ agentId: 1, createdAt: -1 });  // Agent booking history
 
 // Virtual field to check if coupon was used
 bookingSchema.virtual("hasCouponDiscount").get(function () {

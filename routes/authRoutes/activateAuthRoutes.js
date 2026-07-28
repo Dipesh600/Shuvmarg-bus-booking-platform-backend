@@ -6,14 +6,19 @@
  */
 
 const express = require("express");
-const router = express.Router();
 const activateController = require("../../controllers/authControllers.js/activateAccountController.js");
-const otpRateLimiter = require("../../middleware/otpRateLimiter.js");
+const otpLimiters = require("../../middleware/otpRateLimiter.js");
 
-// Send activation OTP
-router.post("/sendOTP", otpRateLimiter, activateController.sendActivationOTP);
+const createActivateAuthRouter = ({
+  otpSendLimiter = otpLimiters.otpSendLimiter,
+  otpPresenceLimiter = otpLimiters.validatePhonePresent,
+} = {}) => {
+  const router = express.Router();
 
-// Activate account (verify OTP + set new password)
-router.post("/", activateController.activateAccount);
+  router.post("/sendOTP", otpSendLimiter, otpPresenceLimiter, activateController.sendActivationOTP);
+  router.post("/", activateController.activateAccount);
+  return router;
+};
 
-module.exports = router;
+module.exports = createActivateAuthRouter();
+module.exports.createActivateAuthRouter = createActivateAuthRouter;

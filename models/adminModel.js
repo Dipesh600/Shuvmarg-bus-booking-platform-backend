@@ -66,6 +66,13 @@ const superAdminSchema = new mongoose.Schema(
       type: Date,
     },
 
+    // Stores the TOTP window timestamp of the last accepted OTP to prevent replay within the 90s window.
+    // Updated on every successful 2FA login. (NEW-FINDING-04)
+    lastOtpWindowUsed: {
+      type: Number,
+      default: 0,
+    },
+
     loginAttempts: {
       type: Number,
       default: 0,

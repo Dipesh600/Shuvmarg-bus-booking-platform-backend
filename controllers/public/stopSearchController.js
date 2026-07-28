@@ -4,39 +4,26 @@ const Stop = require("../../models/stopModel");
  * GET /api/public/stops/search?q=<query>&limit=<n>
  *
  * Production-grade stop autocomplete for the booking search bar.
- *
  * Strategy:
- *   1. If query >= 2 chars  → MongoDB text index search (fast, ranked by score)
- *   2. If query < 2 chars   → Return top-N popular/major stops (CITY type first)
- *   3. Always filter status = ACTIVE
- *   4. Results are shaped to the minimal payload the UI needs — no over-fetching.
- *
- * The text index on Stop is: { name: "text", code: 1 }
- * This means both full-name matches ("Kathmandu") and short-code matches ("KTM")
- * will rank correctly.
+ *   1. query >= 2 chars → text index search + prefix fallback, merged & deduped
+ *   2. query < 2 chars  → return top CITY-type stops (fallback when no query)
  */
 const searchStops = async (req, res) => {
   try {
     const rawQuery = (req.query.q || "").trim();
     const limit = Math.min(10, parseInt(req.query.limit) || 8);
 
-    // ── Case 1: No query — return default popular stops ──────────────────────
     if (rawQuery.length < 2) {
       const popular = await Stop.find({ status: "ACTIVE" })
-        .sort({ type: 1 }) // CITY < JUNCTION < TOWN < BORDER alphabetically
+        .sort({ type: 1 })
         .limit(limit)
         .select("_id name code type state")
         .lean();
 
-      return res.status(200).json({
-        success: true,
-        data: popular.map(_shape),
-      });
+      return res.status(200).json({ success: true, data: popular.map(_shape) });
     }
 
-    // ── Case 2: Query present — text index search + prefix fallback ───────────
-    // We run both strategies and merge, deduplicating by _id.
-    // Strategy A: MongoDB $text search (ranks by relevance score)
+    // Strategy A: MongoDB $text search (relevance ranked)
     const textResults = await Stop.find(
       { $text: { $search: rawQuery }, status: "ACTIVE" },
       { score: { $meta: "textScore" } }
@@ -46,8 +33,7 @@ const searchStops = async (req, res) => {
       .select("_id name code type state")
       .lean();
 
-    // Strategy B: Prefix regex on name — catches partial matches $text misses
-    // e.g., "Bira" matches "Biratnagar" even without a full word boundary
+    // Strategy B: Prefix regex — catches partial matches $text misses
     const prefixResults = await Stop.find({
       name: { $regex: `^${_escapeRegex(rawQuery)}`, $options: "i" },
       status: "ACTIVE",
@@ -56,7 +42,7 @@ const searchStops = async (req, res) => {
       .select("_id name code type state")
       .lean();
 
-    // Merge, deduplicate, keep text-ranked results first
+    // Merge & deduplicate, text-ranked first
     const seen = new Set();
     const merged = [];
     for (const stop of [...textResults, ...prefixResults]) {
@@ -68,40 +54,85 @@ const searchStops = async (req, res) => {
       if (merged.length >= limit) break;
     }
 
-    return res.status(200).json({
-      success: true,
-      data: merged.map(_shape),
-    });
+    return res.status(200).json({ success: true, data: merged.map(_shape) });
   } catch (err) {
     console.error("stopSearch error:", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Internal Server Error" });
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+/**
+ * GET /api/public/stops/popular?limit=<n>
+ *
+ * Returns top N stops ranked by popularityScore (trend-weighted).
+ * Cached by the frontend for 24 h — this endpoint fires rarely.
+ *
+ * popularityScore = (recentSelectionCount × 2) + (selectionCount × 0.2)
+ * Falls back to CITY-type ordering for fresh deployments (all scores = 0).
+ */
+const getPopularStops = async (req, res) => {
+  try {
+    const limit = Math.min(10, parseInt(req.query.limit) || 8);
+
+    const stops = await Stop.find({ status: "ACTIVE" })
+      .sort({ popularityScore: -1, type: 1 })
+      .limit(limit)
+      .select("_id name code type state")
+      .lean();
+
+    return res.status(200).json({ success: true, data: stops.map(_shape) });
+  } catch (err) {
+    console.error("getPopularStops error:", err);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+/**
+ * POST /api/public/stops/select
+ * Body: { stopId: "<mongo id>" }
+ *
+ * Fire-and-forget popularity increment.
+ * Responds 204 immediately; DB update runs async.
+ * Called only when the user CONFIRMS a stop selection — not on search or hover.
+ */
+const recordStopSelection = async (req, res) => {
+  // Respond immediately — popularity tracking is non-blocking
+  res.status(204).end();
+
+  try {
+    const { stopId } = req.body;
+    if (!stopId) return;
+
+    const stop = await Stop.findByIdAndUpdate(
+      stopId,
+      { $inc: { selectionCount: 1, recentSelectionCount: 1 } },
+      { new: true, select: "selectionCount recentSelectionCount" }
+    ).lean();
+
+    if (!stop) return;
+
+    // Recompute trend-aware popularity score inline
+    const score = stop.recentSelectionCount * 2 + stop.selectionCount * 0.2;
+    await Stop.updateOne({ _id: stopId }, { $set: { popularityScore: score } });
+  } catch (err) {
+    console.error("recordStopSelection error:", err);
   }
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Shape a raw Stop document into the minimal UI payload.
- * Keeping the payload tiny is important for autocomplete latency.
- */
 function _shape(stop) {
   return {
     id: stop._id,
     name: stop.name,
     code: stop.code,
-    type: stop.type,      // CITY | JUNCTION | TOWN | BORDER — drives the icon in Flutter
+    type: stop.type,
     state: stop.state || null,
   };
 }
 
-/**
- * Escape special regex characters in user input to prevent injection.
- * Production requirement — never pass raw user strings into RegExp.
- */
 function _escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-module.exports = { searchStops };
+module.exports = { searchStops, getPopularStops, recordStopSelection };

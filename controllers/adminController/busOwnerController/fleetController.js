@@ -1,7 +1,7 @@
 const User = require("../../../models/userModel.js");
 const BusOwner = require("../../../models/busOwnerModel.js");
 const OperatorBrand = require("../../../models/operatorBrandModel.js");
-const fleetService = require("../../../services/fleetService.js");
+const fleetService = require("../../../src/modules/fleet-management");
 
 // Create Fleet for Owner by Admin
 const createFleetForOwner = async (req, res) => {
@@ -88,6 +88,9 @@ const getFleetsByOwner = async (req, res) => {
 };
 
 // Get Single Fleet Details (Admin)
+// Uses getFleetDetailsRaw — returns raw S3 keys, NOT presigned URLs.
+// The admin panel streams files via the secure document proxy (/api/admin/documents/view?key=...)
+// which requires the raw key. Presigned URLs contain AWS credentials and would fail the proxy.
 const getFleetById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -99,7 +102,7 @@ const getFleetById = async (req, res) => {
             });
         }
 
-        const fleet = await fleetService.getFleetDetails(id, null); // Admins can view any fleet
+        const fleet = await fleetService.getFleetDetailsRaw(id); // raw S3 keys for admin proxy
 
         return res.status(200).json({
             success: true,

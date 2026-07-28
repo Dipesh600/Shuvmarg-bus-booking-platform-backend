@@ -1,129 +1,64 @@
-// Admin
-const adminMiddleware = (req, res, next) => {
-    if (!req.userInfo) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized. Please login first.",
-        });
-    }
-    if (req.userInfo.role !== "admin") {
-        return res.status(403).json({
-            success: false,
-            message: "Access denied. Admins only.",
-        });
-    }
-    next();
-}
-// Bus Owner
-const busOwnerMiddleware = (req, res, next) => {
-    if (!req.userInfo) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized. Please login first.",
-        });
-    }
-    if (req.userInfo.role !== "busOwner") {
-        return res.status(403).json({
-            success: false,
-            message: "Access denied. Bus owners only.",
-        });
-    }
-    next();
-}
+/**
+ * middleware/checkRole.js
+ *
+ * Role authorization middleware for the multi-role identity system.
+ *
+ * Uses `req.userInfo.activeRole` (set by authMiddleware from JWT) to check
+ * if the current session has permission to access a route.
+ *
+ * Usage:
+ *   router.get("/dashboard", auth, requireRole("agent"), handler);
+ *   router.get("/fleet", auth, requireRole("busOwner"), handler);
+ *   router.post("/approve", auth, requireRole("busOwner", "admin"), handler);
+ */
 
-// Agent
-const agentMiddleware = (req, res, next) => {
-    if (!req.userInfo) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized. Please login first.",
-        });
-    }
-    if (req.userInfo.role !== "agent") {
-        return res.status(403).json({
-            success: false,
-            message: "Access denied. Agents only.",
-        });
-    }
-    next();
-}
-// Admin or Buss Owner
-const isAdminOrBusOwner = async (req, res, next) => {
-    try {
-        const role = req.userInfo?.role;
-        if (role !== "admin" && role !== "busOwner") {
-            return res.status(403).json({
-                status: false,
-                message: "Access denied!",
+/**
+ * Role authorization middleware factory.
+ * Checks if the JWT's activeRole is one of the allowed roles.
+ *
+ * @param  {...string} allowedRoles - Roles that can access this route
+ * @returns {Function} Express middleware
+ */
+const requireRole = (...allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.userInfo) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized. Please login first.",
             });
         }
+
+        // Use activeRole (multi-role system) with fallback to role (legacy JWTs)
+        const activeRole = req.userInfo.activeRole || req.userInfo.role;
+
+        if (!activeRole || !allowedRoles.includes(activeRole)) {
+            return res.status(403).json({
+                success: false,
+                message: `Access denied. Required: ${allowedRoles.join(" or ")}.`,
+                errorCode: "INSUFFICIENT_ROLE",
+            });
+        }
+
         next();
-    } catch (error) {
-        console.error("Role check failed:", error);
-        return res.status(500).json({
-            status: false,
-            message: "Internal Server Error.",
-        });
-    }
+    };
 };
 
-// Conductor
-const conductorMiddleware = (req, res, next) => {
-    if (!req.userInfo) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized. Please login first.",
-        });
-    }
-    if (req.userInfo.role !== "conductor") {
-        return res.status(403).json({
-            success: false,
-            message: "Access denied. Conductors only.",
-        });
-    }
-    next();
-};
+// ── Backward-compatible aliases ──────────────────────────────────────────
+// These are drop-in replacements for the old per-role middleware functions.
+// All existing route files that use e.g. `agentMiddleware` continue to work.
+//
+// NOTE: "admin" is NOT here — admin authorization uses the separate
+// adminMiddleware.js (SuperAdmin JWT), not User JWT role checks.
 
-// Driver
-const driverMiddleware = (req, res, next) => {
-    if (!req.userInfo) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized. Please login first.",
-        });
-    }
-    if (req.userInfo.role !== "driver") {
-        return res.status(403).json({
-            success: false,
-            message: "Access denied. Drivers only.",
-        });
-    }
-    next();
-};
-
-// Bus Owner OR Conductor — for conductor routes (bus owner acting as conductor)
-const busOwnerOrConductorMiddleware = (req, res, next) => {
-    if (!req.userInfo) {
-        return res.status(401).json({
-            success: false,
-            message: "Unauthorized. Please login first.",
-        });
-    }
-    if (req.userInfo.role !== "busOwner" && req.userInfo.role !== "conductor") {
-        return res.status(403).json({
-            success: false,
-            message: "Access denied. Bus owners or conductors only.",
-        });
-    }
-    next();
-};
+const busOwnerMiddleware = requireRole("busOwner");
+const agentMiddleware = requireRole("agent");
+const conductorMiddleware = requireRole("conductor");
+const driverMiddleware = requireRole("driver");
 
 module.exports = {
-    isAdminOrBusOwner,
-    adminMiddleware,
+    requireRole,
     agentMiddleware,
     busOwnerMiddleware,
     conductorMiddleware,
     driverMiddleware,
-    busOwnerOrConductorMiddleware,
 };

@@ -18,6 +18,15 @@ const seatHoldSchema = new mongoose.Schema(
       type: [String],
       required: true,
     },
+    seatKeys: {
+      type: [String],
+      select: false,
+      default: undefined,
+    },
+    userTripKey: {
+      type: String,
+      select: false,
+    },
     tempBookingId: {
       type: String,
       required: true,
@@ -25,17 +34,55 @@ const seatHoldSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["held", "completed"],
+      enum: ["held", "processing", "completed", "released"],
       default: "held",
+    },
+    originalAmount: {
+      type: Number,
+      default: null,
+      min: 0,
     },
     expiresAt: {
       type: Date,
       required: true,
-      // TTL Index: MongoDB automatically deletes the document when the current time reaches expiresAt
-      index: { expires: 0 }, 
+      index: { expires: 0 },
+    },
+    completedAt: {
+      type: Date,
+      default: null,
+    },
+    processingAt: {
+      type: Date,
+      default: null,
+    },
+    heldExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    releasedAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }
+);
+
+seatHoldSchema.index(
+  { seatKeys: 1 },
+  {
+    unique: true,
+    sparse: true,
+    name: "uniq_active_trip_seat_hold",
+  }
+);
+
+seatHoldSchema.index(
+  { userTripKey: 1 },
+  {
+    unique: true,
+    sparse: true,
+    name: "uniq_active_user_trip_hold",
+  }
 );
 
 module.exports = mongoose.model("SeatHold", seatHoldSchema);

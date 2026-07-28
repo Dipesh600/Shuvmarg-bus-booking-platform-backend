@@ -11,13 +11,15 @@ const googleMapRoutes = require("./googleMapRoute/googleMapRoute.js")
 const agentRoute = require("./agentRoute/agentRoute.js")
 const busOwnerRoute = require("./busOwner/busOwner.js")
 const publicRoute = require("./publicRoutes/publicRoute.js")
-const paymentRoutes = require("./paymentRoutes/paymentRoutes.js")
 const conductorRoutes = require("./conductorRoutes/conductorRoutes.js")
 
 // Entity-specific self-registration auth routes
 const busOwnerAuthRoutes = require("./authRoutes/busOwnerAuthRoutes.js");
 const agentAuthRoutes = require("./authRoutes/agentAuthRoutes.js");
 const activateAuthRoutes = require("./authRoutes/activateAuthRoutes.js");
+const passengerAuthRoutes = require("./authRoutes/passengerAuthRoutes.js");
+
+const partnerLeadRoutes = require("./partnerLeadRoutes.js");
 
 router.use("/api", userRoute);
 router.use("/api/ticket", ticketRoute);
@@ -30,12 +32,13 @@ router.use("/api/pushnoti", pushRoute);
 router.use("/api/googlemap", googleMapRoutes)
 router.use("/api/agent", agentRoute)
 router.use("/api/public", publicRoute)
-router.use("/api/payment", paymentRoutes)
 router.use("/api/conductor", conductorRoutes)
+router.use("/api", partnerLeadRoutes);
 
 // Entity-specific self-registration auth
 router.use("/api/auth/busowner", busOwnerAuthRoutes);
 router.use("/api/auth/agent", agentAuthRoutes);
 router.use("/api/auth/activate", activateAuthRoutes);
+router.use("/api/auth/passenger", passengerAuthRoutes);
 
 module.exports = router;

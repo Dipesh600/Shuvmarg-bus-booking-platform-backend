@@ -501,4 +501,4 @@ const generateTripsForDate = async (targetDate) => {
     return { date: dateStr, generated, skipped, errors };
 };
 
-module.exports = { setupTripGeneratorCron, generateTripsForDate, generateTripsForDateRange };
+module.exports = { setupTripGeneratorCron, generateTripsForDate, generateTripsForDateRange, shouldGenerate, isAlternatingDay };

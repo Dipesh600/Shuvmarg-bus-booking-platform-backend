@@ -1,6 +1,10 @@
-const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const path = require("path");
+const {
+  buildS3Path,
+  sanitizeSegment,
+} = require("../src/modules/shared/storage/s3-object-key-builder.js");
 
 const s3Client = new S3Client({
     region: process.env.AWS_REGION,
@@ -9,20 +13,6 @@ const s3Client = new S3Client({
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     },
 });
-
-/**
- * Sanitizes a string to be safe for use as an S3 folder segment.
- * Lowercases, replaces spaces/special chars with hyphens, strips leading/trailing hyphens.
- */
-const sanitizeSegment = (str) => {
-    if (!str) return "unknown";
-    return String(str)
-        .toLowerCase()
-        .replace(/[^a-z0-9-_]/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-|-$/g, "")
-        .slice(0, 64);
-};
 
 /**
  * Uploads a file buffer to S3 and returns the Object Key.
@@ -59,6 +49,7 @@ const uploadFileToS3 = async (file, folder) => {
     return objectKey;
 };
 
+
 /**
  * Generates a temporary, 1-hour presigned URL for securely viewing private S3 objects.
  */
@@ -73,8 +64,35 @@ const getPresignedUrl = async (objectKey) => {
         Key: objectKey,
     });
 
-    // URL expires in 1 hour (3600 seconds)
+    // 1 hour — for sensitive private documents (KYC, driver docs, etc.)
+    // Short-lived by design: only valid for the duration of one admin/staff session.
     return await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+};
+
+/**
+ * Generates a long-lived presigned URL (7 days — S3 maximum) for non-sensitive
+ * display assets such as coupon/offer images.
+ *
+ * Why 7 days and not permanent:
+ *   - The S3 bucket stays 100% private, no bucket policy or ACL changes needed.
+ *   - 7 days is the AWS maximum for presigned URLs with IAM credentials.
+ *   - URLs are always regenerated fresh on every API call, so a user loading
+ *     the page always gets a URL valid for another 7 days from that moment.
+ *   - In practice, a marketing banner image never needs to outlive a user session.
+ *
+ * Use this ONLY for public-facing display content that is not sensitive.
+ */
+const getDisplayUrl = async (objectKey) => {
+    if (!objectKey) return null;
+    if (objectKey.startsWith("http")) return objectKey; // already a full URL
+
+    const command = new GetObjectCommand({
+        Bucket: process.env.AWS_S3_BUCKET_NAME,
+        Key: objectKey,
+    });
+
+    // 7 days (604800 seconds) — S3 maximum for presigned URLs
+    return await getSignedUrl(s3Client, command, { expiresIn: 604800 });
 };
 
 /**
@@ -100,75 +118,49 @@ const deleteFromS3 = async (keys) => {
 };
 
 /**
- * ─── S3 Path Builder ────────────────────────────────────────────────────
- *
- * All S3 key prefixes MUST be constructed through this single helper.
- * This ensures a consistent, navigable folder structure across all uploads.
- *
- * Structure:
- *   Bus Owner KYC docs:
- *     owners/{busOwnerId}/kyc/{documentType}/
- *
- *   Fleet images:
- *     owners/{ownerId}/brands/{brandId}/fleets/{fleetId}/images/
- *
- *   Fleet documents:
- *     owners/{ownerId}/brands/{brandId}/fleets/{fleetId}/docs/{documentType}/
- *
- *   Driver documents:
- *     brands/{brandId}/drivers/{driverId}/docs/{documentType}/
- *
- *   Dispute proofs:
- *     disputes/{disputeType}/{transactionId}/
- *
- * NOTE: brandId (MongoDB ObjectId) is used instead of brandName because:
- *   - IDs are unique and immutable (brand names can be renamed or sanitize to collide)
- *   - Prevents path drift when a brand is renamed
- *
- * @param {object} options
- * @param {'owner_kyc' | 'fleet_images' | 'fleet_docs' | 'driver_docs' | 'dispute_proof'} options.type
- * @param {string} [options.ownerId]        - BusOwner's User._id (Mongo ObjectId string)
- * @param {string} [options.brandId]        - OperatorBrand._id (Mongo ObjectId string)
- * @param {string} [options.fleetId]        - Fleet.fleetId auto-generated field (e.g. "FL-001")
- * @param {string} [options.driverId]       - DriverProfile._id (Mongo ObjectId string)
- * @param {string} [options.documentType]   - e.g. "company-registration", "fitness-cert", "license"
- * @param {string} [options.disputeType]    - e.g. "booking-mismatch", "verification-lag", "general"
- * @param {string} [options.transactionId]  - Transaction MongoDB _id for dispute uploads
- * @returns {string} - S3 key prefix (no trailing slash)
+ * Lists objects in a specific S3 folder prefix.
+ * Used by background cron jobs to find orphaned assets.
+ * @param {string} prefix - The S3 folder prefix (e.g. 'platform/coupons')
+ * @returns {Array<{Key: string, LastModified: Date}>} - Array of object keys and their modification dates
  */
-const buildS3Path = ({ type, ownerId, brandId, fleetId, driverId, documentType, disputeType, transactionId }) => {
-    const ownerSegment = `owners/${sanitizeSegment(ownerId)}`;
+const listObjectsInFolder = async (prefix) => {
+    if (!prefix) return [];
+    
+    // Ensure prefix has a trailing slash for exact folder matching if not already
+    const searchPrefix = prefix.endsWith('/') ? prefix : `${prefix}/`;
+    
+    let isTruncated = true;
+    let continuationToken = undefined;
+    const allObjects = [];
 
-    switch (type) {
-        case "owner_kyc":
-            return `${ownerSegment}/kyc/${sanitizeSegment(documentType)}`;
+    while (isTruncated) {
+        const command = new ListObjectsV2Command({
+            Bucket: process.env.AWS_S3_BUCKET_NAME,
+            Prefix: searchPrefix,
+            ContinuationToken: continuationToken,
+        });
 
-        case "fleet_images":
-            // Use brandId for uniqueness; falls back to 'no-brand' when fleet has no brand
-            return `${ownerSegment}/brands/${sanitizeSegment(brandId || "no-brand")}/fleets/${sanitizeSegment(fleetId)}/images`;
-
-        case "fleet_docs":
-            return `${ownerSegment}/brands/${sanitizeSegment(brandId || "no-brand")}/fleets/${sanitizeSegment(fleetId)}/docs/${sanitizeSegment(documentType)}`;
-
-        case "driver_docs":
-            // Driver docs are brand-scoped, not owner-scoped
-            // brands/{brandId}/drivers/{driverId}/docs/{documentType}/
-            return `brands/${sanitizeSegment(brandId)}/drivers/${sanitizeSegment(driverId)}/docs/${sanitizeSegment(documentType)}`;
-
-        case "dispute_proof":
-            // disputes/{disputeType}/{transactionId}/
-            // disputeType: "booking-mismatch" | "verification-lag" | "general"
-            return `disputes/${sanitizeSegment(disputeType || "general")}/${sanitizeSegment(transactionId)}`;
-
-        default:
-            return `misc/${sanitizeSegment(type)}`;
+        const response = await s3Client.send(command);
+        if (response.Contents) {
+            allObjects.push(...response.Contents.map(obj => ({
+                Key: obj.Key,
+                LastModified: obj.LastModified,
+            })));
+        }
+        
+        isTruncated = response.IsTruncated;
+        continuationToken = response.NextContinuationToken;
     }
+
+    return allObjects;
 };
 
 module.exports = {
     uploadFileToS3,
-    getPresignedUrl,
+    getPresignedUrl,    // 1 hour  — private/sensitive documents (KYC, driver docs, etc.)
+    getDisplayUrl,      // 7 days  — non-sensitive display assets (coupon images etc.)
     deleteFromS3,
+    listObjectsInFolder,
     buildS3Path,
     sanitizeSegment,
 };

@@ -3,24 +3,28 @@ const RouteCorridor = require("../models/routeCorridorModel.js");
 const RouteVariant = require("../models/routeVariantModel.js");
 const RouteStop = require("../models/routeStopModel.js");
 const BoardingPoint = require("../models/boardingPointsModel.js");
+const OperatorRouteConfig = require("../models/operatorRouteConfigModel.js");
 
 // ──────────────────────────────────────────────
 // LAYER 3: Stop Registry
 // ──────────────────────────────────────────────
 
 const createStop = async (data) => {
-    const { code, name, type, state, coordinates, aliases } = data;
-    if (!code || !name) throw new Error("Stop code and name are required.");
+    const { code, name, type, province, district, municipality, coordinates, aliases, status } = data;
+    if (!name) throw new Error("Stop name is required.");
 
-    const existing = await Stop.findOne({ code: code.toUpperCase() });
-    if (existing) throw new Error(`Stop with code "${code.toUpperCase()}" already exists.`);
-
-    return await Stop.create({ code, name, type, state, coordinates, aliases: aliases || [] });
+    if (code) {
+        const existing = await Stop.findOne({ code: code.toUpperCase() });
+        if (existing) throw new Error(`Stop with code "${code.toUpperCase()}" already exists.`);
+        return await Stop.create({ code, name, type, province, district, municipality, coordinates, aliases: aliases || [], status: status || "ACTIVE" });
+    } else {
+        return await Stop.createWithUniqueCode({ name, type, province, district, municipality, coordinates, aliases: aliases || [], status: status || "ACTIVE" });
+    }
 };
 
 const getAllStops = async (filter = {}) => {
-    const query = { status: "ACTIVE", ...filter };
-    return await Stop.find(query).sort({ name: 1 }).lean();
+    // Remove default "ACTIVE" filter so admin registry shows all stops (including inactive ones)
+    return await Stop.find(filter).sort({ province: 1, district: 1, name: 1 }).lean();
 };
 
 const searchStops = async (query) => {
@@ -449,30 +453,53 @@ const bulkImportStops = async (rawStops, adminId) => {
 };
 
 const updateStop = async (id, data) => {
-    const { name, type, state, status, aliases } = data;
-    const stop = await Stop.findByIdAndUpdate(
-        id,
-        { 
-            ...(name && { name }), 
-            ...(type && { type }), 
-            ...(state !== undefined && { state }), 
-            ...(status && { status }),
-            ...(aliases !== undefined && { aliases })
-        },
-        { new: true, runValidators: true }
-    );
+    const { name, type, province, district, municipality, coordinates, status, aliases } = data;
+    const updateFields = {
+        // When renaming, keep _nameLower in sync — the pre("save") hook does NOT run on findByIdAndUpdate
+        ...(name && { name, _nameLower: name.toLowerCase().trim() }),
+        ...(type && { type }),
+        ...(province !== undefined && { province }),
+        ...(district !== undefined && { district }),
+        ...(municipality !== undefined && { municipality }),
+        ...(coordinates && { coordinates }),
+        ...(status && { status }),
+        ...(aliases && { aliases: Array.isArray(aliases) ? aliases : [] })
+    };
+    
+    console.log("UPDATE FIELDS COMPUTED:", updateFields);
+    
+    const updated = await Stop.findByIdAndUpdate(id, updateFields, { new: true, runValidators: true });
+    console.log("UPDATED STOP IN DB:", updated);
+    return updated;
     if (!stop) throw new Error("Stop not found.");
     return stop;
 };
 
+
 const deleteStop = async (id) => {
     const stop = await Stop.findById(id);
     if (!stop) throw new Error("Stop not found.");
-    const refCount = await RouteStop.countDocuments({ stopId: id });
-    if (refCount > 0) {
-        throw new Error(`REFERENCED:${refCount}:Stop is used in ${refCount} route sequence(s). Remove it from those sequences first.`);
+
+    // Check if any operator is actively using this stop in their fleet config
+    const operatorUsageCount = await OperatorRouteConfig.countDocuments({
+        $or: [
+            { activeStops: id },
+            { returnActiveStops: id },
+            { "boardingConfig.stopId": id },
+            { "timingConfig.stopId": id },
+            { "returnBoardingConfig.stopId": id },
+            { "returnTimingConfig.stopId": id }
+        ]
+    });
+
+    if (operatorUsageCount > 0) {
+        throw new Error(`REFERENCED:${operatorUsageCount}:Stop is actively used by ${operatorUsageCount} operator route(s). Remove it from those operators' fleets first.`);
     }
+
+    // Safe to delete. Cascade delete global registry references.
     await Stop.findByIdAndDelete(id);
+    await RouteStop.deleteMany({ stopId: id });
+    await BoardingPoint.deleteMany({ stopId: id });
 };
 
 const updateCorridor = async (id, data) => {

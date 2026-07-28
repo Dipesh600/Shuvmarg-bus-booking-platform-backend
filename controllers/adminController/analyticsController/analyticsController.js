@@ -10,7 +10,10 @@
 const User     = require("../../../models/userModel.js");
 const Booking  = require("../../../models/bookTicketModel.js");
 const Trip     = require("../../../models/tripModel.js");
-const BusRoute = require("../../../models/busRouteModel.js");
+const RouteVariant = require("../../../models/routeVariantModel.js");
+const Buse     = require("../../../models/fleetModel.js");
+const OperatorBrand = require("../../../models/operatorBrandModel.js");
+const Agent    = require("../../../models/agentModel.js");
 const logger   = require("../../../utils/logger.js");
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -36,8 +39,7 @@ const getAnalyticsOverview = async (req, res) => {
                     },
                     newUsers: { $sum: 1 },
                 }
-            },
-            { $sort: { "_id.year": 1, "_id.month": 1 } }
+            }
         ]);
 
         const totalUsers   = await User.countDocuments({});
@@ -46,14 +48,6 @@ const getAnalyticsOverview = async (req, res) => {
 
         const usersLastMonth  = await User.countDocuments({ createdAt: { $gte: prevMonthStart, $lt: thisMonthStart } });
         const usersThisMonth  = await User.countDocuments({ createdAt: { $gte: thisMonthStart } });
-
-        // Build cumulative user growth chart (running total)
-        let runningTotal = totalUsers;
-        const userGrowthChart = userGrowthRaw.map(m => ({
-            month:    `${MONTH_NAMES[m._id.month - 1]} ${m._id.year}`,
-            newUsers: m.newUsers,
-            total:    runningTotal,  // approximate; exact would need full scan
-        }));
 
         // ── 2. Booking trends — last 12 months ──
         const bookingTrendsRaw = await Booking.aggregate([
@@ -66,16 +60,38 @@ const getAnalyticsOverview = async (req, res) => {
                     },
                     bookings: { $sum: 1 },
                     revenue:  { $sum: "$totalAmount" },
+                    activeUsersSet: { $addToSet: "$userId" }
                 }
-            },
-            { $sort: { "_id.year": 1, "_id.month": 1 } }
+            }
         ]);
 
-        const bookingTrendChart = bookingTrendsRaw.map(m => ({
-            month:    `${MONTH_NAMES[m._id.month - 1]} ${m._id.year}`,
-            bookings: m.bookings,
-            revenue:  Math.round(m.revenue),
-        }));
+        // Merge into a continuous 12-month timeline
+        const userGrowthChart = [];
+        const bookingTrendChart = [];
+        
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(twelveMonthsAgo);
+            d.setMonth(d.getMonth() + i);
+            const y = d.getFullYear();
+            const m = d.getMonth() + 1; // 1-12
+            
+            const uData = userGrowthRaw.find(u => u._id.year === y && u._id.month === m);
+            const bData = bookingTrendsRaw.find(b => b._id.year === y && b._id.month === m);
+            
+            const monthLabel = `${MONTH_NAMES[m - 1]} ${y}`;
+            
+            userGrowthChart.push({
+                month: monthLabel,
+                newUsers: uData ? uData.newUsers : 0,
+                activeUsers: bData ? bData.activeUsersSet.length : 0,
+            });
+            
+            bookingTrendChart.push({
+                month: monthLabel,
+                bookings: bData ? bData.bookings : 0,
+                revenue: bData ? Math.round(bData.revenue) : 0,
+            });
+        }
 
         // ── 3. Top routes by booking volume ──
         const topRoutesRaw = await Booking.aggregate([
@@ -86,10 +102,15 @@ const getAnalyticsOverview = async (req, res) => {
                 foreignField: "_id",
                 as:           "trip",
             }},
-            { $unwind: "$trip" },
+            { $unwind: { path: "$trip", preserveNullAndEmptyArrays: true } },
             {
                 $group: {
-                    _id:      "$trip.routeId",
+                    _id: {
+                        routeId: "$trip.routeId",
+                        directionLabel: "$trip.directionLabel",
+                        fromStop: "$trip.fromStopName",
+                        toStop: "$trip.toStopName"
+                    },
                     bookings: { $sum: 1 },
                     revenue:  { $sum: "$totalAmount" },
                 }
@@ -98,19 +119,27 @@ const getAnalyticsOverview = async (req, res) => {
             { $limit: 6 },
             { $lookup: {
                 from:         "busroutes",
-                localField:   "_id",
+                localField:   "_id.routeId",
                 foreignField: "_id",
                 as:           "route",
             }},
             { $unwind: { path: "$route", preserveNullAndEmptyArrays: true } },
         ]);
 
-        const topRoutes = topRoutesRaw.map(r => ({
-            route:    r.route?.routeName
-                   ?? (r.route?.from && r.route?.to ? `${r.route.from} → ${r.route.to}` : "Unknown Route"),
-            bookings: r.bookings,
-            revenue:  Math.round(r.revenue),
-        }));
+        const topRoutes = topRoutesRaw.map(r => {
+            const tripFallback = r._id.fromStop && r._id.toStop ? `${r._id.fromStop} → ${r._id.toStop}` : null;
+            const routeFallback = r.route?.from && r.route?.to ? `${r.route.from} → ${r.route.to}` : null;
+            
+            return {
+                route:    r._id.directionLabel
+                       ?? tripFallback
+                       ?? r.route?.routeName
+                       ?? routeFallback
+                       ?? "Unknown Route",
+                bookings: r.bookings,
+                revenue:  Math.round(r.revenue),
+            };
+        });
 
         // ── 4. Platform KPIs ──
         const [bookingStats] = await Booking.aggregate([
@@ -150,6 +179,13 @@ const getAnalyticsOverview = async (req, res) => {
             ? parseFloat(((usersThisMonth - usersLastMonth) / usersLastMonth * 100).toFixed(1))
             : 0;
 
+        // ── 5. Operational Overview Stats (Supply Side) ──
+        const activeFleets = await Buse.countDocuments({ status: "ACTIVE" });
+        const activeTrips = await Trip.countDocuments({ status: { $in: ["scheduled", "in-transit", "boarding"] } });
+        const totalOperators = await OperatorBrand.countDocuments({});
+        const activeRoutes = await RouteVariant.countDocuments({ status: "ACTIVE" });
+        const registeredAgents = await Agent.countDocuments({ accountStatus: "ACTIVE" });
+
         return res.status(200).json({
             success: true,
             data: {
@@ -162,6 +198,13 @@ const getAnalyticsOverview = async (req, res) => {
                     avgTransactionAmount: avgTransaction,
                     fleetUtilization:     avgFleetUtil,
                     totalRevenue:         Math.round(bookingStats?.totalRevenue ?? 0),
+                },
+                operationalStats: {
+                    activeFleets,
+                    activeTrips,
+                    totalOperators,
+                    activeRoutes,
+                    registeredAgents,
                 },
                 userGrowthChart,
                 bookingTrendChart,

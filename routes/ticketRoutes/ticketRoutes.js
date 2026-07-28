@@ -1,36 +1,75 @@
 const express = require("express");
 const router = express.Router();
-const ticket = require("../../controllers/ticketController/ticketController.js")
-const paymentBooking = require("../../controllers/ticketController/paymentBookingController.js")
-const role = require("../../middleware/checkRole.js")
-const auth = require("../../middleware/authMiddleware.js")
+const role = require("../../middleware/checkRole.js");
+const auth = require("../../middleware/authMiddleware.js");
+const optionalAuth = require("../../middleware/optionalAuthMiddleware.js");
+const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
+const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner.js");
+const passengerSeatHold = require("../../src/modules/booking/passenger-seat-hold");
+const bookingVerification = require("../../src/modules/booking/booking-verification");
+const busOwnerScheduleManagement = require("../../src/modules/bus-owner/schedule-management");
+const tripSeatAvailability = require("../../src/modules/booking/trip-seat-availability");
+const passengerBookingHistory = require("../../src/modules/booking/passenger-booking-history");
+const passengerEsewaCheckout = require(
+  "../../src/modules/booking/passenger-esewa-checkout"
+);
+const {
+  preparePassengerBooking,
+} = require("../../src/modules/booking/passenger-booking-preparation");
+const {
+  confirmPassengerBooking,
+} = require("../../src/modules/booking/passenger-booking-confirmation-orchestrator");
 
-router.post("/createTicket", auth, role.isAdminOrBusOwner, ticket.createTicket);
-router.post("/creatSeats", auth, role.isAdminOrBusOwner, ticket.createSeats);
-router.patch("/updateTicket", auth, role.isAdminOrBusOwner, ticket.updateTicket);
-router.delete("/deleteTicket", auth, role.isAdminOrBusOwner, ticket.deleteTicket);
-router.post("/getTicketById", auth, role.isAdminOrBusOwner, ticket.getTicketById);
+const busOwnerGuard = [auth, verifyRoleFromDB, role.busOwnerMiddleware, requireApprovedBusOwner];
+const passengerBookingGuard = [auth, verifyRoleFromDB, role.requireRole("passenger")];
 
-// Book Ticket (Original - for backend payment)
-router.post("/bookTicket", auth, ticket.bookTicket);
 
-// Payment Gateway Booking Flow (New - for frontend payment)
-router.post("/prepareBooking", auth, paymentBooking.prepareBooking);
-router.post("/confirmBooking", auth, paymentBooking.confirmBooking);
-router.get("/verifyBooking/:ticketId", auth, paymentBooking.verifyBooking);
+
+router.post("/createTicket", busOwnerGuard, busOwnerScheduleManagement.createSchedule);
+router.patch("/updateTicket", busOwnerGuard, busOwnerScheduleManagement.updateSchedule);
+router.delete("/deleteTicket", busOwnerGuard, busOwnerScheduleManagement.deleteSchedule);
+router.post("/getTicketById", busOwnerGuard, busOwnerScheduleManagement.getScheduleById);
+
+// Payment Gateway Booking Flow
+router.post("/prepareBooking", ...passengerBookingGuard, preparePassengerBooking);
+router.post(
+  "/esewa/initiate",
+  ...passengerBookingGuard,
+  passengerSeatHold.requireOwnedActivePassengerSeatHold,
+  passengerEsewaCheckout.initiatePassengerEsewaCheckout
+);
+router.post(
+  "/esewa/finalize",
+  ...passengerBookingGuard,
+  passengerEsewaCheckout.finalizePassengerEsewaCheckout
+);
+router.post(
+  "/releaseBookingHold",
+  ...passengerBookingGuard,
+  passengerSeatHold.releasePassengerSeatHold
+);
+router.post(
+  "/confirmBooking",
+  ...passengerBookingGuard,
+  passengerEsewaCheckout.requireServerOwnedEsewaCheckout,
+  passengerSeatHold.requireOwnedActivePassengerSeatHold,
+  confirmPassengerBooking
+);
+router.get("/verifyBooking/:ticketId", ...passengerBookingGuard, bookingVerification.verifyBooking);
 
 // Get Seats
-router.post("/getSeats", auth, ticket.getSeatsById);
+router.post("/getSeats", optionalAuth, tripSeatAvailability.getTripSeatAvailability);
 // Get My ticket History
-router.get("/getMyTicketHistory", auth, ticket.getMyTicketHistory);
-// Get My YatraPoints History
-router.get("/getMyYatraHistory", auth, ticket.getMyYatraHistory);
+router.get(
+  "/getMyTicketHistory",
+  auth,
+  passengerBookingHistory.getPassengerBookingHistory
+);
+const passengerBookingCancellation = require("../../src/modules/booking/passenger-booking-cancellation");
 
-// Validate YatraPoints for discount
-router.post("/validateYatraPoints", auth, ticket.validateYatraPoints);
 // Cancel Ticket
-router.post("/cancelTicket", auth, ticket.cancelTicket);
+router.post("/cancelTicket", auth, passengerBookingCancellation.cancelPassengerBooking);
 // Cancel Estimate (preview refund breakdown)
-router.post("/cancelEstimate", auth, ticket.cancelEstimate);
+router.post("/cancelEstimate", auth, passengerBookingCancellation.estimatePassengerBookingCancellation);
 
 module.exports = router;

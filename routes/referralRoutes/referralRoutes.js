@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const referralController = require("../../controllers/referralController/referralController.js");
 const auth = require("../../middleware/authMiddleware.js");
-const { adminMiddleware } = require("../../middleware/checkRole.js");
+const adminMiddleware = require("../../middleware/adminMiddleware.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -36,11 +36,11 @@ router.get("/dashboard", auth, autoGenerateReferralCode, referralController.getR
 router.get("/history", auth, referralController.getReferralHistory);
 
 // ═══════════════════════════════════════════════════════════════════════
-// ADMIN
+// ADMIN (SuperAdmin JWT — not User JWT)
 // ═══════════════════════════════════════════════════════════════════════
 
 // Get all referral codes (Admin only)
-router.get("/allCodes", auth, adminMiddleware, referralController.getAllReferralCodes);
+router.get("/allCodes", adminMiddleware, referralController.getAllReferralCodes);
 
 // Legacy routes — kept for backward compatibility, redirect to dashboard
 // /myStats → now served by /dashboard

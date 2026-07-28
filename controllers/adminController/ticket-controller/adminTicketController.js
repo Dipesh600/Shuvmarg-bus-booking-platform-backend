@@ -8,11 +8,14 @@ const Route = require("../../../models/googleRouteModel");
 const BusRoute = require("../../../models/busRouteModel");
 const getAllTickets = async (req, res) => {
   try {
-    const getinfo = req.userInfo;
+    // Admin requests use adminMiddleware → req.adminInfo
+    // BusOwner requests use auth → req.userInfo
+    const isAdmin = !!req.adminInfo;
+    const userId = req.adminInfo?.id ?? req.userInfo?.id;
 
     let query = {};
-    if (getinfo.role !== "admin") {
-      query.operatorId = getinfo.id;
+    if (!isAdmin) {
+      query.operatorId = userId;
     }
 
     const tickets = await Ticket.find(query);
