@@ -24,11 +24,11 @@ const logger        = require("./utils/logger.js");
 const errorHandler  = require("./src/shared/http/error-handler.js");
 const requestLogger = require("./middleware/requestLogger.js");
 const indexRoute    = require("./routes/indexRoute.js");
-const startServer   = require("./utils/server.js");
+const startServer       = require("./utils/server.js");
+const { registerShutdown } = require("./utils/lifecycle.js");
 const { setupTripGeneratorCron } = require("./services/tripGeneratorCron.js");
 const setupFleetDocumentExpiryCron = require("./services/fleetDocumentExpiryCron.js");
 const { setupReconciliationCron } = require("./services/reconcilePayments.js");
-
 // Ensure logs directory exists (Winston needs it)
 const logsDir = path.join(__dirname, "logs");
 if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
@@ -252,7 +252,7 @@ if (require.main === module) {
   setupReconciliationCron();
   // Note: orphan coupon image cleanup is handled client-side via localStorage
   // tombstoning in the admin Create Offer page — no server-side cron needed.
-  startServer(app, PORT);
+  startServer(app, PORT).then(registerShutdown);
 }
 
 module.exports = app;

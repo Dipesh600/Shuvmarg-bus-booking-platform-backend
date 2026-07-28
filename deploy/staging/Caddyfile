@@ -1,0 +1,70 @@
+# deploy/staging/Caddyfile
+#
+# Domain is read from the STAGING_API_DOMAIN environment variable.
+# Set it in the VM-local .env file (mode 600).
+# Example: STAGING_API_DOMAIN=api-staging.shuvmarg.com
+#
+# Caddy automatically provisions and renews a TLS certificate via Let's Encrypt.
+
+{
+  # Disable Caddy's admin API on the public interface.
+  # The admin socket is accessible locally only (default unix socket).
+  admin off
+}
+
+{$STAGING_API_DOMAIN} {
+
+  # ── Compression ──────────────────────────────────────────────────────────
+  encode gzip
+
+  # ── Reverse proxy to the backend container ───────────────────────────────
+  # Caddy automatically sets X-Forwarded-For, X-Real-IP, X-Forwarded-Proto,
+  # and X-Forwarded-Host. No manual header_up directives needed.
+  reverse_proxy backend:7012 {
+    # Transport timeouts — generous for mobile networks
+    transport http {
+      dial_timeout        10s
+      response_header_timeout 60s
+    }
+
+    # Forward the client's real IP (populated automatically by Caddy)
+    header_up X-Forwarded-For {remote_host}
+
+    # WebSocket upgrade passthrough
+    header_up Connection {http.request.header.Connection}
+    header_up Upgrade    {http.request.header.Upgrade}
+
+    # Health check — only proxy to a healthy backend
+    health_uri      /health
+    health_interval 15s
+    health_timeout  5s
+  }
+
+  # ── Security headers ─────────────────────────────────────────────────────
+  # Applied to all responses. These headers do not affect API payloads.
+  header {
+    # Prevent MIME-type sniffing
+    X-Content-Type-Options "nosniff"
+
+    # Prevent clickjacking
+    X-Frame-Options "DENY"
+
+    # Force HTTPS for future requests (HSTS — 1 year)
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+    # Referrer policy for API responses
+    Referrer-Policy "strict-origin-when-cross-origin"
+
+    # No caching for API responses
+    Cache-Control "no-store"
+
+    # Remove the Caddy version header
+    -Server
+  }
+
+  # ── Logging ──────────────────────────────────────────────────────────────
+  log {
+    output stdout
+    format json
+  }
+}
