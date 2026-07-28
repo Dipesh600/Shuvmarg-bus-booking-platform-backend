@@ -1,6 +1,9 @@
 'use strict';
 
-process.env.SECRET_KEY = process.env.SECRET_KEY || 'test-only-secret-32chars-minimum!!';
+const { createTestPassword, createTestSecret } =
+  require('../helpers/security-test-values');
+process.env.SECRET_KEY ||=
+  createTestSecret('bus-owner-session-refresh');
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -13,7 +16,7 @@ const User = require('../../models/userModel');
 const tokenService = require('../../utils/tokenService');
 const service = require('../../src/modules/bus-owner/auth/session/bus-owner-session.service');
 
-const password = ['BusOwner', 'Pass', '123!'].join('');
+const password = createTestPassword('bus-owner-session-refresh');
 const cookieToken = (res) => (res.headers['set-cookie'] || [])
   .find((c) => c.startsWith('refreshToken='))
   ?.split(';')[0]
