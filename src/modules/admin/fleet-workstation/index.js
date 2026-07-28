@@ -66,7 +66,7 @@ const referralService = createReferralUnlockService({
   Booking,
   loadUser: () => require("../../../../models/userModel"),
   loadReferralService: () =>
-    require("../../../../services/referralV2Service"),
+    require("../../referral/reward-lifecycle"),
   logger,
 });
 const tripStatusService = createTripStatusService({
