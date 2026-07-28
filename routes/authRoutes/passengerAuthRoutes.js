@@ -17,11 +17,12 @@ const otpLimiters = require('../../middleware/otpRateLimiter.js');
 
 const createPassengerAuthRouter = ({
   otpVerifyLimiter = otpLimiters.otpVerifyLimiter,
+  otpSendLimiter = otpLimiters.otpSendLimiter,
   otpPresenceLimiter = otpLimiters.validatePhonePresent,
 } = {}) => {
   const router = express.Router();
 
-  router.post('/sendOTP', otpPresenceLimiter, passengerOtpAuth.sendOTP);
+  router.post('/sendOTP', otpSendLimiter, otpPresenceLimiter, passengerOtpAuth.sendOTP);
   router.post('/verifyOTP', otpVerifyLimiter, passengerOtpAuth.verifyOTP);
   return router;
 };
