@@ -1,5 +1,9 @@
 'use strict';
 
+process.env.NODE_ENV = 'test';
+process.env.SECRET_KEY ||= 'test-only-secret-32chars-minimum!!';
+process.env.VERIFICATION_TOKEN_SECRET ||= 'test-only-verification-secret!!';
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const passengerOtpAuth = require('../../../src/modules/auth/passenger-otp-auth');
