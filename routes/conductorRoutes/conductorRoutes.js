@@ -3,7 +3,7 @@ const router               = express.Router();
 const conductorCon         = require("../../controllers/conductorController/conductorController.js");
 const auth                 = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB     = require("../../middleware/verifyRoleFromDB.js");
-const { busOwnerOrConductorMiddleware } = require("../../middleware/checkRole.js");
+const { requireRole }      = require("../../middleware/checkRole.js");
 
 /**
  * Conductor Routes — /api/conductor
@@ -14,7 +14,7 @@ const { busOwnerOrConductorMiddleware } = require("../../middleware/checkRole.js
  */
 
 // ── Pipeline: JWT verify → DB status check → role check ─────────────────────
-router.use(auth, verifyRoleFromDB, busOwnerOrConductorMiddleware);
+router.use(auth, verifyRoleFromDB, requireRole("busOwner", "conductor"));
 
 // POST /api/conductor/confirmBoarding
 // Body: { ticketId, tripId }

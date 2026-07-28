@@ -219,4 +219,38 @@ tripSchema.index({ brandId: 1, status: 1, tripDate: -1 });      // Brand-level f
 tripSchema.index({ scheduleId: 1, tripDate: -1 });                     // Schedule → Trips lookup
 tripSchema.index({ status: 1, recurrence: 1, autoGenerateUntil: 1 }); // Legacy CRON query
 
+/**
+ * Ownership invariant — runs only on INSERT.
+ *
+ * A Trip document cannot be written to the database unless the operator
+ * who owns it has a fully KYC-approved BusOwner profile.
+ *
+ * Canonical enforcement point — below HTTP, below services.
+ */
+tripSchema.pre("save", async function (next) {
+    if (!this.isNew) return next();
+    if (!this.ownerId) return next(); // admin-generated trips may not have ownerId
+
+    const BusOwner = require("mongoose").model("BusOwner");
+    const busOwner = await BusOwner.findOne({ user: this.ownerId })
+        .select("verificationStatus")
+        .lean();
+
+    if (!busOwner) {
+        return next(new Error(
+            "OWNER_PROFILE_NOT_FOUND: No BusOwner profile found for this user."
+        ));
+    }
+
+    if (busOwner.verificationStatus !== "approved") {
+        return next(new Error(
+            `OWNER_NOT_APPROVED: Trip creation requires an approved BusOwner profile ` +
+            `(current status: ${busOwner.verificationStatus}).`
+        ));
+    }
+
+    return next();
+});
+
 module.exports = mongoose.models.Trip || mongoose.model("Trip", tripSchema);
+

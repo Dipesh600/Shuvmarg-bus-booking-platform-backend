@@ -42,8 +42,21 @@ const routeStopSchema = new mongoose.Schema(
             // Major = shown prominently in search/booking
             // Minor = junction, only shown for operators who explicitly stop there
         },
-        // Estimated minutes from the ORIGIN stop of this variant
-        // Used for ETA display and timing calculations
+        // Distance in km from the ORIGIN stop of this variant.
+        // Populated by the discovery publish action; can also be set manually.
+        // Used for fare calculation on sub-routes (pick-up at stop B, drop-off at stop D).
+        distanceFromOriginKm: {
+            type: Number,
+            default: null,
+        },
+        // Duration in minutes from the ORIGIN stop of this variant.
+        // Canonical field name aligns with RouteDiscovery.publishedVariant schema.
+        durationFromOriginMins: {
+            type: Number,
+            default: 0,
+        },
+        // Legacy alias — kept so existing controller reads don't break.
+        // New code should write/read durationFromOriginMins instead.
         estimatedMinutesFromOrigin: {
             type: Number,
             default: 0,

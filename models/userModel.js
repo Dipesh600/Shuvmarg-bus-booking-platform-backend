@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const accountRolePolicy = require('../src/shared/auth/account-role.policy');
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -12,7 +13,7 @@ const userSchema = new mongoose.Schema(
       // required: [true, "Email is required"],
       trim: true,
       unique: true,
-      sparse: true, // <--- ADD THIS LINE
+      sparse: true,
       lowercase: true,
       match: [/^\S+@\S+\.\S+$/, "Please use a valid email address"],
     },
@@ -28,7 +29,14 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
+      // NOTE: validators run BEFORE pre-save hooks — resolve effective roles
+      // independently using roles[] when non-empty, else fall back to role.
+      required: [
+        function requirePasswordForOperationalRoles() {
+          return accountRolePolicy.hasPrivilegedRole(this);
+        },
+        'Password is required for operational roles',
+      ],
       minlength: [8, "Password must be at least 8 characters long"],
       select: false,
     },
@@ -42,10 +50,31 @@ const userSchema = new mongoose.Schema(
       enum: ["male", "female"],
       //   required: [true, "Gender is required"],
     },
+    // The FIRST role this user registered with — historical/analytics only.
+    // NOT used for authorization. Auth checks use `roles[]` and JWT `activeRole`.
     role: {
       type: String,
-      enum: ["passenger", "agent", "busOwner", "conductor", "driver", "admin"],
+      enum: ["passenger", "agent", "busOwner", "conductor", "driver"],
       default: "passenger",
+    },
+    // === MULTI-ROLE SUPPORT (SOURCE OF TRUTH FOR AUTHORIZATION) ===
+    // All roles this user actively holds. Grows when user is onboarded to a new app.
+    // Role-specific status lives on role profile models (Agent, BusOwner), not here.
+    roles: {
+      type: [String],
+      enum: ["passenger", "agent", "busOwner", "conductor", "driver"],
+      default: [],
+      validate: {
+        validator: (v) => v.length > 0,
+        message: "User must have at least one role",
+      },
+      index: true,
+    },
+    // Track when each role was granted: { passenger: Date, agent: Date, ... }
+    roleActivatedAt: {
+      type: Map,
+      of: Date,
+      default: {},
     },
     isVerified: {
       type: Boolean,
@@ -113,13 +142,34 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,    // Non-null = account locked until this timestamp
     },
-
+    // Incremented on logout/password change. Tokens embed the version; stale tokens are rejected.
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
     // === SOFT DELETE ===
     deletedAt: {
       type: Date,
       default: null,    // Non-null = account soft-deleted
     },
-
+    // === ADMIN ENFORCEMENT ===
+    // Why the user was banned/suspended — shown to the user in the app
+    suspensionReason: {
+      type: String,
+      default: null,
+      maxlength: 500,
+    },
+    // When the status was last changed by an admin
+    suspendedAt: {
+      type: Date,
+      default: null,
+    },
+    // Which admin changed the status (for internal tracking)
+    statusChangedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SuperAdmin",
+      default: null,
+    },
     // === ADMIN-GENERATED CREDENTIALS ===
     forcePasswordChange: {
       type: Boolean,
@@ -128,5 +178,41 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// === PRE-SAVE HOOK: Normalize phone + sync roles ===
+// 1. Normalizes phone to consistent local format (strips +977, 977, leading 0)
+// 2. Guarantees `roles` always includes the primary `role`.
+// 3. Backfills roleActivatedAt for roles missing timestamps.
+userSchema.pre("save", function (next) {
+  // Phone normalization — single canonical form in the DB
+  if (this.isModified("phone") && this.phone) {
+    let p = String(this.phone).replace(/[\s\-\(\)]/g, "");
+    if (p.startsWith("+977")) p = p.slice(4);
+    else if (p.startsWith("977") && p.length > 10) p = p.slice(3);
+    if (p.startsWith("0") && p.length === 11) p = p.slice(1);
+    this.phone = p;
+  }
+
+  if (this.role) {
+    if (!this.roles || this.roles.length === 0) {
+      this.roles = [this.role];
+    } else if (!this.roles.includes(this.role)) {
+      this.roles.push(this.role);
+    }
+  }
+
+  // Backfill roleActivatedAt for any roles without a timestamp
+  if (this.roles && this.roles.length > 0) {
+    const now = new Date();
+    for (const r of this.roles) {
+      if (!this.roleActivatedAt || !this.roleActivatedAt.get(r)) {
+        if (!this.roleActivatedAt) this.roleActivatedAt = new Map();
+        this.roleActivatedAt.set(r, now);
+      }
+    }
+  }
+
+  next();
+});
 
 module.exports = mongoose.model("User", userSchema);

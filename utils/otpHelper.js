@@ -1,144 +1,267 @@
 /**
  * utils/otpHelper.js
- * 
+ *
  * Centralized OTP generation and verification logic.
- * All auth flows (passenger, busOwner, agent, password reset) 
- * must use these functions — never inline OTP logic.
- * 
+ * All auth flows must use these functions — never inline OTP logic.
+ *
  * Security measures:
- * - 6-digit OTP (900,000 combinations vs. old 4-digit 9,000)
- * - crypto.randomInt for cryptographically secure generation
- * - Constant-time comparison to prevent timing attacks
- * - Mandatory `purpose` field to prevent cross-flow OTP reuse
+ *  - 6-digit OTP (900,000 combinations) via crypto.randomInt (CSPRNG)
+ *  - Constant-time comparison via crypto.timingSafeEqual
+ *  - Mandatory `purpose` field prevents cross-flow OTP reuse
+ *  - `blockedUntil` prevents SMS bombing after sendCount is exhausted
+ *  - Attempts are tracked; brute-force exhaustion triggers blockedUntil
  */
 
-const crypto = require("crypto");
 const OTP = require("../models/otpModel.js");
-const sendOTP = require("../handlers/sparro-otp.js");
+const sendSMS = require("../handlers/sparro-otp.js");
+const {
+  hashOTP,
+  generateOtpCode,
+  safeCompare,
+} = require("../src/shared/auth/otp-code.crypto.js");
 
 const OTP_EXPIRY_MINUTES = 5;
-const OTP_MAX_ATTEMPTS = 5;
+const OTP_MAX_ATTEMPTS = 5;    // wrong guesses before the code is dead
+const MAX_OTP_SENDS = 3;        // max OTP sends per phone+purpose per window
+const BLOCK_DURATION_MS = 10 * 60 * 1000;  // 10 minutes
+const OTP_SEND_COOLDOWN_MS = 60 * 1000;    // 60-second cooldown between sends
 
 /**
- * Generate a cryptographically secure 6-digit OTP.
- * @returns {string} 6-digit OTP as a string
+ * Human-readable SMS prefix per OTP purpose.
  */
-const generateOtpCode = () => {
-    // crypto.randomInt is CSPRNG — far better than Math.random()
-    const code = crypto.randomInt(100000, 999999);
-    return String(code);
-};
-
-/**
- * Constant-time string comparison to prevent timing side-channel attacks.
- * @param {string} a 
- * @param {string} b 
- * @returns {boolean}
- */
-const safeCompare = (a, b) => {
-    if (typeof a !== "string" || typeof b !== "string") return false;
-    if (a.length !== b.length) return false;
-    
-    const bufA = Buffer.from(a, "utf-8");
-    const bufB = Buffer.from(b, "utf-8");
-    return crypto.timingSafeEqual(bufA, bufB);
+const PREFIX_MAP = {
+  REGISTRATION:           "Your Shuv Marg Verification code is",
+  PASSWORD_RESET:         "Your Shuv Marg account recovery code is",
+  PHONE_CHANGE:           "Your Shuv Marg Phone Change code is",
+  ACCOUNT_ACTIVATION:     "Your Shuv Marg Account Activation code is",
+  BUSOWNER_REGISTRATION:  "Your Shuv Marg Operator Verification code is",
+  BUSOWNER_PASSWORD_RESET:"Your Shuv Marg Operator Password Reset code is",
+  AGENT_REGISTRATION:     "Your Shuv Marg Agent Verification code is",
+  AGENT_PASSWORD_RESET:   "Your Shuv Marg Agent Password Reset code is",
 };
 
 /**
  * Create and send an OTP for a given phone and purpose.
- * 
- * @param {string} phone - Phone number to send OTP to
- * @param {string} purpose - One of: REGISTRATION, PASSWORD_RESET, PHONE_CHANGE, ACCOUNT_ACTIVATION
- * @param {string} [messagePrefix] - Custom SMS prefix (default based on purpose)
- * @returns {Promise<{success: boolean, expiresIn: string}>}
+ *
+ * Rate limiting logic (no extra collection needed):
+ *  - If an existing record is `blockedUntil > now`, reject with 429.
+ *  - Fresh OTP: upsert with sendCount = 1, blockedUntil = null.
+ *  - Resend:    increment sendCount. If >= MAX_OTP_SENDS, set blockedUntil.
+ *
+ * @param {string} phone
+ * @param {string} purpose
+ * @param {string|null} [customPrefix] - Override SMS prefix
+ * @returns {Promise<{ success: boolean, expiresIn: string }>}
  */
-const createAndSendOTP = async (phone, purpose, messagePrefix = null) => {
-    const otpCode = generateOtpCode();
-    const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+const createAndSendOTP = async (phone, purpose, customPrefix = null) => {
+  // ── Check 1: Hard block (send-count exhausted) ─────────────────────────────
+  const existing = await OTP.findOne({ phone, purpose });
+  if (existing && existing.isBlocked()) {
+    const unblockAt = new Date(existing.blockedUntil);
+    const minutesLeft = Math.ceil((unblockAt - Date.now()) / 60000);
+    const err = new Error(`OTP_SEND_BLOCKED:${minutesLeft}`);
+    err.statusCode = 429;
+    err.minutesLeft = minutesLeft;
+    throw err;
+  }
 
-    // Upsert: one active OTP per phone+purpose
-    await OTP.findOneAndUpdate(
-        { phone, purpose },
-        {
-            otp: otpCode,
-            otpExpiry,
-            isUsed: false,
-            attempts: 0,
-        },
-        { upsert: true, new: true }
-    );
+  // ── Check 2: Cooldown (60-second gap between sends) ──────────────────────────
+  if (existing && existing.lastSentAt) {
+    const elapsed = Date.now() - new Date(existing.lastSentAt).getTime();
+    if (elapsed < OTP_SEND_COOLDOWN_MS) {
+      const secondsLeft = Math.ceil((OTP_SEND_COOLDOWN_MS - elapsed) / 1000);
+      const err = new Error(`OTP_COOLDOWN:${secondsLeft}`);
+      err.statusCode = 429;
+      err.secondsLeft = secondsLeft;
+      throw err;
+    }
+  }
 
-    // Build SMS message
-    const prefixMap = {
-        REGISTRATION: "Your Sumarg Verification code is",
-        PASSWORD_RESET: "Your Sumarg Password Reset code is",
-        PHONE_CHANGE: "Your Sumarg Phone Change code is",
-        ACCOUNT_ACTIVATION: "Your Sumarg Account Activation code is",
-    };
+  const otpCode = generateOtpCode();
+  const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    const prefix = messagePrefix || prefixMap[purpose] || "Your Sumarg code is";
-    await sendOTP(phone, `${prefix}: ${otpCode}`);
+  let newSendCount = 1;
+  let newBlockedUntil = null;
 
-    return {
-        success: true,
-        expiresIn: `${OTP_EXPIRY_MINUTES} minutes`,
-    };
+  if (existing) {
+    // This is a resend — increment the counter
+    newSendCount = (existing.sendCount || 1) + 1;
+    if (newSendCount >= MAX_OTP_SENDS) {
+      // Block further sends for BLOCK_DURATION_MS
+      newBlockedUntil = new Date(Date.now() + BLOCK_DURATION_MS);
+    }
+  }
+
+  const hashedOtp = hashOTP(otpCode);
+
+  // Upsert: reset OTP, attempts, and expiry — but preserve/update send-rate fields
+  await OTP.findOneAndUpdate(
+    { phone, purpose },
+    {
+      otp: hashedOtp,
+      otpExpiry,
+      isUsed: false,
+      attempts: 0,
+      maxAttempts: OTP_MAX_ATTEMPTS,
+      sendCount: newSendCount,
+      blockedUntil: newBlockedUntil,
+      lastSentAt: new Date(),       // stamp for cooldown enforcement
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  const prefix = customPrefix || PREFIX_MAP[purpose] || "Your Shuv Marg code is";
+  const message = `${prefix}: ${otpCode}. Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code.`;
+
+  await sendSMS(phone, message);
+
+  return {
+    success: true,
+    expiresIn: `${OTP_EXPIRY_MINUTES} minutes`,
+  };
 };
 
 /**
  * Verify an OTP for a given phone and purpose.
- * Returns a detailed result object — never throws for expected failures.
- * 
- * @param {string} phone 
- * @param {string} otp 
- * @param {string} purpose 
- * @param {boolean} [markUsed=true] - Whether to mark OTP as used after success
- * @returns {Promise<{valid: boolean, error: string|null}>}
+ *
+ * SECURITY — RACE CONDITION FIX (HIGH severity):
+ *
+ * Previous implementation used a read → check → separate save pattern:
+ *   1. findOne()  → reads attempts = N
+ *   2. N < max?   → yes, proceed
+ *   3. incrementAttempts() → this.attempts += 1; this.save()
+ *
+ * Under parallel requests, all goroutines read the same N and all pass
+ * the check, allowing substantially more than maxAttempts wrong guesses.
+ *
+ * Fix: ALL state mutations now use atomic findOneAndUpdate with a
+ * conditional filter that enforces the constraint at the database level:
+ *
+ *   Attempt increment:
+ *     filter: { phone, purpose, isUsed: false, attempts: { $lt: maxAttempts }, otpExpiry: { $gt: now } }
+ *     update: { $inc: { attempts: 1 } }
+ *
+ *   Mark as used:
+ *     filter: { phone, purpose, isUsed: false, otpExpiry: { $gt: now } }
+ *     update: { $set: { isUsed: true } }
+ *
+ * MongoDB guarantees these are atomic. Concurrent requests racing on the
+ * same document: only those that find the document in the valid state win.
+ * Subsequent requests get null back and fail safely.
+ *
+ * @param {string} phone
+ * @param {string} otp - The code submitted by the user
+ * @param {string} purpose
+ * @param {boolean} [markUsed=true] - Mark OTP as used after a successful verify
+ * @returns {Promise<{ valid: boolean, error: string|null }>}
  */
 const verifyOTPCode = async (phone, otp, purpose, markUsed = true) => {
-    const otpRecord = await OTP.findOne({ phone, purpose });
+  const now = new Date();
 
-    if (!otpRecord) {
-        return { valid: false, error: "OTP not found. Please request a new OTP." };
+  // ── Step 1: Lightweight initial read for human-readable error messages ─────
+  // This read is informational only. The security gates are the atomic updates below.
+  const otpRecord = await OTP.findOne({ phone, purpose });
+
+  if (!otpRecord) {
+    return { valid: false, error: "No OTP found. Please request a new code." };
+  }
+
+  if (otpRecord.isUsed) {
+    return { valid: false, error: "This OTP has already been used. Please request a new code." };
+  }
+
+  if (otpRecord.isExpired()) {
+    return { valid: false, error: "OTP has expired. Please request a new code." };
+  }
+
+  // Inform the caller if attempts are already exhausted (informational — not the gate)
+  if (otpRecord.attempts >= otpRecord.maxAttempts) {
+    // Atomically set the send block so attacker cannot immediately request a fresh OTP
+    await OTP.findOneAndUpdate(
+      { phone, purpose, $or: [{ blockedUntil: null }, { blockedUntil: { $lt: now } }] },
+      { $set: { blockedUntil: new Date(Date.now() + BLOCK_DURATION_MS) } }
+    );
+    return { valid: false, error: "Maximum attempts exceeded. Please wait before requesting a new code." };
+  }
+
+  // ── Step 2: Constant-time comparison (timing-safe) ────────────────────────
+  // Hash the incoming OTP using the same secret before comparing it to the DB value
+  const hashedInput = hashOTP(otp);
+  const codeMatches = safeCompare(String(otpRecord.otp), String(hashedInput));
+
+  if (!codeMatches) {
+    // ── ATOMIC increment — the real security gate ─────────────────────────────
+    // The filter enforces the constraint at the DB level in a single operation.
+    // Concurrent requests are serialized by MongoDB; once attempts reaches
+    // maxAttempts the filter stops matching and all subsequent attempts return null.
+    const updated = await OTP.findOneAndUpdate(
+      {
+        phone,
+        purpose,
+        isUsed: false,
+        otpExpiry: { $gt: now },
+        attempts: { $lt: otpRecord.maxAttempts },   // ← atomic guard (this IS the cap)
+      },
+      { $inc: { attempts: 1 } },
+      { new: true }
+    );
+
+    if (!updated) {
+      // Document no longer matches — either expired, already used, or maxAttempts
+      // was just hit by a concurrent request. Apply the send block and refuse.
+      await OTP.findOneAndUpdate(
+        { phone, purpose, $or: [{ blockedUntil: null }, { blockedUntil: { $lt: now } }] },
+        { $set: { blockedUntil: new Date(Date.now() + BLOCK_DURATION_MS) } }
+      );
+      return { valid: false, error: "Maximum attempts exceeded. Please wait before requesting a new code." };
     }
 
-    // Check expiry
-    if (otpRecord.isExpired()) {
-        return { valid: false, error: "OTP has expired. Please request a new one." };
+    // Apply send-block when this was the final allowed attempt
+    if (updated.attempts >= updated.maxAttempts) {
+      await OTP.findOneAndUpdate(
+        { phone, purpose, $or: [{ blockedUntil: null }, { blockedUntil: { $lt: now } }] },
+        { $set: { blockedUntil: new Date(Date.now() + BLOCK_DURATION_MS) } }
+      );
     }
 
-    // Check if already used
-    if (otpRecord.isUsed) {
-        return { valid: false, error: "OTP has already been used. Please request a new one." };
-    }
+    const remaining = updated.maxAttempts - updated.attempts;
+    return {
+      valid: false,
+      error: remaining > 0
+        ? `Incorrect OTP. ${remaining} attempt(s) remaining.`
+        : "Maximum attempts exceeded. Please wait before requesting a new code.",
+    };
+  }
 
-    // Check max attempts
-    if (otpRecord.attempts >= otpRecord.maxAttempts) {
-        return { valid: false, error: "Maximum OTP attempts exceeded. Please request a new one." };
-    }
+  // ── Step 3: Correct code — atomically mark as used ────────────────────────
+  if (markUsed) {
+    // Single atomic operation: only succeeds if still unused and unexpired.
+    // Prevents a race where two concurrent correct-OTP requests both mark success.
+    const consumed = await OTP.findOneAndUpdate(
+      {
+        phone,
+        purpose,
+        isUsed: false,            // ← atomic guard: only one request can win
+        otpExpiry: { $gt: now },
+      },
+      { $set: { isUsed: true } },
+      { new: true }
+    );
 
-    // Constant-time comparison
-    if (!safeCompare(String(otpRecord.otp), String(otp))) {
-        await otpRecord.incrementAttempts();
-        const remaining = otpRecord.maxAttempts - (otpRecord.attempts); // already incremented
-        return { 
-            valid: false, 
-            error: `Invalid OTP. ${remaining} attempt(s) remaining.`,
-        };
+    if (!consumed) {
+      // A concurrent request already consumed this OTP
+      return { valid: false, error: "This OTP has already been used. Please request a new code." };
     }
+  }
 
-    // Success — mark as used if requested
-    if (markUsed) {
-        await otpRecord.markAsUsed();
-    }
-
-    return { valid: true, error: null };
+  return { valid: true, error: null };
 };
 
 module.exports = {
-    generateOtpCode,
-    safeCompare,
-    createAndSendOTP,
-    verifyOTPCode,
-    OTP_EXPIRY_MINUTES,
+  generateOtpCode,
+  safeCompare,
+  createAndSendOTP,
+  verifyOTPCode,
+  OTP_EXPIRY_MINUTES,
+  MAX_OTP_SENDS,
 };

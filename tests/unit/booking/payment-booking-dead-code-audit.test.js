@@ -1,0 +1,87 @@
+'use strict';
+
+/**
+ * tests/unit/booking/payment-booking-dead-code-audit.test.js
+ * Unit tests for payment-booking controller dead code audit & module ownership.
+ */
+
+const test   = require('node:test');
+const assert = require('node:assert/strict');
+const fs     = require('node:fs');
+const path   = require('node:path');
+const {
+  readPassengerBookingConfirmationOrchestratorSource,
+} = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
+
+const controllerSource =
+  readPassengerBookingConfirmationOrchestratorSource();
+
+test('paymentBookingDeadCodeAudit unit tests', async (t) => {
+
+  await t.test('1. controller does NOT contain removed dead imports', () => {
+    assert.ok(!controllerSource.includes('require("../../models/userModel.js")'), 'User model import removed');
+    assert.ok(!controllerSource.includes('require("../../models/seatHoldModel.js")'), 'SeatHold model import removed');
+    assert.ok(!controllerSource.includes('services/esewaVerificationService.js'), 'direct esewaVerificationService import removed');
+  });
+
+  await t.test('2. controller does NOT bind removed dead locals', () => {
+    assert.ok(!controllerSource.includes('scheduleId: clientScheduleId'), 'clientScheduleId not bound');
+    assert.ok(!controllerSource.includes('seatNumbers: clientSeats'), 'clientSeats not bound');
+    assert.ok(!controllerSource.includes('requestedSmMoney,'), 'requestedSmMoney not bound');
+  });
+
+  await t.test('3. controller retains required orchestration and authoritative references', () => {
+    const requiredReferences = [
+      'req.bookingHold.tripId',
+      'req.bookingHold.seatNumbers',
+      'smMoneyApplied',
+      'gatewayAmount',
+      'debitPassengerWalletPayment',
+      'debitPassengerSplitPayment',
+      'reversePassengerInternalMoneyDebits',
+      'verifyPassengerEsewaPayment',
+      'createPassengerBookingPaymentTransaction',
+      'validatePassengerPostPaymentTrip',
+      'commitPassengerSeats',
+      'persistPassengerBooking',
+      'markPassengerPaymentDisputed',
+      'rollbackPassengerSeatLocks',
+      'sendPassengerPaymentDisputeAdminAlert',
+      '_reverseInternalMoneyDebitIfNeeded',
+      'completePassengerBookingPostCommit',
+    ];
+    for (const ref of requiredReferences) {
+      assert.ok(controllerSource.includes(ref), `controller retains ${ref}`);
+    }
+  });
+
+  await t.test('4. controller does NOT contain inline module domain implementation details', () => {
+    const extractedStrings = [
+      'SM Wallet debited successfully (full payment)',
+      'SM Money spent at checkout',
+      'SM_MONEY_DEBIT_FAILED',
+      '_reverseSmDebitIfNeeded',
+      'ESEWA_PARAMS_MISSING',
+      'ESEWA_VERIFICATION_FAILED',
+    ];
+    for (const str of extractedStrings) {
+      assert.ok(!controllerSource.includes(str), `controller does NOT contain ${str}`);
+    }
+  });
+
+  await t.test('5. confirmation, wallet, split, esewa, transaction, trip validation, seat commitment, booking persistence, and transaction success reconciliation operations are invoked via modular boundaries', () => {
+    assert.ok(controllerSource.includes('buildPassengerBookingConfirmationQuote({'), 'buildPassengerBookingConfirmationQuote invoked');
+    assert.ok(controllerSource.includes('debitPassengerWalletPayment({'), 'debitPassengerWalletPayment invoked');
+    assert.ok(controllerSource.includes('debitPassengerSplitPayment({'), 'debitPassengerSplitPayment invoked');
+    assert.ok(controllerSource.includes('reversePassengerInternalMoneyDebits({'), 'reversePassengerInternalMoneyDebits invoked');
+    assert.ok(controllerSource.includes('verifyPassengerEsewaPayment({'), 'verifyPassengerEsewaPayment invoked');
+    assert.ok(controllerSource.includes('createPassengerBookingPaymentTransaction({'), 'createPassengerBookingPaymentTransaction invoked');
+    assert.ok(controllerSource.includes('validatePassengerPostPaymentTrip({'), 'validatePassengerPostPaymentTrip invoked');
+    assert.ok(controllerSource.includes('commitPassengerSeats({'), 'commitPassengerSeats invoked');
+    assert.ok(controllerSource.includes('persistPassengerBooking({'), 'persistPassengerBooking invoked');
+    assert.ok(controllerSource.includes('reconcilePassengerTransactionSuccess({'), 'reconcilePassengerTransactionSuccess invoked');
+    assert.ok(controllerSource.includes('markPassengerPaymentDisputed({'), 'markPassengerPaymentDisputed invoked');
+    assert.ok(controllerSource.includes('completePassengerBookingPostCommit({'), 'completePassengerBookingPostCommit invoked');
+    assert.ok(controllerSource.includes('rollbackPassengerSeatLocks({'), 'rollbackPassengerSeatLocks invoked');
+  });
+});

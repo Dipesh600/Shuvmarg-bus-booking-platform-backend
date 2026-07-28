@@ -98,6 +98,16 @@ const PRESETS = {
         maxFileSizeMB: 15,
     },
 
+    // Scratch card overlay textures — optimized for mobile scratch animation
+    // Must load fast on spotty mobile networks (checkout flow), so keep tight.
+    scratch_theme: {
+        maxWidth: 800,
+        maxHeight: 600,
+        quality: 85,
+        format: "webp",
+        maxFileSizeMB: 5,
+    },
+
     // Default fallback — moderate compression
     default: {
         maxWidth: 1600,

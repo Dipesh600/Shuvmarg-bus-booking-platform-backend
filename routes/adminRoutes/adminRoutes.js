@@ -1,15 +1,19 @@
 const express = require("express");
 const router = express.Router();
-const admin = require("../../controllers/adminController/adminController.js");
+const admin = require("../../src/modules/admin/user-management");
 const bookings = require("../../controllers/adminController/booking/bookingController.js");
-const coupon = require("../../controllers/adminController/coupon-controller/adminCouponController.js");
+const couponAdminRoutes = require("../../src/modules/coupon/admin");
 const autoSeat = require("../../controllers/adminController/seat-controller/adminAutoSeatController.js");
 const authController = require("../../controllers/adminController/authController/auth-controller.js");
 const adminMiddleware = require("../../middleware/adminMiddleware.js");
 const dashboard = require("../../controllers/adminController/dashboardController/dashboardController.js");
 const userDashboard = require("../../controllers/adminController/dashboardController/userDashboardController.js");
-const agentController = require("../../controllers/adminController/adminAgentController/adminAgentController.js");
-const busOwnerController = require("../../controllers/adminController/busOwnerController/adminBusOwnerController.js");
+const agentConversion = require("../../src/modules/agent/admin/conversion");
+const agentDirectory = require("../../src/modules/agent/admin/directory");
+const agentDashboard = require("../../src/modules/agent/admin/dashboard");
+const agentSetup = require("../../src/modules/agent/admin/setup");
+const agentKycReview = require("../../src/modules/kyc/agent-review");
+const busOwnerController = require("../../src/modules/admin/bus-owner-management");
 const adminPushnotification = require("../../controllers/adminController/adminPushnotification.js/adminPushnotification.js");
 const busOwnerFleetController = require("../../controllers/adminController/busOwnerController/adminBusOwnerFleetController.js");
 const refundController = require("../../controllers/adminController/refundController/adminRefundController.js");
@@ -32,34 +36,31 @@ const platformRegistry     = require("../../controllers/adminController/platform
 const operatorConfig       = require("../../controllers/adminController/operatorRouteConfigController.js");
 const operatorBrand        = require("../../controllers/adminController/operatorBrandController.js");
 const routeRequestCtrl     = require("../../controllers/adminController/routeRequestController.js");
-const scheduleController   = require("../../controllers/adminController/scheduleController.js");
+const scheduleController   = require("../../src/modules/admin/schedule-management");
 const tripExceptionCtrl    = require("../../controllers/adminController/tripExceptionController.js");
 const brandFinancialCtrl   = require("../../controllers/adminController/brandFinancialController.js");
 const driverController     = require("../../controllers/adminController/driverController.js");
-const fleetWorkstation     = require("../../controllers/adminController/fleetWorkstationController.js");
+const fleetWorkstation     = require("../../src/modules/admin/fleet-workstation");
+const tripOverviewCtrl     = require("../../src/modules/admin/trip-overview");
 const adminWalletCtrl      = require("../../controllers/adminController/walletController/adminWalletController.js");
+const transactionCtrl      = require("../../controllers/adminController/transactionController/transactionController.js");
+const routeDiscoveryCtrl   = require("../../src/modules/admin/route-discovery");
 // Auth Routes
 router.post("/auth/login",   authController.login);
 router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);
-
 // NOTE: No /auth/refresh route.
 // Super Admin sessions are explicit by design — when a token expires, the admin
 // must re-authenticate with their credentials. Silent token refresh is a consumer
 // app pattern; for a privileged admin panel it is a security liability.
 
-
 // User Management Routes
-router.post("/createAccount", adminMiddleware, admin.createAccount);
 router.delete("/deleteAccount", adminMiddleware, admin.deleteAccount);
-router.patch("/updateAccount", adminMiddleware, admin.updateAccount);
 router.get("/getAllUsers", adminMiddleware, admin.getAllUsers);
 router.get("/userDashboard", adminMiddleware, userDashboard.getUserDashboardStats);
 router.post("/getuserById", adminMiddleware, admin.getUserById);
-router.post("/activity", adminMiddleware, admin.getUserActivitySummary);
-router.post("/accountStatus", adminMiddleware, admin.getUserAccountStatus);
 router.patch("/resetPassword", adminMiddleware, admin.changeUserPassword);
 router.patch("/updateStatus", adminMiddleware, admin.updateUserStatus);
-router.post("/getUserBookings", adminMiddleware, admin.getUserBookings);
+router.get("/users/:id/transactions", adminMiddleware, admin.getUserTransactions);
 
 // Ticket Management Routes
 router.get("/getAllTicket", adminMiddleware, ticketController.getAllTickets);
@@ -73,18 +74,7 @@ router.get("/booking/stats", adminMiddleware, bookings.getBookingStats);
 router.get("/booking/getBookingById/:bookingid", adminMiddleware, bookings.getBookingById);
 router.post("/booking/getBookingsByUser", adminMiddleware, bookings.getBookingsByUser);
 // Coupon Management Routes
-router.post("/coupons", adminMiddleware, coupon.createCoupon);
-router.get("/coupons", adminMiddleware, coupon.getAllCoupons);
-router.get("/coupons-stats", adminMiddleware, coupon.getCouponUsageStats);
-router.get("/coupons/:id/analytics", adminMiddleware, coupon.getCouponAnalytics);
-router.get("/coupons/:id", adminMiddleware, coupon.getCouponById);
-router.put("/coupons/:id", adminMiddleware, coupon.updateCoupon);
-router.delete("/coupons/:id", adminMiddleware, coupon.deleteCoupon);
-router.patch(
-  "/coupons/:id/toggle-status",
-  adminMiddleware,
-  coupon.toggleCouponStatus
-);
+router.use(couponAdminRoutes);
 
 // Dashboard
 router.get("/dashboard", adminMiddleware, dashboard.getDashboardStats);
@@ -94,13 +84,26 @@ router.get("/userdashboard", adminMiddleware, userDashboard.getUserDashboardStat
 
 // 2 Step Verification
 router.post("/two-factor/setup", adminMiddleware, authController.setupTwoFactor);
-
 // Agent 
-router.post("/getAgentDetails", adminMiddleware, agentController.getAgentsById);
-router.get("/getAllAgents", adminMiddleware, agentController.getAllAgents);
-router.get("/agentDashboard", adminMiddleware, agentController.getAgentDashboard);
-router.post("/makeUserAgent", adminMiddleware, agentController.makeUserAgent);
-router.patch("/agentKycStatus", adminMiddleware, agentController.updateAgentKyc);
+router.post("/getAgentDetails", adminMiddleware, agentDirectory.getAgentsById);
+router.get("/getAllAgents", adminMiddleware, agentDirectory.getAllAgents);
+router.get("/agentDashboard", adminMiddleware, agentDashboard.getAgentDashboard);
+router.post("/makeUserAgent", adminMiddleware, agentConversion.makeUserAgent);
+
+// Route Discovery Routes
+router.post("/registry/discovery", adminMiddleware, routeDiscoveryCtrl.createSession);
+router.get("/registry/discovery", adminMiddleware, routeDiscoveryCtrl.listSessions);
+router.get("/registry/discovery/:id", adminMiddleware, routeDiscoveryCtrl.getSession);
+router.patch("/registry/discovery/:id/select-route", adminMiddleware, routeDiscoveryCtrl.selectRoute);
+router.patch("/registry/discovery/:id/stops/:stopId", adminMiddleware, routeDiscoveryCtrl.patchStop);
+router.patch("/registry/discovery/:id/approve", adminMiddleware, routeDiscoveryCtrl.approveSession);
+router.patch("/registry/discovery/:id/reject", adminMiddleware, routeDiscoveryCtrl.rejectSession);
+router.post("/registry/discovery/:id/publish", adminMiddleware, routeDiscoveryCtrl.publishSession);
+router.patch("/registry/discovery/:id/route-options", adminMiddleware, routeDiscoveryCtrl.setRouteOptions);
+router.patch("/registry/discovery/:id/discovered-stops", adminMiddleware, routeDiscoveryCtrl.setDiscoveredStops);
+router.patch("/registry/discovery/:id/refine-stops", adminMiddleware, routeDiscoveryCtrl.refineStopsWithLLM);
+router.patch("/finalizeAgentSetup", adminMiddleware, agentSetup.finalizeAgentSetup);
+router.patch("/agentKycStatus", adminMiddleware, agentKycReview.updateAgentKyc);
 
 // Bus Owner
 router.post("/busOwner/create", adminMiddleware, busOwnerController.createBusOwnerFull);
@@ -154,6 +157,7 @@ router.patch("/refund-policy/toggleStatus", adminMiddleware, refundPolicyControl
 
 // Shuvmarg Money (Wallet) Management
 router.get("/wallet/overview",              adminMiddleware, adminWalletCtrl.getOverview);
+router.get("/wallet/global-feed",           adminMiddleware, adminWalletCtrl.getGlobalFeed);
 router.get("/wallet/lookup",                adminMiddleware, adminWalletCtrl.lookupUser);
 router.post("/wallet/adjust",               adminMiddleware, adminWalletCtrl.adjustBalance);
 router.patch("/wallet/freeze",              adminMiddleware, adminWalletCtrl.freezeWallet);
@@ -240,6 +244,16 @@ router.patch("/fleet/update/:id", adminMiddleware, adminFleetController.updateFl
 router.delete("/fleet/delete/:id", adminMiddleware, adminFleetController.deleteFleetByAdmin);
 router.patch("/fleet/resubmit/:id", adminMiddleware, adminFleetController.resubmitFleetByAdmin);
 router.patch("/fleet/reupload-doc/:id", adminMiddleware, adminFleetController.reuploadFleetDocument);
+
+// ─── TRIP CONTROL CENTER (Platform-wide oversight — read-only) ────────────────
+// Exception triage dashboard with per-trip booking aggregation
+router.get("/trips/overview",          adminMiddleware, tripOverviewCtrl.getOverview);
+// Schedule generation health monitor (CRON health check)
+router.get("/trips/schedule-health",   adminMiddleware, tripOverviewCtrl.getScheduleHealth);
+// Enhanced global trip search with booking stats
+router.get("/trips/search",            adminMiddleware, tripOverviewCtrl.searchTrips);
+// Route performance: load factor, revenue, completion rate per schedule
+router.get("/trips/route-performance", adminMiddleware, tripOverviewCtrl.getRoutePerformance);
 
 // Dedicated Trip Management (Admin on behalf of Owner)
 router.post("/trips/create",               adminMiddleware, adminTripController.createTripForOwner);
@@ -400,6 +414,11 @@ router.post("/schedules/:id/cancel-range",          adminMiddleware, tripExcepti
 // Extra run — one-off trip on a date not in the regular schedule
 router.post("/schedules/:id/extra-run",             adminMiddleware, tripExceptionCtrl.createExtraRun);
 
+// ─── TRANSACTION MANAGEMENT ────────────────────────────────────────────────────
+// Paginated list with stats + single detail view (full population)
+router.get("/transactions",      adminMiddleware, transactionCtrl.getAllTransactions);
+router.get("/transactions/:id",  adminMiddleware, transactionCtrl.getTransactionById);
+
 // ─── DISPUTED PAYMENT MANAGEMENT ──────────────────────────────────────────────
 // Money received by eSewa but booking creation failed on our end.
 // Finance team resolves manually from the eSewa merchant dashboard.
@@ -415,5 +434,22 @@ router.get("/platform-config",              adminMiddleware, platformConfigCtrl.
 router.get("/platform-config/:key",         adminMiddleware, platformConfigCtrl.getConfig);
 router.put("/platform-config/:key",         adminMiddleware, platformConfigCtrl.updateConfig);
 
-module.exports = router;
+// ─── SCRATCH CARD THEME MANAGEMENT ────────────────────────────────────────────
+// Admin-managed overlay textures for scratch cards. Themes are weighted for
+// probability-based random assignment during the booking checkout flow.
+const scratchThemeCtrl = require("../../controllers/adminController/scratchThemeController.js");
+router.get("/scratch-themes",                    adminMiddleware, scratchThemeCtrl.listThemes);
+router.post("/scratch-themes",                   adminMiddleware, scratchThemeCtrl.createTheme);
+router.patch("/scratch-themes/:themeId",          adminMiddleware, scratchThemeCtrl.updateTheme);
+router.patch("/scratch-themes/:themeId/image",    adminMiddleware, scratchThemeCtrl.replaceThemeImage);
+router.patch("/scratch-themes/:themeId/toggle",   adminMiddleware, scratchThemeCtrl.toggleTheme);
+router.delete("/scratch-themes/:themeId",         adminMiddleware, scratchThemeCtrl.deleteTheme);
 
+// ─── SECURE DOCUMENT PROXY ─────────────────────────────────────────────────────
+// Streams private S3 objects through the server — the raw AWS presigned URL
+// (with credential key ID, bucket path, and signature) is NEVER sent to the browser.
+// Frontend calls: GET /api/admin/documents/view?key=owners/{id}/kyc/...
+const documentProxy = require("../../src/modules/shared/document-proxy");
+router.get("/documents/view", adminMiddleware, documentProxy.viewDocument);
+
+module.exports = router;

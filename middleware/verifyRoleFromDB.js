@@ -83,13 +83,31 @@ const verifyRoleFromDB = async (req, res, next) => {
             });
         }
 
-        // === ROLE DRIFT CHECK ===
-        // If the role in JWT doesn't match the DB, the token is stale
-        if (req.userInfo.role && req.userInfo.role !== user.role) {
+        // === ROLE DRIFT CHECK (multi-role aware) ===
+        // Verify the activeRole in this JWT is still in the user's roles array.
+        // This catches: role revoked by admin, stale JWTs after role removal.
+        const activeRole = req.userInfo.activeRole || req.userInfo.role;
+        if (activeRole && user.roles && !user.roles.includes(activeRole)) {
             return res.status(403).json({
                 success: false,
-                message: "Your role has been updated. Please login again to get a new token.",
-                errorCode: "ROLE_MISMATCH",
+                message: "Your role has been revoked. Please login again.",
+                errorCode: "ROLE_REVOKED",
+            });
+        }
+
+        // === TOKEN VERSION CHECK ===
+        // Access tokens carry the tokenVersion from the moment they were minted.
+        // On logout or password change the DB counter is incremented ($inc).
+        // A token with a lower version than the DB value was issued before the
+        // last invalidation event and is therefore no longer valid, even if its
+        // cryptographic signature and expiry are both fine.
+        // Cost: zero extra DB reads — the user document is already in memory above.
+        const tokenVersion = req.userInfo.tokenVersion ?? 0;
+        if (tokenVersion !== user.tokenVersion) {
+            return res.status(401).json({
+                success: false,
+                message: "Your session is no longer valid. Please login again.",
+                errorCode: "SESSION_INVALIDATED",
             });
         }
 

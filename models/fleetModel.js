@@ -257,7 +257,46 @@ const BusSchema = new mongoose.Schema(
     }
 );
 
-// Auto-generate human-readable Fleet ID: SUV-MARG-FLEET-ABC-001
+/**
+ * Hook 1 — Ownership invariant (runs only on INSERT).
+ *
+ * A Fleet document cannot be written to the database unless the operator
+ * who owns it has a fully KYC-approved BusOwner profile.
+ *
+ * This is the canonical enforcement point for this constraint. It lives at
+ * the Mongoose layer — below HTTP, below services — so no future API route,
+ * admin script, seeder, or background job can accidentally bypass it.
+ * Service-level guards are removed; this is the single source of truth.
+ */
+BusSchema.pre("save", async function (next) {
+    if (!this.isNew) return next();
+
+    const BusOwner = mongoose.model("BusOwner");
+    const busOwner = await BusOwner.findOne({ user: this.ownerId })
+        .select("verificationStatus")
+        .lean();
+
+    if (!busOwner) {
+        return next(new Error(
+            "OWNER_PROFILE_NOT_FOUND: No BusOwner profile exists for this user. " +
+            "Complete KYC registration before adding a fleet."
+        ));
+    }
+
+    if (busOwner.verificationStatus !== "approved") {
+        return next(new Error(
+            `OWNER_NOT_APPROVED: Fleet creation requires an approved BusOwner profile ` +
+            `(current status: ${busOwner.verificationStatus}). ` +
+            `Admin approval is required before you can register fleet vehicles.`
+        ));
+    }
+
+    return next();
+});
+
+/**
+ * Hook 2 — Auto-generate human-readable Fleet ID: SUV-MARG-FLEET-ABC-001
+ */
 BusSchema.pre("save", async function (next) {
     if (this.fleetId) return next();
 
@@ -278,13 +317,8 @@ BusSchema.pre("save", async function (next) {
 
         while (!uniqueIdFound) {
             const randomCode = generateRandomPart(3);
-            const randomNumber = String(Math.floor(Math.random() * 1000)).padStart(
-                3,
-                "0"
-            );
-
+            const randomNumber = String(Math.floor(Math.random() * 1000)).padStart(3, "0");
             candidate = `${prefix}-${randomCode}-${randomNumber}`;
-
             const existing = await mongoose.model("Buse").findOne({ fleetId: candidate });
             if (!existing) {
                 uniqueIdFound = true;

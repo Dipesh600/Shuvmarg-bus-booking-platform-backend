@@ -171,4 +171,8 @@ smLedgerSchema.index({ userId: 1, status: 1, direction: 1, expires_at: 1 });
 // Expiry cron: find all entries that need to be expired
 smLedgerSchema.index({ status: 1, expires_at: 1 });
 
+// Global feed: platform-wide ledger sorted by date, filterable by direction/type
+// Used by admin wallet dashboard — no userId prefix because this is cross-user
+smLedgerSchema.index({ createdAt: -1, direction: 1, type: 1 });
+
 module.exports = mongoose.model("SMLedger", smLedgerSchema);

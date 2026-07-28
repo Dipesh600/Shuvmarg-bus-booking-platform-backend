@@ -3,7 +3,11 @@ const router = express.Router();
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { busOwnerMiddleware } = require("../../middleware/checkRole.js");
-const busOwnerCon = require("../../controllers/busOwnerController/busOwnerController.js");
+const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner.js");
+const busOwnerKyc = require("../../src/modules/bus-owner/kyc-submission");
+const fleetManagement = require("../../src/modules/bus-owner/fleet-management");
+const boardingPointManagement = require("../../src/modules/bus-owner/boarding-point-management");
+const amenityManagement = require("../../src/modules/bus-owner/amenity-management");
 const busOwnerRouteCon = require("../../controllers/busOwnerController/busOwnerRouteController.js");
 const tripCon = require("../../controllers/busOwnerController/busTripController.js");
 const settlementCon = require("../../controllers/busOwnerController/settlementController.js");
@@ -13,27 +17,31 @@ const fareRuleCon = require("../../controllers/busOwnerController/fareRuleContro
 // Applied to ALL routes in this router — no individual `auth` needed.
 router.use(auth, verifyRoleFromDB, busOwnerMiddleware);
 
-router.post("/submitBusOwnerKyc", busOwnerCon.submitBusOwnerKyc);
-router.get("/myBusOwnerKycStatus", busOwnerCon.getMyBusOwnerKycStatus);
-router.post("/submitFleetForVerification", busOwnerCon.submitFleetForVerification);
-router.get("/myFleets", busOwnerCon.getMyFleets);
-router.post("/getFleetById", busOwnerCon.getFleetById);
-router.patch("/updateFleet", busOwnerCon.updateFleet);
-router.delete("/deleteFleet", busOwnerCon.deleteFleet);
+router.post("/submitBusOwnerKyc", busOwnerKyc.submitBusOwnerKyc);
+router.get("/myBusOwnerKycStatus", busOwnerKyc.getMyBusOwnerKycStatus);
+
+// ── REQUIRE APPROVED KYC FOR ALL ROUTES BELOW ─────────────────────────────────
+router.use(requireApprovedBusOwner);
+
+router.post("/submitFleetForVerification", fleetManagement.submitFleetForVerification);
+router.get("/myFleets", fleetManagement.getMyFleets);
+router.post("/getFleetById", fleetManagement.getFleetById);
+router.patch("/updateFleet", fleetManagement.updateFleet);
+router.delete("/deleteFleet", fleetManagement.deleteFleet);
 
 // Boarding Points
-router.post("/createBoardingPoint", busOwnerCon.createBoardingPoint);
-router.get("/getMyBoardingPoints", busOwnerCon.getMyBoardingPoints);
-router.patch("/updateBoardingPoint", busOwnerCon.updateBoardingPoint);
-router.delete("/deleteBoardingPoint", busOwnerCon.deleteBoardingPoint);   
-router.post("/getBoardingPointsById", busOwnerCon.getBoardingPointsById);   
+router.post("/createBoardingPoint", boardingPointManagement.createBoardingPoint);
+router.get("/getMyBoardingPoints", boardingPointManagement.getMyBoardingPoints);
+router.patch("/updateBoardingPoint", boardingPointManagement.updateBoardingPoint);
+router.delete("/deleteBoardingPoint", boardingPointManagement.deleteBoardingPoint);
+router.post("/getBoardingPointsById", boardingPointManagement.getBoardingPointsById);
 
 // Amenities
-router.post("/createAmenity", busOwnerCon.createAmenity);
-router.get("/getMyAmenities", busOwnerCon.getMyAmenities);
-router.patch("/updateAmenity", busOwnerCon.updateAmenity);
-router.delete("/deleteAmenity", busOwnerCon.deleteAmenity);
-router.post("/getAmenitiesById", busOwnerCon.getAmenityById);
+router.post("/createAmenity", amenityManagement.createAmenity);
+router.get("/getMyAmenities", amenityManagement.getMyAmenities);
+router.patch("/updateAmenity", amenityManagement.updateAmenity);
+router.delete("/deleteAmenity", amenityManagement.deleteAmenity);
+router.post("/getAmenitiesById", amenityManagement.getAmenityById);
 
 // Routes for Route CRUD
 router.post("/createRoute", busOwnerRouteCon.createRoute);

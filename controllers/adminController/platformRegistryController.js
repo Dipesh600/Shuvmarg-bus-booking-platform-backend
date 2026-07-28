@@ -172,6 +172,7 @@ const getBoardingPointsByStop = async (req, res) => {
 
 const updateStop = async (req, res) => {
     try {
+        console.log("UPDATE STOP PAYLOAD:", req.body);
         const stop = await registry.updateStop(req.params.id, req.body);
         res.status(200).json({ success: true, message: "Stop updated.", data: stop });
     } catch (err) {

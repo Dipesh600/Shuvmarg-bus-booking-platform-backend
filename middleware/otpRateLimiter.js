@@ -1,47 +1,76 @@
-/**
- * middleware/otpRateLimiter.js
- * 
- * Enforces OTP generation limits per phone number:
- * - Max 3 requests per 10 minutes (uses the OTP model as the data store)
- * - Prevents SMS bombing, phone enumeration, and SMS credit exhaustion
- */
+'use strict';
 
-const OTP = require("../models/otpModel");
+const rateLimit = require('express-rate-limit');
+const { MemoryStore } = rateLimit;
 
-const OTP_WINDOW_MS = 10 * 60 * 1000;  // 10 minutes
-const MAX_OTP_REQUESTS = 3;
-
-const otpRateLimiter = async (req, res, next) => {
-    const phone = req.body?.phone || req.body?.emailOrPhone;
-
-    if (!phone) {
-        return res.status(400).json({ success: false, message: "Phone number or identifier is required" });
-    }
-
-    try {
-        const windowStart = new Date(Date.now() - OTP_WINDOW_MS);
-
-        // Count OTP documents created for this phone in the last 10 minutes
-        const recentCount = await OTP.countDocuments({
-            phone,
-            createdAt: { $gte: windowStart }
-        });
-
-        if (recentCount >= MAX_OTP_REQUESTS) {
-            const cooldownMinutes = Math.ceil(OTP_WINDOW_MS / 60000);
-            return res.status(429).json({
-                success: false,
-                message: `Too many OTP requests. Please wait ${cooldownMinutes} minutes before requesting again.`,
-                errorCode: "OTP_RATE_LIMIT_EXCEEDED",
-                retryAfterMinutes: cooldownMinutes,
-            });
-        }
-
-        next();
-    } catch (e) {
-        console.error("OTP rate limiter error:", e);
-        next(); // Fail open — don't block users if DB is unavailable
-    }
+const validatePhonePresent = (req, res, next) => {
+  const phone = req.body?.phone || req.body?.emailOrPhone;
+  if (!phone) {
+    return res.status(400).json({
+      success: false,
+      message: 'Phone number is required.',
+    });
+  }
+  next();
 };
 
-module.exports = otpRateLimiter;
+const phoneKey = (req) => {
+  const phone = req.body?.phone || req.body?.emailOrPhone || req.ip;
+  return String(phone).replace(/\s+/g, '').toLowerCase();
+};
+
+const createOtpRateLimiters = ({ stores = {} } = {}) => {
+  const verifyStore = stores.verifyStore || new MemoryStore();
+  const sendStore = stores.sendStore || new MemoryStore();
+
+  const otpVerifyLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 10,
+    store: verifyStore,
+    keyGenerator: phoneKey,
+    message: {
+      success: false,
+      message: 'Too many verification attempts for this phone number. Please wait 10 minutes.',
+      errorCode: 'OTP_VERIFY_RATE_LIMIT',
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: false,
+  });
+
+  const otpSendLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    store: sendStore,
+    keyGenerator: (req) => req.ip,
+    message: {
+      success: false,
+      message: 'Too many OTP requests from this device. Please wait 15 minutes.',
+      errorCode: 'OTP_SEND_IP_RATE_LIMIT',
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: false,
+  });
+
+  const reset = async () => {
+    await verifyStore.resetAll();
+    await sendStore.resetAll();
+  };
+
+  return {
+    otpVerifyLimiter,
+    otpSendLimiter,
+    validatePhonePresent,
+    stores: { verifyStore, sendStore },
+    reset,
+  };
+};
+
+const productionOtpRateLimiters = createOtpRateLimiters();
+
+module.exports = productionOtpRateLimiters.validatePhonePresent;
+module.exports.validatePhonePresent = productionOtpRateLimiters.validatePhonePresent;
+module.exports.otpVerifyLimiter = productionOtpRateLimiters.otpVerifyLimiter;
+module.exports.otpSendLimiter = productionOtpRateLimiters.otpSendLimiter;
+module.exports.createOtpRateLimiters = createOtpRateLimiters;

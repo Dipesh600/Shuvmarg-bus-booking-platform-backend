@@ -136,10 +136,24 @@ const getDashboardStats = async (req, res) => {
             "Dec",
         ];
 
-        const revenueOverview = monthlyRevenue.map((item) => ({
-            label: `${monthNames[item._id.month - 1]} ${item._id.year}`,
-            revenue: item.revenue,
-        }));
+        // Ensure 12-month padding
+        const revenueOverview = [];
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+        twelveMonthsAgo.setDate(1);
+
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(twelveMonthsAgo);
+            d.setMonth(d.getMonth() + i);
+            const y = d.getFullYear();
+            const m = d.getMonth() + 1;
+            
+            const rData = monthlyRevenue.find(r => r._id.year === y && r._id.month === m);
+            revenueOverview.push({
+                label: `${monthNames[m - 1]} ${y}`,
+                revenue: rData ? rData.revenue : 0,
+            });
+        }
 
         let revenueChangePercent = 0;
         let revenueChangeText = "+0.0% from last month";

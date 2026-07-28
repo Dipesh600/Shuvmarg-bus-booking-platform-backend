@@ -230,6 +230,18 @@ function validateConfigValue(key, value) {
       return null;
     }
 
+    case "scratch_card_themes": {
+      if (!Array.isArray(value)) return "scratch_card_themes must be an array";
+      for (let i = 0; i < value.length; i++) {
+        const t = value[i];
+        if (!t.id || typeof t.id !== "string") return `Theme at index ${i}: missing or invalid id`;
+        if (!t.name || typeof t.name !== "string") return `Theme at index ${i}: missing or invalid name`;
+        if (typeof t.weight !== "number" || t.weight < 1) return `Theme at index ${i}: weight must be >= 1`;
+        if (typeof t.isActive !== "boolean") return `Theme at index ${i}: isActive must be a boolean`;
+      }
+      return null;
+    }
+
     default:
       return null; // Unknown keys are allowed — flexible config store
   }

@@ -1,0 +1,75 @@
+services:
+  - type: web
+    name: shuvmarg-backend
+    env: node
+    region: singapore    # Closest to Nepal; change to oregon/frankfurt if needed
+    plan: free           # Upgrade to starter ($7/mo) for always-on
+
+    buildCommand: npm install --production=false
+    startCommand: npm start
+
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000          # Render always uses port 10000 internally
+
+      # ── Set these in the Render Dashboard (do NOT commit real values) ──────
+      - key: MONGODB_URL
+        sync: false           # Render will prompt you to enter this
+
+      - key: SECRET_KEY
+        sync: false
+
+      - key: FRONTEND_URL
+        sync: false           # Your deployed frontend URL (e.g. https://shuvmarg.vercel.app)
+
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+
+      - key: CLOUDINARY_NAME
+        sync: false
+
+      - key: CLOUDINARY_API_KEY
+        sync: false
+
+      - key: CLOUDINARY_SECRET_KEY
+        sync: false
+
+      - key: EMAIL_SERVICES
+        value: gmail
+
+      - key: HOST
+        value: smtp.gmail.com
+
+      - key: EMAIL_PORT
+        value: 587
+
+      - key: USER_EMAIL
+        sync: false
+
+      - key: USER_PASSWORD
+        sync: false
+
+      - key: SUPER_ADMIN_EMAIL
+        sync: false
+
+      - key: SUPER_ADMIN_ID
+        sync: false
+
+      - key: SUPER_ADMIN_PASSWORD
+        sync: false
+
+      - key: AWS_REGION
+        value: ap-southeast-2
+
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+      - key: AWS_S3_BUCKET_NAME
+        sync: false

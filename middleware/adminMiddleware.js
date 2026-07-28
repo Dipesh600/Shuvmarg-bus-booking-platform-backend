@@ -20,13 +20,23 @@ const superAdminAuthMiddleware = async (req, res, next) => {
         const token = authHeader && authHeader.split(" ")[1];
 
         if (!token) {
-            return res.status(400).json({
+            return res.status(401).json({
                 status: false,
                 message: "Authorization header is missing or invalid",
             });
         }
 
         const decoded = jwt.verify(token, process.env.SECRET_KEY);
+        
+        // SECURITY: Enforce strict token purpose.
+        if (decoded.purpose !== "access") {
+            return res.status(403).json({
+                success: false,
+                message: "Invalid token purpose. Expected an access token.",
+                errorCode: "INVALID_TOKEN_PURPOSE",
+            });
+        }
+        
         req.adminInfo = decoded;
 
         // ── JWT Role Check (fast, stateless) ──────────────────────────────────

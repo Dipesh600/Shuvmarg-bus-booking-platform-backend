@@ -1,5 +1,5 @@
 const { getOrCreateWallet, getFullBalance } = require("../../services/walletService");
-const smLedgerService = require("../../services/smLedgerService");
+const smLedgerService = require("../../src/modules/wallet/sm-ledger");
 const ScratchCard = require("../../models/scratchCardModel");
 const Wallet = require("../../models/walletModel");
 const bcrypt = require("bcryptjs");
