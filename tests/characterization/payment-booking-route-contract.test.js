@@ -11,6 +11,9 @@ const verifyRoleFromDB = require('../../middleware/verifyRoleFromDB.js');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
 const { preparePassengerBooking } = require('../../src/modules/booking/passenger-booking-preparation');
 const { confirmPassengerBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
+const {
+  requireServerOwnedEsewaCheckout,
+} = require('../../src/modules/booking/passenger-esewa-checkout/passenger-esewa-checkout.middleware');
 
 test('payment booking Express router contract characterization', async (t) => {
   const routed = ticketRoutes.stack.filter(l => l.route);
@@ -46,7 +49,7 @@ test('payment booking Express router contract characterization', async (t) => {
 
     const route = matches[0];
     const stackHandlers = handles(route);
-    assert.equal(stackHandlers.length, 5);
+    assert.equal(stackHandlers.length, 6);
     assert.equal(stackHandlers[0], auth);
     assert.equal(stackHandlers[1], verifyRoleFromDB);
 
@@ -54,8 +57,9 @@ test('payment booking Express router contract characterization', async (t) => {
     stackHandlers[2]({ userInfo: { activeRole: 'passenger' } }, {}, () => { nextCalled = true; });
     assert.equal(nextCalled, true);
 
-    assert.equal(stackHandlers[3], passengerSeatHold.requireOwnedActivePassengerSeatHold);
-    assert.equal(stackHandlers[4], confirmPassengerBooking);
+    assert.equal(stackHandlers[3], requireServerOwnedEsewaCheckout);
+    assert.equal(stackHandlers[4], passengerSeatHold.requireOwnedActivePassengerSeatHold);
+    assert.equal(stackHandlers[5], confirmPassengerBooking);
   });
 
   await t.test('3. POST /releaseBookingHold uses the passenger guard', () => {

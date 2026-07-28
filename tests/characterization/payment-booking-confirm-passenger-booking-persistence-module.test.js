@@ -104,12 +104,16 @@ test('confirmBooking passenger booking persistence module characterization tests
 
       const bookingPersistenceIndexPath = require.resolve('../../src/modules/booking/passenger-booking-persistence');
       const controllerPath = require.resolve('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
+      const compositionPath = require.resolve(
+        '../../src/modules/booking/passenger-booking-confirmation-orchestrator/passenger-booking-confirmation.composition.js'
+      );
 
       require.cache[bookingPersistenceIndexPath] = {
         id: bookingPersistenceIndexPath, filename: bookingPersistenceIndexPath, loaded: true,
         exports: { persistPassengerBooking: async () => { throw new TypeError("Cannot read properties of undefined (reading 'brandId')"); } }
       };
       delete require.cache[controllerPath];
+      delete require.cache[compositionPath];
       const { confirmPassengerBooking: confirmBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 
       h.mockMethod(h.Booking, 'create', async () => { bookingCreateCalled = true; return {}; });

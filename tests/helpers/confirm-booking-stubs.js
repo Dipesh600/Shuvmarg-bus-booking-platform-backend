@@ -10,6 +10,9 @@
 // ── Notification module stub ──────────────────────────────────────────────────
 const notifModulePath      = require.resolve('../../controllers/notificationController/notification_manager.js');
 const userDeviceInfoPath   = require.resolve('../../models/userDeviceInfoModel.js');
+const esewaVerificationPath = require.resolve(
+  '../../src/modules/booking/passenger-esewa-verification'
+);
 
 const notifStub = {
   _shouldThrow: false,
@@ -29,6 +32,16 @@ require.cache[notifModulePath] = {
 require.cache[userDeviceInfoPath] = {
   id: userDeviceInfoPath, filename: userDeviceInfoPath, loaded: true,
   exports: userDeviceInfoStub,
+};
+require.cache[esewaVerificationPath] = {
+  id: esewaVerificationPath,
+  filename: esewaVerificationPath,
+  loaded: true,
+  exports: {
+    verifyPassengerEsewaPayment: async () => ({
+      ok: true, applied: true, verified: true,
+    }),
+  },
 };
 
 // Load controller AFTER stubs are registered
@@ -96,6 +109,7 @@ const makeRes = () => {
 const teardown = () => {
   delete require.cache[notifModulePath];
   delete require.cache[userDeviceInfoPath];
+  delete require.cache[esewaVerificationPath];
 };
 
 module.exports = {

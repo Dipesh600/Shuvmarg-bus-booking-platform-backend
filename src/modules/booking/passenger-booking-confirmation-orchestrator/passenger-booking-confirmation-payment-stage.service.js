@@ -39,13 +39,14 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
     state.lockUserId = state.userId;
     state.lockTripId = state.scheduleId;
 
-    const confirmationQuoteResult =
-      await deps.buildPassengerBookingConfirmationQuote({
-      gateway, tempBookingId, paymentAmount,
-      originalAmount: state.originalAmount, couponCode,
-      smMoneyToUse, userId: state.userId, scheduleId: state.scheduleId,
-      activeRole: req.userInfo.activeRole,
-    });
+    const confirmationQuoteResult = req.paymentAttemptQuote
+      ? { ok: true, quote: req.paymentAttemptQuote }
+      : await deps.buildPassengerBookingConfirmationQuote({
+        gateway, tempBookingId, paymentAmount,
+        originalAmount: state.originalAmount, couponCode,
+        smMoneyToUse, userId: state.userId, scheduleId: state.scheduleId,
+        activeRole: req.userInfo.activeRole,
+      });
     if (!confirmationQuoteResult.ok) return confirmationQuoteResult;
 
     Object.assign(state, confirmationQuoteResult.quote);
