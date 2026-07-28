@@ -1,7 +1,7 @@
 const User = require("../../../models/userModel.js");
 const BusOwner = require("../../../models/busOwnerModel.js");
 const OperatorBrand = require("../../../models/operatorBrandModel.js");
-const fleetService = require("../../../services/fleetService.js");
+const fleetService = require("../../../src/modules/fleet-management");
 
 // Create Fleet for Owner by Admin
 const createFleetForOwner = async (req, res) => {
