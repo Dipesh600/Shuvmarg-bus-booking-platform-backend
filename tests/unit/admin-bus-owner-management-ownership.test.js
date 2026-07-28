@@ -51,11 +51,14 @@ test("module files obey the 150-line boundary", () => {
   }
 });
 
-test("separate bus-owner responsibilities remain in their existing modules", () => {
+test("separate bus-owner responsibilities remain in domain modules", () => {
   const retained = [
     "controllers/adminController/busOwnerController/adminBusOwnerFleetController.js",
-    "controllers/busOwnerController/busOwnerController.js",
     "src/modules/bus-owner/schedule-management/index.js",
+    "src/modules/bus-owner/kyc-submission/index.js",
+    "src/modules/bus-owner/fleet-management/index.js",
+    "src/modules/bus-owner/boarding-point-management/index.js",
+    "src/modules/bus-owner/amenity-management/index.js",
   ];
   for (const file of retained) {
     assert.equal(fs.existsSync(path.join(root, file)), true, `${file} missing`);
