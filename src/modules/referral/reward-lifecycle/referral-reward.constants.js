@@ -1,0 +1,28 @@
+"use strict";
+
+const UNLOCK_SCHEDULE = {
+  1: 30,
+  2: 20,
+  3: 20,
+  4: 20,
+  5: 10,
+};
+
+const TOTAL_REFERRAL_REWARD = 100;
+const REFERRAL_EXPIRY_DAYS = 60;
+const CODE_APPLICATION_WINDOW_HOURS = 24;
+const FRAUD_REFERRAL_THRESHOLD = 5;
+const FRAUD_WINDOW_DAYS = 7;
+
+const getUnlockAmount = (journeyNumber) =>
+  UNLOCK_SCHEDULE[journeyNumber] || null;
+
+module.exports = {
+  UNLOCK_SCHEDULE,
+  TOTAL_REFERRAL_REWARD,
+  REFERRAL_EXPIRY_DAYS,
+  CODE_APPLICATION_WINDOW_HOURS,
+  FRAUD_REFERRAL_THRESHOLD,
+  FRAUD_WINDOW_DAYS,
+  getUnlockAmount,
+};

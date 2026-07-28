@@ -3,14 +3,14 @@ const {
   generateReferralCode,
   validateReferralCode,
 } = require("../../handlers/referralCodeGenerator.js");
-const referralV2Service = require("../../services/referralV2Service.js");
+const referralRewardService = require("../../src/modules/referral/reward-lifecycle");
 
 /**
  * Referral Controller — V2 (Progressive Unlock)
  *
  * SPEC REFERENCE: shuvmarg-money-spec.md §3
  *
- * All business logic is delegated to referralV2Service.js.
+ * All reward lifecycle logic is delegated to the referral reward module.
  * This controller handles HTTP concerns only: request parsing,
  * response formatting, and error mapping.
  *
@@ -192,7 +192,7 @@ const validateReferralCodeEndpoint = async (req, res) => {
  * POST /api/referral/applyCode
  *
  * Apply a referral code during or after registration.
- * Delegates to referralV2Service.createReferral() which:
+ * Delegates to the referral reward lifecycle module which:
  *   1. Validates all rules (self-refer, 24h window, first journey, etc.)
  *   2. Creates ReferralV2 document
  *   3. Creates REFERRAL_LOCKED ledger entry (NPR 100)
@@ -231,7 +231,7 @@ const applyReferralCode = async (req, res) => {
     }
 
     // Delegate to V2 service — all validation happens inside
-    const referral = await referralV2Service.createReferral({
+    const referral = await referralRewardService.createReferral({
       referrerId: referrer._id,
       referredUserId: userId,
       referralCode: referralCode.trim().toUpperCase(),
@@ -244,7 +244,7 @@ const applyReferralCode = async (req, res) => {
       message: "Referral code applied successfully",
       data: {
         referrerName: referrer.name,
-        lockedReward: referralV2Service.TOTAL_REFERRAL_REWARD,
+        lockedReward: referralRewardService.TOTAL_REFERRAL_REWARD,
         referralStatus: referral.status,
       },
     });
@@ -292,7 +292,7 @@ const getReferralDashboard = async (req, res) => {
     }
 
     const userId = req.userInfo.id;
-    const dashboard = await referralV2Service.getReferralDashboard(userId);
+    const dashboard = await referralRewardService.getReferralDashboard(userId);
 
     return res.status(200).json({
       status: true,
@@ -325,7 +325,7 @@ const getReferralHistory = async (req, res) => {
     }
 
     const userId = req.userInfo.id;
-    const dashboard = await referralV2Service.getReferralDashboard(userId);
+    const dashboard = await referralRewardService.getReferralDashboard(userId);
 
     // Transform into a timeline-focused response
     const history = dashboard.referrals.map((referral) => ({
