@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert");
 
 const routes = require("../../routes/ticketRoutes/ticketRoutes");
-const auth = require("../../middleware/authMiddleware");
+const optionalAuth = require("../../middleware/optionalAuthMiddleware");
 const tripSeatAvailability = require("../../src/modules/booking/trip-seat-availability");
 test("Trip seat availability route characterization", (t) => {
   const routedLayers = routes.stack.filter((layer) => layer.route);
@@ -32,8 +32,12 @@ test("Trip seat availability route characterization", (t) => {
   // 5. route has exactly two handlers
   assert.strictEqual(handlers.length, 2, "Route should have exactly two handlers");
   
-  // 6. handler 1 is exactly `auth`
-  assert.strictEqual(handlers[0], auth, "Handler 1 should be exactly auth");
+  // 6. handler 1 accepts anonymous requests and resolves valid access tokens
+  assert.strictEqual(
+    handlers[0],
+    optionalAuth,
+    "Handler 1 should be exactly optionalAuth"
+  );
   
   // 7. handler 2 is exactly `tripSeatAvailability.getTripSeatAvailability`
   assert.strictEqual(

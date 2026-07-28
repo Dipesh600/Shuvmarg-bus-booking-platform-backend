@@ -14,6 +14,7 @@ const fs     = require('node:fs');
 
 const router = require('../../routes/ticketRoutes/ticketRoutes');
 const auth   = require('../../middleware/authMiddleware');
+const optionalAuth = require('../../middleware/optionalAuthMiddleware');
 const verifyRoleFromDB = require('../../middleware/verifyRoleFromDB');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
 const { preparePassengerBooking } = require('../../src/modules/booking/passenger-booking-preparation');
@@ -87,7 +88,7 @@ test('Legacy Ticket API Retirement', async (t) => {
 
   await t.test('getSeats handler identity — directly wired to tripSeatAvailability', () => {
     const h = handles(find('/getSeats', 'post'));
-    assert.equal(h[0], auth);
+    assert.equal(h[0], optionalAuth);
     assert.equal(h[1], tripSeatAvailability.getTripSeatAvailability);
   });
 
