@@ -42,7 +42,7 @@ const brandFinancialCtrl   = require("../../controllers/adminController/brandFin
 const driverController     = require("../../controllers/adminController/driverController.js");
 const fleetWorkstation     = require("../../src/modules/admin/fleet-workstation");
 const tripOverviewCtrl     = require("../../src/modules/admin/trip-overview");
-const adminWalletCtrl      = require("../../controllers/adminController/walletController/adminWalletController.js");
+const adminWalletCtrl      = require("../../src/modules/admin/wallet-management");
 const transactionCtrl      = require("../../controllers/adminController/transactionController/transactionController.js");
 const routeDiscoveryCtrl   = require("../../src/modules/admin/route-discovery");
 // Auth Routes
