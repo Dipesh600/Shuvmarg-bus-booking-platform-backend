@@ -43,6 +43,7 @@
     "test:admin-operator-route-configuration": "node --test --test-concurrency=1 tests/unit/admin-operator-route-configuration-*.test.js tests/characterization/admin-operator-route-configuration-*.test.js",
     "test:admin-wallet-management": "node --test --test-concurrency=1 tests/unit/admin-wallet-management-*.test.js tests/characterization/admin-wallet-management-*.test.js",
     "test:admin-ticket-schedule-management": "node --test --test-concurrency=1 tests/unit/admin-ticket-schedule-management-*.test.js tests/characterization/admin-ticket-schedule-management-*.test.js",
+    "test:admin-financial-overview": "node --test --test-concurrency=1 tests/unit/admin-financial-overview-*.test.js tests/characterization/admin-financial-overview-*.test.js",
     "test:admin-trip-overview": "node --test --test-concurrency=1 tests/unit/admin-trip-overview-*.test.js tests/characterization/admin-trip-overview-*.test.js",
     "test:admin-schedule-management": "node --test --test-concurrency=1 tests/unit/admin-schedule-management-*.test.js tests/characterization/admin-schedule-management-*.test.js",
     "test:admin-bus-owner-management": "node --test --test-concurrency=1 tests/unit/admin-bus-owner-management-*.test.js tests/characterization/admin-bus-owner-management-*.test.js",
