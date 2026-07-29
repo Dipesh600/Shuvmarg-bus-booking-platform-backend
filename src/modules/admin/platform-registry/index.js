@@ -1,0 +1,8 @@
+"use strict";
+
+module.exports = {
+  ...require("./stop-registry.controller.js"),
+  ...require("./corridor-registry.controller.js"),
+  ...require("./route-variant-registry.controller.js"),
+  ...require("./registry-boarding-point.controller.js"),
+};

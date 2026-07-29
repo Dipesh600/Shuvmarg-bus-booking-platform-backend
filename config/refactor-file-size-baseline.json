@@ -9,7 +9,6 @@
     "filesOver150": 90,
     "_note_filesOver150": "Violation = strictly over 150 lines (151+). Exactly 150 is compliant."
   },
-  "services/platformRegistryService.js": 624,
   "controllers/agentController/agentController.js": 369,
   "controllers/adminController/walletController/adminWalletController.js": 556,
   "services/tripGeneratorCron.js": 504,
@@ -40,7 +39,6 @@
   "services/fileProcessor.js": 279,
   "services/googlePlacesClient.js": 278,
   "controllers/adminController/routeRequestController.js": 277,
-  "controllers/adminController/platformRegistryController.js": 276,
   "index.js": 273,
   "controllers/adminController/busOwnerController/tripController.js": 259,
   "models/tripModel.js": 256,
