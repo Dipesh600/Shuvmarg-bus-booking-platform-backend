@@ -53,7 +53,7 @@ test("module files obey the 150-line boundary", () => {
 
 test("separate bus-owner responsibilities remain in domain modules", () => {
   const retained = [
-    "controllers/adminController/busOwnerController/adminBusOwnerFleetController.js",
+    "src/modules/admin/fleet-management/index.js",
     "src/modules/bus-owner/schedule-management/index.js",
     "src/modules/bus-owner/kyc-submission/index.js",
     "src/modules/bus-owner/fleet-management/index.js",
