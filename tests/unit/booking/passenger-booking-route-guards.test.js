@@ -93,6 +93,22 @@ test('Passenger Booking Route Guards — auth -> verifyRoleFromDB -> requireRole
     } finally { restore.reverse().forEach((f) => f()); }
   });
 
+  await t.test('legacy user and token without tokenVersion are treated as version zero', async () => {
+    const restore = [];
+    const legacyUser = {
+      _id: validUser._id,
+      roles: validUser.roles,
+      status: validUser.status,
+    };
+    patch(User, 'findById', () => ({ lean: async () => legacyUser }), restore);
+    try {
+      const req = { headers: { authorization: `Bearer ${createValidToken({ tokenVersion: undefined })}` } };
+      const res = { status: () => ({ json: () => assert.fail('legacy session should remain valid') }) };
+      const result = await executeGuardChain(req, res);
+      assert.deepEqual(result, { passed: true });
+    } finally { restore.reverse().forEach((f) => f()); }
+  });
+
   await t.test('stale token version returns 401 SESSION_INVALIDATED', async () => {
     const restore = [];
     patch(User, 'findById', () => ({ lean: async () => ({ ...validUser, tokenVersion: 1 }) }), restore);
