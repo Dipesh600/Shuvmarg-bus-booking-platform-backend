@@ -35,8 +35,9 @@ test("Trip seat availability service", async (t) => {
     
     assert.deepStrictEqual(callOrder, ["Seat", "Trip", "SeatHold"]);
     assert.deepStrictEqual(result, {
-      _id: "seatId",
       seata: [],
+      seatb: [],
+      seatc: [],
       seatConfig: null
     });
   });

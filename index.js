@@ -24,11 +24,11 @@ const logger        = require("./utils/logger.js");
 const errorHandler  = require("./src/shared/http/error-handler.js");
 const requestLogger = require("./middleware/requestLogger.js");
 const indexRoute    = require("./routes/indexRoute.js");
-const startServer   = require("./utils/server.js");
+const startServer       = require("./utils/server.js");
+const { registerShutdown } = require("./utils/lifecycle.js");
 const { setupTripGeneratorCron } = require("./services/tripGeneratorCron.js");
 const setupFleetDocumentExpiryCron = require("./services/fleetDocumentExpiryCron.js");
 const { setupReconciliationCron } = require("./services/reconcilePayments.js");
-
 // Ensure logs directory exists (Winston needs it)
 const logsDir = path.join(__dirname, "logs");
 if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
@@ -128,14 +128,26 @@ const searchLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const seatAvailabilityLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 60,
+  message: {
+    success: false,
+    message: "Seat availability rate limit exceeded. Please slow down.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use("/api/", apiLimiter);
 app.use("/api/public/searchTrips", searchLimiter);
+app.use("/api/ticket/getSeats", seatAvailabilityLimiter);
 
 
 
 // ── Body Parsing ──────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
 app.use(fileUpload({
   limits: { fileSize: 20 * 1024 * 1024 },  // 20 MB max per file
@@ -252,7 +264,7 @@ if (require.main === module) {
   setupReconciliationCron();
   // Note: orphan coupon image cleanup is handled client-side via localStorage
   // tombstoning in the admin Create Offer page — no server-side cron needed.
-  startServer(app, PORT);
+  startServer(app, PORT).then(registerShutdown);
 }
 
 module.exports = app;

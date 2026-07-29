@@ -1,0 +1,69 @@
+# ── Version control ──────────────────────────────────────────────────────────
+.git
+.github
+.gitignore
+
+# ── Node dependencies (rebuilt inside container) ──────────────────────────────
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Logs (not needed in image; container logs go to Docker log driver) ────────
+logs
+*.log
+*.debug.log
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+tests
+coverage
+.nyc_output
+
+# ── Documentation (not needed at runtime) ─────────────────────────────────────
+docs
+*.md
+*.txt
+*.pdf
+
+# ── Deploy configuration (stays on VM, not baked into image) ─────────────────
+deploy
+
+# ── Scratch / debug files ─────────────────────────────────────────────────────
+scratch
+test_*.js
+test_*.mjs
+test-*.js
+get-admin.js
+test-auth.js
+test-coupon.js
+test-image-upload.js
+test-s3.js
+test-upload-coupon.js
+test-upload.js
+test_mongo.js
+test_mongo_designConfig.js
+test_mongo_update.js
+fleet_error_debug.log
+
+# ── Development tooling ───────────────────────────────────────────────────────
+ecosystem.config.js
+tools
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# ── Build artefacts ───────────────────────────────────────────────────────────
+dist
+build
+
+# ── Dummy test assets ─────────────────────────────────────────────────────────
+dummy.jpg
+dummy.png

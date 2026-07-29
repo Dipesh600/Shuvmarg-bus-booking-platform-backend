@@ -5,6 +5,9 @@ const assert = require('node:assert/strict');
 const policy = require(
   '../../../src/modules/booking/passenger-esewa-checkout/passenger-esewa-checkout.policy'
 );
+const tripPolicy = require(
+  '../../../src/modules/booking/passenger-esewa-checkout/passenger-esewa-checkout-trip.policy'
+);
 const signature = require(
   '../../../src/modules/booking/passenger-esewa-checkout/passenger-esewa-checkout.signature'
 );
@@ -40,12 +43,24 @@ test('initiation signs and persists the server quote, never browser price', asyn
       };
     },
     repository: {
+      findCheckoutTrip: async () => ({
+        departureTime: '07:30',
+        arrivalTime: '14:30',
+        routeId: { from: 'Kathmandu', to: 'Pokhara' },
+        busId: {
+          boardingPointId: {
+            boardingPoints: [{ name: 'Kalanki', time: '08:00' }],
+            droppingPoints: [{ name: 'Pokhara', time: '15:00' }],
+          },
+        },
+      }),
       createAttempt: async (payload) => {
         saved = payload;
         return { ...payload, _id: 'attempt-1' };
       },
     },
     signature,
+    tripPolicy,
     policy: {
       ...policy,
       createTransactionUuid: () => 'SM-SECURE-1',
@@ -70,6 +85,10 @@ test('initiation signs and persists the server quote, never browser price', asyn
       ],
       boardingPoint: { name: 'Kalanki', time: '08:00' },
       droppingPoint: { name: 'Pokhara', time: '15:00' },
+      bookedFrom: 'Tampered origin',
+      bookedTo: 'Tampered destination',
+      bookedDepartureTime: '00:00',
+      bookedArrivalTime: '00:01',
     },
   });
 
@@ -78,6 +97,10 @@ test('initiation signs and persists the server quote, never browser price', asyn
   assert.equal(saved.gatewayAmount, 1100);
   assert.equal(saved.formFields.total_amount, '1100');
   assert.equal(saved.formFields.transaction_uuid, 'SM-SECURE-1');
+  assert.equal(saved.checkoutPayload.bookedFrom, 'Kathmandu');
+  assert.equal(saved.checkoutPayload.bookedTo, 'Pokhara');
+  assert.equal(saved.checkoutPayload.bookedDepartureTime, '08:00');
+  assert.equal(saved.checkoutPayload.bookedArrivalTime, '15:00');
   assert.equal(
     saved.formFields.signed_field_names,
     'total_amount,transaction_uuid,product_code'

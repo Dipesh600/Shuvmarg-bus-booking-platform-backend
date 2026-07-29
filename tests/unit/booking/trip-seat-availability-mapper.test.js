@@ -92,11 +92,36 @@ test("Trip seat availability mapper", async (t) => {
   });
 
   await t.test("buildAvailabilityData", async (st) => {
-    await st.test("output spreads all seat-document properties and overrides seatConfig", () => {
-      const seats = { id: 1, name: "test", seatConfig: "old" };
-      const config = "new";
+    await st.test("returns only public availability fields", () => {
+      const seats = {
+        _id: "seat-doc",
+        tripId: "trip-1",
+        createdAt: new Date(),
+        seata: [{
+          seatNo: "a1",
+          booked: true,
+          bookedBy: "private-user-id",
+          bookedAt: new Date(),
+          seatClass: "window",
+          blockedFor: "none",
+        }],
+      };
+      const config = { floors: [] };
       const result = buildAvailabilityData(seats, config);
-      assert.deepStrictEqual(result, { id: 1, name: "test", seatConfig: "new" });
+      assert.deepStrictEqual(result, {
+        seata: [{
+          seatNo: "a1",
+          booked: true,
+          seatClass: "window",
+          blockedFor: "none",
+        }],
+        seatb: [],
+        seatc: [],
+        seatConfig: config,
+      });
+      assert.equal(JSON.stringify(result).includes("private-user-id"), false);
+      assert.equal("_id" in result, false);
+      assert.equal("tripId" in result, false);
     });
   });
 });
