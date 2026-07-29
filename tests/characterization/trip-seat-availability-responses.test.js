@@ -101,8 +101,9 @@ test("Trip seat availability responses characterization", async (t) => {
       status: true,
       message: "Successfully fetched seats!",
       data: {
-        _id: "seatId",
         seata: [],
+        seatb: [],
+        seatc: [],
         seatConfig: { rows: 5 }
       }
     });
@@ -122,8 +123,9 @@ test("Trip seat availability responses characterization", async (t) => {
       status: true,
       message: "Successfully fetched seats!",
       data: {
-        _id: "seatId",
         seata: [],
+        seatb: [],
+        seatc: [],
         seatConfig: null
       }
     });

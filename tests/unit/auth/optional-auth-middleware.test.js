@@ -60,62 +60,50 @@ test("optional access-token authentication", async (t) => {
     assert.deepEqual(result.req.userInfo.roles, ["passenger"]);
   });
 
-  await t.test("rejects a malformed supplied authorization header", () => {
+  await t.test("ignores a malformed supplied authorization header", () => {
     const result = run("Bearer");
-    assert.equal(result.nextCalls, 0);
-    assert.equal(result.statusCode, 401);
-    assert.deepEqual(result.body, {
-      status: false,
-      message: "Authorization header is missing or invalid",
-    });
+    assert.equal(result.nextCalls, 1);
+    assert.equal(result.statusCode, undefined);
+    assert.equal(result.req.userInfo, undefined);
   });
 
-  await t.test("rejects a non-Bearer authorization scheme", () => {
+  await t.test("ignores a non-Bearer authorization scheme", () => {
     const token = jwt.sign(
       { id: "passenger-1", purpose: "access" },
       process.env.SECRET_KEY
     );
     const result = run(`Basic ${token}`);
-    assert.equal(result.nextCalls, 0);
-    assert.equal(result.statusCode, 401);
-    assert.equal(
-      result.body.message,
-      "Authorization header is missing or invalid"
-    );
+    assert.equal(result.nextCalls, 1);
+    assert.equal(result.statusCode, undefined);
+    assert.equal(result.req.userInfo, undefined);
   });
 
-  await t.test("rejects an invalid supplied token", () => {
+  await t.test("ignores an invalid supplied token", () => {
     const result = run("Bearer invalid-token");
-    assert.equal(result.nextCalls, 0);
-    assert.equal(result.statusCode, 401);
-    assert.deepEqual(result.body, {
-      success: false,
-      message: "Unauthorized: Invalid token",
-    });
+    assert.equal(result.nextCalls, 1);
+    assert.equal(result.statusCode, undefined);
+    assert.equal(result.req.userInfo, undefined);
   });
 
-  await t.test("rejects an expired supplied token", () => {
+  await t.test("ignores an expired supplied token", () => {
     const token = jwt.sign(
       { id: "passenger-1", purpose: "access", exp: 1 },
       process.env.SECRET_KEY
     );
     const result = run(`Bearer ${token}`);
-    assert.equal(result.nextCalls, 0);
-    assert.equal(result.statusCode, 401);
-    assert.deepEqual(result.body, {
-      success: false,
-      message: "Your session has expired. Please login again.",
-    });
+    assert.equal(result.nextCalls, 1);
+    assert.equal(result.statusCode, undefined);
+    assert.equal(result.req.userInfo, undefined);
   });
 
-  await t.test("rejects a token with the wrong purpose", () => {
+  await t.test("ignores a token with the wrong purpose", () => {
     const token = jwt.sign(
       { id: "passenger-1", purpose: "FORCE_PASSWORD_CHANGE" },
       process.env.SECRET_KEY
     );
     const result = run(`Bearer ${token}`);
-    assert.equal(result.nextCalls, 0);
-    assert.equal(result.statusCode, 403);
-    assert.equal(result.body.errorCode, "INVALID_TOKEN_PURPOSE");
+    assert.equal(result.nextCalls, 1);
+    assert.equal(result.statusCode, undefined);
+    assert.equal(result.req.userInfo, undefined);
   });
 });

@@ -5,6 +5,7 @@ const EsewaPaymentAttempt = require(
 );
 const SeatHold = require('../../../../models/seatHoldModel.js');
 const Transaction = require('../../../../models/transactionModel.js');
+const Trip = require('../../../../models/tripModel.js');
 const { verifyEsewaPayment } = require(
   '../../../../services/esewaVerificationService.js'
 );
@@ -18,6 +19,7 @@ const { readEsewaCheckoutConfig } = require(
 );
 const signature = require('./passenger-esewa-checkout.signature.js');
 const policy = require('./passenger-esewa-checkout.policy.js');
+const tripPolicy = require('./passenger-esewa-checkout-trip.policy.js');
 const mapper = require('./passenger-esewa-checkout.mapper.js');
 const {
   validateEsewaResponse,
@@ -45,6 +47,7 @@ const repository = createPassengerEsewaCheckoutRepository({
   EsewaPaymentAttempt,
   SeatHold,
   Transaction,
+  Trip,
 });
 const initiate = createPassengerEsewaCheckoutInitiationService({
   readConfig: readEsewaCheckoutConfig,
@@ -52,6 +55,7 @@ const initiate = createPassengerEsewaCheckoutInitiationService({
   repository,
   signature,
   policy,
+  tripPolicy,
 });
 const recovery = createPassengerEsewaCheckoutRecoveryService({
   repository,

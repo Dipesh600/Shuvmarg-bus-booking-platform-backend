@@ -25,14 +25,32 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
       body.passengerDetails,
       hold.seatNumbers
     );
-    const boardingPoint = deps.policy.normalizePoint(
+    const trip = await deps.repository.findCheckoutTrip(hold.tripId);
+    const configuredPoints =
+      deps.tripPolicy.resolveConfiguredCheckoutPoints(trip);
+    const boardingPoint = deps.tripPolicy.resolveCanonicalPoint(
       body.boardingPoint,
+      configuredPoints.boardingPoints,
       'Boarding point'
     );
-    const droppingPoint = deps.policy.normalizePoint(
+    const droppingPoint = deps.tripPolicy.resolveCanonicalPoint(
       body.droppingPoint,
+      configuredPoints.droppingPoints,
       'Dropping point'
     );
+    const tripSnapshot = deps.tripPolicy.resolveCanonicalTripSnapshot(
+      trip,
+      boardingPoint,
+      droppingPoint
+    );
+    const checkoutBoardingPoint = {
+      name: boardingPoint.name,
+      time: boardingPoint.time,
+    };
+    const checkoutDroppingPoint = {
+      name: droppingPoint.name,
+      time: droppingPoint.time,
+    };
     const transactionUuid = deps.policy.createTransactionUuid();
     const totalAmount = deps.policy.formatAmount(
       quoteResult.quote.gatewayAmount
@@ -63,19 +81,10 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
       seatNumbers: hold.seatNumbers,
       couponCode: body.couponCode || null,
       smMoneyToUse: quoteResult.quote.requestedSmMoney,
-      boardingPoint,
-      droppingPoint,
+      boardingPoint: checkoutBoardingPoint,
+      droppingPoint: checkoutDroppingPoint,
       passengerDetails,
-      bookedFrom: deps.policy.normalizeOptionalText(body.bookedFrom),
-      bookedTo: deps.policy.normalizeOptionalText(body.bookedTo),
-      bookedDepartureTime: deps.policy.normalizeOptionalText(
-        body.bookedDepartureTime,
-        40
-      ),
-      bookedArrivalTime: deps.policy.normalizeOptionalText(
-        body.bookedArrivalTime,
-        40
-      ),
+      ...tripSnapshot,
     };
     const attempt = await deps.repository.createAttempt({
       userId,
