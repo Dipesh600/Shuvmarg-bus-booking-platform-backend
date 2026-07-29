@@ -44,7 +44,7 @@ test("all fleet-workstation module files stay within 150 lines", () => {
 
 test("similarly named fleet and trip APIs remain separate", () => {
   const retained = [
-    "controllers/adminController/busOwnerController/adminBusOwnerFleetController.js",
+    "src/modules/admin/fleet-management/index.js",
     "controllers/adminController/busOwnerController/fleetController.js",
     "src/modules/admin/trip-overview/index.js",
     "src/modules/admin/schedule-management/index.js",
