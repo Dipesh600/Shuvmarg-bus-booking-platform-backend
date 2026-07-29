@@ -10,21 +10,14 @@ const optionalAuthMiddleware = (req, res, next) => {
   const [scheme, token, extraPart] = authHeader.trim().split(/\s+/);
 
   if (scheme !== "Bearer" || !token || extraPart) {
-    return res.status(401).json({
-      status: false,
-      message: "Authorization header is missing or invalid",
-    });
+    return next();
   }
 
   try {
     const userInfo = jwt.verify(token, process.env.SECRET_KEY);
 
     if (userInfo.purpose !== "access") {
-      return res.status(403).json({
-        success: false,
-        message: "Invalid token purpose. Expected an access token.",
-        errorCode: "INVALID_TOKEN_PURPOSE",
-      });
+      return next();
     }
 
     req.userInfo = userInfo;
@@ -35,18 +28,11 @@ const optionalAuthMiddleware = (req, res, next) => {
     }
 
     return next();
-  } catch (error) {
-    if (error.name === "TokenExpiredError") {
-      return res.status(401).json({
-        success: false,
-        message: "Your session has expired. Please login again.",
-      });
-    }
-
-    return res.status(401).json({
-      success: false,
-      message: "Unauthorized: Invalid token",
-    });
+  } catch {
+    // Authentication is genuinely optional on these routes. Invalid, expired,
+    // or malformed credentials must never block the public response and must
+    // never create a partial identity.
+    return next();
   }
 };
 

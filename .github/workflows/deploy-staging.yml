@@ -1,0 +1,148 @@
+# .github/workflows/deploy-staging.yml
+#
+# Staging deployment workflow.
+#
+# Trigger: direct push to the 'staging' branch.
+#
+# NOTE: workflow_run cannot be used here because that trigger only fires when
+# the workflow file exists on the repository's DEFAULT branch (main).
+# deploy-staging.yml will not be merged to main, so a direct push trigger
+# is used instead. The full CI gate (tests + file-size check) is re-run
+# inside this workflow before any image is built or deployed.
+#
+# Separation of credentials:
+#   - GITHUB_TOKEN (packages: write)  → push to GHCR
+#   - GHCR_TOKEN (GitHub secret)      → VM pulls from GHCR (read-only package token)
+#   - ORACLE_STAGING_SSH_KEY          → SSH access to the VM
+
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - staging
+
+concurrency:
+  group: shuvmarg-staging-deployment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # ── Step 1: Run full CI gate before building ────────────────────────────────
+  ci:
+    name: CI Gate
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Checkout staging commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check repository file sizes
+        run: npm run check:filesize
+
+      - name: Run tests
+        run: npm test
+
+  # ── Step 2: Build and push Docker image to GHCR ────────────────────────────
+  build-and-push:
+    name: Build & Push Image
+    needs: ci
+    runs-on: ubuntu-latest
+
+    outputs:
+      image: ${{ steps.image-ref.outputs.image }}
+
+    steps:
+      - name: Checkout staging commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive lowercase image name
+        id: image-ref
+        run: |
+          # GitHub repository names are case-sensitive; GHCR requires lowercase.
+          REPO_LC=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          SHA_TAG="sha-${{ github.sha }}"
+          IMAGE="ghcr.io/${REPO_LC}:${SHA_TAG}"
+          STAGING_IMAGE="ghcr.io/${REPO_LC}:staging"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "staging_image=${STAGING_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "Image reference: ${IMAGE}"
+
+      - name: Set up QEMU for ARM64
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ steps.image-ref.outputs.image }}
+            ${{ steps.image-ref.outputs.staging_image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Step 3: Deploy to Oracle VM ────────────────────────────────────────────
+  deploy:
+    name: Deploy to Oracle VM
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH — invoke deploy script with immutable SHA image
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.ORACLE_STAGING_HOST }}
+          username: ${{ secrets.ORACLE_STAGING_USER }}
+          key: ${{ secrets.ORACLE_STAGING_SSH_KEY }}
+          port: ${{ secrets.ORACLE_STAGING_SSH_PORT }}
+          # Pass GHCR_TOKEN as an environment variable so the deploy script
+          # can authenticate to GHCR for pulls. This is a read-only package token
+          # stored as a GitHub secret — separate from GITHUB_TOKEN.
+          envs: GHCR_TOKEN,NEW_IMAGE
+          script: |
+            export GHCR_TOKEN="${GHCR_TOKEN}"
+            export NEW_IMAGE="${NEW_IMAGE}"
+            /opt/shuvmarg/staging/deploy.sh "${NEW_IMAGE}"
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          NEW_IMAGE: ${{ needs.build-and-push.outputs.image }}
+
+      - name: Verify deployment health (from CI runner)
+        run: |
+          IMAGE="${{ needs.build-and-push.outputs.image }}"
+          echo "Deployed image: ${IMAGE}"
+          echo "Deployment complete. Health is verified by deploy.sh on the VM."
+          echo "To manually verify: curl -fsS https://api-staging.shuvmarg.com/health"

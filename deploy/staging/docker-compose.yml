@@ -1,0 +1,95 @@
+# deploy/staging/docker-compose.yml
+#
+# Staging environment — Oracle Cloud VM
+#
+# Usage:
+#   Set BACKEND_IMAGE and STAGING_API_DOMAIN in .env (mode 600) before running.
+#   docker compose --env-file .env up -d
+#
+# Network: all inter-service traffic is private (shuvmarg-staging-net).
+# Port 7012 is NOT published externally; Caddy proxies through the Docker network.
+
+services:
+
+  # ── Backend ──────────────────────────────────────────────────────────────────
+  backend:
+    image: "${BACKEND_IMAGE:?BACKEND_IMAGE must be set in .env}"
+    container_name: shuvmarg-staging-backend
+    restart: unless-stopped
+
+    # Load all runtime secrets from the VM-local .env file (mode 600).
+    # Never bake secrets into Compose or images.
+    env_file:
+      - .env
+
+    # Drop the ability to write to the root filesystem.
+    # Winston log files: /app/logs tmpfs
+    # Express/Node temp:  /tmp    tmpfs
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs
+
+    # Process reaping for signal-forwarding correctness
+    init: true
+
+    # Backend is reachable only through the private Docker network.
+    # Port 7012 is NOT published on the host.
+    networks:
+      - shuvmarg-staging-net
+
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:7012/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ── Caddy (TLS termination + reverse proxy) ────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: shuvmarg-staging-caddy
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+    networks:
+      - shuvmarg-staging-net
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+# ── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  shuvmarg-staging-net:
+    driver: bridge
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  caddy_data:
+  caddy_config:

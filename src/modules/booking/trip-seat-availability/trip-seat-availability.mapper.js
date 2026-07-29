@@ -41,9 +41,18 @@ const maskActiveHeldSeats = (seats, activeHolds) => {
   return seats;
 };
 const buildAvailabilityData = (seats, seatConfig) => {
+  const mapPublicSeat = (seat) => ({
+    seatNo: seat.seatNo,
+    booked: Boolean(seat.booked),
+    seatClass: seat.seatClass,
+    blockedFor: seat.blockedFor,
+  });
+
   return {
-    ...seats,
-    seatConfig: seatConfig
+    seata: (seats.seata || []).map(mapPublicSeat),
+    seatb: (seats.seatb || []).map(mapPublicSeat),
+    seatc: (seats.seatc || []).map(mapPublicSeat),
+    seatConfig,
   };
 };
 

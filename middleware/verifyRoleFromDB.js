@@ -103,7 +103,8 @@ const verifyRoleFromDB = async (req, res, next) => {
         // cryptographic signature and expiry are both fine.
         // Cost: zero extra DB reads — the user document is already in memory above.
         const tokenVersion = req.userInfo.tokenVersion ?? 0;
-        if (tokenVersion !== user.tokenVersion) {
+        const dbTokenVersion = user.tokenVersion ?? 0;
+        if (tokenVersion !== dbTokenVersion) {
             return res.status(401).json({
                 success: false,
                 message: "Your session is no longer valid. Please login again.",
