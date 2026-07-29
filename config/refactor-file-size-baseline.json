@@ -12,7 +12,6 @@
   "controllers/agentController/agentController.js": 369,
   "services/tripGeneratorCron.js": 504,
   "routes/adminRoutes/adminRoutes.js": 466,
-  "controllers/couponController/userCouponController.js": 431,
   "controllers/busOwnerController/staffAssignmentController.js": 408,
   "controllers/adminController/scratchThemeController.js": 403,
   "handlers/couponHelper.js": 395,
