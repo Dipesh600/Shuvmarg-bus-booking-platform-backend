@@ -10,7 +10,7 @@ const profileModule = require("../../src/modules/auth/profile");
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralCode.js");
-const userCouponController = require("../../controllers/couponController/userCouponController.js");
+const passengerCouponModule = require("../../src/modules/coupon/passenger");
 const recordCouponUsageController = require("../../controllers/couponController/recordCouponUsageController.js");
 const walletController = require("../../controllers/walletController/walletController.js");
 const scratchCardController = require("../../controllers/walletController/scratchCardController.js");
@@ -76,27 +76,27 @@ router.get("/getUserDetail", auth, verifyRoleFromDB, profileModule.getUserDetail
 // Coupon Routes
 router.get(
   "/coupons/all",
-  userCouponController.getAllCouponsForUser          // active only → home carousel
+  passengerCouponModule.getAllCouponsForUser          // active only → home carousel
 );
 router.get(
   "/coupons/all-with-expired",
-  userCouponController.getAllCouponsIncludingExpired // active + expired → "See All" page
+  passengerCouponModule.getAllCouponsIncludingExpired // active + expired → "See All" page
 );
 router.get(
   "/coupons/available",
   auth,
   verifyRoleFromDB,
-  userCouponController.getAvailableCoupons
+  passengerCouponModule.getAvailableCoupons
 );
-router.post("/coupons/validate", auth, verifyRoleFromDB, userCouponController.validateCoupon);
+router.post("/coupons/validate", auth, verifyRoleFromDB, passengerCouponModule.validateCoupon);
 router.get(
   "/coupons/usage-history",
   auth,
   verifyRoleFromDB,
-  userCouponController.getMyCouponUsage
+  passengerCouponModule.getMyCouponUsage
 );
-router.get("/coupons/best", auth, verifyRoleFromDB, userCouponController.getBestCoupon);
-router.get("/coupons/search", auth, verifyRoleFromDB, userCouponController.searchCoupons);
+router.get("/coupons/best", auth, verifyRoleFromDB, passengerCouponModule.getBestCoupon);
+router.get("/coupons/search", auth, verifyRoleFromDB, passengerCouponModule.searchCoupons);
 
 // Coupon Usage Tracking Routes
 router.post(
