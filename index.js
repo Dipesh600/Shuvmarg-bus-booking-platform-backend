@@ -128,14 +128,26 @@ const searchLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const seatAvailabilityLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 60,
+  message: {
+    success: false,
+    message: "Seat availability rate limit exceeded. Please slow down.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use("/api/", apiLimiter);
 app.use("/api/public/searchTrips", searchLimiter);
+app.use("/api/ticket/getSeats", seatAvailabilityLimiter);
 
 
 
 // ── Body Parsing ──────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
 app.use(fileUpload({
   limits: { fileSize: 20 * 1024 * 1024 },  // 20 MB max per file
