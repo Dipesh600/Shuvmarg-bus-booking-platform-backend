@@ -59,6 +59,22 @@ jobs:
       - name: Check repository file sizes
         run: npm run check:filesize
 
+      - name: Validate staging proxy configuration
+        env:
+          BACKEND_IMAGE: ghcr.io/example/backend:sha-0000000000000000000000000000000000000000
+          STAGING_API_DOMAIN: api-staging.example.com
+        run: |
+          docker compose \
+            --env-file deploy/staging/.env.example \
+            --file deploy/staging/docker-compose.yml \
+            config > /tmp/staging-compose.yml
+          grep -q "STAGING_API_DOMAIN: api-staging.example.com" /tmp/staging-compose.yml
+          docker run --rm \
+            --env STAGING_API_DOMAIN="${STAGING_API_DOMAIN}" \
+            --volume "${PWD}/deploy/staging/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
       - name: Run tests
         run: npm test
 
@@ -121,6 +137,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout staging deployment files
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Sync versioned deployment files to Oracle VM
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.ORACLE_STAGING_HOST }}
+          username: ${{ secrets.ORACLE_STAGING_USER }}
+          key: ${{ secrets.ORACLE_STAGING_SSH_KEY }}
+          port: ${{ secrets.ORACLE_STAGING_SSH_PORT }}
+          source: "deploy/staging/docker-compose.yml,deploy/staging/Caddyfile,deploy/staging/deploy.sh"
+          target: /opt/shuvmarg/staging
+          strip_components: 2
+          overwrite: true
+
       - name: SSH — invoke deploy script with immutable SHA image
         uses: appleboy/ssh-action@v1
         with:
@@ -135,6 +168,7 @@ jobs:
           script: |
             export GHCR_TOKEN="${GHCR_TOKEN}"
             export NEW_IMAGE="${NEW_IMAGE}"
+            chmod 750 /opt/shuvmarg/staging/deploy.sh
             /opt/shuvmarg/staging/deploy.sh "${NEW_IMAGE}"
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
