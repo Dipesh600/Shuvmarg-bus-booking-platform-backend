@@ -22,6 +22,7 @@ const path         = require("path");
 
 const logger        = require("./utils/logger.js");
 const errorHandler  = require("./src/shared/http/error-handler.js");
+const { createCorsOptions } = require("./src/shared/http/cors-options.js");
 const requestLogger = require("./middleware/requestLogger.js");
 const indexRoute    = require("./routes/indexRoute.js");
 const startServer       = require("./utils/server.js");
@@ -36,35 +37,11 @@ if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
 const app  = express();
 const PORT = process.env.PORT || 7012;
 
-// ── CORS — MUST be first middleware before helmet / rate limiter ──────────────
-// Wildcard '*' conflicts with credentials:true, so we use a function-based origin.
-// Support comma-separated FRONTEND_URL for multiple deployed frontends
-// e.g. FRONTEND_URL="https://shuvmarg.vercel.app,https://shuvmarg-admin.vercel.app"
-const allowedOrigins = [
-  "http://localhost:5173",   // Vite super admin dev
-  "http://localhost:5174",   // Vite super admin dev (alt port)
-  "http://localhost:5175",   // Vite super admin dev (alt port)
-  "http://localhost:5176",   // Vite super admin dev (alt port)
-  "http://localhost:5177",   // Vite super admin dev (alt port)
-  "http://localhost:3000",   // CRA fallback
-  "http://localhost:4173",   // Vite preview
-  ...(process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(",").map((u) => u.trim()).filter(Boolean)
-    : []),
-];
+// Never reveal the application framework, including on early middleware errors.
+app.disable("x-powered-by");
 
-const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow requests with no origin (curl, mobile apps, Postman)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin '${origin}' not allowed`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-App-Source"],
-  optionsSuccessStatus: 200,   // Some browsers (IE11) choke on 204
-};
+// ── CORS — MUST be first middleware before helmet / rate limiter ──────────────
+const corsOptions = createCorsOptions();
 
 app.use(cors(corsOptions));
 // Explicit pre-flight handler for all routes.
