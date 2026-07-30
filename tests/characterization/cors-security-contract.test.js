@@ -5,12 +5,19 @@ const assert = require("node:assert/strict");
 const request = require("supertest");
 
 const previousFrontendUrl = process.env.FRONTEND_URL;
+const previousSecretKey = process.env.SECRET_KEY;
+
 process.env.FRONTEND_URL = "https://staging.shuvmarg.com";
+process.env.SECRET_KEY = "cors-security-contract-test-secret";
+
 const app = require("../../index");
 
 test.after(() => {
   if (previousFrontendUrl === undefined) delete process.env.FRONTEND_URL;
   else process.env.FRONTEND_URL = previousFrontendUrl;
+
+  if (previousSecretKey === undefined) delete process.env.SECRET_KEY;
+  else process.env.SECRET_KEY = previousSecretKey;
 });
 
 test("requests without an Origin remain available to mobile and server clients", async () => {
