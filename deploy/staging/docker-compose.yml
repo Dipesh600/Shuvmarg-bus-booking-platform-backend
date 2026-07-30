@@ -61,6 +61,10 @@ services:
     container_name: shuvmarg-staging-caddy
     restart: unless-stopped
 
+    # Caddy needs only the public domain. Do not expose backend secrets to it.
+    environment:
+      STAGING_API_DOMAIN: "${STAGING_API_DOMAIN:?STAGING_API_DOMAIN must be set in .env}"
+
     ports:
       - "80:80"
       - "443:443"
