@@ -38,6 +38,10 @@ test('deployment validates the proxy and syncs versioned files before SSH', () =
   );
 
   assert.match(workflow, /Validate staging proxy configuration/);
+  assert.match(
+    workflow,
+    /cp deploy\/staging\/\.env\.example deploy\/staging\/\.env/,
+  );
   assert.match(workflow, /appleboy\/scp-action@v1/);
   assert.match(workflow, /deploy\/staging\/docker-compose\.yml/);
   assert.match(workflow, /deploy\/staging\/Caddyfile/);
