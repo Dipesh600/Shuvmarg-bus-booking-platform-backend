@@ -64,6 +64,7 @@ jobs:
           BACKEND_IMAGE: ghcr.io/example/backend:sha-0000000000000000000000000000000000000000
           STAGING_API_DOMAIN: api-staging.example.com
         run: |
+          cp deploy/staging/.env.example deploy/staging/.env
           docker compose \
             --env-file deploy/staging/.env.example \
             --file deploy/staging/docker-compose.yml \
