@@ -6,9 +6,11 @@ const request = require("supertest");
 
 const previousFrontendUrl = process.env.FRONTEND_URL;
 const previousSecretKey = process.env.SECRET_KEY;
+const previousVerificationTokenSecret = process.env.VERIFICATION_TOKEN_SECRET;
 
 process.env.FRONTEND_URL = "https://staging.shuvmarg.com";
 process.env.SECRET_KEY = "cors-security-contract-test-secret";
+process.env.VERIFICATION_TOKEN_SECRET = "cors-contract-verification-token-test-secret";
 
 const app = require("../../index");
 
@@ -18,6 +20,9 @@ test.after(() => {
 
   if (previousSecretKey === undefined) delete process.env.SECRET_KEY;
   else process.env.SECRET_KEY = previousSecretKey;
+
+  if (previousVerificationTokenSecret === undefined) delete process.env.VERIFICATION_TOKEN_SECRET;
+  else process.env.VERIFICATION_TOKEN_SECRET = previousVerificationTokenSecret;
 });
 
 test("requests without an Origin remain available to mobile and server clients", async () => {
