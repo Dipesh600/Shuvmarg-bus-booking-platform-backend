@@ -35,27 +35,29 @@ test("stop registry creates explicit and generated stop codes", async (t) => {
 
 test("stop registry blocks referenced deletion before any write", async (t) => {
   let writes = 0;
-  patch(t, Stop, "findById", async () => ({ _id: "stop-1" }));
+  const objectId = new (require("mongoose").Types.ObjectId)();
+  patch(t, Stop, "findById", async () => ({ _id: objectId }));
   patch(t, OperatorConfig, "countDocuments", async () => 2);
+  patch(t, RouteStop, "countDocuments", async () => 0);
+  patch(t, BoardingPoint, "countDocuments", async () => 0);
   patch(t, Stop, "findByIdAndDelete", async () => { writes += 1; });
-  patch(t, RouteStop, "deleteMany", async () => { writes += 1; });
-  patch(t, BoardingPoint, "deleteMany", async () => { writes += 1; });
 
   await assert.rejects(
-    service.deleteStop("stop-1"),
-    /REFERENCED:2:Stop is actively used by 2 operator route/
+    service.deleteStop(objectId),
+    /Stop is actively used and cannot be deleted/
   );
   assert.equal(writes, 0);
 });
 
 test("stop registry cascades an unreferenced deletion in order", async (t) => {
   const calls = [];
-  patch(t, Stop, "findById", async () => ({ _id: "stop-1" }));
+  const objectId = new (require("mongoose").Types.ObjectId)();
+  patch(t, Stop, "findById", async () => ({ _id: objectId }));
   patch(t, OperatorConfig, "countDocuments", async () => 0);
+  patch(t, RouteStop, "countDocuments", async () => 0);
+  patch(t, BoardingPoint, "countDocuments", async () => 0);
   patch(t, Stop, "findByIdAndDelete", async () => calls.push("stop"));
-  patch(t, RouteStop, "deleteMany", async () => calls.push("route-stop"));
-  patch(t, BoardingPoint, "deleteMany", async () => calls.push("point"));
 
-  await service.deleteStop("stop-1");
-  assert.deepEqual(calls, ["stop", "route-stop", "point"]);
+  await service.deleteStop(objectId);
+  assert.deepEqual(calls, ["stop"]);
 });

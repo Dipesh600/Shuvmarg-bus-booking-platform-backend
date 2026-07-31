@@ -20,13 +20,14 @@ test("platform registry bulk policy normalizes a valid stop", () => {
   assert.deepEqual(
     policy.sanitizeEntry({
       code: " ktm ", name: " Kathmandu ", type: "city",
-      state: " Bagmati ", aliases: "Kathmandu, KTM ",
+      province: " Bagmati ", aliases: "Kathmandu, KTM ",
     }, 0),
     {
       ok: true,
       entry: {
+        _sourceIndex: 0,
         code: "KTM", name: "Kathmandu", type: "CITY",
-        aliases: ["Kathmandu", "KTM"], state: "Bagmati",
+        aliases: ["Kathmandu", "KTM"], province: "Bagmati",
       },
     }
   );
