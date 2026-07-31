@@ -17,7 +17,22 @@ async function createStop(req, res) {
 
 async function getAllStops(req, res) {
   try {
-    const data = await stops.getAllStops();
+    const filter = {};
+    const { isSearchable, isRouteStop, parentStopId, status, verificationStatus, source, type, district, municipality } = req.query;
+
+    if (isSearchable !== undefined) filter.isSearchable = isSearchable === "true";
+    if (isRouteStop !== undefined) filter.isRouteStop = isRouteStop === "true";
+    if (parentStopId !== undefined) {
+      filter.parentStopId = parentStopId === "null" ? null : parentStopId;
+    }
+    if (status) filter.status = status;
+    if (verificationStatus) filter.verificationStatus = verificationStatus;
+    if (source) filter.source = source;
+    if (type) filter.type = type;
+    if (district) filter.district = district;
+    if (municipality) filter.municipality = municipality;
+
+    const data = await stops.getAllStops(filter);
     res.status(200).json({ success: true, results: data.length, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

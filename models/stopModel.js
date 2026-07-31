@@ -45,6 +45,21 @@ const stopSchema = new mongoose.Schema(
             enum: ["CITY", "JUNCTION", "TOWN", "HIGHWAY_STOP", "BORDER"],
             default: "CITY",
         },
+        parentStopId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Stop",
+            default: null,
+        },
+        isSearchable: {
+            type: Boolean,
+            required: true,
+            default: true,
+        },
+        isRouteStop: {
+            type: Boolean,
+            required: true,
+            default: true,
+        },
         province: {
             type: String,
             trim: true,
@@ -119,22 +134,71 @@ stopSchema.index({ status: 1, popularityScore: -1 });
 // Discovery-sourced stops (admin review queue)
 stopSchema.index({ source: 1, verificationStatus: 1 });
 
+// ── Hierarchy Validation ───────────────────────────────────────────────────────
+stopSchema.pre("validate", async function (next) {
+    if (this.parentStopId) {
+        if (this._id && this.parentStopId.equals(this._id)) {
+            return next(new Error("A stop cannot be its own parent."));
+        }
+        
+        let currentParentId = this.parentStopId;
+        const StopModel = this.constructor;
+        const visited = new Set();
+        if (this._id) visited.add(this._id.toString());
+        
+        while (currentParentId) {
+            if (visited.has(currentParentId.toString())) {
+                return next(new Error("Parent hierarchy cycle detected."));
+            }
+            visited.add(currentParentId.toString());
+            const parentStop = await StopModel.findById(currentParentId).select("parentStopId status").lean();
+            if (!parentStop) {
+                return next(new Error("Assigned parent stop does not exist."));
+            }
+            currentParentId = parentStop.parentStopId;
+        }
+    }
+    next();
+});
+
 // ── Deduplication Hook ────────────────────────────────────────────────────────
 /**
  * Keeps _nameLower in sync with name on every save.
- * The unique index on _nameLower is the enforcement layer against
- * inserting "kathmandu" when "Kathmandu" already exists.
- * This handles the case-sensitivity gap that the text index does not cover.
+ * Normalizes aliases, removing duplicates and the canonical name.
  */
 stopSchema.pre("save", function (next) {
     if (this.isModified("name")) {
         this._nameLower = this.name.toLowerCase().trim();
     }
+    
+    if (this.isModified("aliases") && Array.isArray(this.aliases)) {
+        const canonical = this._nameLower || this.name.toLowerCase().trim();
+        const cleaned = new Map();
+        
+        this.aliases.forEach(alias => {
+            if (!alias || typeof alias !== "string") return;
+            const t = alias.trim();
+            if (!t) return;
+            const lower = t.toLowerCase();
+            if (lower === canonical) return; // exclude if same as canonical name
+            if (!cleaned.has(lower)) {
+                cleaned.set(lower, t);
+            }
+        });
+        this.aliases = Array.from(cleaned.values());
+    }
+    
     next();
 });
 
-// Unique deduplication index — enforces one canonical record per name regardless of case
-stopSchema.index({ _nameLower: 1 }, { unique: true, sparse: true });
+// Unique deduplication index — enforces one record per name within a geographic context
+stopSchema.index(
+    { _nameLower: 1, district: 1, municipality: 1, parentStopId: 1 }, 
+    { unique: true }
+);
+
+// Child queries index
+stopSchema.index({ parentStopId: 1, status: 1 });
 
 // ── Code Auto-Generation ───────────────────────────────────────────────────────
 /**

@@ -8,12 +8,15 @@ const OperatorRouteConfig = require("../../../../models/operatorRouteConfigModel
 async function createStop(data) {
   const {
     code, name, type, province, district, municipality,
-    coordinates, aliases, status,
+    coordinates, aliases, status, isSearchable, isRouteStop, parentStopId
   } = data;
   if (!name) throw new Error("Stop name is required.");
   const stop = {
     name, type, province, district, municipality, coordinates,
     aliases: aliases || [], status: status || "ACTIVE",
+    ...(isSearchable !== undefined && { isSearchable }),
+    ...(isRouteStop !== undefined && { isRouteStop }),
+    ...(parentStopId !== undefined && { parentStopId }),
   };
   if (!code) return Stop.createWithUniqueCode(stop);
   const normalizedCode = code.toUpperCase();
@@ -24,7 +27,10 @@ async function createStop(data) {
 }
 
 function getAllStops(filter = {}) {
-  return Stop.find(filter).sort({ province: 1, district: 1, name: 1 }).lean();
+  return Stop.find(filter)
+    .populate("parentStopId", "id code name")
+    .sort({ province: 1, district: 1, name: 1 })
+    .lean();
 }
 
 function searchStops(query) {
@@ -44,22 +50,36 @@ async function getStopByCode(code) {
   return stop;
 }
 
-function updateStop(id, data) {
+async function updateStop(id, data) {
   const {
     name, type, province, district, municipality, coordinates, status, aliases,
+    isSearchable, isRouteStop, parentStopId
   } = data;
-  const update = {
-    ...(name && { name, _nameLower: name.toLowerCase().trim() }),
-    ...(type && { type }),
-    ...(province !== undefined && { province }),
-    ...(district !== undefined && { district }),
-    ...(municipality !== undefined && { municipality }),
-    ...(coordinates && { coordinates }),
-    ...(status && { status }),
-    ...(aliases && { aliases: Array.isArray(aliases) ? aliases : [] }),
-  };
-  // Preserve legacy behavior: a missing id resolves to null rather than throwing.
-  return Stop.findByIdAndUpdate(id, update, { new: true, runValidators: true });
+
+  if (isRouteStop === false) {
+    const usageCount = await RouteStop.countDocuments({ stopId: id });
+    if (usageCount > 0) {
+      throw new Error(`REFERENCED:${usageCount}:Cannot disable isRouteStop because this stop is actively used by ${usageCount} RouteStop(s).`);
+    }
+  }
+
+  const stop = await Stop.findById(id);
+  if (!stop) throw new Error("Stop not found.");
+
+  if (name !== undefined) stop.name = name;
+  if (type !== undefined) stop.type = type;
+  if (province !== undefined) stop.province = province;
+  if (district !== undefined) stop.district = district;
+  if (municipality !== undefined) stop.municipality = municipality;
+  if (coordinates !== undefined) stop.coordinates = coordinates;
+  if (status !== undefined) stop.status = status;
+  if (aliases !== undefined) stop.aliases = Array.isArray(aliases) ? aliases : [];
+  if (isSearchable !== undefined) stop.isSearchable = isSearchable;
+  if (isRouteStop !== undefined) stop.isRouteStop = isRouteStop;
+  if (parentStopId !== undefined) stop.parentStopId = parentStopId;
+
+  await stop.save();
+  return stop;
 }
 
 async function deleteStop(id) {

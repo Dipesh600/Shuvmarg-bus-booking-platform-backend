@@ -14,10 +14,11 @@ const searchStops = async (req, res) => {
     const limit = Math.min(10, parseInt(req.query.limit) || 8);
 
     if (rawQuery.length < 2) {
-      const popular = await Stop.find({ status: "ACTIVE" })
+      const popular = await Stop.find({ status: "ACTIVE", isSearchable: true, verificationStatus: "VERIFIED" })
+        .populate("parentStopId", "id name")
         .sort({ type: 1 })
         .limit(limit)
-        .select("_id name code type state")
+        .select("_id name code type state municipality district parentStopId")
         .lean();
 
       return res.status(200).json({ success: true, data: popular.map(_shape) });
@@ -25,21 +26,25 @@ const searchStops = async (req, res) => {
 
     // Strategy A: MongoDB $text search (relevance ranked)
     const textResults = await Stop.find(
-      { $text: { $search: rawQuery }, status: "ACTIVE" },
+      { $text: { $search: rawQuery }, status: "ACTIVE", isSearchable: true, verificationStatus: "VERIFIED" },
       { score: { $meta: "textScore" } }
     )
+      .populate("parentStopId", "id name")
       .sort({ score: { $meta: "textScore" } })
       .limit(limit)
-      .select("_id name code type state")
+      .select("_id name code type state municipality district parentStopId")
       .lean();
 
     // Strategy B: Prefix regex — catches partial matches $text misses
     const prefixResults = await Stop.find({
       name: { $regex: `^${_escapeRegex(rawQuery)}`, $options: "i" },
       status: "ACTIVE",
+      isSearchable: true,
+      verificationStatus: "VERIFIED"
     })
+      .populate("parentStopId", "id name")
       .limit(limit)
-      .select("_id name code type state")
+      .select("_id name code type state municipality district parentStopId")
       .lean();
 
     // Merge & deduplicate, text-ranked first
@@ -74,10 +79,11 @@ const getPopularStops = async (req, res) => {
   try {
     const limit = Math.min(10, parseInt(req.query.limit) || 8);
 
-    const stops = await Stop.find({ status: "ACTIVE" })
+    const stops = await Stop.find({ status: "ACTIVE", isSearchable: true, verificationStatus: "VERIFIED" })
+      .populate("parentStopId", "id name")
       .sort({ popularityScore: -1, type: 1 })
       .limit(limit)
-      .select("_id name code type state")
+      .select("_id name code type state municipality district parentStopId")
       .lean();
 
     return res.status(200).json({ success: true, data: stops.map(_shape) });
@@ -128,6 +134,12 @@ function _shape(stop) {
     code: stop.code,
     type: stop.type,
     state: stop.state || null,
+    municipality: stop.municipality || null,
+    district: stop.district || null,
+    parentStop: stop.parentStopId ? {
+      id: stop.parentStopId._id,
+      name: stop.parentStopId.name
+    } : null,
   };
 }
 
