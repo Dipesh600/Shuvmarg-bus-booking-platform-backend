@@ -100,6 +100,22 @@ async function findRouteStops(originIds, destIds) {
   return { originRouteStops, destRouteStops };
 }
 
+const mongoose = require("mongoose");
+
+function isValidObjectId(id) {
+  return Boolean(id) && mongoose.Types.ObjectId.isValid(id);
+}
+
+async function findStopById(id) {
+  if (!isValidObjectId(id)) return null;
+  return await Stop.findById(id).lean();
+}
+
+async function findChildStops(parentStopId) {
+  if (!isValidObjectId(parentStopId)) return [];
+  return await Stop.find({ parentStopId, status: "ACTIVE" }).select("_id name code").lean();
+}
+
 module.exports = {
   countTrips,
   findTripsWithPopulate,
@@ -108,5 +124,8 @@ module.exports = {
   findStopsByNameOrCode,
   findCorridors,
   findVariants,
-  findRouteStops
+  findRouteStops,
+  findStopById,
+  findChildStops,
+  isValidObjectId,
 };

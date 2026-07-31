@@ -1,16 +1,27 @@
 function createTripDiscoveryService({ resolveRouteCandidates, buildTripQuery, countTrips, findTripsWithPopulate, getSeatAvailabilityMap, mapTripResponse }) {
-  async function searchTripsService({ from, to, date, shift, page, limit }) {
+  async function searchTripsService({ from, to, date, shift, page, limit, identitySelection }) {
     const skip = (page - 1) * limit;
 
     // 1. Resolve stops and routes
-    const resolution = await resolveRouteCandidates(from, to);
+    const resolution = await resolveRouteCandidates(from, to, identitySelection);
 
-    if (resolution.legacyRouteIds.length === 0 && resolution.variantIds.length === 0 && from && to) {
+    const searchMeta = identitySelection?.isIdentityMode
+      ? {
+          from: identitySelection.fromScope.metadata,
+          to: identitySelection.toScope.metadata,
+        }
+      : {
+          from: { name: resolution.resolvedFromName || from || "" },
+          to: { name: resolution.resolvedToName || to || "" },
+        };
+
+    if (resolution.legacyRouteIds.length === 0 && resolution.variantIds.length === 0) {
       return {
         results: 0,
         total: 0,
         page: 1,
         totalPages: 0,
+        search: searchMeta,
         data: [],
         noRoutes: true
       };
@@ -44,6 +55,7 @@ function createTripDiscoveryService({ resolveRouteCandidates, buildTripQuery, co
       total,
       page,
       totalPages: Math.ceil(total / limit),
+      search: searchMeta,
       data: validTrips,
       noRoutes: false
     };
