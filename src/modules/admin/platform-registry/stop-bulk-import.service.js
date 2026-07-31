@@ -4,8 +4,25 @@ const Stop = require("../../../../models/stopModel.js");
 const { validateBatch, sanitizeEntry } = require("./stop-bulk-import.policy.js");
 const { buildStopIdentity } = require("./stop-identity.js");
 
+function formatError(entry, errorCode, message, details = {}) {
+  return {
+    index: entry?._sourceIndex ?? null,
+    code: entry?.code ?? null,
+    name: entry?.name ?? null,
+    errorCode,
+    message,
+    details: {
+      province: entry?.province,
+      district: entry?.district,
+      municipality: entry?.municipality,
+      parentStopId: entry?.parentStopId,
+      ...details
+    }
+  };
+}
+
 function splitEntries(rawStops) {
-  const rows = rawStops.map(sanitizeEntry);
+  const rows = rawStops.map((raw, index) => sanitizeEntry(raw, index));
   return {
     invalid: rows.filter((row) => !row.ok),
     valid: rows.filter((row) => row.ok).map((row) => row.entry),
@@ -15,7 +32,12 @@ function splitEntries(rawStops) {
 async function bulkPreviewStops(rawStops) {
   validateBatch(rawStops, true);
   const { invalid, valid } = splitEntries(rawStops);
-  const invalidRows = invalid.map((row) => ({ error: row.error, raw: row.raw }));
+  
+  const invalidRows = invalid.map((row) => {
+    const err = formatError(row.raw, "INVALID_STOP_DATA", row.error);
+    err.index = row._sourceIndex;
+    return err;
+  });
 
   if (valid.length === 0) {
     return {
@@ -38,13 +60,12 @@ async function bulkPreviewStops(rawStops) {
   const codesToQuery = [];
   const identitiesToQuery = [];
 
-  // Add _normalizedIdentity and detect batch conflicts
   const enrichedValid = valid.map(entry => {
     try {
       const identity = buildStopIdentity(entry);
       return { ...entry, _normalizedIdentity: identity };
     } catch (error) {
-      invalidRows.push({ error: error.message, raw: entry });
+      invalidRows.push(formatError(entry, "INVALID_STOP_DATA", error.message));
       return null;
     }
   }).filter(Boolean);
@@ -53,8 +74,10 @@ async function bulkPreviewStops(rawStops) {
     codesToQuery.push(entry.code);
     identitiesToQuery.push(entry._normalizedIdentity);
     
-    if (batchCodes.has(entry.code) || batchIdentities.has(entry._normalizedIdentity)) {
-      duplicateWithinBatch.push(entry);
+    if (batchCodes.has(entry.code)) {
+      duplicateWithinBatch.push({ ...entry, conflictReason: "CODE_CONFLICT" });
+    } else if (batchIdentities.has(entry._normalizedIdentity)) {
+      duplicateWithinBatch.push({ ...entry, conflictReason: "IDENTITY_CONFLICT" });
     } else {
       batchCodes.add(entry.code);
       batchIdentities.add(entry._normalizedIdentity);
@@ -66,7 +89,7 @@ async function bulkPreviewStops(rawStops) {
       { code: { $in: codesToQuery } },
       { _normalizedIdentity: { $in: identitiesToQuery } }
     ]
-  }).select("code _normalizedIdentity name").lean();
+  }).select("code _normalizedIdentity name district municipality parentStopId").lean();
 
   const dbCodeMap = new Map();
   const dbIdentityMap = new Map();
@@ -76,7 +99,7 @@ async function bulkPreviewStops(rawStops) {
   }
 
   for (const entry of enrichedValid) {
-    if (duplicateWithinBatch.includes(entry)) continue;
+    if (duplicateWithinBatch.find(d => d._sourceIndex === entry._sourceIndex)) continue;
     
     if (dbCodeMap.has(entry.code)) {
       duplicateCode.push({ ...entry, existingStop: dbCodeMap.get(entry.code) });
@@ -104,7 +127,11 @@ async function bulkImportStops(rawStops, adminId) {
   validateBatch(rawStops);
   const { invalid, valid } = splitEntries(rawStops);
   
-  const invalidRows = invalid.map((row) => ({ error: row.error, raw: row.raw }));
+  const errors = invalid.map((row) => {
+    const err = formatError(row.raw, "INVALID_STOP_DATA", row.error);
+    err.index = row._sourceIndex;
+    return err;
+  });
 
   if (valid.length === 0) {
     throw new Error("No valid entries to import after validation.");
@@ -122,8 +149,12 @@ async function bulkImportStops(rawStops, adminId) {
       const identity = buildStopIdentity(entry);
       entry._normalizedIdentity = identity;
       
-      if (batchCodes.has(entry.code) || batchIdentities.has(identity)) {
-        invalidRows.push({ error: "Duplicate within batch", raw: entry });
+      if (batchCodes.has(entry.code)) {
+        errors.push(formatError(entry, "DUPLICATE_WITHIN_BATCH", "Duplicate code in this batch"));
+        continue;
+      }
+      if (batchIdentities.has(identity)) {
+        errors.push(formatError(entry, "DUPLICATE_WITHIN_BATCH", "Duplicate identity in this batch"));
         continue;
       }
       
@@ -133,7 +164,7 @@ async function bulkImportStops(rawStops, adminId) {
       identitiesToQuery.push(identity);
       toInsertCandidates.push(entry);
     } catch (error) {
-      invalidRows.push({ error: error.message, raw: entry });
+      errors.push(formatError(entry, "INVALID_STOP_DATA", error.message));
     }
   }
 
@@ -148,32 +179,30 @@ async function bulkImportStops(rawStops, adminId) {
   const dbIdentitySet = new Set(dbConflicts.map(s => s._normalizedIdentity));
 
   const validToInsert = [];
-  const errors = [];
   
   for (const entry of toInsertCandidates) {
     if (dbCodeSet.has(entry.code)) {
-      errors.push({ code: entry.code, error: "Code already exists in database" });
+      errors.push(formatError(entry, "STOP_CODE_CONFLICT", "Code already exists in database"));
       continue;
     }
     if (dbIdentitySet.has(entry._normalizedIdentity)) {
-      errors.push({ code: entry.code, error: "A stop with this identity already exists" });
+      errors.push(formatError(entry, "STOP_IDENTITY_CONFLICT", "A stop with this identity already exists"));
       continue;
     }
     
-    // Model Validation before insert
     const stopDoc = new Stop({ ...entry, createdBy: adminId || null });
     try {
       await stopDoc.validate();
       validToInsert.push(stopDoc.toObject());
     } catch (err) {
-      errors.push({ code: entry.code, error: err.message });
+      errors.push(formatError(entry, "INVALID_STOP_DATA", err.message));
     }
   }
 
   if (validToInsert.length === 0) {
     return {
-      inserted: 0, skipped: rawStops.length - validToInsert.length - invalidRows.length,
-      invalidCount: invalidRows.length, errors,
+      inserted: 0, skipped: rawStops.length - validToInsert.length,
+      invalidCount: errors.length, errors,
     };
   }
 
@@ -185,16 +214,25 @@ async function bulkImportStops(rawStops, adminId) {
     if (!error.writeErrors) throw error;
     inserted = error.insertedDocs?.length ?? 0;
     for (const writeError of error.writeErrors) {
-      errors.push({
-        code: validToInsert[writeError.index]?.code,
-        error: writeError.errmsg || "Write error",
-      });
+      // attempt to figure out which it is
+      const failedEntry = validToInsert[writeError.index];
+      let errorCode = "WRITE_ERROR";
+      let message = writeError.errmsg || "Write error";
+      
+      if (writeError.code === 11000) {
+        if (message.includes("code_1")) {
+          errorCode = "STOP_CODE_CONFLICT";
+        } else if (message.includes("_normalizedIdentity_1")) {
+          errorCode = "STOP_IDENTITY_CONFLICT";
+        }
+      }
+      errors.push(formatError(failedEntry, errorCode, message));
     }
   }
 
   return {
-    inserted, skipped: rawStops.length - inserted - invalidRows.length,
-    invalidCount: invalidRows.length, errors,
+    inserted, skipped: rawStops.length - inserted,
+    invalidCount: errors.length, errors,
   };
 }
 

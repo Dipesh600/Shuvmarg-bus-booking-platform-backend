@@ -4,16 +4,13 @@ const Stop = require("../../models/stopModel");
 const { describe, it, before, after, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 
-describe("Stop Registry", () => {
+describe("Stop Registry Model", () => {
   let mongoServer;
 
   before(async () => {
     mongoServer = await MongoMemoryServer.create();
     const uri = mongoServer.getUri();
-    await mongoose.connect(uri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(uri);
     await Stop.syncIndexes();
   });
 
@@ -45,8 +42,6 @@ describe("Stop Registry", () => {
       const parent = await Stop.createWithUniqueCode({
         name: "Kathmandu",
         type: "CITY",
-        isSearchable: true,
-        isRouteStop: false,
       });
 
       const child = await Stop.createWithUniqueCode({
@@ -62,42 +57,68 @@ describe("Stop Registry", () => {
     });
   });
 
+  describe("Coordinates Validation", () => {
+    it("should reject partial coordinates (lat without lng)", async () => {
+      const stop = new Stop({
+        name: "Test", code: "TST1",
+        coordinates: { lat: 27.7, lng: null }
+      });
+      await assert.rejects(stop.validate(), /Both latitude and longitude must be provided/);
+    });
+
+    it("should reject out of bound coordinates", async () => {
+      const stop = new Stop({
+        name: "Test", code: "TST2",
+        coordinates: { lat: 95, lng: 85 }
+      });
+      await assert.rejects(stop.validate(), /Invalid latitude value/);
+    });
+
+    it("should accept valid coordinates", async () => {
+      const stop = new Stop({
+        name: "Test", code: "TST3",
+        coordinates: { lat: 27.7172, lng: 85.3240 }
+      });
+      await assert.doesNotReject(stop.validate());
+    });
+  });
+
   describe("Parent Hierarchy Validation", () => {
     it("should reject self-parent assignment", async () => {
-      const stop = new Stop({
-        name: "Self Parent",
-        type: "CITY",
-      });
-      // Mocking ID for validation since it needs to exist
+      const stop = new Stop({ name: "Self Parent", type: "CITY", code: "SP1" });
       stop._id = new mongoose.Types.ObjectId();
       stop.parentStopId = stop._id;
-
       await assert.rejects(stop.validate(), /A stop cannot be its own parent/);
     });
 
     it("should reject cyclic parent references", async () => {
-      const parent = await Stop.createWithUniqueCode({
-        name: "Parent",
-      });
+      const parent = await Stop.createWithUniqueCode({ name: "Parent" });
+      const child = await Stop.createWithUniqueCode({ name: "Child", parentStopId: parent._id });
 
-      const child = await Stop.createWithUniqueCode({
-        name: "Child",
-        parentStopId: parent._id,
-      });
-
-      // Attempt to make the parent a child of its child
       parent.parentStopId = child._id;
-
       await assert.rejects(parent.validate(), /Parent hierarchy cycle detected/);
     });
 
     it("should reject non-existent parent assignment", async () => {
       const stop = new Stop({
-        name: "Orphan",
-        parentStopId: new mongoose.Types.ObjectId(), // Non-existent
+        name: "Orphan", code: "ORP",
+        parentStopId: new mongoose.Types.ObjectId(),
       });
-
       await assert.rejects(stop.validate(), /Assigned parent stop does not exist/);
+    });
+
+    it("should reject inactive parent assignment", async () => {
+      const parent = await Stop.createWithUniqueCode({ name: "InactiveParent", status: "INACTIVE" });
+      const stop = new Stop({
+        name: "Child", code: "CHD",
+        parentStopId: parent._id,
+      });
+      await assert.rejects(stop.validate(), /A stop may only be assigned under an ACTIVE parent/);
+    });
+
+    it("should allow null parent", async () => {
+      const stop = new Stop({ name: "NullParent", code: "NUL", parentStopId: null });
+      await assert.doesNotReject(stop.validate());
     });
   });
 
@@ -108,40 +129,30 @@ describe("Stop Registry", () => {
         aliases: ["  pokhara  ", "  pkr city  ", "PKR City", ""],
       });
 
-      // "pokhara" is canonical, should be removed
-      // "pkr city" and "PKR City" should be deduplicated
-      // empty string should be removed
       assert.deepEqual(stop.aliases, ["pkr city"]);
     });
 
     it("should allow same-name stops if geographic context differs", async () => {
-      await Stop.createWithUniqueCode({
-        name: "Himalaya",
-        district: "District A",
-      });
-
-      const stop2 = await Stop.createWithUniqueCode({
-        name: "Himalaya",
-        district: "District B",
-      });
-
+      await Stop.createWithUniqueCode({ name: "Himalaya", district: "District A" });
+      const stop2 = await Stop.createWithUniqueCode({ name: "Himalaya", district: "District B" });
       assert.equal(stop2.name, "Himalaya");
     });
 
     it("should reject exact duplicates in the same geographic context", async () => {
       await Stop.createWithUniqueCode({
-        name: "Himalaya",
-        district: "District A",
-        municipality: "Municipality 1",
+        name: "Himalaya", district: "District A", municipality: "Municipality 1"
       });
-
       await assert.rejects(
         Stop.createWithUniqueCode({
-          name: "Himalaya",
-          district: "District A",
-          municipality: "Municipality 1",
+          name: "Himalaya", district: "District A", municipality: "Municipality 1"
         })
       ); // Duplicate key error
+    });
+
+    it("missing context determinism - treats missing parent/district/municipality correctly", async () => {
+      await Stop.createWithUniqueCode({ name: "Himalaya" });
+      // Creating another "Himalaya" with all missing context should clash
+      await assert.rejects(Stop.createWithUniqueCode({ name: "Himalaya" }));
     });
   });
 });

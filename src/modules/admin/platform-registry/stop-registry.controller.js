@@ -135,6 +135,14 @@ async function deleteStop(req, res) {
       success: true, message: "Stop deleted from registry.",
     });
   } catch (error) {
+    if (error.message && error.message.startsWith("REFERENCED:")) {
+      const parts = error.message.split(":");
+      return res.status(409).json({
+        success: false,
+        message: parts.slice(2).join(":"),
+        refCount: parseInt(parts[1], 10)
+      });
+    }
     if (error.statusCode) {
       return res.status(error.statusCode).json({
         success: false, message: error.message, code: error.code, details: error.details
