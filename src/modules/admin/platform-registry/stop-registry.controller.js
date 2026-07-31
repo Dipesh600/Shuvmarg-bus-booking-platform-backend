@@ -5,13 +5,23 @@ const bulk = require("./stop-bulk-import.service.js");
 
 async function createStop(req, res) {
   try {
-    const data = await stops.createStop(req.body);
+    const data = await stops.createStop(req.body, req.adminInfo?.id);
     res.status(201).json({
       success: true, message: "Stop added to registry.", data,
     });
   } catch (error) {
-    const status = error.message.includes("already exists") ? 409 : 400;
-    res.status(status).json({ success: false, message: error.message });
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false, message: error.message, code: error.code, details: error.details
+      });
+    }
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: error.message, code: "VALIDATION_ERROR" });
+    }
+    if (error.code === 11000) {
+      return res.status(409).json({ success: false, message: "A stop with this identity already exists.", code: "DUPLICATE_ERROR" });
+    }
+    res.status(500).json({ success: false, message: error.message });
   }
 }
 
@@ -103,8 +113,18 @@ async function updateStop(req, res) {
     const data = await stops.updateStop(req.params.id, req.body);
     res.status(200).json({ success: true, message: "Stop updated.", data });
   } catch (error) {
-    const status = error.message.includes("not found") ? 404 : 400;
-    res.status(status).json({ success: false, message: error.message });
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false, message: error.message, code: error.code, details: error.details
+      });
+    }
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: error.message, code: "VALIDATION_ERROR" });
+    }
+    if (error.code === 11000) {
+      return res.status(409).json({ success: false, message: "A stop with this identity already exists.", code: "DUPLICATE_ERROR" });
+    }
+    res.status(500).json({ success: false, message: error.message });
   }
 }
 
@@ -115,14 +135,12 @@ async function deleteStop(req, res) {
       success: true, message: "Stop deleted from registry.",
     });
   } catch (error) {
-    if (error.message.startsWith("REFERENCED:")) {
-      const [, count, message] = error.message.split(":");
-      return res.status(409).json({
-        success: false, message, refCount: Number(count),
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false, message: error.message, code: error.code, details: error.details
       });
     }
-    const status = error.message.includes("not found") ? 404 : 400;
-    res.status(status).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 }
 

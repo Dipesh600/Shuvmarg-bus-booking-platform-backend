@@ -28,10 +28,9 @@ const stopSchema = new mongoose.Schema(
             trim: true,
             // e.g., "Kathmandu", "Pokhara", "Hetauda"
         },
-        // Normalised lowercase name — used for deduplication guard.
+        // Normalized identity for deduplication (name:district:municipality:parent)
         // Kept in sync via the pre-save hook. Never write this field directly.
-        // Unique index is declared below via stopSchema.index() (not here, to avoid duplicate warning).
-        _nameLower: {
+        _normalizedIdentity: {
             type: String,
         },
         aliases: [{
@@ -122,11 +121,8 @@ const stopSchema = new mongoose.Schema(
 );
 
 // ── Indexes ────────────────────────────────────────────────────────────────────
-// Full-text index for autocomplete search (name + code)
-stopSchema.index({ name: "text", code: 1 });
-// Aliases — enables O(1) lookup by alternate name during discovery deduplication
-// MongoDB automatically indexes every element of the array field.
-stopSchema.index({ aliases: 1 });
+// Full-text index for autocomplete search (name + code + aliases)
+stopSchema.index({ name: "text", code: "text", aliases: "text" });
 // Status-only filter (list page, inactive filter)
 stopSchema.index({ status: 1 });
 // Popular stops query: status filter + score sort in one pass, no in-memory sort
@@ -136,9 +132,35 @@ stopSchema.index({ source: 1, verificationStatus: 1 });
 
 // ── Hierarchy Validation ───────────────────────────────────────────────────────
 stopSchema.pre("validate", async function (next) {
+    // Coordinate validation
+    if (this.coordinates) {
+        const { lat, lng } = this.coordinates;
+        if ((lat === null && lng !== null) || (lat !== null && lng === null)) {
+            const err = new Error("Both latitude and longitude must be provided, or both must be null.");
+            err.code = "INVALID_STOP_COORDINATES";
+            err.statusCode = 400;
+            return next(err);
+        }
+        if (lat !== null && (Number.isNaN(lat) || !Number.isFinite(lat) || lat < -90 || lat > 90)) {
+            const err = new Error("Invalid latitude value.");
+            err.code = "INVALID_STOP_COORDINATES";
+            err.statusCode = 400;
+            return next(err);
+        }
+        if (lng !== null && (Number.isNaN(lng) || !Number.isFinite(lng) || lng < -180 || lng > 180)) {
+            const err = new Error("Invalid longitude value.");
+            err.code = "INVALID_STOP_COORDINATES";
+            err.statusCode = 400;
+            return next(err);
+        }
+    }
+
     if (this.parentStopId) {
         if (this._id && this.parentStopId.equals(this._id)) {
-            return next(new Error("A stop cannot be its own parent."));
+            const err = new Error("A stop cannot be its own parent.");
+            err.code = "STOP_HIERARCHY_CYCLE";
+            err.statusCode = 400;
+            return next(err);
         }
         
         let currentParentId = this.parentStopId;
@@ -148,12 +170,24 @@ stopSchema.pre("validate", async function (next) {
         
         while (currentParentId) {
             if (visited.has(currentParentId.toString())) {
-                return next(new Error("Parent hierarchy cycle detected."));
+                const err = new Error("Parent hierarchy cycle detected.");
+                err.code = "STOP_HIERARCHY_CYCLE";
+                err.statusCode = 400;
+                return next(err);
             }
             visited.add(currentParentId.toString());
             const parentStop = await StopModel.findById(currentParentId).select("parentStopId status").lean();
             if (!parentStop) {
-                return next(new Error("Assigned parent stop does not exist."));
+                const err = new Error("Assigned parent stop does not exist.");
+                err.code = "INVALID_PARENT_STOP";
+                err.statusCode = 400;
+                return next(err);
+            }
+            if (parentStop.status !== "ACTIVE") {
+                const err = new Error("A stop may only be assigned under an ACTIVE parent.");
+                err.code = "INACTIVE_PARENT_STOP";
+                err.statusCode = 400;
+                return next(err);
             }
             currentParentId = parentStop.parentStopId;
         }
@@ -163,16 +197,20 @@ stopSchema.pre("validate", async function (next) {
 
 // ── Deduplication Hook ────────────────────────────────────────────────────────
 /**
- * Keeps _nameLower in sync with name on every save.
+ * Keeps _normalizedIdentity in sync with geographic context on every save.
  * Normalizes aliases, removing duplicates and the canonical name.
  */
 stopSchema.pre("save", function (next) {
-    if (this.isModified("name")) {
-        this._nameLower = this.name.toLowerCase().trim();
-    }
+    const nameLower = this.name.toLowerCase().trim();
+    
+    // Always recalculate identity to catch district/municipality/parent updates
+    const districtLower = this.district ? this.district.toLowerCase().trim() : 'null';
+    const municipalityLower = this.municipality ? this.municipality.toLowerCase().trim() : 'null';
+    const parentStr = this.parentStopId ? this.parentStopId.toString() : 'null';
+    this._normalizedIdentity = `${nameLower}:${districtLower}:${municipalityLower}:${parentStr}`;
     
     if (this.isModified("aliases") && Array.isArray(this.aliases)) {
-        const canonical = this._nameLower || this.name.toLowerCase().trim();
+        const canonical = nameLower;
         const cleaned = new Map();
         
         this.aliases.forEach(alias => {
@@ -193,7 +231,7 @@ stopSchema.pre("save", function (next) {
 
 // Unique deduplication index — enforces one record per name within a geographic context
 stopSchema.index(
-    { _nameLower: 1, district: 1, municipality: 1, parentStopId: 1 }, 
+    { _normalizedIdentity: 1 }, 
     { unique: true }
 );
 
@@ -258,7 +296,19 @@ stopSchema.statics.createWithUniqueCode = async function (stopData) {
 
             if (isDuplicateCode) continue; // Try next candidate
 
-            throw err; // Any other error (validation, _nameLower unique clash, etc.) surfaces immediately
+            const isDuplicateIdentity =
+                err.code === 11000 &&
+                err.keyPattern &&
+                (err.keyPattern._normalizedIdentity === 1 || err.keyPattern["_normalizedIdentity"] !== undefined);
+
+            if (isDuplicateIdentity) {
+                const customErr = new Error(`A stop with this identity already exists.`);
+                customErr.code = "STOP_IDENTITY_CONFLICT";
+                customErr.statusCode = 409;
+                throw customErr;
+            }
+
+            throw err; // Any other error surfaces immediately
         }
     }
 

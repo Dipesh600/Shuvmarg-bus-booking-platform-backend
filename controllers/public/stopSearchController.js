@@ -18,7 +18,7 @@ const searchStops = async (req, res) => {
         .populate("parentStopId", "id name")
         .sort({ type: 1 })
         .limit(limit)
-        .select("_id name code type state municipality district parentStopId")
+        .select("_id name code type province municipality district parentStopId")
         .lean();
 
       return res.status(200).json({ success: true, data: popular.map(_shape) });
@@ -32,19 +32,23 @@ const searchStops = async (req, res) => {
       .populate("parentStopId", "id name")
       .sort({ score: { $meta: "textScore" } })
       .limit(limit)
-      .select("_id name code type state municipality district parentStopId")
+      .select("_id name code type province municipality district parentStopId")
       .lean();
 
     // Strategy B: Prefix regex — catches partial matches $text misses
     const prefixResults = await Stop.find({
-      name: { $regex: `^${_escapeRegex(rawQuery)}`, $options: "i" },
+      $or: [
+        { name: { $regex: `^${_escapeRegex(rawQuery)}`, $options: "i" } },
+        { code: { $regex: `^${_escapeRegex(rawQuery)}`, $options: "i" } },
+        { aliases: { $regex: `^${_escapeRegex(rawQuery)}`, $options: "i" } }
+      ],
       status: "ACTIVE",
       isSearchable: true,
       verificationStatus: "VERIFIED"
     })
       .populate("parentStopId", "id name")
       .limit(limit)
-      .select("_id name code type state municipality district parentStopId")
+      .select("_id name code type province municipality district parentStopId")
       .lean();
 
     // Merge & deduplicate, text-ranked first
@@ -83,7 +87,7 @@ const getPopularStops = async (req, res) => {
       .populate("parentStopId", "id name")
       .sort({ popularityScore: -1, type: 1 })
       .limit(limit)
-      .select("_id name code type state municipality district parentStopId")
+      .select("_id name code type province municipality district parentStopId")
       .lean();
 
     return res.status(200).json({ success: true, data: stops.map(_shape) });
@@ -133,7 +137,7 @@ function _shape(stop) {
     name: stop.name,
     code: stop.code,
     type: stop.type,
-    state: stop.state || null,
+    province: stop.province || null,
     municipality: stop.municipality || null,
     district: stop.district || null,
     parentStop: stop.parentStopId ? {
