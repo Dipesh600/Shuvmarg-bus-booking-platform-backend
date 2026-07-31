@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { buildStopIdentity } = require("../src/modules/admin/platform-registry/stop-identity");
 
 /**
  * LAYER 3: Stop Registry
@@ -204,10 +205,16 @@ stopSchema.pre("save", function (next) {
     const nameLower = this.name.toLowerCase().trim();
     
     // Always recalculate identity to catch district/municipality/parent updates
-    const districtLower = this.district ? this.district.toLowerCase().trim() : 'null';
-    const municipalityLower = this.municipality ? this.municipality.toLowerCase().trim() : 'null';
-    const parentStr = this.parentStopId ? this.parentStopId.toString() : 'null';
-    this._normalizedIdentity = `${nameLower}:${districtLower}:${municipalityLower}:${parentStr}`;
+    try {
+        this._normalizedIdentity = buildStopIdentity({
+            name: this.name,
+            district: this.district,
+            municipality: this.municipality,
+            parentStopId: this.parentStopId
+        });
+    } catch (err) {
+        return next(err);
+    }
     
     if (this.isModified("aliases") && Array.isArray(this.aliases)) {
         const canonical = nameLower;

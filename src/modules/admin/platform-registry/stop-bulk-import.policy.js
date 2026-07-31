@@ -34,13 +34,25 @@ function sanitizeEntry(raw, index) {
   if (!VALID_TYPES.includes(type)) {
     return { ok: false, error: `Row ${index + 1}: type "${type}" is invalid. Must be one of CITY, JUNCTION, TOWN, BORDER.`, raw };
   }
-  const state = raw.state ? String(raw.state).trim().substring(0, 80) : undefined;
+  const province = raw.province ? String(raw.province).trim().substring(0, 80) : undefined;
+  const district = raw.district ? String(raw.district).trim().substring(0, 80) : undefined;
+  const municipality = raw.municipality ? String(raw.municipality).trim().substring(0, 80) : undefined;
+  // bulk import usually references parent by code if at all, but let's allow parentStopId if it's an ObjectId or string
+  const parentStopId = raw.parentStopId ? String(raw.parentStopId).trim() : undefined;
+
   const aliases = Array.isArray(raw.aliases)
     ? raw.aliases.map((a) => String(a).trim()).filter(Boolean)
     : typeof raw.aliases === "string"
       ? raw.aliases.split(",").map((a) => a.trim()).filter(Boolean)
       : [];
-  return { ok: true, entry: { code, name, type, aliases, ...(state ? { state } : {}) } };
+  
+  const entry = { code, name, type, aliases };
+  if (province) entry.province = province;
+  if (district) entry.district = district;
+  if (municipality) entry.municipality = municipality;
+  if (parentStopId) entry.parentStopId = parentStopId;
+
+  return { ok: true, entry };
 }
 
 module.exports = { validateBatch, sanitizeEntry };
