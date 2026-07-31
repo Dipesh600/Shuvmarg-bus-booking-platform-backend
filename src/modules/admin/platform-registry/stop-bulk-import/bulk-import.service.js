@@ -1,6 +1,7 @@
 "use strict";
 
 const Stop = require("../../../../../models/stopModel.js");
+const logger = require("../../../../../utils/logger.js");
 const { validateBatch } = require("../stop-bulk-import.policy.js");
 const { buildStopIdentity } = require("../stop-identity.js");
 const { formatError, mapBulkWriteError } = require("./bulk-error-mapper.js");
@@ -101,6 +102,14 @@ async function bulkImportStops(rawStops, adminId) {
     for (const writeError of error.writeErrors) {
       const failedItem = insertionBatch[writeError.index];
       const originalEntry = failedItem ? failedItem.originalEntry : null;
+      logger.error("Stop bulk import write failed", {
+        error,
+        mongoCode: writeError?.code,
+        writeIndex: writeError?.index,
+        sourceIndex: originalEntry?._sourceIndex,
+        stopCode: originalEntry?.code,
+        stopName: originalEntry?.name,
+      });
       errors.push(mapBulkWriteError(writeError, originalEntry));
     }
   }
