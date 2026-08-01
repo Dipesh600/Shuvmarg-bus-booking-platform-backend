@@ -49,6 +49,19 @@ test("pickup and drop capability are resolved independently", () => {
   assert.equal(dropping[0].sourceType, "STOP_FALLBACK");
 });
 
+test("configured passenger addresses omit plus codes and postal codes", () => {
+  const configured = option({
+    boardingLocationId: {
+      ...option().boardingLocationId,
+      address: "M9X3+5X9, Sinamangal Rd, Kathmandu 44600, Nepal",
+    },
+  });
+  const result = resolveBoardingOptions({
+    stop, usage: "PICKUP", operatorOptions: [configured],
+  });
+  assert.equal(result[0].address, "Sinamangal Rd, Kathmandu, Nepal");
+});
+
 test("route stop becomes fallback without a duplicate location record", () => {
   const result = resolveBoardingOptions({ stop, usage: "PICKUP" });
   assert.deepEqual(result, [{
