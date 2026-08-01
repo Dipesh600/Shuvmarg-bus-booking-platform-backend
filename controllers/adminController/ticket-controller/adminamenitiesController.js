@@ -41,7 +41,7 @@ const createAmenity = async (req, res) => {
         }
 
         // ✅ ALWAYS CREATE NEW DOCUMENT
-        const newAmenity = await BusAmenities.create({
+        const newAmenity = await Amenities.create({
             userId,
             amenities,
         });

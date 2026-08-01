@@ -56,7 +56,7 @@ test("route stop becomes fallback without a duplicate location record", () => {
     stopId: "stop-1", boardingLocationId: null, assignmentId: null,
     name: "Mugling", canonicalName: "Mugling", landmark: null,
     address: null,
-    reportingInstructions: "Board at the registered stop location.",
+    reportingInstructions: null,
     coordinates: { lat: 27.856, lng: 84.558 },
   }]);
 });

@@ -4,7 +4,7 @@ const BoardingLocation = require(
   "../../../../../models/boardingLocationModel.js"
 );
 const {
-  normalizeBoardingCoordinates,
+  normalizeBoardingCoordinates, toGeoPoint,
 } = require("../../../../domain/boarding-location/boarding-location-coordinates.js");
 
 function distanceMeters(left, right) {
@@ -26,19 +26,24 @@ async function findNearbyBoardingLocations({
   const query = {
     stopId,
     status: "ACTIVE",
+    geo: {
+      $near: {
+        $geometry: toGeoPoint(normalized),
+        $maxDistance: maximum,
+      },
+    },
   };
   if (excludeId) query._id = { $ne: excludeId };
   const locations = await BoardingLocation.find(query)
     .populate("stopId", "name code")
+    .limit(10)
     .lean();
   return locations
     .map((location) => ({
       ...location,
       distanceMeters: Math.round(distanceMeters(normalized, location.coordinates)),
     }))
-    .filter((location) => location.distanceMeters <= maximum)
-    .sort((left, right) => left.distanceMeters - right.distanceMeters)
-    .slice(0, 10);
+    .filter((location) => location.distanceMeters <= maximum);
 }
 
 module.exports = { distanceMeters, findNearbyBoardingLocations };

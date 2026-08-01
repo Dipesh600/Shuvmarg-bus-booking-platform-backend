@@ -64,7 +64,7 @@ function makeStopFallback(stop, usage) {
       canonicalName: stop.name,
       landmark: null,
       address: null,
-      reportingInstructions: "Board at the registered stop location.",
+      reportingInstructions: null,
       coordinates: normalizeBoardingCoordinates(stop.coordinates),
     };
   } catch (_error) {

@@ -13,6 +13,8 @@ function createRouteResolver({ repository }) {
     let stopTimingMap = {};
     let originStopIds = new Set();
     let destStopIds = new Set();
+    let selectedOriginStopId = null;
+    let selectedDestinationStopId = null;
 
     if (identitySelection && identitySelection.isIdentityMode) {
       const { fromScope, toScope } = identitySelection;
@@ -24,6 +26,8 @@ function createRouteResolver({ repository }) {
 
       originStopIds = new Set(originIds.map(id => id.toString()));
       destStopIds = new Set(destIds.map(id => id.toString()));
+      selectedOriginStopId = fromScope.selectedStop._id.toString();
+      selectedDestinationStopId = toScope.selectedStop._id.toString();
 
       const fromRegex = new RegExp(`^${_esc(resolvedFromName)}$`, 'i');
       const toRegex = new RegExp(`^${_esc(resolvedToName)}$`, 'i');
@@ -54,6 +58,12 @@ function createRouteResolver({ repository }) {
 
       originStopIds = new Set(originStops.map(s => s._id.toString()));
       destStopIds = new Set(destStops.map(s => s._id.toString()));
+      if (originStops.length === 1) {
+        selectedOriginStopId = originStops[0]._id.toString();
+      }
+      if (destStops.length === 1) {
+        selectedDestinationStopId = destStops[0]._id.toString();
+      }
 
       const originIds = originStops.map(s => s._id);
       const destIds = destStops.map(s => s._id);
@@ -71,6 +81,8 @@ function createRouteResolver({ repository }) {
       stopTimingMap,
       originStopIds,
       destStopIds,
+      selectedOriginStopId,
+      selectedDestinationStopId,
     };
   }
 

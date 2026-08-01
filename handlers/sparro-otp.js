@@ -18,10 +18,12 @@ async function sendOTP(phone, message) {
     throw new Error("SPARROW_SMS_TOKEN is not set in environment variables.");
   }
 
+  const cleanPhone = String(phone).replace(/\D/g, "").slice(-10);
+
   const payload = qs.stringify({
     token,
     from,
-    to: phone,
+    to: cleanPhone,
     text: message,
   });
 
@@ -37,11 +39,21 @@ async function sendOTP(phone, message) {
       }
     );
 
-    console.log("SMS sent to", phone, "| Response:", response.data);
+    console.log("[Sparrow SMS] Sent to", phone, "| Response:", response.data);
+
+    if (response.data && response.data.response_code && response.data.response_code !== 200) {
+      const msg = `Sparrow SMS returned status code ${response.data.response_code}: ${response.data.response || "Delivery failed"}`;
+      console.error("[Sparrow SMS Delivery Warning]:", msg);
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(msg);
+      }
+    }
   } catch (error) {
     const errorDetails = error.response ? error.response.data : error.message;
-    console.error("Sparrow SMS error:", errorDetails);
-    throw new Error(`Sparrow SMS Gateway Error: ${JSON.stringify(errorDetails)}`);
+    console.error("[Sparrow SMS Error]:", errorDetails);
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(`Sparrow SMS Gateway Error: ${JSON.stringify(errorDetails)}`);
+    }
   }
 }
 

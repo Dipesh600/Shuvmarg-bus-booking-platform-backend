@@ -1,35 +1,24 @@
 "use strict";
 
-const BoardingLocation = require(
-  "../../../../../models/boardingLocationModel.js"
-);
-const {
-  boardingLocationError,
-} = require("../../../../domain/boarding-location/boarding-location-errors.js");
+const BoardingLocation = require("../../../../../models/boardingLocationModel.js");
+const Assignment = require("../../../../../models/operatorBoardingAssignmentModel.js");
+const { boardingLocationError } = require("../../../../domain/boarding-location/boarding-location-errors.js");
 const { resolveOperationalStop } = require("./boarding-location-stop.policy.js");
-const { findNearbyBoardingLocations } = require(
-  "./boarding-location-nearby.service.js"
-);
+const { findNearbyBoardingLocations } = require("./boarding-location-nearby.service.js");
 const { mapBoardingLocation } = require("./boarding-location.mapper.js");
 const { assertBoardingLocationId } = require("./boarding-location-id.policy.js");
-const { assertNoActiveBoardingAssignments } = require(
-  "./boarding-location-usage.policy.js"
-);
-
-function mapWriteError(error) {
-  if (error?.code !== 11000) throw error;
-  throw boardingLocationError(
-    "BOARDING_LOCATION_IDENTITY_CONFLICT",
-    "A boarding location with this name already exists under the route stop.",
-    409
-  );
-}
+const { assertNoActiveBoardingAssignments } = require("./boarding-location-usage.policy.js");
+const {
+  assertNearbyReview, buildVerificationFields,
+  mapBoardingLocationWriteError,
+} = require("./boarding-location-write.policy.js");
 
 async function createBoardingLocation(data, adminId) {
   const stop = await resolveOperationalStop(data);
   const nearby = await findNearbyBoardingLocations({
     stopId: stop._id, coordinates: data.coordinates,
   });
+  assertNearbyReview(nearby, data.nearbyReview);
   const source = data.source || "ADMIN";
   const payload = {
     stopId: stop._id,
@@ -37,9 +26,20 @@ async function createBoardingLocation(data, adminId) {
     aliases: data.aliases || [],
     landmark: data.landmark,
     address: data.address,
+    locationType: data.locationType,
+    gateOrBay: data.gateOrBay,
+    directionHint: data.directionHint,
     coordinates: data.coordinates,
-    verificationStatus: data.verificationStatus ||
-      (source === "ADMIN" ? "VERIFIED" : "PENDING"),
+    coordinateSource: data.coordinateSource || "MAP_PIN",
+    coordinateAccuracyMeters: data.coordinateAccuracyMeters,
+    capturedAt: data.capturedAt,
+    providerMetadata: data.providerMetadata,
+    ...buildVerificationFields(data, adminId),
+    nearbyReview: data.nearbyReview?.acknowledged ? {
+      reason: data.nearbyReview.reason || "Reviewed nearby locations",
+      reviewedBy: adminId || null,
+      reviewedAt: new Date(),
+    } : undefined,
     source,
     status: data.status || "ACTIVE",
     createdBy: adminId || null,
@@ -53,7 +53,7 @@ async function createBoardingLocation(data, adminId) {
       nearbyWarnings: nearby.map(mapBoardingLocation),
     };
   } catch (error) {
-    return mapWriteError(error);
+    return mapBoardingLocationWriteError(error);
   }
 }
 
@@ -70,7 +70,14 @@ async function listBoardingLocations(filter = {}) {
     .populate("stopId", "name code")
     .sort({ name: 1 })
     .lean();
-  return locations.map(mapBoardingLocation);
+  const counts = await Assignment.aggregate([
+    { $match: { boardingLocationId: { $in: locations.map((item) => item._id) }, status: "ACTIVE" } },
+    { $group: { _id: "$boardingLocationId", count: { $sum: 1 } } },
+  ]);
+  const byLocation = new Map(counts.map((item) => [String(item._id), item.count]));
+  return locations.map((location) => mapBoardingLocation({
+    ...location, activeAssignmentCount: byLocation.get(String(location._id)) || 0,
+  }));
 }
 
 async function getBoardingLocation(id) {
@@ -97,7 +104,7 @@ async function getNearbyLocations(data) {
   return locations.map(mapBoardingLocation);
 }
 
-async function updateBoardingLocation(id, data) {
+async function updateBoardingLocation(id, data, adminId) {
   assertBoardingLocationId(id);
   const location = await BoardingLocation.findById(id);
   if (!location) {
@@ -114,16 +121,20 @@ async function updateBoardingLocation(id, data) {
   }
   for (const key of [
     "name", "aliases", "landmark", "address", "coordinates",
-    "verificationStatus", "status",
+    "locationType", "gateOrBay", "directionHint", "coordinateSource",
+    "coordinateAccuracyMeters", "capturedAt", "providerMetadata", "status",
   ]) {
     if (data[key] !== undefined) location[key] = data[key];
+  }
+  if (data.verificationStatus !== undefined) {
+    Object.assign(location, buildVerificationFields(data, adminId));
   }
   try {
     await location.save();
     await location.populate("stopId", "name code");
     return mapBoardingLocation(location);
   } catch (error) {
-    return mapWriteError(error);
+    return mapBoardingLocationWriteError(error);
   }
 }
 
@@ -141,8 +152,6 @@ async function deactivateBoardingLocation(id) {
   return mapBoardingLocation(location);
 }
 
-module.exports = {
-  createBoardingLocation, listBoardingLocations, getBoardingLocation,
-  updateBoardingLocation, deactivateBoardingLocation,
-  getNearbyLocations,
-};
+module.exports = { createBoardingLocation, listBoardingLocations,
+  getBoardingLocation, updateBoardingLocation, deactivateBoardingLocation,
+  getNearbyLocations };

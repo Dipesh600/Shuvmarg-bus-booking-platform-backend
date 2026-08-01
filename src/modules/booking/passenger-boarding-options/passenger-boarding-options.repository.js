@@ -26,6 +26,15 @@ function findStops(stopIds) {
   return Stop.find({ _id: { $in: stopIds } }).lean();
 }
 
+function findChildStops(parentStopId) {
+  return Stop.find({
+    parentStopId,
+    status: "ACTIVE",
+    verificationStatus: "VERIFIED",
+    isRouteStop: true,
+  }).sort({ name: 1 }).lean();
+}
+
 async function findOperatorAssignments(brandId, stopIds) {
   const locations = await BoardingLocation.find({
     stopId: { $in: stopIds }, status: "ACTIVE", verificationStatus: "VERIFIED",
@@ -37,4 +46,6 @@ async function findOperatorAssignments(brandId, stopIds) {
   }).populate("boardingLocationId").lean();
 }
 
-module.exports = { findTripBoardingContext, findStops, findOperatorAssignments };
+module.exports = {
+  findTripBoardingContext, findStops, findChildStops, findOperatorAssignments,
+};

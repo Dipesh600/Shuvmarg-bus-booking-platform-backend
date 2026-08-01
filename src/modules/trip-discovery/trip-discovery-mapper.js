@@ -1,14 +1,46 @@
 const { resolveStopTiming } = require("./trip-discovery-stop-timing");
 
 function createTripMapper({ getPresignedUrl, timeToMins }) {
-  async function mapTripResponse(trips, seatAvailabilityMap, originStopIds, destStopIds, resolvedFromName, resolvedToName) {
+  async function mapTripResponse(
+    trips, seatAvailabilityMap, originStopIds, destStopIds,
+    resolvedFromName, resolvedToName, selectedOriginStopId, selectedDestinationStopId
+  ) {
     const formattedTrips = await Promise.all(trips
       .filter(trip => trip.busId != null)  // Extra null guard after populate
       .map(async trip => {
-        let amenities = [];
-        if (trip.busId?.amenitiesId?.amenities) {
-          amenities = trip.busId.amenitiesId.amenities.map(a => a.name);
+        let rawAmenities = [];
+
+        // 1) Handle amenityIds array (populated BusAmenities docs or nested amenities arrays)
+        if (Array.isArray(trip.busId?.amenityIds) && trip.busId.amenityIds.length > 0) {
+          for (const item of trip.busId.amenityIds) {
+            if (!item) continue;
+            if (typeof item === "string") {
+              rawAmenities.push(item);
+            } else if (Array.isArray(item.amenities)) {
+              item.amenities.forEach(a => {
+                if (typeof a === "string") rawAmenities.push(a);
+                else if (a?.name) rawAmenities.push(a.name);
+              });
+            } else if (item.name) {
+              rawAmenities.push(item.name);
+            }
+          }
         }
+
+        // 2) Handle amenitiesId single doc reference
+        if (trip.busId?.amenitiesId) {
+          const amObj = trip.busId.amenitiesId;
+          if (Array.isArray(amObj.amenities)) {
+            amObj.amenities.forEach(a => {
+              if (typeof a === "string") rawAmenities.push(a);
+              else if (a?.name) rawAmenities.push(a.name);
+            });
+          } else if (amObj.name) {
+            rawAmenities.push(amObj.name);
+          }
+        }
+
+        const amenities = [...new Set(rawAmenities)].filter(Boolean);
 
         let boardingPoints = [];
         let droppingPoints = [];
@@ -105,6 +137,9 @@ function createTripMapper({ getPresignedUrl, timeToMins }) {
             ? {
                 originStopId: resolvedOriginStopId,
                 destinationStopId: resolvedDestinationStopId,
+                originSelectionStopId: selectedOriginStopId || resolvedOriginStopId,
+                destinationSelectionStopId:
+                  selectedDestinationStopId || resolvedDestinationStopId,
               }
             : null,
           availableSeats,

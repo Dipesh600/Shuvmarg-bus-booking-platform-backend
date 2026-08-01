@@ -51,6 +51,8 @@ test("admin platform-registry Express route contract", () => {
     ["get", "/boarding-locations/:id", registry.getBoardingLocation],
     ["patch", "/boarding-locations/:id", registry.updateBoardingLocation],
     ["patch", "/boarding-locations/:id/deactivate", registry.deactivateBoardingLocation],
+    ["get", "/boarding-locations/:id/operator-access", registry.listBoardingLocationOperatorAccess],
+    ["put", "/boarding-locations/:id/operator-access", registry.enableBoardingLocationOperatorAccess],
     ["get", "/operator-boarding-assignments", registry.listBoardingAssignmentReviews],
     ["patch", "/operator-boarding-assignments/:id/review", registry.reviewBoardingAssignment],
   ];

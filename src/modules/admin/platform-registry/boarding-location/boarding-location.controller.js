@@ -1,6 +1,7 @@
 "use strict";
 
 const service = require("./boarding-location.service.js");
+const operatorAccess = require("./boarding-location-operator-access.service.js");
 
 function handleError(res, error) {
   const status = error.statusCode || (error.name === "ValidationError" ? 400 : 500);
@@ -60,7 +61,9 @@ async function getNearbyBoardingLocations(req, res) {
 
 async function updateBoardingLocation(req, res) {
   try {
-    const data = await service.updateBoardingLocation(req.params.id, req.body);
+    const data = await service.updateBoardingLocation(
+      req.params.id, req.body, req.adminInfo?.id || req.admin?._id
+    );
     return res.status(200).json({
       success: true, message: "Boarding location updated.", data,
     });
@@ -80,8 +83,31 @@ async function deactivateBoardingLocation(req, res) {
   }
 }
 
+async function listBoardingLocationOperatorAccess(req, res) {
+  try {
+    const data = await operatorAccess.listOperatorAccess(req.params.id);
+    return res.status(200).json({ success: true, results: data.length, data });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+async function enableBoardingLocationOperatorAccess(req, res) {
+  try {
+    const data = await operatorAccess.enableOperatorAccess(
+      req.params.id, req.body, req.adminInfo?.id || req.admin?._id
+    );
+    return res.status(200).json({
+      success: true, message: "Passenger boarding access updated.", data,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
 module.exports = {
   createBoardingLocation, listBoardingLocations, getBoardingLocation,
   getNearbyBoardingLocations, updateBoardingLocation,
-  deactivateBoardingLocation,
+  deactivateBoardingLocation, listBoardingLocationOperatorAccess,
+  enableBoardingLocationOperatorAccess,
 };

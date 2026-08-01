@@ -17,9 +17,10 @@ async function findTripsWithPopulate(tripQuery, skip, limit) {
     .limit(limit)
     .populate({
       path: "busId",
-      select: "busName busNumber busType vehicleType totalSeats seatLayout fleetImages averageRating totalReviews amenitiesId boardingPointId",
+      select: "busName busNumber busType vehicleType totalSeats seatLayout fleetImages averageRating totalReviews amenitiesId amenityIds boardingPointId",
       populate: [
-        { path: "amenitiesId",     select: "amenities -_id" },
+        { path: "amenitiesId" },
+        { path: "amenityIds" },
         { path: "boardingPointId", select: "boardingPoints droppingPoints -_id" }
       ]
     })

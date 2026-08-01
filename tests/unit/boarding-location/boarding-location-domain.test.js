@@ -36,6 +36,11 @@ test("boarding location prepares geo identity and normalized aliases", async () 
     name: "Kalanki Chowk",
     aliases: [" Kalanki ", "kalanki", "Kalanki Chowk", ""],
     coordinates: { lat: "27.693", lng: "85.281" },
+    coordinateSource: "GOOGLE_PLACE",
+    providerMetadata: {
+      provider: "GOOGLE", placeId: "google-place-1",
+      suggestedAddress: "Kalanki, Kathmandu",
+    },
   });
   await location.validate();
   assert.equal(location._normalizedIdentity, `${stopId}:kalanki chowk`);
@@ -44,6 +49,8 @@ test("boarding location prepares geo identity and normalized aliases", async () 
     lat: 27.693, lng: 85.281,
   });
   assert.deepEqual(location.geo.coordinates, [85.281, 27.693]);
+  assert.equal(location.coordinateSource, "GOOGLE_PLACE");
+  assert.equal(location.providerMetadata.placeId, "google-place-1");
 });
 
 test("boarding location requires complete valid map coordinates", async () => {

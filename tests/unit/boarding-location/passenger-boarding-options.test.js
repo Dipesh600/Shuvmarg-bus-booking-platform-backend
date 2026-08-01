@@ -31,7 +31,7 @@ function makeTrip(overrides = {}) {
   };
 }
 
-function makeRepository({ trip = makeTrip(), assignments = [] } = {}) {
+function makeRepository({ trip = makeTrip(), assignments = [], children = [] } = {}) {
   return {
     findTripBoardingContext: async () => trip,
     findStops: async () => [
@@ -46,6 +46,7 @@ function makeRepository({ trip = makeTrip(), assignments = [] } = {}) {
         coordinates: { lat: 28.21, lng: 83.98 },
       },
     ],
+    findChildStops: async () => children,
     findOperatorAssignments: async () => assignments,
   };
 }

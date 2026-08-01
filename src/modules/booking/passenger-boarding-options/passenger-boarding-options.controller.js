@@ -7,6 +7,8 @@ function createPassengerBoardingOptionsController(service) {
         tripId: req.params.tripId,
         originStopId: req.query.originStopId,
         destinationStopId: req.query.destinationStopId,
+        originSelectionStopId: req.query.originSelectionStopId,
+        destinationSelectionStopId: req.query.destinationSelectionStopId,
       });
       return res.status(200).json({ success: true, data });
     } catch (error) {

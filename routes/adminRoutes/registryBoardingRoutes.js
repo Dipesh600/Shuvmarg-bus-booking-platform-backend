@@ -20,6 +20,8 @@ router.get("/boarding-locations/nearby", registry.getNearbyBoardingLocations);
 router.get("/boarding-locations/:id", registry.getBoardingLocation);
 router.patch("/boarding-locations/:id", registry.updateBoardingLocation);
 router.patch("/boarding-locations/:id/deactivate", registry.deactivateBoardingLocation);
+router.get("/boarding-locations/:id/operator-access", registry.listBoardingLocationOperatorAccess);
+router.put("/boarding-locations/:id/operator-access", registry.enableBoardingLocationOperatorAccess);
 
 router.get("/operator-boarding-assignments", registry.listBoardingAssignmentReviews);
 router.patch("/operator-boarding-assignments/:id/review", registry.reviewBoardingAssignment);
