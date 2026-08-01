@@ -42,7 +42,35 @@ function buildVerificationFields(data, adminId) {
   };
 }
 
+function buildBoardingLocationPayload(data, adminId, stopId) {
+  return {
+    stopId,
+    name: data.name,
+    aliases: data.aliases || [],
+    landmark: data.landmark,
+    address: data.address,
+    locationType: data.locationType,
+    gateOrBay: data.gateOrBay,
+    directionHint: data.directionHint,
+    coordinates: data.coordinates,
+    coordinateSource: data.coordinateSource || "MAP_PIN",
+    coordinateAccuracyMeters: data.coordinateAccuracyMeters,
+    capturedAt: data.capturedAt,
+    providerMetadata: data.providerMetadata,
+    ...buildVerificationFields(data, adminId),
+    nearbyReview: data.nearbyReview?.acknowledged ? {
+      reason: data.nearbyReview.reason || "Reviewed nearby locations",
+      reviewedBy: adminId || null,
+      reviewedAt: new Date(),
+    } : undefined,
+    source: data.source || "ADMIN",
+    status: data.status || "ACTIVE",
+    createdBy: adminId || null,
+    createdByType: "ADMIN",
+  };
+}
+
 module.exports = {
-  assertNearbyReview, buildVerificationFields,
+  assertNearbyReview, buildVerificationFields, buildBoardingLocationPayload,
   mapBoardingLocationWriteError,
 };

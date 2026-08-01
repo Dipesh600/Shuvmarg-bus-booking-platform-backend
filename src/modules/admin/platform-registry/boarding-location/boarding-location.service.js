@@ -9,7 +9,7 @@ const { mapBoardingLocation } = require("./boarding-location.mapper.js");
 const { assertBoardingLocationId } = require("./boarding-location-id.policy.js");
 const { assertNoActiveBoardingAssignments } = require("./boarding-location-usage.policy.js");
 const {
-  assertNearbyReview, buildVerificationFields,
+  assertNearbyReview, buildVerificationFields, buildBoardingLocationPayload,
   mapBoardingLocationWriteError,
 } = require("./boarding-location-write.policy.js");
 
@@ -19,32 +19,7 @@ async function createBoardingLocation(data, adminId) {
     stopId: stop._id, coordinates: data.coordinates,
   });
   assertNearbyReview(nearby, data.nearbyReview);
-  const source = data.source || "ADMIN";
-  const payload = {
-    stopId: stop._id,
-    name: data.name,
-    aliases: data.aliases || [],
-    landmark: data.landmark,
-    address: data.address,
-    locationType: data.locationType,
-    gateOrBay: data.gateOrBay,
-    directionHint: data.directionHint,
-    coordinates: data.coordinates,
-    coordinateSource: data.coordinateSource || "MAP_PIN",
-    coordinateAccuracyMeters: data.coordinateAccuracyMeters,
-    capturedAt: data.capturedAt,
-    providerMetadata: data.providerMetadata,
-    ...buildVerificationFields(data, adminId),
-    nearbyReview: data.nearbyReview?.acknowledged ? {
-      reason: data.nearbyReview.reason || "Reviewed nearby locations",
-      reviewedBy: adminId || null,
-      reviewedAt: new Date(),
-    } : undefined,
-    source,
-    status: data.status || "ACTIVE",
-    createdBy: adminId || null,
-    createdByType: "ADMIN",
-  };
+  const payload = buildBoardingLocationPayload(data, adminId, stop._id);
   try {
     const location = await BoardingLocation.create(payload);
     await location.populate("stopId", "name code");
