@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const routes = require("../../routes/adminRoutes/adminRoutes.js");
 const adminMiddleware = require("../../middleware/adminMiddleware.js");
 const registry = require("../../src/modules/admin/platform-registry");
+const boardingRoutes = require("../../routes/adminRoutes/registryBoardingRoutes.js");
 
 test("admin platform-registry Express route contract", () => {
   const expected = [
@@ -27,24 +28,6 @@ test("admin platform-registry Express route contract", () => {
     ["put", "/registry/variants/:variantId/stops", registry.setVariantStops],
     ["get", "/registry/variants/:variantId/stops",
       registry.getStopsForVariant],
-    ["post", "/registry/boarding-points", registry.createBoardingPoint],
-    ["get", "/registry/boarding-points/:stopCode",
-      registry.getBoardingPointsByStop],
-    ["patch", "/registry/boarding-points/:id", registry.updateBoardingPoint],
-    ["delete", "/registry/boarding-points/:id",
-      registry.deleteRegistryBoardingPoint],
-    ["post", "/registry/boarding-locations",
-      registry.createBoardingLocation],
-    ["get", "/registry/boarding-locations",
-      registry.listBoardingLocations],
-    ["get", "/registry/boarding-locations/nearby",
-      registry.getNearbyBoardingLocations],
-    ["get", "/registry/boarding-locations/:id",
-      registry.getBoardingLocation],
-    ["patch", "/registry/boarding-locations/:id",
-      registry.updateBoardingLocation],
-    ["patch", "/registry/boarding-locations/:id/deactivate",
-      registry.deactivateBoardingLocation],
   ];
   const layers = routes.stack.filter((layer) => layer.route);
   for (const [method, path, handler] of expected) {
@@ -56,5 +39,27 @@ test("admin platform-registry Express route contract", () => {
       matches[0].route.stack.map((layer) => layer.handle),
       [adminMiddleware, handler]
     );
+  }
+  const nestedExpected = [
+    ["post", "/boarding-points", registry.createBoardingPoint],
+    ["get", "/boarding-points/:stopCode", registry.getBoardingPointsByStop],
+    ["patch", "/boarding-points/:id", registry.updateBoardingPoint],
+    ["delete", "/boarding-points/:id", registry.deleteRegistryBoardingPoint],
+    ["post", "/boarding-locations", registry.createBoardingLocation],
+    ["get", "/boarding-locations", registry.listBoardingLocations],
+    ["get", "/boarding-locations/nearby", registry.getNearbyBoardingLocations],
+    ["get", "/boarding-locations/:id", registry.getBoardingLocation],
+    ["patch", "/boarding-locations/:id", registry.updateBoardingLocation],
+    ["patch", "/boarding-locations/:id/deactivate", registry.deactivateBoardingLocation],
+    ["get", "/operator-boarding-assignments", registry.listBoardingAssignmentReviews],
+    ["patch", "/operator-boarding-assignments/:id/review", registry.reviewBoardingAssignment],
+  ];
+  assert.equal(boardingRoutes.stack[0].handle, adminMiddleware);
+  for (const [method, path, handler] of nestedExpected) {
+    const matches = boardingRoutes.stack.filter(
+      (layer) => layer.route?.path === path && layer.route.methods[method]
+    );
+    assert.equal(matches.length, 1, `${method.toUpperCase()} /registry${path}`);
+    assert.deepEqual(matches[0].route.stack.map((layer) => layer.handle), [handler]);
   }
 });

@@ -7,6 +7,7 @@ const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwne
 const busOwnerKyc = require("../../src/modules/bus-owner/kyc-submission");
 const fleetManagement = require("../../src/modules/bus-owner/fleet-management");
 const boardingPointManagement = require("../../src/modules/bus-owner/boarding-point-management");
+const boardingLocationAssignment = require("../../src/modules/bus-owner/boarding-location-assignment");
 const amenityManagement = require("../../src/modules/bus-owner/amenity-management");
 const busOwnerRouteCon = require("../../controllers/busOwnerController/busOwnerRouteController.js");
 const tripCon = require("../../controllers/busOwnerController/busTripController.js");
@@ -35,6 +36,16 @@ router.get("/getMyBoardingPoints", boardingPointManagement.getMyBoardingPoints);
 router.patch("/updateBoardingPoint", boardingPointManagement.updateBoardingPoint);
 router.delete("/deleteBoardingPoint", boardingPointManagement.deleteBoardingPoint);
 router.post("/getBoardingPointsById", boardingPointManagement.getBoardingPointsById);
+
+// Canonical boarding locations and operator-owned usage assignments.
+// Legacy Boarding Point endpoints remain available during the data migration.
+router.get("/operator-brands", boardingLocationAssignment.listBrands);
+router.get("/route-stops", boardingLocationAssignment.listRouteStops);
+router.get("/boarding-locations", boardingLocationAssignment.listCatalog);
+router.get("/boarding-assignments", boardingLocationAssignment.listAssignments);
+router.post("/boarding-assignments", boardingLocationAssignment.createAssignment);
+router.patch("/boarding-assignments/:id", boardingLocationAssignment.updateAssignment);
+router.post("/boarding-location-requests", boardingLocationAssignment.requestLocation);
 
 // Amenities
 router.post("/createAmenity", amenityManagement.createAmenity);

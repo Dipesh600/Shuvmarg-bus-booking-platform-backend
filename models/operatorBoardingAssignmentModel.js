@@ -16,17 +16,20 @@ const operatorBoardingAssignmentSchema = new mongoose.Schema({
   usage: {
     type: String, enum: ["PICKUP", "DROP", "BOTH"], default: "BOTH",
   },
-  displayName: { type: String, trim: true, default: null },
-  counterNumber: { type: String, trim: true, default: null },
-  contactName: { type: String, trim: true, default: null },
-  contactPhone: { type: String, trim: true, default: null },
-  reportingInstructions: { type: String, trim: true, default: null },
+  displayName: { type: String, trim: true, maxlength: 120, default: null },
+  counterNumber: { type: String, trim: true, maxlength: 80, default: null },
+  contactName: { type: String, trim: true, maxlength: 120, default: null },
+  contactPhone: { type: String, trim: true, maxlength: 30, default: null },
+  reportingInstructions: { type: String, trim: true, maxlength: 500, default: null },
   status: {
     type: String,
-    enum: ["PENDING_REVIEW", "ACTIVE", "INACTIVE"],
+    enum: ["PENDING_REVIEW", "ACTIVE", "INACTIVE", "REJECTED"],
     default: "PENDING_REVIEW",
   },
   createdBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+  reviewedBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+  reviewedAt: { type: Date, default: null },
+  rejectionReason: { type: String, trim: true, maxlength: 500, default: null },
 }, { timestamps: true });
 
 operatorBoardingAssignmentSchema.index(

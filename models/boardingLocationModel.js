@@ -44,8 +44,9 @@ const boardingLocationSchema = new mongoose.Schema({
   status: {
     type: String, enum: ["ACTIVE", "INACTIVE"], default: "ACTIVE",
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null,
+  createdBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+  createdByType: {
+    type: String, enum: ["ADMIN", "BUS_OWNER", "SYSTEM"], default: "ADMIN",
   },
   legacySource: {
     model: {

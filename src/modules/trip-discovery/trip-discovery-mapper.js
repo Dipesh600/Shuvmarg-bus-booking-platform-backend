@@ -83,6 +83,8 @@ function createTripMapper({ getPresignedUrl, timeToMins }) {
         const {
           resolvedDepartureTime,
           resolvedArrivalTime,
+          resolvedOriginStopId,
+          resolvedDestinationStopId,
           failsStopBehaviorGate
         } = resolveStopTiming({ trip, originStopIds, destStopIds, timeToMins });
 
@@ -99,6 +101,12 @@ function createTripMapper({ getPresignedUrl, timeToMins }) {
           status: trip.status,
           busDetail,
           routeDetail,
+          boardingContext: resolvedOriginStopId && resolvedDestinationStopId
+            ? {
+                originStopId: resolvedOriginStopId,
+                destinationStopId: resolvedDestinationStopId,
+              }
+            : null,
           availableSeats,
         };
       }));

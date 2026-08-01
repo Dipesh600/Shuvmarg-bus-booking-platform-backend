@@ -10,6 +10,7 @@ const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwne
 const kyc = require("../../src/modules/bus-owner/kyc-submission");
 const fleet = require("../../src/modules/bus-owner/fleet-management");
 const boarding = require("../../src/modules/bus-owner/boarding-point-management");
+const boardingLocations = require("../../src/modules/bus-owner/boarding-location-assignment");
 const amenities = require("../../src/modules/bus-owner/amenity-management");
 
 test("bus-owner operations route and middleware contract", () => {
@@ -26,6 +27,13 @@ test("bus-owner operations route and middleware contract", () => {
     ["patch", "/updateBoardingPoint", boarding.updateBoardingPoint],
     ["delete", "/deleteBoardingPoint", boarding.deleteBoardingPoint],
     ["post", "/getBoardingPointsById", boarding.getBoardingPointsById],
+    ["get", "/operator-brands", boardingLocations.listBrands],
+    ["get", "/route-stops", boardingLocations.listRouteStops],
+    ["get", "/boarding-locations", boardingLocations.listCatalog],
+    ["get", "/boarding-assignments", boardingLocations.listAssignments],
+    ["post", "/boarding-assignments", boardingLocations.createAssignment],
+    ["patch", "/boarding-assignments/:id", boardingLocations.updateAssignment],
+    ["post", "/boarding-location-requests", boardingLocations.requestLocation],
     ["post", "/createAmenity", amenities.createAmenity],
     ["get", "/getMyAmenities", amenities.getMyAmenities],
     ["patch", "/updateAmenity", amenities.updateAmenity],

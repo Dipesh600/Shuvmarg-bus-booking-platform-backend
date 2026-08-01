@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const boardingSelectionSchema = require("./bookingBoardingSelectionSchema.js");
 
 const passengerSchema = new mongoose.Schema({
   name:     { type: String, required: true, trim: true },
@@ -64,18 +65,8 @@ const bookingSchema = new mongoose.Schema(
     passengerDetails: [passengerSchema],
 
     // === BOARDING / DROPPING SELECTION ===
-    boardingPoint: {
-      name: { type: String, default: null },
-      time: { type: String, default: null },
-      lat:  { type: Number, default: null },
-      lng:  { type: Number, default: null },
-    },
-    droppingPoint: {
-      name: { type: String, default: null },
-      time: { type: String, default: null },
-      lat:  { type: Number, default: null },
-      lng:  { type: Number, default: null },
-    },
+    boardingPoint: { type: boardingSelectionSchema, default: () => ({}) },
+    droppingPoint: { type: boardingSelectionSchema, default: () => ({}) },
 
     // === CONDUCTOR BOARDING CONFIRMATION ===
     boardingConfirmed:   { type: Boolean, default: false },

@@ -65,6 +65,7 @@ function buildMigrationCandidate(record, legacyModel) {
       status: record.status === false || record.status === "INACTIVE"
         ? "INACTIVE" : "ACTIVE",
       createdBy: record.createdBy || null,
+      createdByType: "SYSTEM",
       legacySource: { model: legacyModel, id: record._id },
     },
   };

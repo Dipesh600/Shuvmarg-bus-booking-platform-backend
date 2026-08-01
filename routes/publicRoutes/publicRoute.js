@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const tripDiscovery = require("../../src/modules/trip-discovery");
+const passengerBoardingOptions = require(
+  "../../src/modules/booking/passenger-boarding-options"
+);
 const fareRuleCon = require("../../controllers/busOwnerController/fareRuleController.js");
 const {
   searchStops,
@@ -22,6 +25,10 @@ router.post("/stops/select", recordStopSelection);
 
 // Search Trips (core public API)
 router.post("/searchTrips", tripDiscovery.searchTrips);
+router.get(
+  "/trips/:tripId/boarding-options",
+  passengerBoardingOptions.getPassengerBoardingOptions
+);
 
 // Compute effective fare before checkout (applies surge/advance discounts)
 router.post("/computeFare", fareRuleCon.computeEffectiveFare);

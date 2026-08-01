@@ -62,7 +62,8 @@ test("platform registry exports only its declared route handlers", () => {
     "deleteStop", "deleteVariant", "getAllCorridors", "getAllStops",
     "getBoardingLocation", "getBoardingPointsByStop",
     "getNearbyBoardingLocations", "getStopsForVariant", "getVariantsByCorridor",
-    "listBoardingLocations", "previewBulkImportStops", "searchStops", "setVariantStops",
+    "listBoardingAssignmentReviews", "listBoardingLocations",
+    "previewBulkImportStops", "reviewBoardingAssignment", "searchStops", "setVariantStops",
     "updateBoardingLocation", "updateBoardingPoint", "updateCorridor",
     "updateStop", "updateVariant",
   ]);

@@ -45,6 +45,7 @@ const tripOverviewCtrl     = require("../../src/modules/admin/trip-overview");
 const adminWalletCtrl      = require("../../src/modules/admin/wallet-management");
 const transactionCtrl      = require("../../controllers/adminController/transactionController/transactionController.js");
 const routeDiscoveryCtrl   = require("../../src/modules/admin/route-discovery");
+const registryBoardingRoutes = require("./registryBoardingRoutes.js");
 // Auth Routes
 router.post("/auth/login",   authController.login);
 router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);
@@ -324,21 +325,7 @@ router.delete("/registry/variants/:id",                   adminMiddleware, platf
 router.put("/registry/variants/:variantId/stops",  adminMiddleware, platformRegistry.setVariantStops);
 router.get("/registry/variants/:variantId/stops",  adminMiddleware, platformRegistry.getStopsForVariant);
 
-// Layer 5: Boarding Points (Physical micro-locations per stop)
-router.post("/registry/boarding-points",              adminMiddleware, platformRegistry.createBoardingPoint);
-router.get("/registry/boarding-points/:stopCode",     adminMiddleware, platformRegistry.getBoardingPointsByStop);
-router.patch("/registry/boarding-points/:id",         adminMiddleware, platformRegistry.updateBoardingPoint);
-router.delete("/registry/boarding-points/:id",        adminMiddleware, platformRegistry.deleteRegistryBoardingPoint);
-
-// Canonical boarding locations. Legacy boarding-point routes remain available
-// until operator and booking consumers complete their separate migrations.
-router.post("/registry/boarding-locations", adminMiddleware, platformRegistry.createBoardingLocation);
-router.get("/registry/boarding-locations", adminMiddleware, platformRegistry.listBoardingLocations);
-router.get("/registry/boarding-locations/nearby", adminMiddleware, platformRegistry.getNearbyBoardingLocations);
-router.get("/registry/boarding-locations/:id", adminMiddleware, platformRegistry.getBoardingLocation);
-router.patch("/registry/boarding-locations/:id", adminMiddleware, platformRegistry.updateBoardingLocation);
-router.patch("/registry/boarding-locations/:id/deactivate", adminMiddleware, platformRegistry.deactivateBoardingLocation);
-
+router.use("/registry", registryBoardingRoutes);
 
 // Route Requests (Operator-submitted requests for new corridors)
 router.get("/registry/route-requests",         adminMiddleware, routeRequestCtrl.getAllRouteRequests);

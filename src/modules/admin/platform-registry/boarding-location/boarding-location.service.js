@@ -43,6 +43,7 @@ async function createBoardingLocation(data, adminId) {
     source,
     status: data.status || "ACTIVE",
     createdBy: adminId || null,
+    createdByType: "ADMIN",
   };
   try {
     const location = await BoardingLocation.create(payload);
