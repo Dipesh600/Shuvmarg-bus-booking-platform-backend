@@ -33,6 +33,18 @@ test("admin platform-registry Express route contract", () => {
     ["patch", "/registry/boarding-points/:id", registry.updateBoardingPoint],
     ["delete", "/registry/boarding-points/:id",
       registry.deleteRegistryBoardingPoint],
+    ["post", "/registry/boarding-locations",
+      registry.createBoardingLocation],
+    ["get", "/registry/boarding-locations",
+      registry.listBoardingLocations],
+    ["get", "/registry/boarding-locations/nearby",
+      registry.getNearbyBoardingLocations],
+    ["get", "/registry/boarding-locations/:id",
+      registry.getBoardingLocation],
+    ["patch", "/registry/boarding-locations/:id",
+      registry.updateBoardingLocation],
+    ["patch", "/registry/boarding-locations/:id/deactivate",
+      registry.deactivateBoardingLocation],
   ];
   const layers = routes.stack.filter((layer) => layer.route);
   for (const [method, path, handler] of expected) {

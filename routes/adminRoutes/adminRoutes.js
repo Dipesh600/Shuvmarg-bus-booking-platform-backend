@@ -330,6 +330,15 @@ router.get("/registry/boarding-points/:stopCode",     adminMiddleware, platformR
 router.patch("/registry/boarding-points/:id",         adminMiddleware, platformRegistry.updateBoardingPoint);
 router.delete("/registry/boarding-points/:id",        adminMiddleware, platformRegistry.deleteRegistryBoardingPoint);
 
+// Canonical boarding locations. Legacy boarding-point routes remain available
+// until operator and booking consumers complete their separate migrations.
+router.post("/registry/boarding-locations", adminMiddleware, platformRegistry.createBoardingLocation);
+router.get("/registry/boarding-locations", adminMiddleware, platformRegistry.listBoardingLocations);
+router.get("/registry/boarding-locations/nearby", adminMiddleware, platformRegistry.getNearbyBoardingLocations);
+router.get("/registry/boarding-locations/:id", adminMiddleware, platformRegistry.getBoardingLocation);
+router.patch("/registry/boarding-locations/:id", adminMiddleware, platformRegistry.updateBoardingLocation);
+router.patch("/registry/boarding-locations/:id/deactivate", adminMiddleware, platformRegistry.deactivateBoardingLocation);
+
 
 // Route Requests (Operator-submitted requests for new corridors)
 router.get("/registry/route-requests",         adminMiddleware, routeRequestCtrl.getAllRouteRequests);

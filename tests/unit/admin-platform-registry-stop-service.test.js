@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const Stop = require("../../models/stopModel.js");
 const RouteStop = require("../../models/routeStopModel.js");
 const BoardingPoint = require("../../models/boardingPointsModel.js");
+const BoardingLocation = require("../../models/boardingLocationModel.js");
 const OperatorConfig = require("../../models/operatorRouteConfigModel.js");
 const service = require(
   "../../src/modules/admin/platform-registry/stop-registry.service.js"
@@ -40,6 +41,7 @@ test("stop registry blocks referenced deletion before any write", async (t) => {
   patch(t, OperatorConfig, "countDocuments", async () => 2);
   patch(t, RouteStop, "countDocuments", async () => 0);
   patch(t, BoardingPoint, "countDocuments", async () => 0);
+  patch(t, BoardingLocation, "countDocuments", async () => 0);
   patch(t, Stop, "findByIdAndDelete", async () => { writes += 1; });
 
   await assert.rejects(
@@ -56,8 +58,27 @@ test("stop registry cascades an unreferenced deletion in order", async (t) => {
   patch(t, OperatorConfig, "countDocuments", async () => 0);
   patch(t, RouteStop, "countDocuments", async () => 0);
   patch(t, BoardingPoint, "countDocuments", async () => 0);
+  patch(t, BoardingLocation, "countDocuments", async () => 0);
   patch(t, Stop, "findByIdAndDelete", async () => calls.push("stop"));
 
   await service.deleteStop(objectId);
   assert.deepEqual(calls, ["stop"]);
+});
+
+test("active boarding locations block route-stop deactivation", async (t) => {
+  patch(t, OperatorConfig, "countDocuments", async () => 0);
+  patch(t, RouteStop, "countDocuments", async () => 0);
+  patch(t, BoardingPoint, "countDocuments", async () => 0);
+  patch(t, BoardingLocation, "countDocuments", async () => 1);
+
+  await assert.rejects(
+    service.updateStop("507f1f77bcf86cd799439011", { status: "INACTIVE" }),
+    {
+      code: "STOP_IN_USE",
+      details: {
+        operatorRouteCount: 0, routeStopCount: 0,
+        boardingPointCount: 0, boardingLocationCount: 1,
+      },
+    }
+  );
 });

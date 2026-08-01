@@ -1,7 +1,6 @@
 "use strict";
 
 const Stop = require("../../../../models/stopModel.js");
-const StopPoint = require("../../../../models/stopPointModel.js");
 const {
   geocodeAdminBoundaries,
   findNearbyStop,
@@ -40,30 +39,6 @@ const createRegistryStop = async (
     status: "ACTIVE",
     createdBy: adminId,
   });
-  try {
-    const existing = await StopPoint.findOne({
-      stopId: stop._id,
-      status: "ACTIVE",
-    }).lean();
-    if (!existing) {
-      await StopPoint.create({
-        stopId: stop._id,
-        name: candidateName,
-        type: "JUNCTION_POINT",
-        coordinates,
-        supportsBoarding: true,
-        supportsDropping: true,
-        verificationStatus: "VERIFIED",
-        source: "DISCOVERY",
-        status: "ACTIVE",
-        createdBy: adminId,
-      });
-    }
-  } catch (error) {
-    console.error(
-      `[Discovery] Failed to create default StopPoint for "${candidateName}": ${error.message}`
-    );
-  }
   return stop._id;
 };
 

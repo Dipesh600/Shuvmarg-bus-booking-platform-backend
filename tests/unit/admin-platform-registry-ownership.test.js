@@ -8,7 +8,9 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const moduleDir = path.join(root, "../src/modules/admin/platform-registry");
 const domainDir = path.join(root, "../src/domain/stop");
+const boardingDomainDir = path.join(root, "../src/domain/boarding-location");
 const modelPath = path.join(root, "../models/stopModel.js");
+const boardingModelPath = path.join(root, "../models/boardingLocationModel.js");
 
 /**
  * Recursively collect all .js files under a directory.
@@ -51,15 +53,18 @@ test("platform registry module owns the retired legacy subsystem", () => {
   assert.doesNotMatch(source, /bus-owner\/boarding/);
 });
 
-test("platform registry exports only the 21 route handlers", () => {
+test("platform registry exports only its declared route handlers", () => {
   const registry = require("../../src/modules/admin/platform-registry");
   assert.deepEqual(Object.keys(registry).sort(), [
-    "bulkImportStops", "createBoardingPoint", "createCorridor", "createStop",
-    "createVariant", "deleteCorridor", "deleteRegistryBoardingPoint",
+    "bulkImportStops", "createBoardingLocation", "createBoardingPoint",
+    "createCorridor", "createStop", "createVariant",
+    "deactivateBoardingLocation", "deleteCorridor", "deleteRegistryBoardingPoint",
     "deleteStop", "deleteVariant", "getAllCorridors", "getAllStops",
-    "getBoardingPointsByStop", "getStopsForVariant", "getVariantsByCorridor",
-    "previewBulkImportStops", "searchStops", "setVariantStops",
-    "updateBoardingPoint", "updateCorridor", "updateStop", "updateVariant",
+    "getBoardingLocation", "getBoardingPointsByStop",
+    "getNearbyBoardingLocations", "getStopsForVariant", "getVariantsByCorridor",
+    "listBoardingLocations", "previewBulkImportStops", "searchStops", "setVariantStops",
+    "updateBoardingLocation", "updateBoardingPoint", "updateCorridor",
+    "updateStop", "updateVariant",
   ]);
 });
 
@@ -78,7 +83,9 @@ test("every platform registry, stop model, and domain production file stays with
   const targets = [
     ...collectJsFiles(moduleDir),
     ...collectJsFiles(domainDir),
+    ...collectJsFiles(boardingDomainDir),
     modelPath,
+    boardingModelPath,
   ];
 
   for (const fullPath of targets) {
