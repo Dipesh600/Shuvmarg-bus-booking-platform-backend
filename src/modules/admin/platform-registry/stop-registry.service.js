@@ -1,9 +1,9 @@
 "use strict";
 
 const Stop = require("../../../../models/stopModel.js");
-const RouteStop = require("../../../../models/routeStopModel.js");
-const BoardingPoint = require("../../../../models/boardingPointsModel.js");
-const OperatorRouteConfig = require("../../../../models/operatorRouteConfigModel.js");
+const {
+  getStopReferenceCounts, hasStopReferences,
+} = require("./stop-reference-counts.service.js");
 
 async function createStop(data, adminId = null) {
   const {
@@ -73,13 +73,17 @@ async function updateStop(id, data) {
     isSearchable, isRouteStop, parentStopId, verificationStatus, source
   } = data;
 
-  if (isRouteStop === false) {
-    const usageCount = await RouteStop.countDocuments({ stopId: id });
-    if (usageCount > 0) {
-      const err = new Error(`Cannot disable isRouteStop because this stop is actively used by ${usageCount} RouteStop(s).`);
+  if (isRouteStop === false || status === "INACTIVE") {
+    const counts = await getStopReferenceCounts(id);
+    const disablesRouteStop = isRouteStop === false && counts.routeStopCount > 0;
+    const disablesBoardingParent = counts.boardingLocationCount > 0;
+    if (disablesRouteStop || disablesBoardingParent) {
+      const err = new Error(
+        "Cannot disable a route stop while routes or boarding locations use it."
+      );
       err.code = "STOP_IN_USE";
       err.statusCode = 409;
-      err.details = { routeStopCount: usageCount };
+      err.details = counts;
       throw err;
     }
   }
@@ -119,25 +123,12 @@ async function deleteStop(id) {
     throw err;
   }
   
-  const opRouteCount = await OperatorRouteConfig.countDocuments({
-    $or: [
-      { activeStops: id }, { returnActiveStops: id },
-      { "boardingConfig.stopId": id }, { "timingConfig.stopId": id },
-      { "returnBoardingConfig.stopId": id }, { "returnTimingConfig.stopId": id },
-    ],
-  });
-  const routeStopCount = await RouteStop.countDocuments({ stopId: id });
-  const boardingPointCount = await BoardingPoint.countDocuments({ stopId: id });
-
-  if (opRouteCount > 0 || routeStopCount > 0 || boardingPointCount > 0) {
+  const counts = await getStopReferenceCounts(id);
+  if (hasStopReferences(counts)) {
     const err = new Error("Stop is actively used and cannot be deleted.");
     err.code = "STOP_IN_USE";
     err.statusCode = 409;
-    err.details = { 
-        operatorRouteCount: opRouteCount,
-        routeStopCount: routeStopCount,
-        boardingPointCount: boardingPointCount 
-    };
+    err.details = counts;
     throw err;
   }
   

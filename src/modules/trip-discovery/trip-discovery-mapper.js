@@ -1,14 +1,15 @@
 const { resolveStopTiming } = require("./trip-discovery-stop-timing");
+const { collectAmenityNames } = require("./trip-discovery-amenities");
 
 function createTripMapper({ getPresignedUrl, timeToMins }) {
-  async function mapTripResponse(trips, seatAvailabilityMap, originStopIds, destStopIds, resolvedFromName, resolvedToName) {
+  async function mapTripResponse(
+    trips, seatAvailabilityMap, originStopIds, destStopIds,
+    resolvedFromName, resolvedToName, selectedOriginStopId, selectedDestinationStopId
+  ) {
     const formattedTrips = await Promise.all(trips
       .filter(trip => trip.busId != null)  // Extra null guard after populate
       .map(async trip => {
-        let amenities = [];
-        if (trip.busId?.amenitiesId?.amenities) {
-          amenities = trip.busId.amenitiesId.amenities.map(a => a.name);
-        }
+        const amenities = collectAmenityNames(trip.busId);
 
         let boardingPoints = [];
         let droppingPoints = [];
@@ -83,6 +84,8 @@ function createTripMapper({ getPresignedUrl, timeToMins }) {
         const {
           resolvedDepartureTime,
           resolvedArrivalTime,
+          resolvedOriginStopId,
+          resolvedDestinationStopId,
           failsStopBehaviorGate
         } = resolveStopTiming({ trip, originStopIds, destStopIds, timeToMins });
 
@@ -99,6 +102,15 @@ function createTripMapper({ getPresignedUrl, timeToMins }) {
           status: trip.status,
           busDetail,
           routeDetail,
+          boardingContext: resolvedOriginStopId && resolvedDestinationStopId
+            ? {
+                originStopId: resolvedOriginStopId,
+                destinationStopId: resolvedDestinationStopId,
+                originSelectionStopId: selectedOriginStopId || resolvedOriginStopId,
+                destinationSelectionStopId:
+                  selectedDestinationStopId || resolvedDestinationStopId,
+              }
+            : null,
           availableSeats,
         };
       }));

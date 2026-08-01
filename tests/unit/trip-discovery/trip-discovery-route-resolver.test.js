@@ -39,6 +39,8 @@ test("Trip Discovery Route Resolver", async (t) => {
     const result = await resolveRouteCandidates("cityA", "cityB");
     assert.deepStrictEqual(result.variantIds, ["var1"]);
     assert.strictEqual(result.resolvedFromName, "cityA");
+    assert.strictEqual(result.selectedOriginStopId, "stop1");
+    assert.strictEqual(result.selectedDestinationStopId, "stop3");
   });
 
   await t.test("missing from/to returns empty arrays", async () => {

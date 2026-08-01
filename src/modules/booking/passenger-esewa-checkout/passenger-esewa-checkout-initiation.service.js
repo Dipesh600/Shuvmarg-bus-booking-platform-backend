@@ -26,31 +26,44 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
       hold.seatNumbers
     );
     const trip = await deps.repository.findCheckoutTrip(hold.tripId);
-    const configuredPoints =
-      deps.tripPolicy.resolveConfiguredCheckoutPoints(trip);
-    const boardingPoint = deps.tripPolicy.resolveCanonicalPoint(
-      body.boardingPoint,
-      configuredPoints.boardingPoints,
-      'Boarding point'
-    );
-    const droppingPoint = deps.tripPolicy.resolveCanonicalPoint(
-      body.droppingPoint,
-      configuredPoints.droppingPoints,
-      'Dropping point'
-    );
+    const hasCanonicalBoarding = Boolean(body.boardingPoint?.sourceType);
+    const hasCanonicalDropping = Boolean(body.droppingPoint?.sourceType);
+    if (hasCanonicalBoarding !== hasCanonicalDropping) {
+      throw deps.policy.validationError(
+        'Both boarding and dropping selections must use the same selection format.'
+      );
+    }
+    let boardingPoint;
+    let droppingPoint;
+    if (hasCanonicalBoarding) {
+      const options = await deps.boardingOptions({
+        tripId: String(hold.tripId),
+        originStopId: body.boardingPoint.stopId,
+        destinationStopId: body.droppingPoint.stopId,
+      });
+      boardingPoint = deps.tripPolicy.resolveCanonicalBoardingSelection(
+        body.boardingPoint, options.pickupOptions, 'Boarding point'
+      );
+      droppingPoint = deps.tripPolicy.resolveCanonicalBoardingSelection(
+        body.droppingPoint, options.dropOptions, 'Dropping point'
+      );
+    } else {
+      const configuredPoints =
+        deps.tripPolicy.resolveConfiguredCheckoutPoints(trip);
+      boardingPoint = deps.tripPolicy.resolveCanonicalPoint(
+        body.boardingPoint, configuredPoints.boardingPoints, 'Boarding point'
+      );
+      droppingPoint = deps.tripPolicy.resolveCanonicalPoint(
+        body.droppingPoint, configuredPoints.droppingPoints, 'Dropping point'
+      );
+    }
     const tripSnapshot = deps.tripPolicy.resolveCanonicalTripSnapshot(
       trip,
       boardingPoint,
       droppingPoint
     );
-    const checkoutBoardingPoint = {
-      name: boardingPoint.name,
-      time: boardingPoint.time,
-    };
-    const checkoutDroppingPoint = {
-      name: droppingPoint.name,
-      time: droppingPoint.time,
-    };
+    const checkoutBoardingPoint = { ...boardingPoint };
+    const checkoutDroppingPoint = { ...droppingPoint };
     const transactionUuid = deps.policy.createTransactionUuid();
     const totalAmount = deps.policy.formatAmount(
       quoteResult.quote.gatewayAmount

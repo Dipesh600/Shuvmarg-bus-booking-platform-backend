@@ -1,6 +1,8 @@
 function resolveStopTiming({ trip, originStopIds, destStopIds, timeToMins }) {
   let resolvedDepartureTime = trip.departureTime;
   let resolvedArrivalTime   = trip.arrivalTime;
+  let resolvedOriginStopId = null;
+  let resolvedDestinationStopId = null;
   let failsStopBehaviorGate = false;
 
   const operatorConfig = trip.scheduleId?.operatorRouteConfigId;
@@ -14,6 +16,9 @@ function resolveStopTiming({ trip, originStopIds, destStopIds, timeToMins }) {
   if (timingArray && timingArray.length > 0) {
     const fromEntry = timingArray.find(tc => originStopIds.has(tc.stopId?.toString()));
     const toEntry   = timingArray.find(tc => destStopIds.has(tc.stopId?.toString()));
+
+    resolvedOriginStopId = fromEntry?.stopId?.toString() || null;
+    resolvedDestinationStopId = toEntry?.stopId?.toString() || null;
 
     if (fromEntry) {
       const dep = (fromEntry.estimatedDeparture || "").trim();
@@ -47,6 +52,8 @@ function resolveStopTiming({ trip, originStopIds, destStopIds, timeToMins }) {
   return {
     resolvedDepartureTime,
     resolvedArrivalTime,
+    resolvedOriginStopId,
+    resolvedDestinationStopId,
     failsStopBehaviorGate
   };
 }

@@ -48,6 +48,18 @@ test("Trip Discovery Mapper", async (t) => {
     assert.deepStrictEqual(result[0].busDetail.fleetImages, ["http://s3/image1.jpg"]);
   });
 
+  await t.test("combines current and legacy amenity references without duplicates", async () => {
+    const trip = {
+      ...dummyTrip,
+      busId: {
+        ...dummyTrip.busId,
+        amenityIds: [{ amenities: ["wifi", { name: "charging" }] }],
+      },
+    };
+    const result = await mapTripResponse([trip], seatMap, originStopIds, destStopIds);
+    assert.deepStrictEqual(result[0].busDetail.amenities, ["wifi", "charging", "ac"]);
+  });
+
   await t.test("handles missing arrays securely", async () => {
     const tripNoImages = { ...dummyTrip, busId: { ...dummyTrip.busId, fleetImages: null, amenitiesId: null } };
     const result = await mapTripResponse([tripNoImages], seatMap, originStopIds, destStopIds, null, null);

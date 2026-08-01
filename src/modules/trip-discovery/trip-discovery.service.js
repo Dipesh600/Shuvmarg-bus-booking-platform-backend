@@ -47,7 +47,9 @@ function createTripDiscoveryService({ resolveRouteCandidates, buildTripQuery, co
       resolution.originStopIds,
       resolution.destStopIds,
       resolution.resolvedFromName,
-      resolution.resolvedToName
+      resolution.resolvedToName,
+      resolution.selectedOriginStopId || null,
+      resolution.selectedDestinationStopId || null
     );
 
     return {

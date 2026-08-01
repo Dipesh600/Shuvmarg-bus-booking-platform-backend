@@ -6,9 +6,9 @@ const mongoose = require("mongoose");
  * Relationship: many StopPoints belong to one Stop.
  * Example: Stop = "Kathmandu", StopPoints = ["Gongabu Bus Park", "Kalanki"]
  *
- * This is the V2 replacement for the legacy BoardingPoints model.
- * Migration note: BoardingPoints records should be backfilled here; the old model
- * is retained for backward compatibility until the migration is complete.
+ * Transitional discovery model retained for legacy records only.
+ * New physical locations belong in BoardingLocation. New route stops use the
+ * stop-fallback policy instead of receiving an automatic duplicate StopPoint.
  *
  * No contactNumber here — that belongs to a future operator-counter model
  * that layers on top of the registry, not the registry itself.

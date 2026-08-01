@@ -104,7 +104,7 @@ test("Trip Discovery Repository", async (t) => {
       assert.deepStrictEqual(sc, { tripDate: 1, departureTime: 1 });
       assert.strictEqual(skc, 10); assert.strictEqual(lmc, 20); assert.strictEqual(lc, true);
       assert.strictEqual(pop[0].path, "busId");
-      assert.strictEqual(pop[0].select, "busName busNumber busType vehicleType totalSeats seatLayout fleetImages averageRating totalReviews amenitiesId boardingPointId");
+      assert.strictEqual(pop[0].select, "busName busNumber busType vehicleType totalSeats seatLayout fleetImages averageRating totalReviews amenitiesId amenityIds boardingPointId");
       assert.strictEqual(pop[0].populate[0].path, "amenitiesId");
       assert.strictEqual(pop[1].path, "variantId");
       assert.strictEqual(pop[1].select, "name direction");
