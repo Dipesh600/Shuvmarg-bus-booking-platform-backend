@@ -1,94 +1,150 @@
 "use strict";
-
+const mongoose = require("mongoose");
 const RouteCorridor = require("../../../../models/routeCorridorModel.js");
-const RouteVariant = require("../../../../models/routeVariantModel.js");
-const RouteStop = require("../../../../models/routeStopModel.js");
-const Bus = require("../../../../models/fleetModel.js");
-const { getStopByCode } = require("./stop-registry.service.js");
+const {
+  buildCorridorPairKey,
+} = require("../../../domain/corridor/corridor-identity.js");
+const { corridorError } = require("../../../domain/corridor/corridor-errors.js");
+const {
+  resolveCorridorEndpoint,
+} = require("./corridor/corridor-endpoint.policy.js");
+const {
+  assertCorridorCanActivate, hasUsableVariant,
+} = require("./corridor/corridor-activation.policy.js");
+const {
+  assertCorridorCanDelete,
+} = require("./corridor/corridor-reference.policy.js");
+const { buildCorridorQuery } = require("./corridor/corridor-query.service.js");
+const { mapCorridor } = require("./corridor/corridor.mapper.js");
 
-async function createCorridor(data, adminId) {
-  const { originCode, destinationCode, isSymmetric = true, notes } = data;
-  const origin = await getStopByCode(originCode);
-  const destination = await getStopByCode(destinationCode);
-  const forward = await RouteCorridor.findOne({
-    originId: origin._id, destinationId: destination._id,
-  });
-  const reverse = await RouteCorridor.findOne({
-    originId: destination._id, destinationId: origin._id,
-  });
-  if (forward || reverse) {
-    throw new Error(
-      `Corridor between "${origin.name}" and "${destination.name}" already exists.`
+const ENDPOINT_FIELDS = "name code municipality district province status verificationStatus isSearchable";
+
+function mapWriteError(error) {
+  if (error?.code !== 11000) throw error;
+  throw corridorError(
+    error.keyPattern?._endpointPairKey
+      ? "CORRIDOR_PAIR_CONFLICT" : "CORRIDOR_CODE_CONFLICT",
+    "A corridor between these endpoints already exists.", 409
+  );
+}
+
+async function resolveEndpoints(data) {
+  const origin = await resolveCorridorEndpoint({
+    stopId: data.originStopId || data.originId,
+    stopCode: data.originCode,
+  }, "Corridor origin");
+  const destination = await resolveCorridorEndpoint({
+    stopId: data.destinationStopId || data.destinationId,
+    stopCode: data.destinationCode,
+  }, "Corridor destination");
+  const pairKey = buildCorridorPairKey(origin._id, destination._id);
+  return { origin, destination, pairKey };
+}
+
+function findExistingPair({ origin, destination, pairKey }) {
+  return RouteCorridor.findOne({ $or: [
+    { _endpointPairKey: pairKey },
+    { originId: origin._id, destinationId: destination._id },
+    { originId: destination._id, destinationId: origin._id },
+  ] });
+}
+
+async function loadCorridor(id) {
+  if (!mongoose.isValidObjectId(id)) {
+    throw corridorError("INVALID_CORRIDOR_ID", "Corridor ID is invalid.");
+  }
+  const corridor = await RouteCorridor.findById(id)
+    .populate("originId", ENDPOINT_FIELDS)
+    .populate("destinationId", ENDPOINT_FIELDS);
+  if (!corridor) {
+    throw corridorError("CORRIDOR_NOT_FOUND", "Corridor not found.", 404);
+  }
+  return corridor;
+}
+
+async function registerCorridor(data, adminId, returnExisting = false) {
+  const endpoints = await resolveEndpoints(data);
+  const existing = await findExistingPair(endpoints);
+  if (existing) {
+    if (returnExisting) return loadCorridor(existing._id);
+    throw corridorError(
+      "CORRIDOR_PAIR_CONFLICT",
+      `A corridor between ${endpoints.origin.name} and ${endpoints.destination.name} already exists.`,
+      409, { corridorId: String(existing._id) }
     );
   }
-  return RouteCorridor.create({
-    code: `${origin.code}-${destination.code}`,
-    originId: origin._id,
-    destinationId: destination._id,
-    isSymmetric,
-    notes,
-    createdBy: adminId,
+  try {
+    const corridor = await RouteCorridor.create({
+      code: `${endpoints.origin.code}-${endpoints.destination.code}`,
+      originId: endpoints.origin._id,
+      destinationId: endpoints.destination._id,
+      _endpointPairKey: endpoints.pairKey,
+      status: "PENDING", isSymmetric: true,
+      source: data.source || "ADMIN",
+      sourceReferenceId: data.sourceReferenceId || null,
+      notes: data.notes, createdBy: adminId || null,
+    });
+    return loadCorridor(corridor._id);
+  } catch (error) {
+    if (error?.code === 11000 && returnExisting) {
+      const raced = await findExistingPair(endpoints);
+      if (raced) return loadCorridor(raced._id);
+    }
+    return mapWriteError(error);
+  }
+}
+
+async function createCorridor(data, adminId) {
+  return mapCorridor(await registerCorridor(data, adminId));
+}
+
+function findOrCreateCorridor(data, adminId) {
+  return registerCorridor(data, adminId, true);
+}
+
+async function getAllCorridors(filters = {}) {
+  const query = await buildCorridorQuery(filters);
+  const corridors = await RouteCorridor.find(query)
+    .populate("originId", ENDPOINT_FIELDS)
+    .populate("destinationId", ENDPOINT_FIELDS)
+    .sort({ code: 1 }).lean();
+  return corridors.map(mapCorridor);
+}
+
+function getCorridorById(id) {
+  return loadCorridor(id);
+}
+
+async function updateCorridor(id, data, adminId) {
+  const corridor = await loadCorridor(id);
+  if (data.isSymmetric === false) {
+    throw corridorError(
+      "CORRIDOR_DIRECTION_NEUTRAL", "A corridor is always direction-neutral."
+    );
+  }
+  if (data.status === "ACTIVE") await assertCorridorCanActivate(id);
+  if (data.notes !== undefined) corridor.notes = data.notes;
+  if (data.status !== undefined) corridor.status = data.status;
+  corridor.updatedBy = adminId || corridor.updatedBy;
+  await corridor.save();
+  return mapCorridor(await loadCorridor(id));
+}
+
+async function activateCorridorIfReady(id, adminId) {
+  if (!await hasUsableVariant(id)) return false;
+  await RouteCorridor.findByIdAndUpdate(id, {
+    status: "ACTIVE", updatedBy: adminId || null,
   });
-}
-
-function getAllCorridors() {
-  return RouteCorridor.find({ status: "ACTIVE" })
-    .populate("originId", "name code state")
-    .populate("destinationId", "name code state")
-    .sort({ code: 1 })
-    .lean();
-}
-
-async function getCorridorById(id) {
-  const corridor = await RouteCorridor.findById(id)
-    .populate("originId")
-    .populate("destinationId");
-  if (!corridor) throw new Error("Corridor not found.");
-  return corridor;
-}
-
-async function updateCorridor(id, data) {
-  const { notes, isSymmetric, status } = data;
-  const corridor = await RouteCorridor.findByIdAndUpdate(
-    id,
-    {
-      ...(notes !== undefined && { notes }),
-      ...(isSymmetric !== undefined && { isSymmetric }),
-      ...(status && { status }),
-    },
-    { new: true, runValidators: true }
-  ).populate("originId destinationId");
-  if (!corridor) throw new Error("Corridor not found.");
-  return corridor;
+  return true;
 }
 
 async function deleteCorridor(id) {
-  const corridor = await RouteCorridor.findById(id);
-  if (!corridor) throw new Error("Corridor not found.");
-  const fleetCount = await Bus.countDocuments({ corridorId: id });
-  if (fleetCount > 0) {
-    throw new Error(
-      `REFERENCED:${fleetCount}:${fleetCount} fleet(s) are assigned to this ` +
-      "corridor. Reassign them first."
-    );
-  }
-  const variants = await RouteVariant.find({ corridorId: id });
-  for (const variant of variants) {
-    const stopCount = await RouteStop.countDocuments({ variantId: variant._id });
-    if (stopCount > 0) {
-      throw new Error(
-        `REFERENCED:${stopCount}:Corridor has variants with stop sequences. ` +
-        "Clear the stop sequences first."
-      );
-    }
-  }
-  const ids = variants.map((variant) => variant._id);
-  await RouteStop.deleteMany({ variantId: { $in: ids } });
-  await RouteVariant.deleteMany({ corridorId: id });
+  const corridor = await loadCorridor(id);
+  await assertCorridorCanDelete(corridor);
   await RouteCorridor.findByIdAndDelete(id);
 }
 
 module.exports = {
-  createCorridor, getAllCorridors, getCorridorById,
-  updateCorridor, deleteCorridor,
+  activateCorridorIfReady, createCorridor, deleteCorridor,
+  findOrCreateCorridor, getAllCorridors, getCorridorById, updateCorridor,
 };

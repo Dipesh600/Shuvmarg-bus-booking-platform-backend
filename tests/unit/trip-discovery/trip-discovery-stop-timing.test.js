@@ -43,6 +43,8 @@ test("Trip Discovery Stop Timing", async (t) => {
     });
     assert.strictEqual(res.resolvedDepartureTime, "10:00 AM");
     assert.strictEqual(res.resolvedArrivalTime, "11:00 AM");
+    assert.strictEqual(res.resolvedOriginStopId, "stopA");
+    assert.strictEqual(res.resolvedDestinationStopId, "stopB");
     assert.strictEqual(res.failsStopBehaviorGate, false);
   });
 

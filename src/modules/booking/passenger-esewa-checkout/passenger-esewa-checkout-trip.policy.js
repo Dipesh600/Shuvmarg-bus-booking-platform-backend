@@ -75,6 +75,36 @@ function resolveCanonicalPoint(requestedPoint, configuredPoints, label) {
   return match;
 }
 
+function resolveCanonicalBoardingSelection(requested, options, label) {
+  if (!requested?.sourceType || !requested?.stopId) {
+    throw validationError(`${label} selection is invalid.`);
+  }
+  const requestedLocationId = requested.boardingLocationId || null;
+  const requestedAssignmentId = requested.assignmentId || null;
+  const match = (options || []).find((option) =>
+    option.sourceType === requested.sourceType &&
+    idOf(option.stopId) === idOf(requested.stopId) &&
+    idOf(option.boardingLocationId) === idOf(requestedLocationId) &&
+    idOf(option.assignmentId) === idOf(requestedAssignmentId)
+  );
+  if (!match) throw validationError(`${label} is not available for this trip.`);
+  return {
+    sourceType: match.sourceType,
+    stopId: match.stopId,
+    boardingLocationId: match.boardingLocationId,
+    assignmentId: match.assignmentId,
+    name: match.name,
+    canonicalName: match.canonicalName,
+    stopName: match.stopName,
+    landmark: match.landmark,
+    address: match.address,
+    reportingInstructions: match.reportingInstructions,
+    time: match.time,
+    lat: match.coordinates?.lat ?? null,
+    lng: match.coordinates?.lng ?? null,
+  };
+}
+
 function resolveCanonicalTripSnapshot(trip, boardingPoint, droppingPoint) {
   if (!trip) throw validationError('Trip details are unavailable.');
   const corridor = trip.variantId?.corridorId;
@@ -101,5 +131,6 @@ function resolveCanonicalTripSnapshot(trip, boardingPoint, droppingPoint) {
 module.exports = {
   resolveConfiguredCheckoutPoints,
   resolveCanonicalPoint,
+  resolveCanonicalBoardingSelection,
   resolveCanonicalTripSnapshot,
 };

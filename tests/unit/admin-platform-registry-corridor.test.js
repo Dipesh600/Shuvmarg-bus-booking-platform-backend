@@ -2,72 +2,86 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const Stop = require("../../models/stopModel.js");
-const Corridor = require("../../models/routeCorridorModel.js");
-const Variant = require("../../models/routeVariantModel.js");
-const RouteStop = require("../../models/routeStopModel.js");
-const Bus = require("../../models/fleetModel.js");
-const service = require(
-  "../../src/modules/admin/platform-registry/corridor-registry.service.js"
+const mongoose = require("mongoose");
+const fs = require("node:fs");
+const path = require("node:path");
+const {
+  buildCorridorPairKey,
+} = require("../../src/domain/corridor/corridor-identity.js");
+const {
+  buildCorridorMigrationPlan,
+} = require(
+  "../../src/modules/admin/platform-registry/corridor-migration/corridor-migration-plan.js"
 );
+const {
+  mapCorridor,
+} = require("../../src/modules/admin/platform-registry/corridor/corridor.mapper.js");
 
-function patch(t, object, key, value) {
-  const original = object[key];
-  object[key] = value;
-  t.after(() => { object[key] = original; });
-}
-
-test("corridor creation preserves lookup order and persistence fields", async (t) => {
-  const stopQueries = [];
-  const corridorQueries = [];
-  let payload;
-  patch(t, Stop, "findOne", async ({ code }) => {
-    stopQueries.push(code);
-    return code === "KTM"
-      ? { _id: "s1", code, name: "Kathmandu" }
-      : { _id: "s2", code, name: "Pokhara" };
-  });
-  patch(t, Corridor, "findOne", async (query) => {
-    corridorQueries.push(query);
-    return null;
-  });
-  patch(t, Corridor, "create", async (data) => { payload = data; return data; });
-
-  await service.createCorridor({
-    originCode: "ktm", destinationCode: "pkr", notes: "primary",
-  }, "admin-1");
-  assert.deepEqual(stopQueries, ["KTM", "PKR"]);
-  assert.deepEqual(corridorQueries, [
-    { originId: "s1", destinationId: "s2" },
-    { originId: "s2", destinationId: "s1" },
-  ]);
-  assert.deepEqual(payload, {
-    code: "KTM-PKR", originId: "s1", destinationId: "s2",
-    isSymmetric: true, notes: "primary", createdBy: "admin-1",
-  });
+const id = () => new mongoose.Types.ObjectId();
+const stop = (_id, overrides = {}) => ({
+  _id, code: "STP", name: "Stop", status: "ACTIVE",
+  verificationStatus: "VERIFIED", isSearchable: true, ...overrides,
 });
 
-test("corridor deletion blocks fleet references before cascades", async (t) => {
-  let variantsQueried = false;
-  patch(t, Corridor, "findById", async () => ({ _id: "c1" }));
-  patch(t, Bus, "countDocuments", async () => 4);
-  patch(t, Variant, "find", async () => { variantsQueried = true; return []; });
-
-  await assert.rejects(
-    service.deleteCorridor("c1"),
-    /REFERENCED:4:4 fleet\(s\) are assigned/
+test("corridor pair identity is direction-neutral", () => {
+  const left = id(); const right = id();
+  assert.equal(
+    buildCorridorPairKey(left, right), buildCorridorPairKey(right, left)
   );
-  assert.equal(variantsQueried, false);
 });
 
-test("corridor deletion blocks saved stop sequences", async (t) => {
-  patch(t, Corridor, "findById", async () => ({ _id: "c1" }));
-  patch(t, Bus, "countDocuments", async () => 0);
-  patch(t, Variant, "find", async () => [{ _id: "v1" }]);
-  patch(t, RouteStop, "countDocuments", async () => 3);
-
-  await assert.rejects(
-    service.deleteCorridor("c1"),
-    /REFERENCED:3:Corridor has variants with stop sequences/
+test("corridor pair identity rejects the same endpoint", () => {
+  const endpoint = id();
+  assert.throws(
+    () => buildCorridorPairKey(endpoint, endpoint),
+    (error) => error.code === "SAME_CORRIDOR_ENDPOINT"
   );
+});
+
+test("migration reports reverse corridor duplicates without merging", () => {
+  const originId = id(); const destinationId = id();
+  const plan = buildCorridorMigrationPlan([
+    { _id: id(), code: "AAA-BBB", originId, destinationId },
+    { _id: id(), code: "BBB-AAA", originId: destinationId,
+      destinationId: originId },
+  ], [stop(originId), stop(destinationId)]);
+  assert.equal(plan.safeToApply, false);
+  assert.equal(plan.identityConflicts.length, 1);
+  assert.equal(plan.identityConflicts[0].matches.length, 2);
+});
+
+test("migration rejects an unusable corridor endpoint", () => {
+  const originId = id(); const destinationId = id();
+  const plan = buildCorridorMigrationPlan([
+    { _id: id(), code: "AAA-BBB", originId, destinationId },
+  ], [stop(originId), stop(destinationId, { isSearchable: false })]);
+  assert.equal(plan.safeToApply, false);
+  assert.match(plan.invalidRecords[0].problems[0], /not active, verified/);
+});
+
+test("corridor mapper exposes province and compatibility endpoint fields", () => {
+  const originId = id(); const destinationId = id();
+  const result = mapCorridor({
+    _id: id(), code: "KTM-MLW", status: "PENDING",
+    originId: stop(originId, { name: "Kathmandu", province: "Bagmati" }),
+    destinationId: stop(destinationId, { name: "Malangwa", province: "Madhesh" }),
+  });
+  assert.equal(result.origin.province, "Bagmati");
+  assert.equal(result.destination.province, "Madhesh");
+  assert.deepEqual(result.originId, result.origin);
+});
+
+test("route requests and discovery cannot create corridors directly", () => {
+  const root = path.resolve(__dirname, "../..");
+  const routeRequest = fs.readFileSync(path.join(
+    root, "controllers/adminController/routeRequestController.js"
+  ), "utf8");
+  const discovery = fs.readFileSync(path.join(
+    root,
+    "src/modules/admin/route-discovery/route-publication-records.service.js"
+  ), "utf8");
+  assert.doesNotMatch(routeRequest, /RouteCorridor\.create|Stop\.create/);
+  assert.doesNotMatch(discovery, /RouteCorridor\.create/);
+  assert.match(routeRequest, /corridorRegistry\.findOrCreateCorridor/);
+  assert.match(discovery, /findOrCreateRegistryCorridor/);
 });

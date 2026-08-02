@@ -8,6 +8,9 @@ const {
   createVariant,
   createRouteStops,
 } = require("./route-publication-records.service.js");
+const {
+  activateCorridorIfReady,
+} = require("../platform-registry/corridor-registry.service.js");
 
 const resolveStops = async (activeStops, adminId) => {
   const resolved = [];
@@ -55,6 +58,7 @@ const publishSession = async (sessionId, publishData = {}, adminId) => {
     adminId
   );
   await createRouteStops(variant, resolvedStops);
+  await activateCorridorIfReady(corridor._id, adminId);
   session.publishedVariant = {
     variantId: variant._id,
     routeStopSequence: resolvedStops.map((entry) => ({

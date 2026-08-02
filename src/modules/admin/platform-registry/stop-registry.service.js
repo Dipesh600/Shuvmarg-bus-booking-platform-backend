@@ -1,30 +1,53 @@
 "use strict";
 
 const Stop = require("../../../../models/stopModel.js");
-const RouteStop = require("../../../../models/routeStopModel.js");
-const BoardingPoint = require("../../../../models/boardingPointsModel.js");
-const OperatorRouteConfig = require("../../../../models/operatorRouteConfigModel.js");
+const {
+  getStopReferenceCounts, hasStopReferences,
+} = require("./stop-reference-counts.service.js");
+const {
+  assertInteractiveMapSelection, coordinateWriteFields,
+} = require("../../../domain/stop/stop-map-selection.js");
 
-async function createStop(data) {
+async function createStop(data, adminId = null) {
   const {
     code, name, type, province, district, municipality,
-    coordinates, aliases, status,
+    aliases, status, isSearchable, isRouteStop, parentStopId,
+    verificationStatus, source
   } = data;
-  if (!name) throw new Error("Stop name is required.");
+  if (!name) {
+    const err = new Error("Stop name is required.");
+    err.code = "VALIDATION_ERROR";
+    err.statusCode = 400;
+    throw err;
+  }
+  assertInteractiveMapSelection(data);
   const stop = {
-    name, type, province, district, municipality, coordinates,
+    name, type, province, district, municipality,
+    ...coordinateWriteFields(data),
     aliases: aliases || [], status: status || "ACTIVE",
+    ...(isSearchable !== undefined && { isSearchable }),
+    ...(isRouteStop !== undefined && { isRouteStop }),
+    ...(parentStopId !== undefined && { parentStopId }),
+    ...(verificationStatus !== undefined && { verificationStatus }),
+    ...(source !== undefined && { source }),
+    ...(adminId && { createdBy: adminId }),
   };
   if (!code) return Stop.createWithUniqueCode(stop);
   const normalizedCode = code.toUpperCase();
   if (await Stop.findOne({ code: normalizedCode })) {
-    throw new Error(`Stop with code "${normalizedCode}" already exists.`);
+    const err = new Error(`Stop with code "${normalizedCode}" already exists.`);
+    err.code = "STOP_CODE_CONFLICT";
+    err.statusCode = 409;
+    throw err;
   }
   return Stop.create({ code, ...stop });
 }
 
 function getAllStops(filter = {}) {
-  return Stop.find(filter).sort({ province: 1, district: 1, name: 1 }).lean();
+  return Stop.find(filter)
+    .populate("parentStopId", "id code name")
+    .sort({ province: 1, district: 1, name: 1 })
+    .lean();
 }
 
 function searchStops(query) {
@@ -40,47 +63,84 @@ function searchStops(query) {
 
 async function getStopByCode(code) {
   const stop = await Stop.findOne({ code: code.toUpperCase() });
-  if (!stop) throw new Error(`Stop "${code}" not found in registry.`);
+  if (!stop) {
+    const err = new Error(`Stop "${code}" not found in registry.`);
+    err.code = "STOP_NOT_FOUND";
+    err.statusCode = 404;
+    throw err;
+  }
   return stop;
 }
 
-function updateStop(id, data) {
+async function updateStop(id, data) {
   const {
     name, type, province, district, municipality, coordinates, status, aliases,
+    isSearchable, isRouteStop, parentStopId, verificationStatus, source
   } = data;
-  const update = {
-    ...(name && { name, _nameLower: name.toLowerCase().trim() }),
-    ...(type && { type }),
-    ...(province !== undefined && { province }),
-    ...(district !== undefined && { district }),
-    ...(municipality !== undefined && { municipality }),
-    ...(coordinates && { coordinates }),
-    ...(status && { status }),
-    ...(aliases && { aliases: Array.isArray(aliases) ? aliases : [] }),
-  };
-  // Preserve legacy behavior: a missing id resolves to null rather than throwing.
-  return Stop.findByIdAndUpdate(id, update, { new: true, runValidators: true });
+
+  if (isRouteStop === false || status === "INACTIVE") {
+    const counts = await getStopReferenceCounts(id);
+    const disablesRouteStop = isRouteStop === false && counts.routeStopCount > 0;
+    const disablesBoardingParent = counts.boardingLocationCount > 0;
+    if (disablesRouteStop || disablesBoardingParent) {
+      const err = new Error(
+        "Cannot disable a route stop while routes or boarding locations use it."
+      );
+      err.code = "STOP_IN_USE";
+      err.statusCode = 409;
+      err.details = counts;
+      throw err;
+    }
+  }
+
+  const stop = await Stop.findById(id);
+  if (!stop) {
+    const err = new Error("Stop not found.");
+    err.code = "STOP_NOT_FOUND";
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (name !== undefined) stop.name = name;
+  if (type !== undefined) stop.type = type;
+  if (province !== undefined) stop.province = province;
+  if (district !== undefined) stop.district = district;
+  if (municipality !== undefined) stop.municipality = municipality;
+  if (coordinates !== undefined) {
+    assertInteractiveMapSelection(data);
+    Object.assign(stop, coordinateWriteFields(data));
+  }
+  if (status !== undefined) stop.status = status;
+  if (aliases !== undefined) stop.aliases = Array.isArray(aliases) ? aliases : [];
+  if (isSearchable !== undefined) stop.isSearchable = isSearchable;
+  if (isRouteStop !== undefined) stop.isRouteStop = isRouteStop;
+  if (parentStopId !== undefined) stop.parentStopId = parentStopId;
+  if (verificationStatus !== undefined) stop.verificationStatus = verificationStatus;
+  if (source !== undefined) stop.source = source;
+
+  await stop.save();
+  return stop;
 }
 
 async function deleteStop(id) {
   const stop = await Stop.findById(id);
-  if (!stop) throw new Error("Stop not found.");
-  const usageCount = await OperatorRouteConfig.countDocuments({
-    $or: [
-      { activeStops: id }, { returnActiveStops: id },
-      { "boardingConfig.stopId": id }, { "timingConfig.stopId": id },
-      { "returnBoardingConfig.stopId": id }, { "returnTimingConfig.stopId": id },
-    ],
-  });
-  if (usageCount > 0) {
-    throw new Error(
-      `REFERENCED:${usageCount}:Stop is actively used by ${usageCount} ` +
-      "operator route(s). Remove it from those operators' fleets first."
-    );
+  if (!stop) {
+    const err = new Error("Stop not found.");
+    err.code = "STOP_NOT_FOUND";
+    err.statusCode = 404;
+    throw err;
   }
+  
+  const counts = await getStopReferenceCounts(id);
+  if (hasStopReferences(counts)) {
+    const err = new Error("Stop is actively used and cannot be deleted.");
+    err.code = "STOP_IN_USE";
+    err.statusCode = 409;
+    err.details = counts;
+    throw err;
+  }
+  
   await Stop.findByIdAndDelete(id);
-  await RouteStop.deleteMany({ stopId: id });
-  await BoardingPoint.deleteMany({ stopId: id });
 }
 
 module.exports = {
