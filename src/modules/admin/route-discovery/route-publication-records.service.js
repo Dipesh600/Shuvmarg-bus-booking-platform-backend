@@ -1,26 +1,19 @@
 "use strict";
 
 const RouteStop = require("../../../../models/routeStopModel.js");
-const RouteCorridor = require("../../../../models/routeCorridorModel.js");
 const RouteVariant = require("../../../../models/routeVariantModel.js");
+const {
+  findOrCreateCorridor: findOrCreateRegistryCorridor,
+} = require("../platform-registry/corridor-registry.service.js");
 
 const findOrCreateCorridor = async (session, origin, destination, adminId) => {
-  let corridor = await RouteCorridor.findOne({
-    originId: origin._id,
-    destinationId: destination._id,
-  });
-  if (!corridor) {
-    corridor = await RouteCorridor.create({
-      code: `${origin.code || "UNK"}-${destination.code || "UNK"}`,
-      originId: origin._id,
-      destinationId: destination._id,
-      isSymmetric: true,
-      status: "ACTIVE",
-      createdBy: adminId,
-      notes: `Auto-created by discovery session ${session._id}`,
-    });
-  }
-  return corridor;
+  return findOrCreateRegistryCorridor({
+    originStopId: origin._id,
+    destinationStopId: destination._id,
+    source: "DISCOVERY",
+    sourceReferenceId: String(session._id),
+    notes: `Created from approved discovery session ${session._id}`,
+  }, adminId);
 };
 
 const createVariant = async (

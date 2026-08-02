@@ -74,8 +74,8 @@ function createTripMapper({ getPresignedUrl, timeToMins }) {
             to:   displayTo,
             distance: null,
             duration: null,
-            distanceKm:      trip.variantId.corridorId?.distanceKm      || 0,
-            durationMinutes: trip.variantId.corridorId?.durationMinutes || 0,
+            distanceKm:      trip.variantId.distanceKm      || 0,
+            durationMinutes: trip.variantId.durationMinutes || 0,
           };
         }
 
