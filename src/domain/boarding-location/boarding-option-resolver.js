@@ -4,6 +4,9 @@ const {
   normalizeBoardingCoordinates,
 } = require("./boarding-location-coordinates.js");
 const { boardingLocationError } = require("./boarding-location-errors.js");
+const {
+  normalizeBoardingAddress,
+} = require("./boarding-location-address.js");
 
 function supportsUsage(option, usage) {
   return option.usage === "BOTH" || option.usage === usage;
@@ -33,7 +36,7 @@ function mapConfiguredOption(option, usage, sourceLayer) {
       name: option.displayName || location.name,
       canonicalName: location.name,
       landmark: location.landmark || null,
-      address: location.address || null,
+      address: normalizeBoardingAddress(location.address),
       reportingInstructions: option.reportingInstructions || null,
       coordinates,
     };

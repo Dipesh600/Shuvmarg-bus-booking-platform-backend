@@ -4,6 +4,7 @@ const { validateCoordinates } = require("../src/domain/stop/stop-coordinate-vali
 const { validateParentHierarchy } = require("../src/domain/stop/stop-parent-validation");
 const { buildCodeCandidates } = require("../src/domain/stop/stop-code-candidates");
 const { normalizeAliases } = require("../src/domain/stop/stop-alias-normalization");
+const { MAP_COORDINATE_SOURCES } = require("../src/domain/stop/stop-map-selection");
 
 const stopSchema = new mongoose.Schema(
   {
@@ -26,6 +27,12 @@ const stopSchema = new mongoose.Schema(
       lat: { type: Number, default: null },
       lng: { type: Number, default: null },
     },
+    coordinateSource: { type: String, enum: MAP_COORDINATE_SOURCES, default: null },
+    coordinateAccuracyMeters: { type: Number, min: 0, default: null },
+    coordinateCapturedAt: { type: Date, default: null },
+    coordinateProvider: { type: String, enum: ["GOOGLE", "MAPBOX"], default: null },
+    coordinatePlaceId: { type: String, trim: true, maxlength: 250, default: null },
+    coordinateSuggestedAddress: { type: String, trim: true, maxlength: 500, default: null },
     verificationStatus: {
       type: String,
       enum: ["PENDING", "VERIFIED", "REJECTED"],

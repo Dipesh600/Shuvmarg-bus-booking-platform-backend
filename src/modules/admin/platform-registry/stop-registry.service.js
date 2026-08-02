@@ -4,11 +4,14 @@ const Stop = require("../../../../models/stopModel.js");
 const {
   getStopReferenceCounts, hasStopReferences,
 } = require("./stop-reference-counts.service.js");
+const {
+  assertInteractiveMapSelection, coordinateWriteFields,
+} = require("../../../domain/stop/stop-map-selection.js");
 
 async function createStop(data, adminId = null) {
   const {
     code, name, type, province, district, municipality,
-    coordinates, aliases, status, isSearchable, isRouteStop, parentStopId,
+    aliases, status, isSearchable, isRouteStop, parentStopId,
     verificationStatus, source
   } = data;
   if (!name) {
@@ -17,8 +20,10 @@ async function createStop(data, adminId = null) {
     err.statusCode = 400;
     throw err;
   }
+  assertInteractiveMapSelection(data);
   const stop = {
-    name, type, province, district, municipality, coordinates,
+    name, type, province, district, municipality,
+    ...coordinateWriteFields(data),
     aliases: aliases || [], status: status || "ACTIVE",
     ...(isSearchable !== undefined && { isSearchable }),
     ...(isRouteStop !== undefined && { isRouteStop }),
@@ -101,7 +106,10 @@ async function updateStop(id, data) {
   if (province !== undefined) stop.province = province;
   if (district !== undefined) stop.district = district;
   if (municipality !== undefined) stop.municipality = municipality;
-  if (coordinates !== undefined) stop.coordinates = coordinates;
+  if (coordinates !== undefined) {
+    assertInteractiveMapSelection(data);
+    Object.assign(stop, coordinateWriteFields(data));
+  }
   if (status !== undefined) stop.status = status;
   if (aliases !== undefined) stop.aliases = Array.isArray(aliases) ? aliases : [];
   if (isSearchable !== undefined) stop.isSearchable = isSearchable;
