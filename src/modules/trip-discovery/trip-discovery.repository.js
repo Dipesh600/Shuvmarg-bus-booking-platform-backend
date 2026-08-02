@@ -29,7 +29,7 @@ async function findTripsWithPopulate(tripQuery, skip, limit) {
       select: "name direction",
       populate: {
         path: "corridorId",
-        select: "distanceKm durationMinutes",
+        select: "distanceKm durationMinutes originId destinationId",
         populate: [
           { path: "originId",      select: "name code" },
           { path: "destinationId", select: "name code" }

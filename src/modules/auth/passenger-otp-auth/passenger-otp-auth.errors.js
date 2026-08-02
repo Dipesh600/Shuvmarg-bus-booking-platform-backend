@@ -90,6 +90,13 @@ const accountRestrictedError = () =>
     errorCode: 'ACCOUNT_RESTRICTED',
   });
 
+const smsSendError = () =>
+  new AppError('There was a problem sending your verification code. Please try again.', 502, {
+    success: false,
+    message: 'There was a problem sending your verification code. Please try again.',
+    errorCode: 'SMS_DELIVERY_FAILED',
+  });
+
 module.exports = {
   missingPhoneError,
   invalidPhoneError,
@@ -101,4 +108,5 @@ module.exports = {
   forcePasswordChangeError,
   unexpectedPassengerStateError,
   accountRestrictedError,
+  smsSendError,
 };
