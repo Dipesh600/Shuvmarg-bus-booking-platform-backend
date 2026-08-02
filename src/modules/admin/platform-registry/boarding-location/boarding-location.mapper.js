@@ -1,5 +1,9 @@
 "use strict";
 
+const {
+  normalizeBoardingAddress, normalizeBoardingProviderMetadata,
+} = require("../../../../domain/boarding-location/boarding-location-address.js");
+
 function idOf(value) {
   return value?._id || value?.id || value || null;
 }
@@ -22,7 +26,7 @@ function mapBoardingLocation(location) {
     name: source.name,
     aliases: source.aliases || [],
     landmark: source.landmark || null,
-    address: source.address || null,
+    address: normalizeBoardingAddress(source.address),
     locationType: source.locationType || "ROADSIDE",
     gateOrBay: source.gateOrBay || null,
     directionHint: source.directionHint || null,
@@ -30,7 +34,7 @@ function mapBoardingLocation(location) {
     coordinateSource: source.coordinateSource || "MAP_PIN",
     coordinateAccuracyMeters: source.coordinateAccuracyMeters ?? null,
     capturedAt: source.capturedAt || null,
-    providerMetadata: source.providerMetadata || null,
+    providerMetadata: normalizeBoardingProviderMetadata(source.providerMetadata) || null,
     distanceMeters: source.distanceMeters ?? null,
     verificationStatus: source.verificationStatus,
     verificationMethod: source.verificationMethod || null,

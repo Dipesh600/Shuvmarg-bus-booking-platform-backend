@@ -27,11 +27,48 @@ test("stop registry creates explicit and generated stop codes", async (t) => {
     return data;
   });
 
-  await service.createStop({ code: "ktm", name: "Kathmandu" });
-  await service.createStop({ name: "Pokhara" });
+  const mapSelection = {
+    coordinates: { lat: 27.7172, lng: 85.324 },
+    coordinateSource: "GOOGLE_PLACE",
+    coordinateProvider: "GOOGLE",
+    coordinatePlaceId: "google-place-1",
+  };
+  await service.createStop({ code: "ktm", name: "Kathmandu", ...mapSelection });
+  await service.createStop({ name: "Pokhara", ...mapSelection });
   assert.equal(created[0].code, "ktm");
   assert.equal(created[0].status, "ACTIVE");
+  assert.equal(created[0].coordinateSource, "GOOGLE_PLACE");
+  assert.equal(created[0].coordinatePlaceId, "google-place-1");
   assert.equal(Object.hasOwn(generated, "code"), false);
+});
+
+test("interactive stop creation requires a map-selected position", async () => {
+  await assert.rejects(service.createStop({ name: "Missing map" }), {
+    code: "STOP_MAP_LOCATION_REQUIRED",
+  });
+  await assert.rejects(service.createStop({
+    name: "Typed coordinates",
+    coordinates: { lat: 27.7, lng: 85.3 },
+  }), { code: "INVALID_STOP_COORDINATE_SOURCE" });
+});
+
+test("map-based coordinate updates retain capture provenance", async (t) => {
+  const saved = { saveCalls: 0 };
+  const stop = { save: async () => { saved.saveCalls += 1; } };
+  patch(t, Stop, "findById", async () => stop);
+
+  await service.updateStop("507f1f77bcf86cd799439011", {
+    coordinates: { lat: 27.693, lng: 85.281 },
+    coordinateSource: "MAP_PIN",
+    coordinateProvider: "GOOGLE",
+    coordinateSuggestedAddress: "Kalanki, Kathmandu, Nepal",
+  });
+
+  assert.deepEqual(stop.coordinates, { lat: 27.693, lng: 85.281 });
+  assert.equal(stop.coordinateSource, "MAP_PIN");
+  assert.equal(stop.coordinateProvider, "GOOGLE");
+  assert.equal(stop.coordinateSuggestedAddress, "Kalanki, Kathmandu, Nepal");
+  assert.equal(saved.saveCalls, 1);
 });
 
 test("stop registry blocks referenced deletion before any write", async (t) => {

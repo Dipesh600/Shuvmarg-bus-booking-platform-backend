@@ -4,6 +4,9 @@ const {
   boardingLocationError,
 } = require("../../../../domain/boarding-location/boarding-location-errors.js");
 const { mapBoardingLocation } = require("./boarding-location.mapper.js");
+const {
+  normalizeBoardingAddress, normalizeBoardingProviderMetadata,
+} = require("../../../../domain/boarding-location/boarding-location-address.js");
 
 function mapBoardingLocationWriteError(error) {
   if (error?.code !== 11000) throw error;
@@ -48,7 +51,7 @@ function buildBoardingLocationPayload(data, adminId, stopId) {
     name: data.name,
     aliases: data.aliases || [],
     landmark: data.landmark,
-    address: data.address,
+    address: normalizeBoardingAddress(data.address),
     locationType: data.locationType,
     gateOrBay: data.gateOrBay,
     directionHint: data.directionHint,
@@ -56,7 +59,7 @@ function buildBoardingLocationPayload(data, adminId, stopId) {
     coordinateSource: data.coordinateSource || "MAP_PIN",
     coordinateAccuracyMeters: data.coordinateAccuracyMeters,
     capturedAt: data.capturedAt,
-    providerMetadata: data.providerMetadata,
+    providerMetadata: normalizeBoardingProviderMetadata(data.providerMetadata),
     ...buildVerificationFields(data, adminId),
     nearbyReview: data.nearbyReview?.acknowledged ? {
       reason: data.nearbyReview.reason || "Reviewed nearby locations",
