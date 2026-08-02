@@ -1,10 +1,9 @@
 const mongoose = require("mongoose");
 const RouteRequest         = require("../../models/routeRequestModel.js");
 const Bus                  = require("../../models/fleetModel.js");
-const RouteCorridor        = require("../../models/routeCorridorModel.js");
-const Stop                 = require("../../models/stopModel.js");
-const RouteVariant         = require("../../models/routeVariantModel.js");
-const OperatorRouteConfig  = require("../../models/operatorRouteConfigModel.js");
+const corridorRegistry = require(
+    "../../src/modules/admin/platform-registry/corridor-registry.service.js"
+);
 
 /**
  * GET /admin/registry/route-requests
@@ -29,8 +28,8 @@ const getAllRouteRequests = async (req, res) => {
                     path: "corridorId",
                     select: "code originId destinationId status",
                     populate: [
-                        { path: "originId", select: "name code city" },
-                        { path: "destinationId", select: "name code city" }
+                        { path: "originId", select: "name code municipality district province" },
+                        { path: "destinationId", select: "name code municipality district province" }
                     ]
                 }
             })
@@ -70,8 +69,8 @@ const getRouteRequestById = async (req, res) => {
                     path: "corridorId",
                     select: "code originId destinationId status",
                     populate: [
-                        { path: "originId", select: "name code city" },
-                        { path: "destinationId", select: "name code city" }
+                        { path: "originId", select: "name code municipality district province" },
+                        { path: "destinationId", select: "name code municipality district province" }
                     ]
                 }
             })
@@ -96,7 +95,8 @@ const getRouteRequestById = async (req, res) => {
  * Approve body:
  *   { action: "APPROVE", corridorId: "<existing>", adminNotes?: "" }
  *   OR to create a new corridor inline:
- *   { action: "APPROVE", createCorridor: true, originCode: "KTM", destinationCode: "BRD", adminNotes?: "" }
+ *   { action: "APPROVE", createCorridor: true,
+ *     originStopId: "...", destinationStopId: "...", adminNotes?: "" }
  *
  * Reject body:
  *   { action: "REJECT", rejectionReason: "...", adminNotes?: "" }
@@ -104,7 +104,11 @@ const getRouteRequestById = async (req, res) => {
 const reviewRouteRequest = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, corridorId, createCorridor, originCode, destinationCode, rejectionReason, adminNotes } = req.body;
+        const {
+            action, corridorId, createCorridor,
+            originStopId, destinationStopId, originCode, destinationCode,
+            rejectionReason, adminNotes,
+        } = req.body;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({ success: false, message: "Invalid route request ID." });
@@ -130,88 +134,12 @@ const reviewRouteRequest = async (req, res) => {
         if (action.toUpperCase() === "APPROVE") {
             let resolvedCorridorId = corridorId || null;
 
-            // Create a new corridor inline if requested
             if (createCorridor) {
-                if (!originCode || !destinationCode) {
-                    return res.status(400).json({
-                        success: false,
-                        message: "originCode and destinationCode are required when creating a new corridor.",
-                    });
-                }
-
-                // Resolve or create Stop documents for origin & destination
-                // Use the operator-provided city names from the route request as human-readable stop names
-                const getOrCreateStop = async (code, cityName) => {
-                    let stop = await Stop.findOne({ code: code.toUpperCase().trim() });
-                    if (!stop) {
-                        stop = await Stop.create({
-                            code: code.toUpperCase().trim(),
-                            name: cityName ? cityName.trim() : code.trim(),
-                            type: "CITY",
-                        });
-                    }
-                    return stop;
-                };
-
-                const originStop = await getOrCreateStop(originCode, routeRequest.originCity);
-                const destinationStop = await getOrCreateStop(destinationCode, routeRequest.destinationCity);
-
-                // Check if this corridor already exists
-                let corridor = await RouteCorridor.findOne({
-                    $or: [
-                        { originId: originStop._id, destinationId: destinationStop._id },
-                        { originId: destinationStop._id, destinationId: originStop._id, isSymmetric: true },
-                    ],
-                });
-
-                if (!corridor) {
-                    const code = `${originCode.toUpperCase().trim()}-${destinationCode.toUpperCase().trim()}`;
-                    corridor = await RouteCorridor.create({
-                        code,
-                        originId: originStop._id,
-                        destinationId: destinationStop._id,
-                        isSymmetric: true,
-                        status: "ACTIVE",
-                        createdBy: req.admin?._id || null,
-                        notes: `Auto-created via Route Request #${id}`,
-                    });
-
-                    // D2 FIX: Create FORWARD and RETURN variants bidirectionally linked
-                    const forwardVariant = await RouteVariant.create({
-                        code: `${code}-STANDARD-FWD`,
-                        corridorId: corridor._id,
-                        name:      "Standard Route",
-                        type:      "STANDARD",
-                        direction: "FORWARD",
-                    });
-
-                    const returnVariant = await RouteVariant.create({
-                        code:            `${code}-STANDARD-RTN`,
-                        corridorId:      corridor._id,
-                        name:            `${destinationStop.name} to ${originStop.name}`,
-                        type:            "STANDARD",
-                        direction:       "RETURN",
-                        returnVariantId: forwardVariant._id,   // Return points to Forward
-                    });
-
-                    // Back-link Forward to Return
-                    await RouteVariant.findByIdAndUpdate(
-                        forwardVariant._id,
-                        { returnVariantId: returnVariant._id }
-                    );
-
-                    // D2 FIX: Auto-create a minimal OperatorRouteConfig for the brand
-                    // This satisfies the wizard's routeConfigured step immediately.
-                    // Admin can enrich it later (stops, timing, boarding points) via RouteConfigModal.
-                    if (routeRequest.brandId) {
-                        await OperatorRouteConfig.findOneAndUpdate(
-                            { brandId: routeRequest.brandId, variantId: forwardVariant._id },
-                            { brandId: routeRequest.brandId, variantId: forwardVariant._id, status: "ACTIVE", notes: "Auto-created on route request approval." },
-                            { upsert: true, new: true, setDefaultsOnInsert: true }
-                        );
-                    }
-                }
-
+                const corridor = await corridorRegistry.findOrCreateCorridor({
+                    originStopId, destinationStopId, originCode, destinationCode,
+                    source: "ROUTE_REQUEST", sourceReferenceId: id,
+                    notes: `Created from route request ${id}`,
+                }, req.adminInfo?.id || req.admin?._id || null);
                 resolvedCorridorId = corridor._id;
             }
 
@@ -222,11 +150,7 @@ const reviewRouteRequest = async (req, res) => {
                 });
             }
 
-            // Verify the corridor exists
-            const corridorExists = await RouteCorridor.findById(resolvedCorridorId).lean();
-            if (!corridorExists) {
-                return res.status(404).json({ success: false, message: "Corridor not found in the Platform Registry." });
-            }
+            await corridorRegistry.getCorridorById(resolvedCorridorId);
 
             // Link corridor to the fleet
             if (routeRequest.fleetId) {
@@ -237,7 +161,7 @@ const reviewRouteRequest = async (req, res) => {
             routeRequest.status = "APPROVED";
             routeRequest.adminNotes = adminNotes || "";
             routeRequest.resolvedAt = new Date();
-            routeRequest.resolvedBy = req.admin?._id || null;
+            routeRequest.resolvedBy = req.adminInfo?.id || req.admin?._id || null;
             await routeRequest.save();
 
             return res.status(200).json({
@@ -256,7 +180,7 @@ const reviewRouteRequest = async (req, res) => {
         routeRequest.rejectionReason = rejectionReason.trim();
         routeRequest.adminNotes = adminNotes || "";
         routeRequest.resolvedAt = new Date();
-        routeRequest.resolvedBy = req.admin?._id || null;
+        routeRequest.resolvedBy = req.adminInfo?.id || req.admin?._id || null;
         await routeRequest.save();
 
         return res.status(200).json({
@@ -267,8 +191,11 @@ const reviewRouteRequest = async (req, res) => {
 
     } catch (error) {
         console.error("reviewRouteRequest error:", error);
-        if (error.code === 11000) {
-            return res.status(409).json({ success: false, message: "A corridor with that code already exists. Please select it instead." });
+        if (error.statusCode) {
+            return res.status(error.statusCode).json({
+                success: false, code: error.code, message: error.message,
+                details: error.details,
+            });
         }
         return res.status(500).json({ success: false, message: "Internal Server Error" });
     }

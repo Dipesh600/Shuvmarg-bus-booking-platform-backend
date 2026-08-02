@@ -1,10 +1,13 @@
 const mongoose = require("mongoose");
+const {
+    buildCorridorPairKey,
+} = require("../src/domain/corridor/corridor-identity.js");
 
 /**
  * LAYER 1: Route Corridor (Platform Controlled)
  *
- * A corridor is the highest-level concept — just the declared path
- * between two cities. NO stops. NO variants. Just identity.
+ * A corridor is the direction-neutral official connection between two
+ * searchable registry stops. It owns identity, not the physical path.
  *
  * Example: Kathmandu ↔ Bardibas
  *
@@ -31,9 +34,13 @@ const routeCorridorSchema = new mongoose.Schema(
             ref: "Stop",
             required: true,
         },
-        // If true, this corridor implies the return trip automatically
-        // Platform doesn't need to create a separate KTM→BRD and BRD→KTM corridor
-        // Instead, VARIANTS define direction (FORWARD vs RETURN)
+        _endpointPairKey: {
+            type: String,
+            required: true,
+            select: false,
+        },
+        // Deprecated compatibility field. Corridors are always direction-neutral;
+        // variants define FORWARD and RETURN availability.
         isSymmetric: {
             type: Boolean,
             default: true,
@@ -41,11 +48,22 @@ const routeCorridorSchema = new mongoose.Schema(
         status: {
             type: String,
             enum: ["ACTIVE", "INACTIVE", "PENDING"],
-            default: "ACTIVE",
+            default: "PENDING",
         },
+        source: {
+            type: String,
+            enum: ["ADMIN", "ROUTE_REQUEST", "DISCOVERY"],
+            default: "ADMIN",
+        },
+        sourceReferenceId: { type: String, trim: true, default: null },
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Admin",
+        },
+        updatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Admin",
+            default: null,
         },
         notes: {
             type: String,
@@ -55,8 +73,27 @@ const routeCorridorSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// Composite index: prevent duplicate corridors between same two cities
-routeCorridorSchema.index({ originId: 1, destinationId: 1 }, { unique: true });
+routeCorridorSchema.pre("validate", function (next) {
+    try {
+        this._endpointPairKey = buildCorridorPairKey(
+            this.originId, this.destinationId
+        );
+        this.isSymmetric = true;
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Pair identity is direction-neutral: A↔B and B↔A are the same corridor.
+routeCorridorSchema.index(
+    { _endpointPairKey: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { _endpointPairKey: { $type: "string" } },
+    }
+);
+routeCorridorSchema.index({ originId: 1, destinationId: 1 });
 routeCorridorSchema.index({ status: 1 });
 
 module.exports = mongoose.model("RouteCorridor", routeCorridorSchema);
