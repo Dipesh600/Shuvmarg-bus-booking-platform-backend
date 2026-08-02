@@ -52,6 +52,10 @@ const isOtpCooldown = (err) =>
 const otpCooldownSeconds = (err) =>
   parseInt(String(err.message).split(':')[1], 10) || 60;
 
+/** Sparrow SMS Gateway Error — thrown by sparro-otp.js on any delivery failure */
+const isSparrowSmsError = (err) =>
+  Boolean(err && err.message && err.message.startsWith('Sparrow SMS Gateway Error:'));
+
 module.exports = {
   PASSENGER_AUTH_PURPOSE,
   PASSENGER_AUTH_SMS_PREFIX,
@@ -64,4 +68,5 @@ module.exports = {
   otpBlockedMinutes,
   isOtpCooldown,
   otpCooldownSeconds,
+  isSparrowSmsError,
 };
