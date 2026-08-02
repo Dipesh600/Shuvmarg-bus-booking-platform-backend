@@ -14,7 +14,7 @@ function readVerificationConfig(env = process.env) {
     baseUrl: env.ESEWA_STATUS_URL || (
       production
         ? 'https://epay.esewa.com.np/api/epay/transaction/status/'
-        : 'https://uat.esewa.com.np/api/epay/transaction/status/'
+        : 'https://rc-epay.esewa.com.np/api/epay/transaction/status/'
     ),
   };
 }

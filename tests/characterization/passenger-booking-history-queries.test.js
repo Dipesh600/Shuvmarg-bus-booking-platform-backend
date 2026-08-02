@@ -60,9 +60,10 @@ describe("passenger-booking-history queries characterization", () => {
       populate: [
         {
           path: "busId",
-          select: "busName busNumber busType vehicleType totalSeats seatLayout amenitiesId boardingPointId fleetImages",
+          select: "busName busNumber busType vehicleType totalSeats seatLayout amenitiesId amenityIds boardingPointId fleetImages",
           populate: [
-            { path: "amenitiesId", select: "amenities" },
+            { path: "amenitiesId", select: "name icon type description" },
+            { path: "amenityIds", select: "name icon type description" },
             { path: "boardingPointId", select: "city boardingPoints description" },
           ],
         },

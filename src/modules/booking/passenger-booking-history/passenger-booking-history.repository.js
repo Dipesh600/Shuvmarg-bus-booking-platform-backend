@@ -11,11 +11,15 @@ const findBookings = async (userId) => {
         {
           path: "busId",
           select:
-            "busName busNumber busType vehicleType totalSeats seatLayout amenitiesId boardingPointId fleetImages",
+            "busName busNumber busType vehicleType totalSeats seatLayout amenitiesId amenityIds boardingPointId fleetImages",
           populate: [
             {
               path: "amenitiesId",
-              select: "amenities",
+              select: "name icon type description",
+            },
+            {
+              path: "amenityIds",
+              select: "name icon type description",
             },
             {
               path: "boardingPointId",

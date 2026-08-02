@@ -4,6 +4,9 @@ const Stop = require("../../../../models/stopModel.js");
 const RouteStop = require("../../../../models/routeStopModel.js");
 const RouteVariant = require("../../../../models/routeVariantModel.js");
 const { getVariantById } = require("./route-variant-registry.service.js");
+const {
+  activateCorridorIfReady,
+} = require("./corridor-registry.service.js");
 
 function mappedStops(variantId, stops, stopMap) {
   return stops.map((stop) => ({
@@ -61,6 +64,8 @@ async function setVariantStops(variantId, stops) {
     mappedStops(variantId, stops, stopMap)
   );
   await replaceLinkedSequence(variant, stops, stopMap);
+  const corridorId = variant.corridorId?._id || variant.corridorId;
+  if (corridorId) await activateCorridorIfReady(corridorId);
   return result;
 }
 

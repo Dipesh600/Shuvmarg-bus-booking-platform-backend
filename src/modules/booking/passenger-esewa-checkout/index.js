@@ -14,6 +14,7 @@ const confirmation = require(
   '../passenger-booking-confirmation-orchestrator/passenger-booking-confirmation.composition.js'
 );
 const dispute = require('../passenger-payment-dispute');
+const boardingOptions = require('../passenger-boarding-options');
 const { readEsewaCheckoutConfig } = require(
   './passenger-esewa-checkout.config.js'
 );
@@ -56,6 +57,7 @@ const initiate = createPassengerEsewaCheckoutInitiationService({
   signature,
   policy,
   tripPolicy,
+  boardingOptions: boardingOptions.resolvePassengerBoardingOptions,
 });
 const recovery = createPassengerEsewaCheckoutRecoveryService({
   repository,

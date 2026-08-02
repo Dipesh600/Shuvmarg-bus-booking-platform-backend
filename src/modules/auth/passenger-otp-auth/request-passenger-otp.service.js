@@ -66,6 +66,9 @@ const requestPassengerOTP = async ({ rawPhone }) => {
     if (policy.isOtpCooldown(err)) {
       throw errors.otpSendCooldownError(policy.otpCooldownSeconds(err));
     }
+    if (policy.isSparrowSmsError(err)) {
+      throw errors.smsSendError();
+    }
     throw err;
   }
 

@@ -9,8 +9,8 @@ function populateFleetQuery(query) {
       path: "corridorId",
       select: "code originId destinationId status",
       populate: [
-        { path: "originId", select: "name code city" },
-        { path: "destinationId", select: "name code city" },
+        { path: "originId", select: "name code municipality district province" },
+        { path: "destinationId", select: "name code municipality district province" },
       ],
     })
     .populate("routeRequestId");

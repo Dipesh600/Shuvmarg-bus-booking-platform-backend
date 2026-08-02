@@ -17,9 +17,10 @@ async function findTripsWithPopulate(tripQuery, skip, limit) {
     .limit(limit)
     .populate({
       path: "busId",
-      select: "busName busNumber busType vehicleType totalSeats seatLayout fleetImages averageRating totalReviews amenitiesId boardingPointId",
+      select: "busName busNumber busType vehicleType totalSeats seatLayout fleetImages averageRating totalReviews amenitiesId amenityIds boardingPointId",
       populate: [
-        { path: "amenitiesId",     select: "amenities -_id" },
+        { path: "amenitiesId" },
+        { path: "amenityIds" },
         { path: "boardingPointId", select: "boardingPoints droppingPoints -_id" }
       ]
     })
@@ -28,7 +29,7 @@ async function findTripsWithPopulate(tripQuery, skip, limit) {
       select: "name direction",
       populate: {
         path: "corridorId",
-        select: "distanceKm durationMinutes",
+        select: "distanceKm durationMinutes originId destinationId",
         populate: [
           { path: "originId",      select: "name code" },
           { path: "destinationId", select: "name code" }
@@ -100,6 +101,22 @@ async function findRouteStops(originIds, destIds) {
   return { originRouteStops, destRouteStops };
 }
 
+const mongoose = require("mongoose");
+
+function isValidObjectId(id) {
+  return Boolean(id) && mongoose.Types.ObjectId.isValid(id);
+}
+
+async function findStopById(id) {
+  if (!isValidObjectId(id)) return null;
+  return await Stop.findById(id).lean();
+}
+
+async function findChildStops(parentStopId) {
+  if (!isValidObjectId(parentStopId)) return [];
+  return await Stop.find({ parentStopId, status: "ACTIVE" }).select("_id name code").lean();
+}
+
 module.exports = {
   countTrips,
   findTripsWithPopulate,
@@ -108,5 +125,8 @@ module.exports = {
   findStopsByNameOrCode,
   findCorridors,
   findVariants,
-  findRouteStops
+  findRouteStops,
+  findStopById,
+  findChildStops,
+  isValidObjectId,
 };
