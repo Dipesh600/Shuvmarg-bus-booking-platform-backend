@@ -18,7 +18,14 @@ const LOCAL_ORIGINS = [
  * @returns {string[]}
  */
 const parseConfiguredOrigins = (originString = "") =>
-  originString.split(",").map((origin) => origin.trim()).filter(Boolean);
+  Array.from(
+    new Set(
+      originString
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    )
+  );
 
 /**
  * Build the Express cors() options object.

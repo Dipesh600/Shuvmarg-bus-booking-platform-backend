@@ -63,6 +63,16 @@ describe("parseConfiguredOrigins", () => {
     assert.equal(result.length, 2);
   });
 
+  it("deduplicates repeated origins", () => {
+    const result = parseConfiguredOrigins(
+      "https://staging.shuvmarg.com, https://staging.shuvmarg.com ,https://admin-staging.shuvmarg.com"
+    );
+    assert.deepEqual(result, [
+      "https://staging.shuvmarg.com",
+      "https://admin-staging.shuvmarg.com",
+    ]);
+  });
+
   it("returns empty array for empty string or undefined", () => {
     assert.deepEqual(parseConfiguredOrigins(""), []);
     assert.deepEqual(parseConfiguredOrigins(), []);
