@@ -4,7 +4,7 @@
  * tests/unit/auth/registration-verification-envelope.test.js
  *
  * Unit tests verifying that verifyOTP returns verificationToken flat on the response body root.
- * Follows established passenger-otp-controller test pattern with safe restore array patching.
+ * Stubs lead repositories to avoid real MongoDB side effects or buffering timeouts.
  */
 
 const { createTestSecret } = require('../../helpers/security-test-values');
@@ -19,7 +19,10 @@ const otpHelper = require('../../../utils/otpHelper');
 const phoneGuard = require('../../../utils/phoneGuard');
 
 const agentOtpService = require('../../../src/modules/agent/auth/registration/agent-registration-otp.service');
+const agentLeadRepo = require('../../../src/modules/agent/auth/registration/agent-registration-lead.repository');
+
 const busOwnerOtpService = require('../../../src/modules/bus-owner/auth/registration/bus-owner-registration-otp.service');
+const busOwnerLeadRepo = require('../../../src/modules/bus-owner/auth/registration/bus-owner-registration-lead.repository');
 
 const patch = (obj, key, fn, restore) => {
   const old = obj[key];
@@ -34,6 +37,7 @@ test('verifyOTP response envelope contract', { concurrency: false }, async (t) =
     const restore = [];
     patch(otpHelper, 'verifyOTPCode', async () => ({ valid: true }), restore);
     patch(phoneGuard, 'checkPhoneForRole', async () => ({ exists: false, hasRole: false, user: null }), restore);
+    patch(agentLeadRepo, 'upsertOtpVerifiedLead', async () => ({}), restore);
 
     try {
       const result = await agentOtpService.verifyOTP({ phone: PHONE, otp: '123456' });
@@ -53,6 +57,7 @@ test('verifyOTP response envelope contract', { concurrency: false }, async (t) =
     const restore = [];
     patch(otpHelper, 'verifyOTPCode', async () => ({ valid: true }), restore);
     patch(phoneGuard, 'checkPhoneForRole', async () => ({ exists: false, hasRole: false, user: null }), restore);
+    patch(busOwnerLeadRepo, 'upsertOtpVerifiedLead', async () => ({}), restore);
 
     try {
       const result = await busOwnerOtpService.verifyOTP({ phone: PHONE, otp: '123456' });
