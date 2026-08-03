@@ -33,8 +33,15 @@ const otpCooldownError = (seconds) => bodyError(
   { errorCode: 'OTP_COOLDOWN', retryAfterSeconds: seconds },
 );
 
+const accountNotFoundError = () => bodyError(
+  'No bus owner account found with this phone number.',
+  404,
+  { code: 'ACCOUNT_NOT_FOUND' },
+);
+
 module.exports = {
   missingPhoneError,
+  accountNotFoundError,
   missingVerifyInputError,
   missingResetInputError,
   invalidOtpLengthError,
