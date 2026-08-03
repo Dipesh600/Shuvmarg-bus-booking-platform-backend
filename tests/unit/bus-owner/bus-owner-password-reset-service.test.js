@@ -43,7 +43,7 @@ test('bus-owner password-reset service preserves orchestration', async (t) => {
         'normalize:raw', 'latency:600', 'find:9800000000',
         'role:9800000000:busOwner', 'otp:stored-phone:BUSOWNER_PASSWORD_RESET',
       ]);
-      assert.equal(result.responseBody.message, 'If an account exists, OTP has been sent.');
+      assert.equal(result.responseBody.message, 'OTP sent successfully. Please check your phone.');
     } finally { restore.reverse().forEach((fn) => fn()); }
   });
 
