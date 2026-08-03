@@ -12,15 +12,45 @@ const LOCAL_ORIGINS = [
   "http://localhost:4173",
 ];
 
-const parseConfiguredOrigins = (frontendUrl = "") =>
-  frontendUrl.split(",").map((origin) => origin.trim()).filter(Boolean);
+/**
+ * Split a comma-separated origin string into a trimmed, de-duped array.
+ * @param {string} [originString=""]
+ * @returns {string[]}
+ */
+const parseConfiguredOrigins = (originString = "") =>
+  Array.from(
+    new Set(
+      originString
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    )
+  );
 
+/**
+ * Build the Express cors() options object.
+ *
+ * Origin resolution order (first non-empty value wins):
+ *   1. CORS_ALLOWED_ORIGINS — recommended variable for all new / staging deployments
+ *   2. FRONTEND_URL         — legacy variable; retained for backward compatibility with
+ *                             existing Oracle staging/production configurations
+ *
+ * Both accept comma-separated lists of full origin strings, e.g.:
+ *   CORS_ALLOWED_ORIGINS="https://staging.shuvmarg.com,https://admin-staging.shuvmarg.com"
+ *
+ * @param {{ corsAllowedOrigins?: string, frontendUrl?: string }} [overrides]
+ */
 const createCorsOptions = ({
-  frontendUrl = process.env.FRONTEND_URL || "",
+  corsAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS,
+  frontendUrl       = process.env.FRONTEND_URL,
 } = {}) => {
+  const primary = (corsAllowedOrigins ?? "").trim();
+  const fallback = (frontendUrl ?? "").trim();
+  const configuredEnv = primary || fallback;
+
   const allowedOrigins = new Set([
     ...LOCAL_ORIGINS,
-    ...parseConfiguredOrigins(frontendUrl),
+    ...parseConfiguredOrigins(configuredEnv),
   ]);
 
   return {
