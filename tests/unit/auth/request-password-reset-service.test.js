@@ -23,16 +23,18 @@ test('Unit: requestPasswordReset service', async (t) => {
     }
   });
 
-  await t.test('unknown user → generic 200 no OTP sent', async () => {
+  await t.test('unknown user → 404 AppError no OTP sent', async () => {
     const origFind = repository.findForResetRequest;
     const origSend = otpHelper.createAndSendOTP;
     let sendCalled = false;
     repository.findForResetRequest = async () => null;
     otpHelper.createAndSendOTP = async () => { sendCalled = true; };
     try {
-      const result = await service.requestPasswordReset({ emailOrPhone: '9800003301' });
-      assert.equal(result.statusCode, 200);
-      assert.equal(result.responseBody.status, true);
+      await service.requestPasswordReset({ emailOrPhone: '9800003301' });
+      assert.fail('should throw 404');
+    } catch (e) {
+      assert.equal(e.statusCode, 404);
+      assert.equal(e.responseBody.status, false);
       assert.equal(sendCalled, false);
     } finally {
       repository.findForResetRequest = origFind;
@@ -61,12 +63,12 @@ test('Unit: requestPasswordReset service', async (t) => {
     const origFind = repository.findForResetRequest;
     const origLatency = enumGuard.withMinimumLatency;
     let capturedMin;
-    repository.findForResetRequest = async () => null;
+    repository.findForResetRequest = async () => ({ phone: '9800003303' });
     enumGuard.withMinimumLatency = async (fn, min) => { capturedMin = min; return fn(); };
     try {
       await service.requestPasswordReset({ emailOrPhone: '9800003303' });
       assert.equal(capturedMin, 600);
-    } finally {
+    } catch (e) {} finally {
       repository.findForResetRequest = origFind;
       enumGuard.withMinimumLatency = origLatency;
     }
