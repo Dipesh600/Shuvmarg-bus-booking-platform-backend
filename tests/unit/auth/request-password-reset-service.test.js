@@ -62,6 +62,7 @@ test('Unit: requestPasswordReset service', async (t) => {
   await t.test('withMinimumLatency called with 600', async () => {
     const origFind = repository.findForResetRequest;
     const origLatency = enumGuard.withMinimumLatency;
+    const origSend = otpHelper.createAndSendOTP;
     let capturedMin;
     repository.findForResetRequest = async () => ({ phone: '9800003303' });
     enumGuard.withMinimumLatency = async (fn, min) => { capturedMin = min; return fn(); };
@@ -71,6 +72,7 @@ test('Unit: requestPasswordReset service', async (t) => {
     } catch (e) {} finally {
       repository.findForResetRequest = origFind;
       enumGuard.withMinimumLatency = origLatency;
+      otpHelper.createAndSendOTP = origSend;
     }
   });
 
