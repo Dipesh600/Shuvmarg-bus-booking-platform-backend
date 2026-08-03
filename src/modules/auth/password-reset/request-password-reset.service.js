@@ -26,13 +26,18 @@ const requestPasswordReset = async ({ emailOrPhone }) => {
     const user = await repository.findForResetRequest(emailOrPhone, normalizedPhone);
 
     await enumGuard.withMinimumLatency(async () => {
-      if (!user) return;
+      if (!user) {
+        throw new AppError('Account Not Found', 404, {
+          status: false,
+          message: 'No account found with this phone number. Please check the number or sign up.',
+        });
+      }
       await otpHelper.createAndSendOTP(user.phone, 'PASSWORD_RESET');
     }, 600);
 
     return {
       statusCode: 200,
-      responseBody: { status: true, message: 'If an account exists, OTP has been sent.' },
+      responseBody: { status: true, message: 'OTP sent successfully. Please check your phone.' },
     };
   } catch (err) {
     if (err instanceof AppError) throw err;
