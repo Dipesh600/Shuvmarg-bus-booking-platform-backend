@@ -55,7 +55,7 @@ app.options("/{*splat}", cors(corsOptions));
 
 // ── Security Middlewares ──────────────────────────────────────────────────────
 app.use(helmet());
-
+app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
 
 
 // NoSQL Injection Protection — safe wrapper that avoids the

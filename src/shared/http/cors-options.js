@@ -34,11 +34,12 @@ const parseConfiguredOrigins = (originString = "") =>
  * @param {{ corsAllowedOrigins?: string, frontendUrl?: string }} [overrides]
  */
 const createCorsOptions = ({
-  corsAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS || "",
-  frontendUrl       = process.env.FRONTEND_URL || "",
+  corsAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS,
+  frontendUrl       = process.env.FRONTEND_URL,
 } = {}) => {
-  // CORS_ALLOWED_ORIGINS takes precedence; fall back to FRONTEND_URL.
-  const configuredEnv = corsAllowedOrigins || frontendUrl;
+  const primary = (corsAllowedOrigins ?? "").trim();
+  const fallback = (frontendUrl ?? "").trim();
+  const configuredEnv = primary || fallback;
 
   const allowedOrigins = new Set([
     ...LOCAL_ORIGINS,
