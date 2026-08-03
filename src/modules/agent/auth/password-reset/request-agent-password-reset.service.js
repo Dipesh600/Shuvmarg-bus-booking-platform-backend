@@ -20,12 +20,18 @@ const requestPasswordReset = async ({ rawPhone }) => {
   if (!phone) throw errors.missingPhoneError();
   await enumGuard.withMinimumLatency(async () => {
     const user = await repository.findUserByPhone(phone);
-    if (!user) return;
+    if (!user) throw errors.accountNotFoundError();
     const { hasRole } = await phoneGuard.checkPhoneForRole(phone, 'agent');
-    if (!hasRole) return;
+    if (!hasRole) throw errors.accountNotFoundError();
     await otpHelper.createAndSendOTP(user.phone, policy.OTP_PURPOSE);
   }, policy.MINIMUM_LATENCY_MS);
-  return neutralResult();
+  return {
+    statusCode: 200,
+    responseBody: {
+      success: true,
+      message: 'OTP sent successfully. Please check your phone.',
+    },
+  };
 };
 
 module.exports = {

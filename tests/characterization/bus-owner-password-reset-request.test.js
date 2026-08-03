@@ -44,12 +44,16 @@ test('bus-owner password reset request characterization', async (t) => {
     assert.equal(res.status, 400);
     assert.deepEqual(res.body, { success: false, message: 'Phone number is required.' });
     res = await post({ phone: phone(1) });
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, { success: true, message: 'If an account exists, OTP has been sent.' });
+    assert.equal(res.status, 404);
+    assert.equal(res.body.success, false);
+    assert.equal(res.body.code, 'ACCOUNT_NOT_FOUND');
+    assert.equal(res.body.message, 'No bus owner account found with this phone number.');
     await user(phone(2), { role: 'passenger', roles: ['passenger'] });
     res = await post({ phone: phone(2) });
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, { success: true, message: 'If an account exists, OTP has been sent.' });
+    assert.equal(res.status, 404);
+    assert.equal(res.body.success, false);
+    assert.equal(res.body.code, 'ACCOUNT_NOT_FOUND');
+    assert.equal(res.body.message, 'No bus owner account found with this phone number.');
   });
 
   await t.test('eligible and suspended bus owners send stored-phone OTP with latency', async () => {
