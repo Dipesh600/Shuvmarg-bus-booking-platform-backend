@@ -30,7 +30,7 @@ function parseDiffEntries(rawDiff) {
       process.exit(1);
     }
 
-    const isRename = /^R(?:100|[0-9]{1,2})$/.test(status);
+    const isRename = status === 'R100' || (/^R0*([0-9]{1,2})$/.test(status) && parseInt(status.slice(1), 10) <= 99);
     const isNormal = status === 'A' || status === 'M' || status === 'D';
 
     if (!isNormal && !isRename) {
