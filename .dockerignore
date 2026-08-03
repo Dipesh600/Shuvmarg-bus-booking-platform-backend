@@ -38,7 +38,6 @@ scratch
 test_*.js
 test_*.mjs
 test-*.js
-get-admin.js
 test-auth.js
 test-coupon.js
 test-image-upload.js
@@ -64,6 +63,3 @@ Thumbs.db
 dist
 build
 
-# ── Dummy test assets ─────────────────────────────────────────────────────────
-dummy.jpg
-dummy.png

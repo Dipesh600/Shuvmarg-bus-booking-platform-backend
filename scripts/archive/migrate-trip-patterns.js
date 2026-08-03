@@ -1,4 +1,14 @@
 /**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * File: scripts/archive/migrate-trip-patterns.js
+ * Execution Status: COMPLETED
+ * Purpose: Migrate operator route configs to Trip Pattern Architecture v2.
+ * Affected Collections: operatorrouteconfigs
+ * Rerun Safety: SAFE (Idempotent: updates indexes and patternName if default pattern is missing).
+ */
+
+/**
  * MIGRATION: Trip Pattern Architecture (v2)
  *
  * What this does:

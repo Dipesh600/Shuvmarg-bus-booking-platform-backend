@@ -1,4 +1,14 @@
 /**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * File: scripts/archive/backfill_stop_departures.js
+ * Execution Status: COMPLETED
+ * Purpose: Backfill estimatedDeparture for OperatorRouteConfig documents missing haltDuration.
+ * Affected Collections: operatorrouteconfigs
+ * Rerun Safety: SAFE (Idempotent: re-calculates estimatedDeparture cleanly based on route config).
+ */
+
+/**
  * ONE-TIME MIGRATION: Backfill estimatedDeparture for all OperatorRouteConfig documents.
  *
  * Problem:

@@ -1,3 +1,13 @@
+/**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * File: scripts/archive/migrate-stop-registry.js
+ * Execution Status: COMPLETED
+ * Purpose: Migrate legacy city/stop data into the unified stop registry.
+ * Affected Collections: stops, stopPoints
+ * Rerun Safety: SAFE (Idempotent: delegates to stop-registry-migration.service with --dry-run option).
+ */
+
 require('dotenv').config();
 const mongoose = require('mongoose');
 const { runStopRegistryMigration } = require('../src/modules/admin/platform-registry/stop-registry-migration.service');

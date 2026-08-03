@@ -1,3 +1,13 @@
+/**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * File: scripts/archive/migrate-corridor-registry.js
+ * Execution Status: COMPLETED
+ * Purpose: Migrate legacy corridor configurations into the platform corridor registry.
+ * Affected Collections: corridors, operatorrouteconfigs
+ * Rerun Safety: SAFE (Idempotent: delegates to corridor-registry-migration.service.js with --dry-run option).
+ */
+
 "use strict";
 
 require("dotenv").config();

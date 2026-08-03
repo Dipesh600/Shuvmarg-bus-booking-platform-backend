@@ -1,4 +1,14 @@
 /**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * File: scripts/archive/migrateTripdateToDate.js
+ * Execution Status: COMPLETED
+ * Purpose: Convert Trip.tripDate from legacy string format to BSON Date object.
+ * Affected Collections: trips
+ * Rerun Safety: SAFE (Idempotent: filters documents by BSON type String; skips already converted Date objects).
+ */
+
+/**
  * scripts/migrateTripdateToDate.js
  * 
  * ONE-TIME MIGRATION: Converts tripDate from String to Date type.

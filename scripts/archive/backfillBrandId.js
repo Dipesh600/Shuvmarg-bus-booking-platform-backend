@@ -1,3 +1,13 @@
+/**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * File: scripts/archive/backfillBrandId.js
+ * Execution Status: COMPLETED
+ * Purpose: Backfill brandId field across Trips, Bookings, and Fleets for operator brand scoping.
+ * Affected Collections: trips, booktickets, fleets
+ * Rerun Safety: SAFE (Idempotent: skips documents where brandId is already populated). Supports --dry-run.
+ */
+
 require('dotenv').config();
 const mongoose = require('mongoose');
 

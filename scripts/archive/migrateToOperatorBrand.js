@@ -1,3 +1,13 @@
+/**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * File: scripts/archive/migrateToOperatorBrand.js
+ * Execution Status: COMPLETED
+ * Purpose: Migrate BusOwners and Fleets into OperatorBrand entities.
+ * Affected Collections: busowners, fleets, operatorbrands, operatorrouteconfigs
+ * Rerun Safety: SAFE (Idempotent: checks for existing OperatorBrand records before creating).
+ */
+
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const BusOwner = require('../models/busOwnerModel');

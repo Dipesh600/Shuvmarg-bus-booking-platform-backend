@@ -1,4 +1,14 @@
 /**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * File: scripts/archive/migrateRoles.js
+ * Execution Status: COMPLETED
+ * Purpose: One-time migration for multi-role identity system (populates User.roles[] array).
+ * Affected Collections: users
+ * Rerun Safety: SAFE (Idempotent: supports --dry-run; skips users whose roles array is up to date).
+ */
+
+/**
  * scripts/migrateRoles.js
  *
  * One-time migration script for the multi-role identity system.

@@ -1,3 +1,13 @@
+/**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * File: scripts/archive/backfill_trips_manual.js
+ * Execution Status: COMPLETED
+ * Purpose: Manual trigger to generate trips for a date range via tripGeneratorCron service.
+ * Affected Collections: schedules, trips
+ * Rerun Safety: SAFE (Idempotent: trip generator checks schedule dates and avoids duplicate trip creation).
+ */
+
 const mongoose = require('mongoose');
 require('dotenv').config();
 const { generateTripsForDateRange } = require('./services/tripGeneratorCron');

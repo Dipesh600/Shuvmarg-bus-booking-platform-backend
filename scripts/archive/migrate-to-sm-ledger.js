@@ -1,3 +1,13 @@
+/**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * File: scripts/archive/migrate-to-sm-ledger.js
+ * Execution Status: COMPLETED
+ * Purpose: Seed existing Wallet.balance values into sm_ledger as ADMIN_CREDIT entries.
+ * Affected Collections: wallets, sm_ledger
+ * Rerun Safety: SAFE (Idempotent: checks if legacyBalance is already populated; skips processed wallets).
+ */
+
 #!/usr/bin/env node
 
 /**
