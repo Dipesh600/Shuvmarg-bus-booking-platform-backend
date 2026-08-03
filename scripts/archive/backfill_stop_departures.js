@@ -1,30 +1,19 @@
 /**
- * ONE-TIME MIGRATION: Backfill estimatedDeparture for all OperatorRouteConfig documents.
- *
- * Problem:
- *   - haltDuration was not persisted (missing from schema) on older documents.
- *   - estimatedDeparture was not computed for auto-derived returnTimingConfig entries.
- *   - Result: stops showed empty departure time, falling back to raw terminal trip time.
- *
- * Fix:
- *   For each timingConfig / returnTimingConfig entry:
- *     estimatedDeparture = estimatedArrival + haltDuration (in minutes)
- *   - First stop: departure already set manually, no arrival → skip
- *   - Last stop:  arrival set, no departure needed → clear departure
- *   - Intermediate: arrival + halt = departure
- *
- * Usage:
- *   node scripts/backfill_stop_departures.js          # dry run (shows changes, no writes)
- *   node scripts/backfill_stop_departures.js --write  # writes to DB
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * Execution Status: UNKNOWN
+ * Execution Date: UNKNOWN
+ * Affected Environment: UNKNOWN
+ * Purpose: Backfill estimatedDeparture for OperatorRouteConfig documents missing haltDuration.
+ * Affected Collections: operatorrouteconfigs
+ * Rerun Safety: Idempotent: recalculates estimatedDeparture cleanly based on route config.
+ * Dry-Run Support: Yes, via --write (default is dry-run).
+ * Rollback or Recovery Reference: Restore from database backup.
  */
 
 require("dotenv").config();
 const mongoose = require("mongoose");
-const OperatorRouteConfig = require("../models/operatorRouteConfigModel.js");
-
-const DRY_RUN = !process.argv.includes("--write");
-
-// ── Timing helpers (mirror of operatorRouteConfigService.js) ──────────────────
+const OperatorRouteConfig = require("../../models/operatorRouteConfigModel.js");
 
 function _to12hMins(time) {
   if (!time || typeof time !== "string") return -1;
@@ -46,10 +35,6 @@ function _minsTo12h(totalMins) {
   return `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${pm ? "PM" : "AM"}`;
 }
 
-/**
- * Recompute departures for a timing array.
- * Returns { updated: TimingArray, changed: boolean, log: string[] }
- */
 function recomputeArray(entries, label) {
   if (!entries || entries.length === 0) return { updated: entries, changed: false, log: [] };
 
@@ -58,14 +43,12 @@ function recomputeArray(entries, label) {
 
   const updated = entries.map((tc, idx) => {
     const arrival = (tc.estimatedArrival || "").trim();
-    const halt    = typeof tc.haltDuration === "number" ? tc.haltDuration : 5; // default 5 if missing
+    const halt    = typeof tc.haltDuration === "number" ? tc.haltDuration : 5;
     const isFirst = idx === 0;
     const isLast  = idx === entries.length - 1;
 
-    // First stop: only a departure time, no arrival → leave untouched
     if (isFirst || !arrival) return tc;
 
-    // Last stop: bus arrives and terminates → departure should be empty
     if (isLast) {
       if ((tc.estimatedDeparture || "").trim() !== "") {
         log.push(`  [${label}] idx=${idx} LAST STOP: cleared estimatedDeparture (was: ${tc.estimatedDeparture})`);
@@ -74,7 +57,6 @@ function recomputeArray(entries, label) {
       return { ...tc, estimatedDeparture: "" };
     }
 
-    // Intermediate stop: compute departure
     const arrMins = _to12hMins(arrival);
     if (arrMins < 0) {
       log.push(`  [${label}] idx=${idx} SKIP: unparseable arrival "${arrival}"`);
@@ -95,16 +77,23 @@ function recomputeArray(entries, label) {
   return { updated, changed, log };
 }
 
-// ── Main migration ────────────────────────────────────────────────────────────
-
 async function run() {
+  const DRY_RUN = !process.argv.includes("--write");
+
   console.log(DRY_RUN
     ? "=== DRY RUN — no writes. Add --write flag to apply. ===\n"
     : "=== WRITE MODE — changes will be written to MongoDB. ===\n"
   );
 
-  await mongoose.connect(process.env.MONGODB_URL);
-  console.log("Connected to MongoDB:", process.env.MONGODB_URL, "\n");
+  const dbUri = process.env.MONGODB_URL || process.env.MONGO_URI;
+  if (!dbUri) {
+    console.error("❌ MONGODB_URL not found in environment.");
+    process.exitCode = 1;
+    return;
+  }
+
+  await mongoose.connect(dbUri);
+  console.log("Connected to MongoDB:", dbUri, "\n");
 
   const configs = await OperatorRouteConfig.find({}).lean();
   console.log(`Found ${configs.length} OperatorRouteConfig documents.\n`);
@@ -155,7 +144,11 @@ async function run() {
   await mongoose.disconnect();
 }
 
-run().catch(err => {
-  console.error("Migration failed:", err.message);
-  process.exit(1);
-});
+module.exports = { run };
+
+if (require.main === module) {
+  run().catch(err => {
+    console.error("Migration failed:", err.message);
+    process.exitCode = 1;
+  });
+}

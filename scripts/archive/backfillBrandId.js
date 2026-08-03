@@ -1,32 +1,42 @@
+/**
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * Execution Status: UNKNOWN
+ * Execution Date: UNKNOWN
+ * Affected Environment: UNKNOWN
+ * Purpose: Backfill brandId field across Trips, Bookings, and Fleets for operator brand scoping.
+ * Affected Collections: trips, booktickets, fleets
+ * Rerun Safety: Idempotent when brandId is already present.
+ * Dry-Run Support: Yes, via --dry-run.
+ * Rollback or Recovery Reference: Restore from database backup or unset brandId on affected documents.
+ */
+
 require('dotenv').config();
 const mongoose = require('mongoose');
 
-const Trip    = require('../models/tripModel');
-const Booking = require('../models/bookTicketModel');
-const Fleet   = require('../models/fleetModel');
-
-// G1 FIX: Dry-run mode — reports what would be changed without writing to the DB.
-// Usage:
-//   node scripts/backfillBrandId.js           → real backfill (writes to DB)
-//   node scripts/backfillBrandId.js --dry-run → preview only (no writes)
-const DRY_RUN = process.argv.includes("--dry-run");
+const Trip    = require('../../models/tripModel');
+const Booking = require('../../models/bookTicketModel');
+const Fleet   = require('../../models/fleetModel');
 
 async function runBackfill() {
+    const DRY_RUN = process.argv.includes("--dry-run");
+
     console.log(DRY_RUN
         ? "🧪 [DRY RUN] Starting Data Backfill Preview: Trip & Booking brandId resolution (NO writes will be made)"
         : "🚀 Starting Data Backfill: Trip & Booking brandId resolution"
     );
 
-    if (!process.env.DB_URI) {
-        console.error("❌ DB_URI not found in environment variables.");
-        process.exit(1);
+    const dbUri = process.env.MONGODB_URL || process.env.MONGO_URI || process.env.DB_URI;
+    if (!dbUri) {
+        console.error("❌ MONGODB_URL/DB_URI not found in environment variables.");
+        process.exitCode = 1;
+        return;
     }
 
     try {
-        await mongoose.connect(process.env.DB_URI);
+        await mongoose.connect(dbUri);
         console.log("✅ Connected to Database");
 
-        // --- 1. Trips ---
         const tripsToUpdate = await Trip.find({ brandId: null }).select('_id busId');
         console.log(`Found ${tripsToUpdate.length} Trips missing brandId.`);
 
@@ -63,7 +73,6 @@ async function runBackfill() {
         }
         console.log(`${DRY_RUN ? "  [DRY RUN]" : "✅"} Trips ${DRY_RUN ? "to be" : ""} backfilled: ${tripSuccess} (Failed/NoBrand: ${tripErrors})`);
 
-        // --- 2. Bookings ---
         const bookingsToUpdate = await Booking.find({ brandId: null }).select('_id tripId');
         console.log(`Found ${bookingsToUpdate.length} Bookings missing brandId.`);
 
@@ -102,8 +111,11 @@ async function runBackfill() {
 
     } catch (error) {
         console.error("❌ Fatal Error:", error);
+        process.exitCode = 1;
     } finally {
-        await mongoose.disconnect();
+        if (mongoose.connection.readyState !== 0) {
+            await mongoose.disconnect();
+        }
         console.log(DRY_RUN
             ? "🏁 [DRY RUN] Preview complete. No data was written. DB connection closed."
             : "🏁 Backfill complete, DB connection closed."
@@ -111,4 +123,11 @@ async function runBackfill() {
     }
 }
 
-runBackfill();
+module.exports = { runBackfill };
+
+if (require.main === module) {
+    runBackfill().catch((err) => {
+        console.error("Backfill failed:", err);
+        process.exitCode = 1;
+    });
+}

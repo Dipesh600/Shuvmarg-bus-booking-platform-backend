@@ -1,50 +1,32 @@
-#!/usr/bin/env node
-
 /**
- * migrate-to-sm-ledger.js
- *
- * One-time migration script: seeds existing Wallet.balance values into
- * the new sm_ledger as ADMIN_CREDIT entries.
- *
- * USAGE:
- *   # Dry run (no writes — reports what WOULD happen):
- *   node scripts/migrate-to-sm-ledger.js --dry-run
- *
- *   # Execute (writes to sm_ledger, sets legacyBalance):
- *   node scripts/migrate-to-sm-ledger.js --execute
- *
- * WHAT IT DOES:
- *   1. Finds all wallets with balance > 0
- *   2. For each wallet:
- *      a. Creates an ADMIN_CREDIT entry in sm_ledger with 12-month expiry
- *      b. Sets Wallet.legacyBalance = current balance (preservation)
- *   3. Verifies: computeSpendableBalance(userId) === Wallet.balance
- *   4. Reports results
- *
- * SAFETY:
- *   - Idempotent: checks if migration already ran (legacyBalance != null)
- *   - Skips wallets that already have legacyBalance set
- *   - No balance field is modified — only legacyBalance is set
- *   - Each wallet is migrated in its own session (one failure doesn't block others)
+ * ARCHIVED MIGRATION SCRIPT METADATA
+ * -----------------------------------
+ * Execution Status: UNKNOWN
+ * Execution Date: UNKNOWN
+ * Affected Environment: UNKNOWN
+ * Purpose: Seed existing Wallet.balance values into sm_ledger as ADMIN_CREDIT entries.
+ * Affected Collections: wallets, sm_ledger
+ * Rerun Safety: Idempotent: checks if legacyBalance is already populated; skips processed wallets.
+ * Dry-Run Support: Yes, via --dry-run.
+ * Rollback or Recovery Reference: Remove ADMIN_CREDIT entries created by migration and reset legacyBalance.
  */
 
 const mongoose = require("mongoose");
 const path = require("path");
 
-// Load env config
-require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
+require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 
-const Wallet = require("../models/walletModel");
-const SMLedger = require("../models/smLedgerModel");
-const { computeSpendableBalance } = require("../services/smLedgerService");
+const Wallet = require("../../models/walletModel");
+const SMLedger = require("../../models/smLedgerModel");
+const { computeSpendableBalance } = require("../../src/modules/wallet/sm-ledger/sm-ledger-balance.service");
 
-// ─── CLI Argument Parsing ────────────────────────────────────────────────────
-const args = process.argv.slice(2);
-const isDryRun = args.includes("--dry-run");
-const isExecute = args.includes("--execute");
+async function main() {
+  const args = process.argv.slice(2);
+  const isDryRun = args.includes("--dry-run");
+  const isExecute = args.includes("--execute");
 
-if (!isDryRun && !isExecute) {
-  console.log(`
+  if (!isDryRun && !isExecute) {
+    console.log(`
 ╔═══════════════════════════════════════════════════════╗
 ║  SM Ledger Migration Script                           ║
 ║                                                       ║
@@ -52,16 +34,15 @@ if (!isDryRun && !isExecute) {
 ║    --dry-run    Preview only, no writes               ║
 ║    --execute    Run the actual migration               ║
 ╚═══════════════════════════════════════════════════════╝
-  `);
-  process.exit(0);
-}
+    `);
+    return;
+  }
 
-// ─── Main Migration ──────────────────────────────────────────────────────────
-async function main() {
   const dbUri = process.env.DB_URI || process.env.MONGODB_URI || process.env.MONGODB_URL;
   if (!dbUri) {
     console.error("❌ No DB_URI, MONGODB_URI, or MONGODB_URL found in environment.");
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   console.log(`\n${"═".repeat(60)}`);
@@ -71,13 +52,11 @@ async function main() {
   await mongoose.connect(dbUri);
   console.log("✅ Connected to MongoDB\n");
 
-  // Find all wallets with positive balance that haven't been migrated yet
   const walletsToMigrate = await Wallet.find({
     balance: { $gt: 0 },
-    legacyBalance: null, // Not yet migrated
+    legacyBalance: null,
   }).lean();
 
-  // Also check already-migrated count
   const alreadyMigrated = await Wallet.countDocuments({
     legacyBalance: { $ne: null },
   });
@@ -90,7 +69,7 @@ async function main() {
   if (walletsToMigrate.length === 0) {
     console.log("✅ Nothing to migrate. All wallets are either migrated or have zero balance.\n");
     await mongoose.disconnect();
-    process.exit(0);
+    return;
   }
 
   let successCount = 0;
@@ -112,7 +91,6 @@ async function main() {
         continue;
       }
 
-      // Create the migration ledger entry
       const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + 12);
 
@@ -127,13 +105,11 @@ async function main() {
         note: `Migration from legacy wallet balance. Original: NPR ${balance}. Migrated at: ${new Date().toISOString()}`,
       });
 
-      // Set legacyBalance (marks this wallet as migrated)
       await Wallet.updateOne(
         { _id: wallet._id },
         { $set: { legacyBalance: balance } }
       );
 
-      // Verify
       const computed = await computeSpendableBalance(userId);
       if (Math.abs(computed.display - balance) > 0.01) {
         console.log(`    ⚠️  VERIFICATION MISMATCH: stored=${balance}, computed=${computed.display}`);
@@ -151,7 +127,6 @@ async function main() {
     }
   }
 
-  // ─── Report ──────────────────────────────────────────────────────────────
   console.log(`\n${"═".repeat(60)}`);
   console.log(`  MIGRATION ${isDryRun ? "PREVIEW" : "RESULTS"}`);
   console.log(`${"═".repeat(60)}`);
@@ -170,10 +145,16 @@ async function main() {
 
   await mongoose.disconnect();
   console.log("✅ Disconnected from MongoDB\n");
-  process.exit(failCount > 0 ? 1 : 0);
+  if (failCount > 0) {
+    process.exitCode = 1;
+  }
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+module.exports = { main };
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exitCode = 1;
+  });
+}
