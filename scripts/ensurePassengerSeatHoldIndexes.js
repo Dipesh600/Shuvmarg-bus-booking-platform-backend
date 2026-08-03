@@ -49,7 +49,8 @@ if (require.main === module) {
   const mongoUrl = process.env.MONGODB_URL;
   if (!mongoUrl || !mongoUrl.trim()) {
     console.error("[db:index:passenger-seat-hold] MONGODB_URL environment variable is required.");
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const dbName = extractDatabaseName(mongoUrl);
@@ -67,9 +68,6 @@ if (require.main === module) {
     })
     .finally(async () => {
       await mongoose.disconnect().catch(() => {});
-      if (process.exitCode && process.exitCode !== 0) {
-        process.exit(process.exitCode);
-      }
     });
 }
 

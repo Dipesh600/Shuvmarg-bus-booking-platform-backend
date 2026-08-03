@@ -1,5 +1,14 @@
-# Node modules
+# Environment files
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.local
+config/fcm_config.json
+
+# Dependencies
 node_modules/
+.npm/
 
 # Logs
 logs/
@@ -7,32 +16,9 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Environment variables
-.env
-.env.local
-.env.*.local
-config/fcm_config.json
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Optional npm cache directory
-.npm/
-
-# Build output
-dist/
-build/
-
-# IDE/editor settings
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# Coverage directories
-coverage/
+pnpm-debug.log*
+fleet_error_debug.log
+*.debug.log
 
 # PM2 process files
 pids/
@@ -40,19 +26,57 @@ pids/
 *.seed
 *.pid.lock
 
-# Debug files
-*.swp
-*.swo
-
-# Docker
-docker-compose.override.yml
-
-# Testing
+# Runtime and generated data
+tmp/
+temp/
+uploads/
+storage/
+coverage/
 jest-cache/
 .nyc_output/
+dist/
+build/
 sumarg_admin_2fa_qr.png
 
-# Local-only debug and one-off scripts (never commit these)
+# Database exports
+*.dump
+*.bson
+*.archive
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+
+# Certificates and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+service-account*.json
+credentials*.json
+
+# OS and editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# Local-only debug, temporary files, and overrides
+*.bak
+*.tmp
+*.temp
+*.orig
+*.rej
+dummy.*
+output_frame.*
+test-upload.*
 test_*.js
 test_*.mjs
 test-*.js
@@ -62,8 +86,4 @@ bypass-middleware.js
 check_stops.js
 fix_stops.js
 scratch/
-fleet_error_debug.log
-*.debug.log
-
-# One-off migration and seeder scripts (local use only)
-scripts/
+docker-compose.override.yml

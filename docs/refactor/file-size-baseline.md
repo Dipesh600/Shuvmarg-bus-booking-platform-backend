@@ -124,11 +124,11 @@ find . \
 | 79 | 186 | `utils/phoneGuard.js` | Utility | Low |
 | 80 | 185 | `models/referralV2Model.js` | Model | Low |
 | 81 | 182 | `models/couponModel.js` | Model | Low |
-| 82 | 179 | `scripts/migrate-to-sm-ledger.js` | Migration script | Low |
-| 83 | 178 | `models/smLedgerModel.js` | Model | Low |
-| 84 | 163 | `controllers/adminController/busOwnerController/templateController.js` | Controller | Low |
-| 85 | 162 | `controllers/busOwnerController/busTripController.js` | Controller | Low |
-| 86 | 161 | `scripts/backfill_stop_departures.js` | Migration script | Low |
+| 82 | 179 | `legacy-ledger-migration` | Migration script (archived/removed) | Low |
+| 83 | 178 | `models/smLedgerModel.js` | Schema definition | Medium |
+| 84 | 163 | `controllers/adminController/busOwnerController/templateController.js` | Admin workflow | Medium |
+| 85 | 162 | `controllers/busOwnerController/busTripController.js` | Trip management | Medium |
+| 86 | 161 | `legacy-stop-departures-backfill` | Migration script (archived/removed) | Low |
 | 87 | 161 | `models/operatorRouteConfigModel.js` | Model | Low |
 | 88 | 161 | `controllers/authControllers.js/activateAccountController.js` | Controller | Low |
 | 89 | 154 | `models/busOwnerModel.js` | Model | Low |
@@ -150,7 +150,7 @@ These files are **not violations**. They sit at the policy boundary and should b
 
 The initial draft reported 222 total files and 47,220 total lines. The verified ground-truth command produces **221 files and 46,842 lines**. The difference is minor (one file or count discrepancy from `wc -l` on directories). The ranking and all individual file counts in this report are the authoritative numbers from the direct command above.
 
-Two script files (`scripts/migrate-to-sm-ledger.js` at 179 lines, `scripts/backfill_stop_departures.js` at 161 lines) were omitted from the initial draft — they appear in the accurate list at ranks 82 and 86.
+Two historical migration script files at ranks 82 and 86 were omitted from the initial draft — they appear in the accurate list.
 
 ---
 

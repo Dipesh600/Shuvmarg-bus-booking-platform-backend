@@ -28,7 +28,8 @@ if (require.main === module) {
     console.error(
       '[db:index:esewa-payment-attempt] MONGODB_URL is required.'
     );
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   mongoose
     .connect(mongoUrl)

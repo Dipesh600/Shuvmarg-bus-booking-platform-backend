@@ -18,7 +18,7 @@ const walletSchema = new mongoose.Schema(
       // Display layer shows max(0, balance) to user.
     },
     // Preserved during migration from stored-balance to ledger-computed-balance.
-    // Set once by migrate-to-sm-ledger.js, never written again.
+    // Set once by historical wallet balance migration, never written again.
     legacyBalance: {
       type: Number,
       default: null,
