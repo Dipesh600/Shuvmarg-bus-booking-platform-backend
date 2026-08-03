@@ -33,7 +33,8 @@ test('Auth: requestPasswordReset', async (t) => {
     try {
       const res = await request(app).post('/api/requestPasswordReset').send({ emailOrPhone: '9800000099' });
       assert.equal(res.status, 404);
-      assert.equal(res.body.status, false);
+      assert.equal(res.body.success, false);
+      assert.equal(res.body.code, 'ACCOUNT_NOT_FOUND');
       assert.equal(res.body.message, 'No account found with this phone number. Please check the number or sign up.');
     } finally { otpHelper.createAndSendOTP = orig; }
   });
@@ -49,18 +50,18 @@ test('Auth: requestPasswordReset', async (t) => {
     } finally { otpHelper.createAndSendOTP = orig; }
   });
 
-  await t.test('existing phone → exact generic 200', async () => {
+  await t.test('existing phone → exact 200', async () => {
     await seedUser('9800000091');
     const otpHelper = require('../../utils/otpHelper');
     const orig = otpHelper.createAndSendOTP;
     otpHelper.createAndSendOTP = async () => ({ expiresIn: 300 });
     try {
       const res = await request(app).post('/api/requestPasswordReset').send({ emailOrPhone: '9800000091' });
-      assert.equal(res.status, 200); assert.equal(res.body.status, true);
+      assert.equal(res.status, 200); assert.equal(res.body.success, true);
     } finally { otpHelper.createAndSendOTP = orig; }
   });
 
-  await t.test('existing email → exact generic 200', async () => {
+  await t.test('existing email → exact 200', async () => {
     const u = await seedUser('9800000092');
     u.email = 'reset92@test.com'; await u.save();
     const otpHelper = require('../../utils/otpHelper');
@@ -68,7 +69,7 @@ test('Auth: requestPasswordReset', async (t) => {
     otpHelper.createAndSendOTP = async () => ({ expiresIn: 300 });
     try {
       const res = await request(app).post('/api/requestPasswordReset').send({ emailOrPhone: 'reset92@test.com' });
-      assert.equal(res.status, 200); assert.equal(res.body.status, true);
+      assert.equal(res.status, 200); assert.equal(res.body.success, true);
     } finally { otpHelper.createAndSendOTP = orig; }
   });
 

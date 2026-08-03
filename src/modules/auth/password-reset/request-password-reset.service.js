@@ -9,11 +9,12 @@ const errors = require('./password-reset.errors');
 const AppError = require('../../../shared/errors/app-error');
 
 /**
- * Preserves the exact legacy requestPasswordReset behavior.
+ * Request a password-reset OTP for a passenger account.
  *
- * - Enumeration-resistant: always 200 with the same body.
- * - OTP dispatched only when the account exists.
- * - Minimum-latency pad: 600 ms.
+ * - Returns 404 ACCOUNT_NOT_FOUND when the phone is not registered.
+ * - Returns 200 only after the OTP helper succeeds.
+ * - Minimum-latency pad: 600 ms (applies to both found and not-found paths).
+ * - Rate limiting is applied by the route middleware (otpSendLimiter, otpPresenceLimiter).
  *
  * @param {{ emailOrPhone: string }} input
  * @returns {{ statusCode: number, responseBody: object }}
@@ -28,16 +29,17 @@ const requestPasswordReset = async ({ emailOrPhone }) => {
     await enumGuard.withMinimumLatency(async () => {
       if (!user) {
         throw new AppError('Account Not Found', 404, {
-          status: false,
+          success: false,
+          code: 'ACCOUNT_NOT_FOUND',
           message: 'No account found with this phone number. Please check the number or sign up.',
-        });
+        }, 'ACCOUNT_NOT_FOUND');
       }
       await otpHelper.createAndSendOTP(user.phone, 'PASSWORD_RESET');
     }, 600);
 
     return {
       statusCode: 200,
-      responseBody: { status: true, message: 'OTP sent successfully. Please check your phone.' },
+      responseBody: { success: true, message: 'OTP sent successfully. Please check your phone.' },
     };
   } catch (err) {
     if (err instanceof AppError) throw err;

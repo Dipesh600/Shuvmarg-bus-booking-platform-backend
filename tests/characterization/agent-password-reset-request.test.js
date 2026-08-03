@@ -41,7 +41,9 @@ test('agent password reset request characterization', async (t) => {
     assert.deepEqual(res.body, { success: false, message: 'Phone number is required.' });
     res = await request(app).post('/api/auth/agent/requestPasswordReset').send({ phone: phone(1) });
     assert.equal(res.status, 404);
-    assert.deepEqual(res.body, { success: false, message: 'No agent account found with this phone number.' });
+    assert.equal(res.body.success, false);
+    assert.equal(res.body.code, 'ACCOUNT_NOT_FOUND');
+    assert.equal(res.body.message, 'No agent account found with this phone number.');
   });
 
   await t.test('normalizes phone and sends only eligible agent OTP with latency wrapper', async () => {
