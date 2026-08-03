@@ -41,6 +41,9 @@ const PORT = process.env.PORT || 7012;
 app.disable("x-powered-by");
 
 // ── CORS — MUST be first middleware before helmet / rate limiter ──────────────
+// Origin allowlist is configured via environment variables (see cors-options.js):
+//   CORS_ALLOWED_ORIGINS  (preferred)  — comma-separated list of allowed origins
+//   FRONTEND_URL          (fallback)   — same format, kept for backward compat
 const corsOptions = createCorsOptions();
 
 app.use(cors(corsOptions));
@@ -52,7 +55,7 @@ app.options("/{*splat}", cors(corsOptions));
 
 // ── Security Middlewares ──────────────────────────────────────────────────────
 app.use(helmet());
-app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
+
 
 
 // NoSQL Injection Protection — safe wrapper that avoids the
