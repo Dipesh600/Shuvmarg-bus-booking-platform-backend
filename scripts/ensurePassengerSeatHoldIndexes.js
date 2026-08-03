@@ -68,9 +68,6 @@ if (require.main === module) {
     })
     .finally(async () => {
       await mongoose.disconnect().catch(() => {});
-      if (process.exitCode && process.exitCode !== 0) {
-        process.exit(process.exitCode);
-      }
     });
 }
 
