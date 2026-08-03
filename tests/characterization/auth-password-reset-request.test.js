@@ -26,15 +26,15 @@ test('Auth: requestPasswordReset', async (t) => {
     });
   });
 
-  await t.test('unknown account → exact generic 200', async () => {
+  await t.test('unknown account → exact 404 error', async () => {
     const otpHelper = require('../../utils/otpHelper');
     const orig = otpHelper.createAndSendOTP;
     otpHelper.createAndSendOTP = async () => { throw new Error('should not be called'); };
     try {
       const res = await request(app).post('/api/requestPasswordReset').send({ emailOrPhone: '9800000099' });
-      assert.equal(res.status, 200);
-      assert.equal(res.body.status, true);
-      assert.equal(res.body.message, 'If an account exists, OTP has been sent.');
+      assert.equal(res.status, 404);
+      assert.equal(res.body.status, false);
+      assert.equal(res.body.message, 'No account found with this phone number. Please check the number or sign up.');
     } finally { otpHelper.createAndSendOTP = orig; }
   });
 
