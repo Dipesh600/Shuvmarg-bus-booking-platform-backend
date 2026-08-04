@@ -13,7 +13,7 @@ test("kyc-document-read.service unit tests", async (t) => {
     assert.deepEqual(s3Result, {
       storageReference: "owners/1/kyc/doc.pdf",
       viewUrl: "https://s3.signed.url/owners/1/kyc/doc.pdf?token=123",
-      expiresInSeconds: 3600,
+      expiresInSeconds: 300,
       legacy: false,
     });
 

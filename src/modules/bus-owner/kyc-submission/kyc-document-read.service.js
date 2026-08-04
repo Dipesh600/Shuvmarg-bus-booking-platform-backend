@@ -1,5 +1,15 @@
 "use strict";
 
+const MAX_URL_TTL_SECONDS = 300;
+
+function resolveReadTtlSeconds() {
+  const envTtl = parseInt(process.env.KYC_DOCUMENT_READ_URL_TTL_SECONDS, 10);
+  if (!envTtl || isNaN(envTtl) || envTtl <= 0) {
+    return MAX_URL_TTL_SECONDS;
+  }
+  return Math.min(envTtl, MAX_URL_TTL_SECONDS);
+}
+
 function createKycDocumentReadService({ getPresignedUrl }) {
   async function resolveReference(ref) {
     if (ref === null || ref === undefined) return null;
@@ -17,11 +27,12 @@ function createKycDocumentReadService({ getPresignedUrl }) {
       };
     }
 
+    const ttl = resolveReadTtlSeconds();
     const viewUrl = await getPresignedUrl(trimmed);
     return {
       storageReference: trimmed,
       viewUrl: viewUrl || trimmed,
-      expiresInSeconds: 3600,
+      expiresInSeconds: ttl,
       legacy: false,
     };
   }
@@ -44,7 +55,7 @@ function createKycDocumentReadService({ getPresignedUrl }) {
     if (!busOwner || typeof busOwner !== "object") return busOwner;
 
     const cloned = JSON.parse(JSON.stringify(busOwner));
-    const singleDocFields = ["companyRegistration", "taxRegistration", "transportLicense"];
+    const singleDocFields = ["companyRegistration", "taxRegistration", "transportLicense", "ownerIdentity"];
 
     for (const field of singleDocFields) {
       if (cloned[field]) {
