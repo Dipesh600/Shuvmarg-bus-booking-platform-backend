@@ -126,6 +126,38 @@ test("bus-owner KYC submission contracts", async (t) => {
     assert.equal(res.result().body.code, "KYC_FILES_REQUIRED");
   });
 
+  await t.test("controller returns HTTP 400 KYC_INVALID_FILE_PAYLOAD for malformed file object without upload or save calls", async () => {
+    let uploadCalled = false;
+    let saveCalled = false;
+    function MockBusOwner(val) {
+      Object.assign(this, val);
+      this.save = async () => { saveCalled = true; };
+    }
+    MockBusOwner.findOne = async () => null;
+
+    const controller = createKycSubmissionController({
+      BusOwner: MockBusOwner,
+      uploadService: {
+        uploadMany: async () => { uploadCalled = true; return []; },
+      },
+    });
+
+    const malformedFiles = makeValidFiles();
+    malformedFiles.companyRegistration = [null];
+
+    const res = response();
+    await controller.submitBusOwnerKyc({
+      userInfo: { id: "owner" },
+      files: malformedFiles,
+    }, res);
+
+    assert.equal(res.result().status, 400);
+    assert.equal(res.result().body.success, false);
+    assert.equal(res.result().body.code, "KYC_INVALID_FILE_PAYLOAD");
+    assert.equal(uploadCalled, false);
+    assert.equal(saveCalled, false);
+  });
+
   await t.test("controller returns sanitized HTTP 500 without leaking stack or internal error text", async () => {
     function BusOwner() {}
     BusOwner.findOne = async () => { throw new Error("Sensitive DB connection string"); };

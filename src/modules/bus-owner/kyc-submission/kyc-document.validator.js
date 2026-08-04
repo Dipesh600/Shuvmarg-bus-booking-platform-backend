@@ -55,15 +55,16 @@ function matchesSignature(buffer, signatureBuffer) {
 }
 
 function validateFileTriplet(file, field) {
-  const mimeType = (file.mimetype || "").trim().toLowerCase();
-  const fileName = file.name || file.originalname;
+  const mimeType = file.mimetype.trim().toLowerCase();
+  const fileName = file.name !== undefined ? file.name : file.originalname;
   const extension = validateFilenameHygiene(fileName, field);
+  const buffer = file.data || file.buffer;
 
   const matchingTriplet = ALLOWED_TRIPLETS.find(
     (t) =>
       t.mime === mimeType &&
       t.extensions.includes(extension) &&
-      matchesSignature(file.data || file.buffer, t.signature)
+      matchesSignature(buffer, t.signature)
   );
 
   if (!matchingTriplet) {
@@ -164,12 +165,30 @@ function validateKycDocuments(files) {
     }
 
     for (const file of fileList) {
-      const buffer = file.data || file.buffer;
+      if (!file || typeof file !== "object" || Array.isArray(file)) {
+        throw new KycDocumentValidationError(
+          "KYC_INVALID_FILE_PAYLOAD",
+          `Invalid file object for field '${field}'.`,
+          field
+        );
+      }
 
-      if (!file || !Buffer.isBuffer(buffer)) {
+      const buffer = file.data || file.buffer;
+      if (!Buffer.isBuffer(buffer)) {
         throw new KycDocumentValidationError(
           "KYC_INVALID_FILE_PAYLOAD",
           `Invalid file object for field '${field}'. Missing file binary buffer.`,
+          field
+        );
+      }
+
+      const mimetype = file.mimetype;
+      const fileName = file.name !== undefined ? file.name : file.originalname;
+
+      if (typeof mimetype !== "string" || typeof fileName !== "string") {
+        throw new KycDocumentValidationError(
+          "KYC_INVALID_FILE_PAYLOAD",
+          `Invalid file metadata type for field '${field}'.`,
           field
         );
       }

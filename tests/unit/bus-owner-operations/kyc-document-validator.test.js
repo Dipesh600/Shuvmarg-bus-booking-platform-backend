@@ -130,6 +130,51 @@ test("kyc-document-validator unit tests", async (t) => {
     );
   });
 
+  await t.test("rejects malformed file objects (null/undefined in list, boolean, number, nested array, missing/non-Buffer data)", () => {
+    const invalidValues = [
+      [null],
+      [undefined],
+      true,
+      123,
+      [PDF_BUFFER],
+      { name: "doc.pdf", mimetype: "application/pdf" },
+      { name: "doc.pdf", mimetype: "application/pdf", data: "not-a-buffer" },
+    ];
+
+    for (const val of invalidValues) {
+      const files = makeValidFiles();
+      files.companyRegistration = val;
+      assert.throws(
+        () => validateKycDocuments(files),
+        (err) => err.code === "KYC_INVALID_FILE_PAYLOAD" && err.field === "companyRegistration",
+        `Expected val ${JSON.stringify(val)} to throw KYC_INVALID_FILE_PAYLOAD`
+      );
+    }
+  });
+
+  await t.test("rejects malformed metadata types (non-string mimetype, non-string filename)", () => {
+    const invalidMetadata = [
+      { mimetype: {}, name: "doc.pdf" },
+      { mimetype: [], name: "doc.pdf" },
+      { mimetype: "application/pdf", name: 123 },
+      { mimetype: "application/pdf", name: {} },
+    ];
+
+    for (const meta of invalidMetadata) {
+      const files = makeValidFiles();
+      files.companyRegistration = {
+        data: PDF_BUFFER,
+        size: PDF_BUFFER.length,
+        ...meta,
+      };
+      assert.throws(
+        () => validateKycDocuments(files),
+        (err) => err.code === "KYC_INVALID_FILE_PAYLOAD" && err.field === "companyRegistration",
+        `Expected metadata ${JSON.stringify(meta)} to throw KYC_INVALID_FILE_PAYLOAD`
+      );
+    }
+  });
+
   await t.test("rejects unsafe or invalid filenames (null byte, path traversal)", () => {
     assert.throws(
       () => validateFilenameHygiene("doc\0.pdf", "taxRegistration"),
