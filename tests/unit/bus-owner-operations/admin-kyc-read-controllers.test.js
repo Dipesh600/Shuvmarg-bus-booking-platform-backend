@@ -51,6 +51,37 @@ test("admin KYC read controllers unit tests", async (t) => {
     assert.equal(busOwnerItem.data.companyRegistration.documentReferences[0].storageReference, "owners/1/kyc/c.pdf");
   });
 
+  await t.test("unified list controller counts 4 active document types and excludes ownerIdentity/bankDetails", async () => {
+    const rawOwner = {
+      busOwnerId: "bo-2",
+      companyName: "Active Express",
+      companyRegistration: { documentUrls: ["owners/1/c.pdf"] },
+      taxRegistration: { documentUrls: ["owners/1/t.pdf"] },
+      transportLicense: { documentUrls: ["owners/1/l.pdf"] },
+      insuranceCertificates: [
+        { documentUrls: ["owners/1/i1.pdf"] },
+        { documentUrls: ["owners/1/i2.pdf", "owners/1/i3.pdf"] },
+      ],
+      ownerIdentity: { documentUrls: ["owners/1/must-not-count.pdf"] },
+      bankDetails: { documentUrls: ["owners/1/must-not-count.pdf"] },
+    };
+
+    const getUnifiedKycList = createUnifiedKycListController({
+      AgentModel: { find: () => ({ populate: () => ({ lean: async () => [] }) }) },
+      BusOwnerModel: { find: () => ({ populate: () => ({ lean: async () => [rawOwner] }) }) },
+      BusModel: { find: () => ({ populate: () => ({ populate: () => ({ lean: async () => [] }) }) }) },
+      kycDocumentReadService,
+    });
+
+    const res = responseRecorder();
+    await getUnifiedKycList({}, res);
+
+    assert.equal(res.result().status, 200);
+    const item = res.result().body.data.find((entry) => entry.kyctype === "busowner");
+    assert.equal(item.documents, 6);
+    assert.equal(item.data.companyRegistration.documentUrls[0], "https://signed.url/owners/1/c.pdf");
+  });
+
   await t.test("kyc-query.controller resolves S3 keys into presigned URLs for getBusOwnerKycById", async () => {
     const rawOwner = {
       _id: "507f1f77bcf86cd799439011",
