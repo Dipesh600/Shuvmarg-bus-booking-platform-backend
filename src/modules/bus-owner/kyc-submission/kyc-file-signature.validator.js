@@ -47,7 +47,7 @@ function validateFileSignature({ buffer, mimeType, extension, field }) {
 
   return {
     format: matchingTriplet.format,
-    safeExtension: matchingTriplet.extensions[0],
+    safeExtension: matchingTriplet.extensions[0].replace(/^\./, ""),
     mime: matchingTriplet.mime,
   };
 }
