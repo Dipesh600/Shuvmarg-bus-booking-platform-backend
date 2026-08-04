@@ -35,7 +35,12 @@ function createKycReviewService({
       "kycReview.reviewedAt": clock(),
     };
 
-    const docFields = ["companyRegistration", "taxRegistration", "transportLicense"];
+    const docFields = [
+      "companyRegistration",
+      "ownerIdentity",
+      "taxRegistration",
+      "transportLicense",
+    ];
     for (const field of docFields) {
       if (owner[field]) {
         updateFields[`${field}.verified`] = owner[field].verified;
