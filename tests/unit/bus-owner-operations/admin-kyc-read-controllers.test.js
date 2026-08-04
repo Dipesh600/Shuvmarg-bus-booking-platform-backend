@@ -47,8 +47,10 @@ test("admin KYC read controllers unit tests", async (t) => {
 
     assert.equal(res.result().status, 200);
     const busOwnerItem = res.result().body.data.find((item) => item.kyctype === "busowner");
-    assert.equal(busOwnerItem.data.companyRegistration.documentUrls[0], "https://signed.url/owners/1/kyc/c.pdf");
-    assert.equal(busOwnerItem.data.companyRegistration.documentReferences[0].storageReference, "owners/1/kyc/c.pdf");
+    // Unified list response returns sanitized descriptors — no raw S3 keys
+    assert.equal(busOwnerItem.data.companyRegistration.documentUrls, undefined);
+    assert.equal(busOwnerItem.data.companyRegistration.documentReferences, undefined);
+    assert.equal(busOwnerItem.data.companyRegistration.fileCount, 1);
   });
 
   await t.test("unified list controller counts 4 active document types and excludes ownerIdentity/bankDetails", async () => {
@@ -79,7 +81,9 @@ test("admin KYC read controllers unit tests", async (t) => {
     assert.equal(res.result().status, 200);
     const item = res.result().body.data.find((entry) => entry.kyctype === "busowner");
     assert.equal(item.documents, 6);
-    assert.equal(item.data.companyRegistration.documentUrls[0], "https://signed.url/owners/1/c.pdf");
+    // Admin list response returns sanitized descriptors — no raw S3 keys
+    assert.equal(item.data.companyRegistration.documentUrls, undefined);
+    assert.equal(item.data.companyRegistration.fileCount, 1);
   });
 
   await t.test("kyc-query.controller resolves S3 keys into presigned URLs for getBusOwnerKycById", async () => {
@@ -99,7 +103,10 @@ test("admin KYC read controllers unit tests", async (t) => {
     await controller.getBusOwnerKycById({ body: { id: "507f1f77bcf86cd799439011" } }, res);
 
     assert.equal(res.result().status, 200);
-    assert.equal(res.result().body.data.companyRegistration.documentUrls[0], "https://signed.url/owners/1/kyc/c.pdf");
-    assert.equal(res.result().body.data.companyRegistration.documentReferences[0].storageReference, "owners/1/kyc/c.pdf");
+    // Admin detail response returns sanitized descriptors — no raw S3 keys
+    assert.equal(res.result().body.data.companyRegistration.documentUrls, undefined);
+    assert.equal(res.result().body.data.companyRegistration.documentReferences, undefined);
+    assert.equal(res.result().body.data.companyRegistration.fileCount, 1);
+    assert.equal(res.result().body.data.companyRegistration.available, true);
   });
 });

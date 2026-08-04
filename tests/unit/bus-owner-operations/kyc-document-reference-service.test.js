@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { resolveAuthorizedKycDocumentReference } = require("../../../src/modules/bus-owner/kyc-document-read/kyc-document-reference.service");
+const { resolveAuthorizedKycDocumentReference, parseNonNegativeIndex } = require("../../../src/modules/bus-owner/kyc-document-read/kyc-document-reference.service");
 const { createKycDocumentReadUrlService } = require("../../../src/modules/bus-owner/kyc-document-read/kyc-document-read-url.service");
 
 test("kyc-document-reference-service unit tests", async (t) => {
@@ -48,24 +48,18 @@ test("kyc-document-reference-service unit tests", async (t) => {
     assert.equal(res.storageReference, "owners/owner-1/kyc/reg.pdf");
   });
 
-  await t.test("Presigned URL is generated only after authorization; TTL capped at 300s", async () => {
-    let generatedKey = null;
+  await t.test("Actual getPresignedUrl call receives TTL <= 300, not default 3600", async () => {
+    let receivedTtl = null;
     const urlService = createKycDocumentReadUrlService({
-      getPresignedUrl: async (key) => {
-        generatedKey = key;
+      getPresignedUrl: async (key, ttl) => {
+        receivedTtl = ttl;
         return `https://s3.amazonaws.com/${key}?signed=true`;
       },
     });
 
-    const fixedNow = new Date("2026-08-04T12:00:00Z");
-    const result = await urlService.generateReadUrl({
-      actor: actorOwner,
-      storageReference: "owners/owner-1/kyc/reg.pdf",
-      clock: () => fixedNow,
-    });
-
-    assert.equal(generatedKey, "owners/owner-1/kyc/reg.pdf");
-    assert.equal(result.expiresAt, "2026-08-04T12:05:00.000Z");
+    await urlService.generateReadUrl({ actor: actorOwner, storageReference: "owners/owner-1/kyc/reg.pdf" });
+    assert.ok(receivedTtl !== null, "TTL must be passed to getPresignedUrl");
+    assert.ok(receivedTtl <= 300, `Expected TTL <= 300, got ${receivedTtl}`);
   });
 
   await t.test("Existing HTTP legacy URL is blocked for bus owner (HTTP 422)", async () => {
@@ -82,4 +76,25 @@ test("kyc-document-reference-service unit tests", async (t) => {
     assert.equal(result.downloadUrl, "http://legacy-cdn.com/tax.pdf");
     assert.equal(result.legacy, true);
   });
+});
+
+test("parseNonNegativeIndex strict validation", async (t) => {
+  const { parseNonNegativeIndex } = require("../../../src/modules/bus-owner/kyc-document-read/kyc-document-reference.service");
+
+  await t.test("undefined returns 0", () => assert.equal(parseNonNegativeIndex(undefined, "f"), 0));
+  await t.test("null returns 0", () => assert.equal(parseNonNegativeIndex(null, "f"), 0));
+  await t.test("empty string returns 0", () => assert.equal(parseNonNegativeIndex("", "f"), 0));
+  await t.test("'0' returns 0", () => assert.equal(parseNonNegativeIndex("0", "f"), 0));
+  await t.test("'1' returns 1", () => assert.equal(parseNonNegativeIndex("1", "f"), 1));
+
+  const cases = ["abc", "-1", "1.5", "1abc", " ", "  3  "];
+  for (const val of cases) {
+    await t.test(`'${val}' is rejected with HTTP 400`, () => {
+      assert.throws(
+        () => parseNonNegativeIndex(val, "fileIndex"),
+        (err) => err.code === "KYC_DOCUMENT_READ_INVALID_REQUEST" && err.statusCode === 400,
+        `Expected 400 for input '${val}'`
+      );
+    });
+  }
 });

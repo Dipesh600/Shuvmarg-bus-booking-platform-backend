@@ -11,12 +11,27 @@ const ALLOWED_DOCUMENT_TYPES = Object.freeze([
   "ownerIdentity",
 ]);
 
+function parseNonNegativeIndex(value, fieldName) {
+  if (value === undefined || value === null || value === "") {
+    return 0;
+  }
+  const normalized = String(value);
+  if (!/^\d+$/.test(normalized)) {
+    throw new KycDocumentReadError(
+      "KYC_DOCUMENT_READ_INVALID_REQUEST",
+      `${fieldName} must be a non-negative integer.`,
+      400
+    );
+  }
+  return Number(normalized);
+}
+
 function resolveAuthorizedKycDocumentReference({
   actor,
   busOwner,
   documentType,
-  certificateIndex = 0,
-  fileIndex = 0,
+  certificateIndex,
+  fileIndex,
   logger = console,
 }) {
   if (!ALLOWED_DOCUMENT_TYPES.includes(documentType)) {
@@ -29,16 +44,8 @@ function resolveAuthorizedKycDocumentReference({
 
   assertCanReadBusOwnerKycDocument({ actor, busOwner, logger });
 
-  const cIdx = parseInt(certificateIndex, 10) || 0;
-  const fIdx = parseInt(fileIndex, 10) || 0;
-
-  if (cIdx < 0 || fIdx < 0) {
-    throw new KycDocumentReadError(
-      "KYC_DOCUMENT_READ_INVALID_REQUEST",
-      "Index parameters must be non-negative integers.",
-      400
-    );
-  }
+  const cIdx = parseNonNegativeIndex(certificateIndex, "certificateIndex");
+  const fIdx = parseNonNegativeIndex(fileIndex, "fileIndex");
 
   let urls = [];
 
@@ -84,5 +91,6 @@ function resolveAuthorizedKycDocumentReference({
 
 module.exports = {
   ALLOWED_DOCUMENT_TYPES,
+  parseNonNegativeIndex,
   resolveAuthorizedKycDocumentReference,
 };

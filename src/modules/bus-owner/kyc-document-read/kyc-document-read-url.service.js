@@ -35,7 +35,7 @@ function createKycDocumentReadUrlService({ getPresignedUrl }) {
     }
 
     const ttlSeconds = resolveReadTtlSeconds();
-    const downloadUrl = await getPresignedUrl(trimmed);
+    const downloadUrl = await getPresignedUrl(trimmed, ttlSeconds);
 
     if (!downloadUrl) {
       throw new KycDocumentReadError("KYC_DOCUMENT_READ_NOT_FOUND", "Failed to generate presigned URL.", 404);

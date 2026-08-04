@@ -46,7 +46,7 @@ const uploadFileToS3 = async (file, folderOrOptions) => {
   return objectKey;
 };
 
-const getPresignedUrl = async (objectKey) => {
+const getPresignedUrl = async (objectKey, expiresInSeconds = 3600) => {
   if (!objectKey) return null;
   if (typeof objectKey === "string" && objectKey.startsWith("http")) return objectKey;
 
@@ -54,7 +54,7 @@ const getPresignedUrl = async (objectKey) => {
     Bucket: process.env.AWS_S3_BUCKET_NAME,
     Key: objectKey,
   });
-  return await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+  return await getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
 };
 
 const getDisplayUrl = async (objectKey) => {
