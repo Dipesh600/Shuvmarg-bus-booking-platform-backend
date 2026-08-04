@@ -15,7 +15,7 @@ test("kyc-file-signature-validation unit tests", async (t) => {
 
   await t.test("validateFileSignature returns format metadata on agreement", () => {
     const res = validateFileSignature({ buffer: PDF_BUFFER, mimeType: "application/pdf", extension: ".pdf", field: "companyRegistration" });
-    assert.equal(res.format, "pdf");
+    assert.equal(res.detectedFormat, "pdf");
     assert.equal(res.safeExtension, "pdf");
     assert.equal(res.mime, "application/pdf");
   });

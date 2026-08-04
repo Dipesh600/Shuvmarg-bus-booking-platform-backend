@@ -34,7 +34,8 @@ function validateSingleFile(file, field) {
     );
   }
 
-  validateFileSignature({ buffer, mimeType, extension, field });
+  const { detectedFormat, safeExtension } = validateFileSignature({ buffer, mimeType, extension, field });
+  return { file, detectedFormat, safeExtension };
 }
 
 function validateKycDocuments(files) {
@@ -82,11 +83,8 @@ function validateKycDocuments(files) {
       throw new KycDocumentValidationError("KYC_TOO_MANY_FILES", `Total number of uploaded files (${totalFileCount}) exceeds limit of ${MAX_TOTAL_FILES}.`, field, 413);
     }
 
-    for (const file of fileList) {
-      validateSingleFile(file, field);
-    }
-
-    normalizedFiles[field] = fileList;
+    const validatedList = fileList.map((file) => validateSingleFile(file, field));
+    normalizedFiles[field] = validatedList;
   }
 
   return normalizedFiles;

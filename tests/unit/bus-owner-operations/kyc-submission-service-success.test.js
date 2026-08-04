@@ -10,14 +10,14 @@ test("kyc-submission.service success and state tests", async (t) => {
     function MockBusOwner(val) { Object.assign(this, val); }
     MockBusOwner.findOne = async () => ({ verificationStatus: "approved" });
 
-    const serviceApproved = createKycSubmissionService({ BusOwner: MockBusOwner, uploadService: {} });
+    const serviceApproved = createKycSubmissionService({ BusOwner: MockBusOwner, storageService: {} });
     await assert.rejects(
       async () => serviceApproved.submitKyc({ userId: "user-1", files: makeValidFiles() }),
       (err) => err.code === "KYC_SUBMISSION_STATE_CONFLICT" && err.statusCode === 409
     );
 
     MockBusOwner.findOne = async () => ({ verificationStatus: "pending" });
-    const servicePending = createKycSubmissionService({ BusOwner: MockBusOwner, uploadService: {} });
+    const servicePending = createKycSubmissionService({ BusOwner: MockBusOwner, storageService: {} });
     await assert.rejects(
       async () => servicePending.submitKyc({ userId: "user-1", files: makeValidFiles() }),
       (err) => err.code === "KYC_SUBMISSION_STATE_CONFLICT" && err.statusCode === 409
@@ -34,8 +34,8 @@ test("kyc-submission.service success and state tests", async (t) => {
 
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
-      uploadService: {
-        uploadMany: async (files, folder) => [{ url: `http://example.com/${folder}.pdf`, publicId: `pub-1` }],
+      storageService: {
+        uploadDocument: async ({ documentType }) => `owners/user-1/kyc/${documentType}/uuid.pdf`,
       },
     });
 
@@ -43,5 +43,6 @@ test("kyc-submission.service success and state tests", async (t) => {
     assert.equal(res.success, true);
     assert.equal(savedOwner.verificationStatus, "pending");
     assert.equal(savedOwner.rejectionReason, null);
+    assert.equal(savedOwner.companyRegistration.documentUrls[0], "owners/user-1/kyc/companyRegistration/uuid.pdf");
   });
 });

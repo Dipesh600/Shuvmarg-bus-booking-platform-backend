@@ -3,32 +3,40 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createKycSubmissionController } = require("../../../src/modules/bus-owner/kyc-submission/kyc-submission.controller");
+const { createKycDocumentReadService } = require("../../../src/modules/bus-owner/kyc-submission/kyc-document-read.service");
 const { responseRecorder } = require("./helpers/kyc-test-fixtures");
 
 test("bus-owner KYC submission controller status contracts", async (t) => {
-  await t.test("status response exposes only the legacy KYC fields", async () => {
+  await t.test("status response resolves S3 keys into presigned viewUrls and documentReferences", async () => {
     const owner = {
       verificationStatus: "pending",
       rejectionReason: null,
-      companyRegistration: { verified: false },
+      companyRegistration: { documentUrls: ["owners/1/kyc/company/doc.pdf"] },
       ignored: "secret",
     };
+    const kycDocumentReadService = createKycDocumentReadService({
+      getPresignedUrl: async (key) => `https://presigned/${key}`,
+    });
+
     const controller = createKycSubmissionController({
       BusOwner: { findOne: () => ({ lean: async () => owner }) },
-      uploadService: {},
+      storageService: {},
+      kycDocumentReadService,
     });
     const res = responseRecorder();
     await controller.getMyBusOwnerKycStatus({ userInfo: { id: "owner" } }, res);
 
     assert.equal(res.result().status, 200);
     assert.equal(res.result().body.data.verificationStatus, "pending");
+    assert.equal(res.result().body.data.companyRegistration.documentUrls[0], "https://presigned/owners/1/kyc/company/doc.pdf");
+    assert.equal(res.result().body.data.companyRegistration.documentReferences[0].storageReference, "owners/1/kyc/company/doc.pdf");
     assert.equal("ignored" in res.result().body.data, false);
   });
 
   await t.test("status response returns 404 when KYC record is missing", async () => {
     const controller = createKycSubmissionController({
       BusOwner: { findOne: () => ({ lean: async () => null }) },
-      uploadService: {},
+      storageService: {},
     });
     const res = responseRecorder();
     await controller.getMyBusOwnerKycStatus({ userInfo: { id: "owner" } }, res);
@@ -41,7 +49,7 @@ test("bus-owner KYC submission controller status contracts", async (t) => {
   await t.test("status response sanitizes DB connection error into HTTP 500", async () => {
     const controller = createKycSubmissionController({
       BusOwner: { findOne: () => { throw new Error("Sensitive DB connection string"); } },
-      uploadService: {},
+      storageService: {},
     });
     const res = responseRecorder();
     await controller.getMyBusOwnerKycStatus({ userInfo: { id: "owner" } }, res);
@@ -53,7 +61,7 @@ test("bus-owner KYC submission controller status contracts", async (t) => {
   });
 
   await t.test("both submit and status endpoints preserve unauthorized response when userInfo is missing", async () => {
-    const controller = createKycSubmissionController({ BusOwner: {}, uploadService: {} });
+    const controller = createKycSubmissionController({ BusOwner: {}, storageService: {} });
     for (const handler of [controller.submitBusOwnerKyc, controller.getMyBusOwnerKycStatus]) {
       const res = responseRecorder();
       await handler({}, res);
