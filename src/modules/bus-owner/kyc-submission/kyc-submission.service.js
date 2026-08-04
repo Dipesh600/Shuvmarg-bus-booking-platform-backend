@@ -2,8 +2,9 @@
 
 const { validateKycDocuments } = require("./kyc-document.validator");
 const { KycSubmissionStateError } = require("./kyc-submission.errors");
+const { collectBusOwnerKycStorageReferences } = require("./kyc-document-references");
 
-function createKycSubmissionService({ BusOwner, storageService }) {
+function createKycSubmissionService({ BusOwner, storageService, logger = console }) {
   async function submitKyc({ userId, files }) {
     let busOwner = await BusOwner.findOne({ user: userId });
     if (!busOwner) {
@@ -24,6 +25,11 @@ function createKycSubmissionService({ BusOwner, storageService }) {
         409
       );
     }
+
+    const replacedDocumentReferences =
+      busOwner.verificationStatus === "rejected"
+        ? collectBusOwnerKycStorageReferences(busOwner)
+        : [];
 
     const normalizedFiles = validateKycDocuments(files);
     const newlyUploadedObjectKeys = [];
@@ -77,6 +83,17 @@ function createKycSubmissionService({ BusOwner, storageService }) {
 
       await busOwner.save();
 
+      if (replacedDocumentReferences.length > 0 && typeof storageService.deleteMany === "function") {
+        try {
+          const oldCleanupResult = await storageService.deleteMany(replacedDocumentReferences);
+          if (oldCleanupResult && oldCleanupResult.failed && oldCleanupResult.failed.length > 0) {
+            logger.error("KYC replaced-document cleanup failures:", oldCleanupResult.failed);
+          }
+        } catch (cleanupErr) {
+          logger.error("KYC replaced-document cleanup unexpected error:", cleanupErr);
+        }
+      }
+
       return {
         success: true,
         message: "Bus owner KYC submitted successfully",
@@ -86,10 +103,10 @@ function createKycSubmissionService({ BusOwner, storageService }) {
         try {
           const cleanupResult = await storageService.deleteMany(newlyUploadedObjectKeys);
           if (cleanupResult && cleanupResult.failed && cleanupResult.failed.length > 0) {
-            console.error("KYC S3 upload cleanup failures:", cleanupResult.failed);
+            logger.error("KYC S3 upload cleanup failures:", cleanupResult.failed);
           }
         } catch (cleanupErr) {
-          console.error("KYC S3 upload cleanup unexpected error:", cleanupErr);
+          logger.error("KYC S3 upload cleanup unexpected error:", cleanupErr);
         }
       }
       throw err;
