@@ -30,7 +30,7 @@ pids/
 tmp/
 temp/
 uploads/
-storage/
+/storage/
 coverage/
 jest-cache/
 .nyc_output/
@@ -52,8 +52,8 @@ sumarg_admin_2fa_qr.png
 *.key
 *.p12
 *.pfx
-id_rsa
-id_ed25519
+55: id_rsa
+56: id_ed25519
 service-account*.json
 credentials*.json
 

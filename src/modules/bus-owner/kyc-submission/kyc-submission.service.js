@@ -1,10 +1,9 @@
 "use strict";
 
 const { validateKycDocuments } = require("./kyc-document.validator");
-const { KYC_DOCUMENT_POLICY } = require("./kyc-document.policy");
 const { KycSubmissionStateError } = require("./kyc-submission.errors");
 
-function createKycSubmissionService({ BusOwner, uploadService }) {
+function createKycSubmissionService({ BusOwner, storageService }) {
   async function submitKyc({ userId, files }) {
     let busOwner = await BusOwner.findOne({ user: userId });
     if (!busOwner) {
@@ -27,48 +26,50 @@ function createKycSubmissionService({ BusOwner, uploadService }) {
     }
 
     const normalizedFiles = validateKycDocuments(files);
-
-    const uploadedPublicIds = [];
+    const newlyUploadedObjectKeys = [];
     const singleDocFields = ["companyRegistration", "taxRegistration", "transportLicense"];
+    const ownerId = busOwner._id ? busOwner._id.toString() : userId;
 
     try {
       for (const field of singleDocFields) {
         if (normalizedFiles[field]) {
-          const folder = KYC_DOCUMENT_POLICY[field].folder;
-          const assets = await uploadService.uploadMany(normalizedFiles[field], folder);
-          for (const asset of assets) {
-            if (asset && asset.publicId) uploadedPublicIds.push(asset.publicId);
+          const documentObjectKeys = [];
+          for (const validatedFile of normalizedFiles[field]) {
+            const key = await storageService.uploadDocument({
+              validatedFile,
+              ownerId,
+              documentType: field,
+            });
+            newlyUploadedObjectKeys.push(key);
+            documentObjectKeys.push(key);
           }
-          const urls = assets.map((a) => (typeof a === "string" ? a : a.url));
 
           busOwner[field] = busOwner[field] || {};
-          busOwner[field].documentUrls = urls;
+          busOwner[field].documentUrls = documentObjectKeys;
           busOwner[field].verified = false;
           busOwner[field].rejectionReason = null;
         }
       }
 
       if (normalizedFiles.insuranceCertificates) {
-        const folder = KYC_DOCUMENT_POLICY.insuranceCertificates.folder;
-        const assets = await uploadService.uploadMany(
-          normalizedFiles.insuranceCertificates,
-          folder
-        );
-        for (const asset of assets) {
-          if (asset && asset.publicId) uploadedPublicIds.push(asset.publicId);
-        }
-
-        busOwner.insuranceCertificates = assets.map((asset) => {
-          const url = typeof asset === "string" ? asset : asset.url;
-          return {
+        const insuranceItems = [];
+        for (const validatedFile of normalizedFiles.insuranceCertificates) {
+          const key = await storageService.uploadDocument({
+            validatedFile,
+            ownerId,
+            documentType: "insuranceCertificates",
+          });
+          newlyUploadedObjectKeys.push(key);
+          insuranceItems.push({
             insurerName: null,
             policyNumber: null,
             validTill: null,
-            documentUrls: [url],
+            documentUrls: [key],
             verified: false,
             rejectionReason: null,
-          };
-        });
+          });
+        }
+        busOwner.insuranceCertificates = insuranceItems;
       }
 
       busOwner.verificationStatus = "pending";
@@ -81,11 +82,14 @@ function createKycSubmissionService({ BusOwner, uploadService }) {
         message: "Bus owner KYC submitted successfully",
       };
     } catch (err) {
-      if (uploadedPublicIds.length > 0 && typeof uploadService.deleteMany === "function") {
+      if (newlyUploadedObjectKeys.length > 0 && typeof storageService.deleteMany === "function") {
         try {
-          await uploadService.deleteMany(uploadedPublicIds);
+          const cleanupResult = await storageService.deleteMany(newlyUploadedObjectKeys);
+          if (cleanupResult && cleanupResult.failed && cleanupResult.failed.length > 0) {
+            console.error("KYC S3 upload cleanup failures:", cleanupResult.failed);
+          }
         } catch (cleanupErr) {
-          console.error("KYC upload cleanup error:", cleanupErr);
+          console.error("KYC S3 upload cleanup unexpected error:", cleanupErr);
         }
       }
       throw err;

@@ -12,8 +12,9 @@ function unauthorized(res) {
 
 function createKycSubmissionController({
   BusOwner,
-  uploadService,
-  kycSubmissionService = createKycSubmissionService({ BusOwner, uploadService }),
+  storageService,
+  kycDocumentReadService,
+  kycSubmissionService = createKycSubmissionService({ BusOwner, storageService }),
 }) {
   async function submitBusOwnerKyc(req, res) {
     try {
@@ -43,6 +44,11 @@ function createKycSubmissionController({
           message: "Bus owner KYC not found. Please submit your KYC.",
         });
       }
+
+      const resolvedOwner = kycDocumentReadService
+        ? await kycDocumentReadService.resolveOwnerKycDocuments(owner)
+        : owner;
+
       const fields = [
         "verificationStatus", "rejectionReason", "companyRegistration",
         "taxRegistration", "transportLicense", "insuranceCertificates",
@@ -51,7 +57,7 @@ function createKycSubmissionController({
       return res.status(200).json({
         success: true,
         message: "Bus owner KYC status fetched successfully",
-        data: Object.fromEntries(fields.map((field) => [field, owner[field]])),
+        data: Object.fromEntries(fields.map((field) => [field, resolvedOwner[field]])),
       });
     } catch (error) {
       return handleKycSubmissionError(error, res);
