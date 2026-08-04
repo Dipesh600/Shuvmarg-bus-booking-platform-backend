@@ -3,6 +3,7 @@
 const BusOwner = require("../../../../models/busOwnerModel.js");
 const { getPresignedUrl } = require("../../../../services/s3Service.js");
 const { createKycDocumentReadService } = require("../../bus-owner/kyc-submission/kyc-document-read.service.js");
+const { sanitizeKycDetailDescriptors } = require("../../bus-owner/kyc-document-read/kyc-document-read.controller.js");
 const { isValidObjectId } = require("./request-validation.policy.js");
 
 const defaultKycDocumentReadService = createKycDocumentReadService({ getPresignedUrl });
@@ -40,7 +41,7 @@ function createKycQueryController({
       return res.status(200).json({
         success: true,
         message: "Bus owner KYC details retrieved successfully!",
-        data: resolved,
+        data: sanitizeKycDetailDescriptors(resolved),
       });
     } catch (error) {
       console.error("getBusOwnerKycById error:", error);
@@ -60,7 +61,9 @@ function createKycQueryController({
         .lean();
 
       const data = await Promise.all(
-        rawList.map((owner) => kycDocumentReadService.resolveOwnerKycDocuments(owner))
+        rawList.map(async (owner) =>
+          sanitizeKycDetailDescriptors(await kycDocumentReadService.resolveOwnerKycDocuments(owner))
+        )
       );
 
       return res.status(200).json({

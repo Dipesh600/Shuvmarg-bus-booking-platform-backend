@@ -5,6 +5,7 @@ const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { busOwnerMiddleware } = require("../../middleware/checkRole.js");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner.js");
 const busOwnerKyc = require("../../src/modules/bus-owner/kyc-submission");
+const kycDocumentRead = require("../../src/modules/bus-owner/kyc-document-read");
 const fleetManagement = require("../../src/modules/bus-owner/fleet-management");
 const boardingPointManagement = require("../../src/modules/bus-owner/boarding-point-management");
 const boardingLocationAssignment = require("../../src/modules/bus-owner/boarding-location-assignment");
@@ -20,6 +21,7 @@ router.use(auth, verifyRoleFromDB, busOwnerMiddleware);
 
 router.post("/submitBusOwnerKyc", busOwnerKyc.submitBusOwnerKyc);
 router.get("/myBusOwnerKycStatus", busOwnerKyc.getMyBusOwnerKycStatus);
+router.get("/kycDocumentReadUrl", kycDocumentRead.getKycDocumentReadUrl);
 
 // ── REQUIRE APPROVED KYC FOR ALL ROUTES BELOW ─────────────────────────────────
 router.use(requireApprovedBusOwner);

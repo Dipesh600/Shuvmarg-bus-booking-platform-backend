@@ -5,6 +5,7 @@ const BusOwner = require("../../../models/busOwnerModel.js");
 const Bus = require("../../../models/fleetModel.js");
 const { getPresignedUrl } = require("../../../services/s3Service.js");
 const { createKycDocumentReadService } = require("../../../src/modules/bus-owner/kyc-submission/kyc-document-read.service.js");
+const { sanitizeKycDetailDescriptors } = require("../../../src/modules/bus-owner/kyc-document-read/kyc-document-read.controller.js");
 const { countBusOwnerKycDocuments } = require("../../../src/modules/bus-owner/kyc-submission/kyc-document-count.js");
 
 const defaultKycDocumentReadService = createKycDocumentReadService({ getPresignedUrl });
@@ -24,7 +25,11 @@ function createUnifiedKycListController({
       ]);
 
       const busOwners = await Promise.all(
-        rawBusOwners.map((owner) => kycDocumentReadService.resolveOwnerKycDocuments(owner))
+        rawBusOwners.map(async (owner) => {
+          const resolved = await kycDocumentReadService.resolveOwnerKycDocuments(owner);
+          const docCount = countBusOwnerKycDocuments(resolved);
+          return { resolved, docCount };
+        })
       );
 
       const unifiedData = [];
@@ -43,18 +48,16 @@ function createUnifiedKycListController({
         });
       });
 
-      busOwners.forEach((owner) => {
-        const docCount = countBusOwnerKycDocuments(owner);
-
+      busOwners.forEach(({ resolved, docCount }) => {
         unifiedData.push({
-          busownerId: owner.busOwnerId,
-          companyname: owner.companyName || "N/A",
-          owner: owner.user?.name || "Unknown",
-          submitdate: owner.createdAt,
-          status: owner.verificationStatus,
+          busownerId: resolved.busOwnerId,
+          companyname: resolved.companyName || "N/A",
+          owner: resolved.user?.name || "Unknown",
+          submitdate: resolved.createdAt,
+          status: resolved.verificationStatus,
           kyctype: "busowner",
           documents: docCount,
-          data: owner,
+          data: sanitizeKycDetailDescriptors(resolved),
         });
       });
 
@@ -78,7 +81,7 @@ function createUnifiedKycListController({
         message: "Unified KYC list fetched successfully",
         dashboard: {
           totalAgents: agents.length,
-          totalBusOwners: busOwners.length,
+          totalBusOwners: rawBusOwners.length,
           totalFleets: fleets.length,
         },
         data: unifiedData,

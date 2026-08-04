@@ -2,6 +2,7 @@
 
 const { createKycSubmissionService } = require("./kyc-submission.service");
 const { handleKycSubmissionError } = require("./kyc-upload-error.mapper");
+const { sanitizeKycDetailDescriptors } = require("../kyc-document-read/kyc-document-read.controller");
 
 function unauthorized(res) {
   return res.status(401).json({
@@ -49,6 +50,8 @@ function createKycSubmissionController({
         ? await kycDocumentReadService.resolveOwnerKycDocuments(owner)
         : owner;
 
+      const sanitized = sanitizeKycDetailDescriptors(resolvedOwner);
+
       const fields = [
         "verificationStatus", "rejectionReason", "companyRegistration",
         "taxRegistration", "transportLicense", "insuranceCertificates",
@@ -57,7 +60,7 @@ function createKycSubmissionController({
       return res.status(200).json({
         success: true,
         message: "Bus owner KYC status fetched successfully",
-        data: Object.fromEntries(fields.map((field) => [field, resolvedOwner[field]])),
+        data: Object.fromEntries(fields.map((field) => [field, sanitized[field]])),
       });
     } catch (error) {
       return handleKycSubmissionError(error, res);

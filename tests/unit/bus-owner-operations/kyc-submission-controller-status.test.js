@@ -28,8 +28,11 @@ test("bus-owner KYC submission controller status contracts", async (t) => {
 
     assert.equal(res.result().status, 200);
     assert.equal(res.result().body.data.verificationStatus, "pending");
-    assert.equal(res.result().body.data.companyRegistration.documentUrls[0], "https://presigned/owners/1/kyc/company/doc.pdf");
-    assert.equal(res.result().body.data.companyRegistration.documentReferences[0].storageReference, "owners/1/kyc/company/doc.pdf");
+    // Status endpoint returns sanitized descriptors — no raw S3 keys in response
+    assert.equal(res.result().body.data.companyRegistration.documentUrls, undefined);
+    assert.equal(res.result().body.data.companyRegistration.documentReferences, undefined);
+    assert.equal(res.result().body.data.companyRegistration.fileCount, 1);
+    assert.equal(res.result().body.data.companyRegistration.available, true);
     assert.equal("ignored" in res.result().body.data, false);
   });
 
