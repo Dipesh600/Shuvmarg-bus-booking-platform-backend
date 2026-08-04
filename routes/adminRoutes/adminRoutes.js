@@ -117,6 +117,10 @@ router.post("/getBusOwnerKycDetails", adminMiddleware, busOwnerController.getBus
 router.patch("/busOwnerKycStatus", adminMiddleware, busOwnerController.updateBusOwnerKyc);
 router.patch("/busOwner/update", adminMiddleware, busOwnerController.updateBusOwnerProfile);
 router.get("/busOwnerDashboard", adminMiddleware, busOwnerController.getBusOwnerDashboard);
+// KYC document read — returns a short-lived presigned URL for one document file.
+// Admin actor is derived from req.adminInfo set by adminMiddleware.
+const kycDocumentRead = require("../../src/modules/bus-owner/kyc-document-read");
+router.get("/busOwner/kycDocumentReadUrl", adminMiddleware, kycDocumentRead.getKycDocumentReadUrl);
 
 // Push Notification (Admin)
 router.post(
