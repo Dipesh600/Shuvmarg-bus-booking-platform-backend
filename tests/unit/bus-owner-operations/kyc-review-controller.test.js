@@ -2,26 +2,31 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { createKycReviewController } = require("../../../src/modules/bus-owner/kyc-review/kyc-review.controller");
 
 function createMockResponse() {
   const res = {
     statusCode: null,
     body: null,
-    status(code) {
-      res.statusCode = code;
-      return res;
-    },
-    json(data) {
-      res.body = data;
-      return res;
-    },
+    status(code) { res.statusCode = code; return res; },
+    json(data) { res.body = data; return res; },
   };
   return res;
 }
 
 test("kyc-review-controller unit tests", async (t) => {
   const validId = "64f000000000000000000001";
+
+  await t.test("PATCH /api/admin/busOwnerKycStatus route remains guarded by adminMiddleware", () => {
+    const adminRoutes = fs.readFileSync(path.resolve(__dirname, "../../../routes/adminRoutes/adminRoutes.js"), "utf8");
+    assert.match(
+      adminRoutes,
+      /router\.patch\(["']\/busOwnerKycStatus["'],\s*adminMiddleware,/,
+      "PATCH /busOwnerKycStatus must use adminMiddleware"
+    );
+  });
 
   await t.test("unauthenticated request returns HTTP 401", async () => {
     const controller = createKycReviewController({ reviewService: {} });
@@ -31,7 +36,7 @@ test("kyc-review-controller unit tests", async (t) => {
     await controller.updateBusOwnerKyc(req, res);
     assert.equal(res.statusCode, 401);
     assert.equal(res.body.success, false);
-    assert.equal(res.body.message, "Unauthorized: Reviewer identity is required.");
+    assert.equal(res.body.message, "Authenticated reviewer identity is required.");
   });
 
   await t.test("successful review triggers notifyKycResult and returns HTTP 200", async () => {
@@ -39,8 +44,9 @@ test("kyc-review-controller unit tests", async (t) => {
     const mockServiceResult = { data: { busOwnerId: validId, verificationStatus: "approved" } };
 
     const mockReviewService = {
-      reviewKyc: async (body, reviewerId) => {
-        assert.equal(reviewerId, "admin-123");
+      reviewKyc: async (body, actor) => {
+        assert.equal(actor.adminId, "admin-123");
+        assert.equal(actor.tokenRole, "ADMIN");
         return mockServiceResult;
       },
     };
@@ -51,7 +57,7 @@ test("kyc-review-controller unit tests", async (t) => {
     });
 
     const req = {
-      adminInfo: { id: "admin-123" },
+      adminInfo: { id: "admin-123", role: "ADMIN" },
       body: { id: validId, verificationStatus: "approved" },
     };
     const res = createMockResponse();
@@ -74,7 +80,7 @@ test("kyc-review-controller unit tests", async (t) => {
     };
 
     const controller = createKycReviewController({ reviewService: mockReviewService });
-    const req = { user: { _id: "admin-456" }, body: { id: validId, verificationStatus: "rejected" } };
+    const req = { adminInfo: { id: "admin-456", role: "ADMIN" }, body: { id: validId, verificationStatus: "rejected" } };
     const res = createMockResponse();
 
     await controller.updateBusOwnerKyc(req, res);
@@ -91,7 +97,7 @@ test("kyc-review-controller unit tests", async (t) => {
     };
 
     const controller = createKycReviewController({ reviewService: mockReviewService });
-    const req = { adminInfo: { id: "admin-123" }, body: { id: validId, verificationStatus: "approved" } };
+    const req = { adminInfo: { id: "admin-123", role: "ADMIN" }, body: { id: validId, verificationStatus: "approved" } };
     const res = createMockResponse();
 
     await controller.updateBusOwnerKyc(req, res);

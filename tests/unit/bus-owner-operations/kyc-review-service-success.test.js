@@ -6,6 +6,8 @@ const { createKycReviewService } = require("../../../src/modules/bus-owner/kyc-r
 
 test("kyc-review-service success tests", async (t) => {
   const fixedDate = new Date("2026-08-04T12:00:00Z");
+  const mockAdmin = { _id: "64f000000000000000000099", role: "ADMIN", isActive: true, email: "admin@shuvmarg.com" };
+  const mockAdminModel = { findById: () => ({ lean: async () => mockAdmin }) };
 
   await t.test("pending -> approved updates state, user sync, review metadata, and ownerIdentity approval verdict", async () => {
     let atomicQuery = null;
@@ -46,6 +48,7 @@ test("kyc-review-service success tests", async (t) => {
     };
 
     const service = createKycReviewService({
+      Admin: mockAdminModel,
       BusOwner: mockBusOwnerModel,
       User: mockUserModel,
       applyDocumentVerdicts: (owner) => {
@@ -107,6 +110,7 @@ test("kyc-review-service success tests", async (t) => {
     };
 
     const service = createKycReviewService({
+      Admin: mockAdminModel,
       BusOwner: mockBusOwnerModel,
       User: mockUserModel,
       applyDocumentVerdicts: (owner) => {

@@ -1,10 +1,7 @@
 "use strict";
 
 const mongoose = require("mongoose");
-
-function getAuthenticatedReviewerId(req) {
-  return req?.adminInfo?.id || req?.adminInfo?._id || req?.user?._id || req?.user?.id || null;
-}
+const { getKycReviewerActor } = require("./kyc-review-actor.policy");
 
 function createKycReviewController({ reviewService, notifyKycResult }) {
   async function updateBusOwnerKyc(req, res) {
@@ -17,15 +14,8 @@ function createKycReviewController({ reviewService, notifyKycResult }) {
         return res.status(400).json({ success: false, message: "Invalid id format!" });
       }
 
-      const reviewerId = getAuthenticatedReviewerId(req);
-      if (!reviewerId) {
-        return res.status(401).json({
-          success: false,
-          message: "Unauthorized: Reviewer identity is required.",
-        });
-      }
-
-      const result = await reviewService.reviewKyc(req.body, reviewerId);
+      const actor = getKycReviewerActor(req);
+      const result = await reviewService.reviewKyc(req.body, actor);
 
       if (typeof notifyKycResult === "function") {
         await notifyKycResult(result);
@@ -54,7 +44,6 @@ function createKycReviewController({ reviewService, notifyKycResult }) {
 
   return {
     updateBusOwnerKyc,
-    getAuthenticatedReviewerId,
   };
 }
 

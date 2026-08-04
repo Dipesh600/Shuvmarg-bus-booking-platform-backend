@@ -5,8 +5,23 @@ const { KYC_REVIEW_STATUS, assertKycReviewTransition } = require("./kyc-review.p
 const { validateKycReviewRequest } = require("./kyc-review-request.policy");
 const { resolveBusOwnerForReviewReference } = require("./kyc-review-reference.resolver");
 const { syncReviewedOwnerUser } = require("./kyc-review-user-sync.service");
+const { getKycReviewerActor, assertCanReviewBusOwnerKyc } = require("./kyc-review-actor.policy");
+const { resolveKycReviewer } = require("./kyc-review-reviewer.resolver");
+const { assertReviewerIsIndependent } = require("./kyc-review-separation-of-duty.policy");
+
+function normalizeActorInput(actorInput) {
+  if (typeof actorInput === "string" && actorInput.trim() !== "") {
+    return { adminId: actorInput.trim(), tokenRole: null };
+  }
+  if (actorInput && typeof actorInput === "object") {
+    if (actorInput.adminId) return actorInput;
+    if (actorInput.adminInfo) return getKycReviewerActor(actorInput);
+  }
+  throw new KycReviewError("KYC_REVIEW_UNAUTHORIZED", "Authenticated reviewer identity is required.", 401);
+}
 
 function createKycReviewService({
+  Admin,
   BusOwner,
   User,
   applyDocumentVerdicts,
@@ -14,14 +29,22 @@ function createKycReviewService({
   clock = () => new Date(),
   logger = console,
 }) {
-  async function reviewKyc(body, reviewerId) {
-    if (!reviewerId) {
-      throw new KycReviewError("KYC_REVIEW_UNAUTHORIZED", "Unauthorized: Reviewer identity is required.", 401);
-    }
-
+  async function reviewKyc(body, actorInput) {
+    const actor = normalizeActorInput(actorInput);
     const { id, targetStatus, rejectionReason } = validateKycReviewRequest(body);
+
+    const reviewer = await resolveKycReviewer({ Admin, actor });
+    assertCanReviewBusOwnerKyc({ reviewer, tokenRole: actor.tokenRole });
+
     const owner = await resolveBusOwnerForReviewReference({ id, BusOwner });
 
+    let busOwnerUser = null;
+    if (User && typeof User.findById === "function" && owner.user) {
+      const q = User.findById(owner.user);
+      busOwnerUser = q && typeof q.lean === "function" ? await q.lean() : await q;
+    }
+
+    assertReviewerIsIndependent({ reviewer, busOwner: owner, busOwnerUser });
     assertKycReviewTransition({ currentStatus: owner.verificationStatus, targetStatus });
 
     if (typeof applyDocumentVerdicts === "function") {
@@ -31,16 +54,11 @@ function createKycReviewService({
     const updateFields = {
       verificationStatus: targetStatus,
       rejectionReason: targetStatus === KYC_REVIEW_STATUS.REJECTED ? rejectionReason : null,
-      "kycReview.reviewedBy": reviewerId,
+      "kycReview.reviewedBy": reviewer.adminId || String(reviewer._id),
       "kycReview.reviewedAt": clock(),
     };
 
-    const docFields = [
-      "companyRegistration",
-      "ownerIdentity",
-      "taxRegistration",
-      "transportLicense",
-    ];
+    const docFields = ["companyRegistration", "ownerIdentity", "taxRegistration", "transportLicense"];
     for (const field of docFields) {
       if (owner[field]) {
         updateFields[`${field}.verified`] = owner[field].verified;
@@ -73,14 +91,10 @@ function createKycReviewService({
     }
 
     const invalidDocs = typeof invalidDocuments === "function" ? invalidDocuments(updatedOwner) : [];
-    let userDoc = null;
-    if (User && typeof User.findById === "function") {
-      userDoc = await User.findById(updatedOwner.user).lean();
-    }
 
     return {
       owner: updatedOwner,
-      user: userDoc || { _id: updatedOwner.user },
+      user: busOwnerUser || { _id: updatedOwner.user },
       status: targetStatus,
       documents: invalidDocs,
       data: {
