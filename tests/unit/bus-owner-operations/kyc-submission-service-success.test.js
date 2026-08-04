@@ -24,18 +24,40 @@ test("kyc-submission.service success and state tests", async (t) => {
     );
   });
 
-  await t.test("state rules: rejected state allows resubmission and resets status to pending", async () => {
+  await t.test("rejected state allows resubmission, saves new keys first, then deletes replaced old S3 keys", async () => {
+    const callOrder = [];
     let savedOwner;
+
     function MockBusOwner(val) {
       Object.assign(this, val);
-      this.save = async () => { savedOwner = this; };
+      this.save = async () => {
+        callOrder.push("save");
+        savedOwner = this;
+      };
     }
-    MockBusOwner.findOne = async () => new MockBusOwner({ verificationStatus: "rejected", rejectionReason: "Bad tax doc" });
+
+    const oldOwnerData = {
+      verificationStatus: "rejected",
+      companyRegistration: { documentUrls: ["owners/1/old-c.pdf", "owners/1/old-c.pdf"] },
+      taxRegistration: { documentUrls: ["https://cloudinary.com/old-t.pdf"] },
+      transportLicense: { documentUrls: ["owners/1/old-l.pdf"] },
+      insuranceCertificates: [{ documentUrls: ["owners/1/old-i.pdf"] }],
+      ownerIdentity: { documentUrls: ["owners/1/old-identity.pdf"] },
+    };
+
+    MockBusOwner.findOne = async () => new MockBusOwner(oldOwnerData);
 
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
       storageService: {
-        uploadDocument: async ({ documentType }) => `owners/user-1/kyc/${documentType}/uuid.pdf`,
+        uploadDocument: async ({ documentType }) => {
+          callOrder.push(`upload:${documentType}`);
+          return `owners/1/new-${documentType}.pdf`;
+        },
+        deleteMany: async (keys) => {
+          callOrder.push(`delete-old:${keys.join(",")}`);
+          return { deleted: keys, failed: [] };
+        },
       },
     });
 
@@ -43,6 +65,44 @@ test("kyc-submission.service success and state tests", async (t) => {
     assert.equal(res.success, true);
     assert.equal(savedOwner.verificationStatus, "pending");
     assert.equal(savedOwner.rejectionReason, null);
-    assert.equal(savedOwner.companyRegistration.documentUrls[0], "owners/user-1/kyc/companyRegistration/uuid.pdf");
+
+    assert.deepEqual(callOrder, [
+      "upload:companyRegistration",
+      "upload:taxRegistration",
+      "upload:transportLicense",
+      "save",
+      "delete-old:owners/1/old-c.pdf,https://cloudinary.com/old-t.pdf,owners/1/old-l.pdf,owners/1/old-i.pdf",
+    ]);
+  });
+
+  await t.test("old cleanup failure logs via logger.error but returns submission success", async () => {
+    const loggedErrors = [];
+    function MockBusOwner(val) {
+      Object.assign(this, val);
+      this.save = async () => {};
+    }
+    MockBusOwner.findOne = async () => new MockBusOwner({
+      verificationStatus: "rejected",
+      companyRegistration: { documentUrls: ["owners/1/old-c.pdf"] },
+    });
+
+    const mockLogger = {
+      error: (...args) => loggedErrors.push(args),
+    };
+
+    const service = createKycSubmissionService({
+      BusOwner: MockBusOwner,
+      logger: mockLogger,
+      storageService: {
+        uploadDocument: async ({ documentType }) => `owners/1/new-${documentType}.pdf`,
+        deleteMany: async () => ({ deleted: [], failed: ["owners/1/old-c.pdf"] }),
+      },
+    });
+
+    const res = await service.submitKyc({ userId: "user-1", files: makeValidFiles() });
+    assert.equal(res.success, true);
+    assert.equal(loggedErrors.length, 1);
+    assert.equal(loggedErrors[0][0], "KYC replaced-document cleanup failures:");
+    assert.deepEqual(loggedErrors[0][1], ["owners/1/old-c.pdf"]);
   });
 });

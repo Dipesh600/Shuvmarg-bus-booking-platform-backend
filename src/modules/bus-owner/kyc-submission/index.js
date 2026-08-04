@@ -28,6 +28,7 @@ const storageService = createKycDocumentStorageService({
 const kycSubmissionService = createKycSubmissionService({
   BusOwner,
   storageService,
+  logger: console,
 });
 const kycDocumentReadService = createKycDocumentReadService({
   getPresignedUrl,
