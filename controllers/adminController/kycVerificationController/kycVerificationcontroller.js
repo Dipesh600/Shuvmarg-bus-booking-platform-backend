@@ -5,6 +5,7 @@ const BusOwner = require("../../../models/busOwnerModel.js");
 const Bus = require("../../../models/fleetModel.js");
 const { getPresignedUrl } = require("../../../services/s3Service.js");
 const { createKycDocumentReadService } = require("../../../src/modules/bus-owner/kyc-submission/kyc-document-read.service.js");
+const { countBusOwnerKycDocuments } = require("../../../src/modules/bus-owner/kyc-submission/kyc-document-count.js");
 
 const defaultKycDocumentReadService = createKycDocumentReadService({ getPresignedUrl });
 
@@ -43,11 +44,7 @@ function createUnifiedKycListController({
       });
 
       busOwners.forEach((owner) => {
-        const docCount =
-          (owner.companyRegistration?.documentUrls?.length || 0) +
-          (owner.ownerIdentity?.documentUrls?.length || 0) +
-          (owner.taxRegistration?.documentUrls?.length || 0) +
-          (owner.bankDetails?.documentUrls?.length || 0);
+        const docCount = countBusOwnerKycDocuments(owner);
 
         unifiedData.push({
           busownerId: owner.busOwnerId,
