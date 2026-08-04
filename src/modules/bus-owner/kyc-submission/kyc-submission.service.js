@@ -80,6 +80,7 @@ function createKycSubmissionService({ BusOwner, storageService, logger = console
 
       busOwner.verificationStatus = "pending";
       busOwner.rejectionReason = null;
+      busOwner.kycReview = { reviewedBy: null, reviewedAt: null };
 
       await busOwner.save();
 
