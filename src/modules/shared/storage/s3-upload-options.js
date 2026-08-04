@@ -1,20 +1,43 @@
 "use strict";
 
-function assertPathSafety(val, name) {
-  if (typeof val !== "string" || val.trim() === "") {
+const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/;
+
+function validatePathValue(value, name) {
+  if (typeof value !== "string" || value.length === 0) {
     throw new Error(`Invalid ${name}: must be a non-empty string.`);
   }
-  const normalized = val.trim();
-  if (normalized.startsWith("/")) {
-    throw new Error(`Invalid ${name} '${val}': leading slashes are not allowed.`);
+
+  if (value !== value.trim()) {
+    throw new Error(`Invalid ${name}: leading or trailing whitespace is not allowed.`);
   }
-  if (normalized.includes("\\")) {
-    throw new Error(`Invalid ${name} '${val}': backslashes are not allowed.`);
+
+  if (value.startsWith("/")) {
+    throw new Error(`Invalid ${name}: leading slash is not allowed.`);
   }
-  if (normalized.split("/").some((part) => part === "..")) {
-    throw new Error(`Invalid ${name} '${val}': path traversal '..' is not allowed.`);
+
+  if (value.includes("\\")) {
+    throw new Error(`Invalid ${name}: backslashes are not allowed.`);
   }
-  return normalized;
+
+  if (CONTROL_CHAR_PATTERN.test(value)) {
+    throw new Error(`Invalid ${name}: control characters are not allowed.`);
+  }
+
+  const segments = value.split("/");
+
+  if (
+    segments.some(
+      (segment) =>
+        segment.length === 0 ||
+        segment === "." ||
+        segment === ".." ||
+        segment !== segment.trim()
+    )
+  ) {
+    throw new Error(`Invalid ${name}: contains an unsafe path segment.`);
+  }
+
+  return value;
 }
 
 function normalizeUploadOptions(folderOrOptions) {
@@ -23,7 +46,7 @@ function normalizeUploadOptions(folderOrOptions) {
   }
 
   if (typeof folderOrOptions === "string") {
-    const safeFolder = assertPathSafety(folderOrOptions, "folder");
+    const safeFolder = validatePathValue(folderOrOptions, "folder");
     return { folder: safeFolder, objectName: null, objectKey: null };
   }
 
@@ -37,7 +60,7 @@ function normalizeUploadOptions(folderOrOptions) {
     if (folder !== undefined || objectName !== undefined) {
       throw new Error("Ambiguous upload options: 'objectKey' cannot be combined with 'folder' or 'objectName'.");
     }
-    const safeKey = assertPathSafety(objectKey, "objectKey");
+    const safeKey = validatePathValue(objectKey, "objectKey");
     return { objectKey: safeKey, folder: null, objectName: null };
   }
 
@@ -45,10 +68,10 @@ function normalizeUploadOptions(folderOrOptions) {
     if (!folder || !objectName) {
       throw new Error("Structured upload options require both 'folder' and 'objectName'.");
     }
-    const safeFolder = assertPathSafety(folder, "folder");
-    const safeName = assertPathSafety(objectName, "objectName");
+    const safeFolder = validatePathValue(folder, "folder");
+    const safeName = validatePathValue(objectName, "objectName");
     if (safeName.includes("/")) {
-      throw new Error(`Invalid objectName '${objectName}': object name cannot contain slashes.`);
+      throw new Error("Invalid objectName: slashes are not allowed.");
     }
     return { folder: safeFolder, objectName: safeName, objectKey: `${safeFolder}/${safeName}` };
   }
@@ -58,4 +81,5 @@ function normalizeUploadOptions(folderOrOptions) {
 
 module.exports = {
   normalizeUploadOptions,
+  validatePathValue,
 };
