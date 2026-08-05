@@ -50,4 +50,47 @@ test("fleet-document-persistence unit tests", async (t) => {
 
     assert.equal(deletedKey, "fleet-documents/1/fitnessCert/u1.pdf");
   });
+
+  await t.test("database exception during update cleans up uploaded keys and rethrows DB error", async () => {
+    let deletedKeys = [];
+    const dbErr = new Error("DB Validation Error");
+
+    const repo = {
+      findFleetForDocumentUpdate: async () => ({
+        _id: fleetId,
+        ownerId: userId,
+        approvalStatus: "PENDING",
+        __v: 5,
+      }),
+      atomicDocumentUpdate: async () => { throw dbErr; },
+    };
+
+    const storage = {
+      buildPrivateObjectKey: () => "fleet-documents/1/fitnessCert/u2.pdf",
+      uploadPrivate: async () => "fleet-documents/1/fitnessCert/u2.pdf",
+      deleteNewObjectOrReport: async (keys) => { deletedKeys = keys; },
+      deleteOldObjectBestEffort: async () => {},
+    };
+
+    const service = createUploadService({
+      repository: repo,
+      storage,
+      resolveActor: async () => ({ actorType: "BUS_OWNER", actorId: userId, userId }),
+    });
+
+    const file = { name: "doc.pdf", mimetype: "application/pdf", data: pdfBuffer, size: 100 };
+
+    await assert.rejects(
+      async () => service.uploadDocument({
+        fleetId,
+        slot: "fitnessCert",
+        body: {},
+        files: { fitnessCert: file },
+        actorContext: { userInfo: { id: userId, role: "busOwner" } },
+      }),
+      (err) => err === dbErr
+    );
+
+    assert.deepEqual(deletedKeys, ["fleet-documents/1/fitnessCert/u2.pdf"]);
+  });
 });

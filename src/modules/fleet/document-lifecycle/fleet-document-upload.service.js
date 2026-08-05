@@ -86,14 +86,24 @@ function createFleetDocumentUploadService(deps = {}) {
       auditEvent,
     });
 
-    const updatedFleet = await repository.atomicDocumentUpdate({
-      fleetId,
-      expectedVersion: fleet.__v,
-      update: updateQuery,
-    });
+    let updatedFleet;
+    try {
+      updatedFleet = await repository.atomicDocumentUpdate({
+        fleetId,
+        expectedVersion: fleet.__v,
+        update: updateQuery,
+      });
+    } catch (databaseError) {
+      if (uploadedKeys.length > 0) {
+        await storage.deleteNewObjectOrReport(uploadedKeys, logger);
+      }
+      throw databaseError;
+    }
 
     if (!updatedFleet) {
-      await storage.deleteNewObjectOrReport(uploadedKeys, logger);
+      if (uploadedKeys.length > 0) {
+        await storage.deleteNewObjectOrReport(uploadedKeys, logger);
+      }
       throw errors.concurrentModification();
     }
 
