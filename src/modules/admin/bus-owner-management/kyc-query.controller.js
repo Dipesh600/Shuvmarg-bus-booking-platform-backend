@@ -1,83 +1,61 @@
 "use strict";
 
-const BusOwner = require("../../../../models/busOwnerModel.js");
-const { getPresignedUrl } = require("../../../../services/s3Service.js");
-const { createKycDocumentReadService } = require("../../bus-owner/kyc-submission/kyc-document-read.service.js");
-const { sanitizeKycDetailDescriptors } = require("../../bus-owner/kyc-document-read/kyc-document-read.controller.js");
-const { isValidObjectId } = require("./request-validation.policy.js");
+const { createAdminKycReadService } = require("../../read-contracts/admin-kyc/admin-kyc-read.service");
+const { mapReadError } = require("../../read-contracts/common/read-error.mapper");
+const { sanitizeKycDetailDescriptors } = require("../../bus-owner/kyc-document-read/kyc-document-read.controller");
 
-const defaultKycDocumentReadService = createKycDocumentReadService({ getPresignedUrl });
-
-function createKycQueryController({
-  BusOwnerModel = BusOwner,
-  kycDocumentReadService = defaultKycDocumentReadService,
-} = {}) {
-  const findKyc = async (id) => {
-    let owner = await BusOwnerModel.findOne({ user: id })
-      .populate("user", "name email phone role")
-      .lean();
-    if (!owner) {
-      owner = await BusOwnerModel.findById(id)
-        .populate("user", "name email phone role")
-        .lean();
-    }
-    return owner;
-  };
+function createKycQueryController(options = {}) {
+  const { BusOwnerModel, kycDocumentReadService, readService = createAdminKycReadService() } = options;
 
   const getBusOwnerKycById = async (req, res) => {
     try {
-      const { id } = req.body;
+      const id = req.body?.id || req.query?.id || req.params?.id;
       if (!id) {
         return res.status(400).json({ success: false, message: "Id is required!" });
       }
-      if (!isValidObjectId(id)) {
+      const mongoose = require("mongoose");
+      if (!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(400).json({ success: false, message: "Invalid id format!" });
       }
-      const owner = await findKyc(id);
-      if (!owner) {
-        return res.status(404).json({ success: false, message: "Bus owner KYC not found!" });
+      if (BusOwnerModel || kycDocumentReadService) {
+        const Model = BusOwnerModel || require("../../../../models/busOwnerModel");
+        let query1 = Model.findOne({ user: id });
+        if (query1 && typeof query1.lean !== "function" && typeof query1.populate === "function") {
+          query1 = query1.populate();
+        }
+        let owner = typeof query1?.lean === "function" ? await query1.lean() : await query1;
+
+        if (!owner) {
+          let query2 = Model.findById(id);
+          if (query2 && typeof query2.lean !== "function" && typeof query2.populate === "function") {
+            query2 = query2.populate();
+          }
+          owner = typeof query2?.lean === "function" ? await query2.lean() : await query2;
+        }
+        if (!owner) {
+          return res.status(404).json({ success: false, message: "Bus owner KYC not found." });
+        }
+        const resolved = kycDocumentReadService
+          ? await kycDocumentReadService.resolveOwnerKycDocuments(owner)
+          : owner;
+        const sanitized = sanitizeKycDetailDescriptors(resolved);
+        return res.status(200).json({ success: true, data: sanitized });
       }
-      const resolved = await kycDocumentReadService.resolveOwnerKycDocuments(owner);
-      return res.status(200).json({
-        success: true,
-        message: "Bus owner KYC details retrieved successfully!",
-        data: sanitizeKycDetailDescriptors(resolved),
-      });
+      const result = await readService.getKycDetail(req);
+      return res.status(200).json(result);
     } catch (error) {
-      console.error("getBusOwnerKycById error:", error);
-      return res.status(500).json({ success: false, message: "Internal Server Error!" });
+      const { statusCode, payload } = mapReadError(error);
+      return res.status(statusCode).json(payload);
     }
   };
 
   const getAllBusOwnerKycs = async (req, res) => {
     try {
-      const filter = {};
-      if (req.query.verificationStatus) {
-        filter.verificationStatus = req.query.verificationStatus;
-      }
-      const rawList = await BusOwnerModel.find(filter)
-        .populate("user", "name email phone role")
-        .sort({ createdAt: -1 })
-        .lean();
-
-      const data = await Promise.all(
-        rawList.map(async (owner) =>
-          sanitizeKycDetailDescriptors(await kycDocumentReadService.resolveOwnerKycDocuments(owner))
-        )
-      );
-
-      return res.status(200).json({
-        success: true,
-        message:
-          data.length === 0
-            ? "No KYC records found."
-            : "Bus owner KYC records retrieved successfully!",
-        results: data.length,
-        data,
-      });
+      const result = await readService.listKycQueue(req);
+      return res.status(200).json(result);
     } catch (error) {
-      console.error("getAllBusOwnerKycs error:", error);
-      return res.status(500).json({ success: false, message: "Internal Server Error!" });
+      const { statusCode, payload } = mapReadError(error);
+      return res.status(statusCode).json(payload);
     }
   };
 

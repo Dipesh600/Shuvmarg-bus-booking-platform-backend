@@ -1,129 +1,56 @@
 "use strict";
 
-const BusOwner = require("../../../../models/busOwnerModel.js");
-const User = require("../../../../models/userModel.js");
-const Fleet = require("../../../../models/fleetModel.js");
-const { isValidObjectId } = require("./request-validation.policy.js");
+const { createAdminBusOwnerReadService } = require("../../read-contracts/admin-bus-owner/admin-bus-owner-read.service");
+const { mapReadError } = require("../../read-contracts/common/read-error.mapper");
 
-const getAllBusOwners = async (_req, res) => {
-  try {
-    const owners = await BusOwner.find()
-      .populate("user", "-password -__v -otp -otpExpiry")
-      .lean();
-    const data = owners
-      .map((owner) =>
-        owner.user
-          ? {
-              _id: owner.user._id,
-              busOwnerId: owner._id,
-              name: owner.user.name,
-              email: owner.user.email,
-              phone: owner.user.phone,
-              profilePicture: owner.user.profilePicture,
-              status: owner.user.status,
-              isVerified: owner.verificationStatus === "approved",
-              verificationStatus: owner.verificationStatus,
-              companyName:
-                owner.companyName ||
-                owner.companyRegistration?.companyName ||
-                "N/A",
-              createdAt: owner.createdAt,
-            }
-          : null
-      )
-      .filter(Boolean);
-    return res.status(200).json({
-      success: true,
-      message:
-        data.length === 0
-          ? "No bus owners registered yet."
-          : "Bus owners retrieved successfully!",
-      results: data.length,
-      data,
-    });
-  } catch (error) {
-    console.error("getAllBusOwners error:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Internal Server Error!" });
-  }
+const defaultService = createAdminBusOwnerReadService();
+
+function createOwnerQueryController({
+  adminBusOwnerReadService = defaultService,
+} = {}) {
+  return {
+    async getAllBusOwners(req, res) {
+      try {
+        const result = await adminBusOwnerReadService.listBusOwners(req);
+        return res.status(200).json(result);
+      } catch (error) {
+        const { statusCode, payload } = mapReadError(error);
+        return res.status(statusCode).json(payload);
+      }
+    },
+
+    async getBusOwnerById(req, res) {
+      try {
+        const id = req.body?.id || req.query?.id || req.params?.id;
+        if (!id) {
+          return res.status(400).json({ success: false, message: "Id is required!" });
+        }
+        const mongoose = require("mongoose");
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+          return res.status(400).json({ success: false, message: "Invalid id format!" });
+        }
+        const result = await adminBusOwnerReadService.getBusOwnerDetail(req);
+        return res.status(200).json(result);
+      } catch (error) {
+        const { statusCode, payload } = mapReadError(error);
+        return res.status(statusCode).json(payload);
+      }
+    },
+  };
+}
+
+const defaultController = createOwnerQueryController();
+
+const exportsObj = {
+  getAllBusOwners: defaultController.getAllBusOwners,
+  getBusOwnerById: defaultController.getBusOwnerById,
 };
 
-const findOwnerAndUser = async (id) => {
-  let user = await User.findById(id).select("-password -__v -otp -otpExpiry");
-  let owner = await BusOwner.findOne({ user: id });
-  if (!owner) {
-    owner = await BusOwner.findById(id);
-    if (owner && !user) {
-      user = await User.findById(owner.user).select(
-        "-password -__v -otp -otpExpiry"
-      );
-    }
-  }
-  return { user, owner };
-};
+Object.defineProperty(exportsObj, "createOwnerQueryController", {
+  value: createOwnerQueryController,
+  enumerable: false,
+  writable: false,
+  configurable: true,
+});
 
-const getBusOwnerById = async (req, res) => {
-  try {
-    const { id } = req.body;
-    if (!id) {
-      return res.status(400).json({ success: false, message: "Id is required!" });
-    }
-    if (!isValidObjectId(id)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid id format!" });
-    }
-    const { user, owner } = await findOwnerAndUser(id);
-    if (!user && !owner) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Bus owner not found!" });
-    }
-    const roles =
-      user.roles && user.roles.length > 0 ? user.roles : [user.role];
-    if (!roles.includes("busOwner")) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User is not a bus owner!" });
-    }
-    const fleets = await Fleet.find({
-      busOwnerId: owner ? owner._id : null,
-    }).populate("operatorId", "name email");
-    const activeRoutes = new Set(
-      fleets
-        .map((fleet) => fleet.route?.from + "-" + fleet.route?.to)
-        .filter(Boolean)
-    ).size;
-    const formatted = {
-      ...user.toObject(),
-      busOwnerDoc: owner || null,
-      fleetSize: fleets.length,
-      activeRoutes,
-      buses: fleets.map((fleet) => ({
-        id: fleet.busNumber,
-        type: fleet.busType,
-        route: fleet.route
-          ? `${fleet.route.from} - ${fleet.route.to}`
-          : "Unassigned",
-        status: fleet.status,
-        capacity: fleet.totalSeats || 0,
-      })),
-      monthlyRevenue: "NPR 0",
-      totalRevenue: "NPR 0",
-      recentPayments: [],
-    };
-    return res.status(200).json({
-      success: true,
-      message: "Bus owner details retrieved successfully!",
-      user: formatted,
-    });
-  } catch (error) {
-    console.error("getBusOwnerById error:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Internal Server Error!" });
-  }
-};
-
-module.exports = { getAllBusOwners, getBusOwnerById };
+module.exports = exportsObj;

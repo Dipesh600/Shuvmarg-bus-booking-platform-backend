@@ -2,41 +2,39 @@
 
 const { getAdminActor } = require("../bus-owner-management/admin-actor.resolver");
 const { mapFleetApprovalError } = require("./fleet-approval-error.mapper");
+const { createFleetReadService } = require("../../read-contracts/fleet/fleet-read.service");
+const { mapReadError } = require("../../read-contracts/common/read-error.mapper");
+
+const defaultReadService = createFleetReadService();
 
 function send(res, result) {
   return res.status(result.statusCode).json(result.body);
 }
 
 function createFleetManagementController({
-  listFleets,
-  getFleetDetail,
   updateFleetStatus,
   getFleetDashboard,
-  getFleetSetupStatus,
+  readService = defaultReadService,
   console: logger = console,
-}) {
+} = {}) {
   return {
     async getAllFleet(req, res) {
       try {
-        return send(res, await listFleets(req.query));
+        const result = await readService.listFleetsForAdmin(req);
+        return res.status(200).json(result);
       } catch (error) {
-        logger.error("Error fetching fleets:", error);
-        return res.status(500).json({
-          success: false,
-          message: "Internal server error",
-        });
+        const { statusCode, payload } = mapReadError(error, logger);
+        return res.status(statusCode).json(payload);
       }
     },
 
     async getFleetById(req, res) {
       try {
-        return send(res, await getFleetDetail(req.params.id));
+        const result = await readService.getFleetDetailForAdmin(req);
+        return res.status(200).json(result);
       } catch (error) {
-        logger.error("Error fetching fleet by ID:", error);
-        return res.status(500).json({
-          success: false,
-          message: "Internal server error",
-        });
+        const { statusCode, payload } = mapReadError(error, logger);
+        return res.status(statusCode).json(payload);
       }
     },
 
@@ -68,13 +66,11 @@ function createFleetManagementController({
 
     async getFleetSetupStatus(req, res) {
       try {
-        return send(res, await getFleetSetupStatus(req.params.id));
+        const result = await readService.getFleetSetupStatusForAdmin(req);
+        return res.status(200).json(result);
       } catch (error) {
-        logger.error("Error fetching fleet setup status:", error);
-        return res.status(500).json({
-          success: false,
-          message: "Internal server error",
-        });
+        const { statusCode, payload } = mapReadError(error, logger);
+        return res.status(statusCode).json(payload);
       }
     },
   };
