@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const fleetApprovalFields = require("./schemas/fleet-approval-fields");
+const fleetDocumentFields = require("./schemas/fleet-document-fields");
 
 const BusSchema = new mongoose.Schema(
     {
@@ -155,11 +156,6 @@ const BusSchema = new mongoose.Schema(
             index: true
         },
 
-        fleetImages: {
-            type: [String],
-            default: []
-        },
-
         // Denormalized rating (updated on review creation via aggregation)
         averageRating: {
             type: Number,
@@ -173,43 +169,13 @@ const BusSchema = new mongoose.Schema(
             min: 0,
         },
 
-        // Per-vehicle legal documents (separate from owner-level KYC)
-        fleetDocuments: {
-            fitnessCert: {
-                url: { type: String, default: null },
-                validTill: { type: Date, default: null },
-            },
-            insurance: {
-                url: { type: String, default: null },
-                policyNumber: { type: String, default: null },
-                validTill: { type: Date, default: null },
-            },
-            bluebook: {
-                url: { type: String, default: null },
-            },
-            routePermit: {
-                url: { type: String, default: null },
-                validTill: { type: Date, default: null },
-            },
-        },
-
         registrationYear: {
             type: Number
         },
 
-        ...fleetApprovalFields,
+        ...fleetDocumentFields,
 
-        // ── Per-document review results (set by admin during KYC review) ────────
-        // Each key maps to a document slot. Status: 'pending' | 'approved' | 'rejected'
-        // This is what the bus owner actually sees when their application is rejected
-        // so they know exactly which file to fix and re-upload.
-        documentReviews: {
-            fleetImages:  { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
-            fitnessCert:  { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
-            insurance:    { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
-            bluebook:     { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
-            routePermit:  { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
-        },
+        ...fleetApprovalFields,
 
         createdBy: {
             type: String,

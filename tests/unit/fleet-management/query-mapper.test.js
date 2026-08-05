@@ -12,25 +12,25 @@ const {
   createFleetQueryRepository,
 } = require("../../../src/modules/fleet-management/fleet-query.repository");
 
-test("fleet mapper presigns images and document slots", async () => {
-  const seen = [];
-  const mapper = createFleetDocumentMapper({
-    getPresignedUrl: async (key) => { seen.push(key); return `signed:${key}`; },
-  });
+test("fleet mapper returns safe document descriptors without raw keys or presigned URLs", async () => {
+  const mapper = createFleetDocumentMapper({});
   const fleet = {
     fleetImages: ["front", "back"],
     fleetDocuments: {
-      fitnessCert: { url: "fitness" }, insurance: { url: "insurance" },
+      fitnessCert: { url: "fitness", uploadedAt: new Date("2026-08-05") }, insurance: { url: "insurance" },
       bluebook: { url: null }, routePermit: { url: "permit" },
     },
   };
-  assert.equal(await mapper.withRawKeys(fleet), fleet);
-  assert.equal(seen.length, 0);
+  const rawResult = mapper.withRawKeys(fleet);
+  assert.equal(rawResult.fleetDocuments.fitnessCert.present, true);
+  assert.equal(rawResult.fleetDocuments.fitnessCert.url, undefined);
+  assert.equal(rawResult.fleetDocuments.fitnessCert.objectKey, undefined);
+
   const result = await mapper.withPresignedUrls(fleet);
-  assert.equal(result, fleet);
-  assert.deepEqual(seen, ["front", "back", "fitness", "insurance", "permit"]);
-  assert.deepEqual(result.fleetImages, ["signed:front", "signed:back"]);
-  assert.equal(result.fleetDocuments.routePermit.url, "signed:permit");
+  assert.equal(result.fleetDocuments.fitnessCert.present, true);
+  assert.equal(result.fleetDocuments.fitnessCert.url, undefined);
+  assert.equal(result.fleetDocuments.fitnessCert.objectKey, undefined);
+  assert.equal(result.fleetImages.count, 2);
 });
 
 test("query service distinguishes mapped and raw admin reads", async () => {

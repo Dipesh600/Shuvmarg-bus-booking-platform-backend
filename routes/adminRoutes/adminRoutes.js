@@ -25,6 +25,7 @@ const boardingPointController = require("../../controllers/adminController/ticke
 const adminAmenityController = require("../../controllers/adminController/amenity/amenityController.js");
 const adminBusRouteController = require("../../controllers/adminController/busOwnerController/busRouteController.js");
 const adminFleetController = require("../../controllers/adminController/busOwnerController/fleetController.js");
+const { adminFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
 const adminTemplateController = require("../../controllers/adminController/busOwnerController/templateController.js");
 const adminTripController = require("../../controllers/adminController/busOwnerController/tripController.js");
 const adminSettlementCon = require("../../controllers/busOwnerController/settlementController.js");
@@ -65,16 +66,11 @@ router.get("/users/:id/transactions", adminMiddleware, admin.getUserTransactions
 
 // Ticket Management Routes
 router.get("/getAllTicket", adminMiddleware, ticketController.getAllTickets);
-
-// Auto Seat Management
 router.post("/auto-seats", adminMiddleware, autoSeat.createAutoSeat);
-
-// Booking Management Routes
 router.get("/booking/getAllBookings", adminMiddleware, bookings.getAllBookings);
 router.get("/booking/stats", adminMiddleware, bookings.getBookingStats);
 router.get("/booking/getBookingById/:bookingid", adminMiddleware, bookings.getBookingById);
 router.post("/booking/getBookingsByUser", adminMiddleware, bookings.getBookingsByUser);
-// Coupon Management Routes
 router.use(couponAdminRoutes);
 
 // Dashboard
@@ -249,6 +245,8 @@ router.patch("/fleet/update/:id", adminMiddleware, adminFleetController.updateFl
 router.delete("/fleet/delete/:id", adminMiddleware, adminFleetController.deleteFleetByAdmin);
 router.patch("/fleet/resubmit/:id", adminMiddleware, adminFleetController.resubmitFleetByAdmin);
 router.patch("/fleet/reupload-doc/:id", adminMiddleware, adminFleetController.reuploadFleetDocument);
+router.put("/fleet/:fleetId/documents/:slot", adminMiddleware, adminFleetDocumentController.uploadDocument);
+router.get("/fleet/:fleetId/documents/:slot/read-url", adminMiddleware, adminFleetDocumentController.getDocumentReadUrl);
 
 // ─── TRIP CONTROL CENTER (Platform-wide oversight — read-only) ────────────────
 // Exception triage dashboard with per-trip booking aggregation

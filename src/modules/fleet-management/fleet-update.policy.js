@@ -8,14 +8,23 @@ const OWNER_PERMITTED_FIELDS = new Set([
   "registrationYear",
   "totalSeats",
   "seatConfig",
-  "fleetImages",
-  "fleetDocuments",
   "amenityIds",
   "corridorId",
   "setupComplete",
   "brandId",
   "fleetGroupId",
 ]);
+
+const FORBIDDEN_UPDATE_FIELDS = [
+  "fleetDocuments",
+  "fleetImages",
+  "url",
+  "objectKey",
+  "storageKey",
+  "documentReviews",
+  "approvalStatus",
+  "status",
+];
 
 const APPROVED_LOCKED_FIELDS = [
   "busNumber",
@@ -27,6 +36,12 @@ const APPROVED_LOCKED_FIELDS = [
   "corridorId",
 ];
 
+function sanitizeUpdatePayload(updateData) {
+  for (const field of FORBIDDEN_UPDATE_FIELDS) {
+    delete updateData[field];
+  }
+}
+
 function restrictOwnerUpdate(updateData) {
   const sanitized = {};
   for (const key of Object.keys(updateData)) {
@@ -34,9 +49,11 @@ function restrictOwnerUpdate(updateData) {
   }
   for (const key of Object.keys(updateData)) delete updateData[key];
   Object.assign(updateData, sanitized);
+  sanitizeUpdatePayload(updateData);
 }
 
 function lockApprovedIdentity(fleet, updateData) {
+  sanitizeUpdatePayload(updateData);
   if (fleet.approvalStatus !== "APPROVED") return;
   for (const field of APPROVED_LOCKED_FIELDS) delete updateData[field];
 }
@@ -91,7 +108,7 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
 
   function parseCatalogAndReviews(updateData) {
     parseJsonField(updateData, "amenityIds");
-    parseJsonField(updateData, "documentReviews");
+    sanitizeUpdatePayload(updateData);
   }
 
   return {

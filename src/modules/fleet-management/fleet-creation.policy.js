@@ -16,6 +16,12 @@ function parseCreationInput(data) {
   if (required.some((field) => !data[field])) {
     throw new Error("Missing required fleet fields.");
   }
+  const forbidden = ["fleetDocuments", "fleetImages", "url", "objectKey", "storageKey"];
+  for (const field of forbidden) {
+    if (data[field] !== undefined) {
+      throw new Error(`Direct document field '${field}' is forbidden during fleet creation.`);
+    }
+  }
   let seatConfig = null;
   if (data.seatConfig) {
     try {

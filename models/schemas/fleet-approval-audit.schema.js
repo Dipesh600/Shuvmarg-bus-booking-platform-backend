@@ -6,14 +6,28 @@ const fleetApprovalAuditSchema = new mongoose.Schema(
   {
     eventType: {
       type: String,
-      enum: ["FLEET_APPROVED", "FLEET_REJECTED"],
+      enum: ["FLEET_APPROVED", "FLEET_REJECTED", "FLEET_RESUBMITTED"],
       required: true,
+      validate: {
+        validator: function (val) {
+          if (val === "FLEET_APPROVED") {
+            return this.actorType === "ADMIN" && this.fromStatus === "PENDING" && this.toStatus === "APPROVED";
+          }
+          if (val === "FLEET_REJECTED") {
+            return this.actorType === "ADMIN" && this.fromStatus === "PENDING" && this.toStatus === "REJECTED";
+          }
+          if (val === "FLEET_RESUBMITTED") {
+            return (this.actorType === "BUS_OWNER" || this.actorType === "ADMIN") && this.fromStatus === "REJECTED" && this.toStatus === "PENDING";
+          }
+          return false;
+        },
+        message: (props) => `Invalid audit event combination for eventType '${props.value}'.`,
+      },
     },
     actorType: {
       type: String,
-      enum: ["ADMIN"],
+      enum: ["ADMIN", "BUS_OWNER"],
       required: true,
-      default: "ADMIN",
     },
     actorId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -21,13 +35,12 @@ const fleetApprovalAuditSchema = new mongoose.Schema(
     },
     fromStatus: {
       type: String,
-      enum: ["PENDING"],
+      enum: ["PENDING", "REJECTED"],
       required: true,
-      default: "PENDING",
     },
     toStatus: {
       type: String,
-      enum: ["APPROVED", "REJECTED"],
+      enum: ["APPROVED", "REJECTED", "PENDING"],
       required: true,
     },
     occurredAt: {
