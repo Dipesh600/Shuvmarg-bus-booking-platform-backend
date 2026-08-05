@@ -40,6 +40,20 @@ function createFleetRepository({ Bus, Trip, Schedule }) {
     return Bus.findById(id).populate("ownerId");
   }
 
+  async function atomicDecidePendingFleet({ fleetId, update }) {
+    return Bus.findOneAndUpdate(
+      { _id: fleetId, approvalStatus: "PENDING" },
+      update,
+      { new: true, runValidators: true }
+    )
+      .populate("ownerId", "name email contactNumber")
+      .exec();
+  }
+
+  async function findApprovalStatusById(fleetId) {
+    return Bus.findById(fleetId).select("approvalStatus").lean();
+  }
+
   async function countDashboard() {
     return Promise.all([
       Bus.countDocuments({
@@ -64,6 +78,8 @@ function createFleetRepository({ Bus, Trip, Schedule }) {
     findById,
     findRecentTrips,
     findForStatusUpdate,
+    atomicDecidePendingFleet,
+    findApprovalStatusById,
     countDashboard,
   };
 }

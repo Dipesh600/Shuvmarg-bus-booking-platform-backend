@@ -1,36 +1,88 @@
 "use strict";
 
-function createFleetStatusService({ repository, policy, notify, clock }) {
-  return async function updateFleetStatus(input) {
-    const validation = policy.validateStatus(input.status);
-    if (validation) return validation;
+const { resolveAuthorizedAdminActor } = require("../bus-owner-management/admin-actor.resolver");
+const { buildFleetApprovalAuditEvent } = require("./fleet-approval-audit.builder");
 
-    const bus = await repository.findForStatusUpdate(input.fleetId);
-    if (!bus) {
-      return {
-        statusCode: 404,
-        body: { success: false, message: "Bus not found" },
-      };
-    }
+const { validateFleetStatusRequest } = require("./fleet-status-request.policy");
+const { FleetApprovalError } = require("./fleet-approval.errors");
 
-    policy.applyStatus(
-      bus,
-      input.status,
-      input.rejectionReason,
-      clock()
-    );
-    await bus.save();
-    await notify(bus, input.status);
+function createFleetApprovalService(deps = {}) {
+  const repository = deps.repository;
+  const resolveActor = deps.resolveAuthorizedAdminActor || resolveAuthorizedAdminActor;
+  const buildAudit = deps.buildFleetApprovalAuditEvent || buildFleetApprovalAuditEvent;
+  const validateRequest = deps.validateFleetStatusRequest || validateFleetStatusRequest;
+  const notify = deps.notify || (async () => {});
+  const clock = deps.clock || (() => new Date());
+  const logger = deps.logger;
 
-    return {
-      statusCode: 200,
-      body: {
-        success: true,
-        message: `Fleet status updated to ${input.status}`,
-        data: bus,
+  async function decideFleetApproval(input = {}) {
+    const { actor, ...body } = input;
+    const validated = validateRequest(body);
+    const { fleetId, decision, rejectionReason } = validated;
+
+    const admin = await resolveActor(actor, deps);
+    const decidedAt = clock();
+
+    const auditEvent = buildAudit({
+      decision,
+      actorId: admin._id,
+      occurredAt: decidedAt,
+      rejectionReason,
+    });
+
+    const isApprove = decision === "APPROVED";
+    const update = {
+      $set: {
+        approvalStatus: decision,
+        status: isApprove ? "ACTIVE" : "INACTIVE",
+        approvedBy: isApprove ? admin._id : null,
+        approvedAt: isApprove ? decidedAt : null,
+        rejectedBy: isApprove ? null : admin._id,
+        rejectedAt: isApprove ? null : decidedAt,
+        rejectionReason: isApprove ? null : rejectionReason,
+      },
+      $push: {
+        approvalAuditHistory: auditEvent,
       },
     };
-  };
+
+    const updated = await repository.atomicDecidePendingFleet({ fleetId, update });
+
+    if (!updated) {
+      const current = await repository.findApprovalStatusById(fleetId);
+      if (!current) {
+        throw new FleetApprovalError("FLEET_NOT_FOUND", "Fleet not found.", 404);
+      }
+      throw new FleetApprovalError(
+        "FLEET_APPROVAL_CONFLICT",
+        current.approvalStatus === "PENDING"
+          ? "Fleet approval decision could not be committed."
+          : `Fleet approval was already decided as ${current.approvalStatus}.`,
+        409
+      );
+    }
+
+    try {
+      await notify(updated, decision);
+    } catch (notificationError) {
+      if (logger && typeof logger.warn === "function") {
+        logger.warn("Fleet approval notification failed:", notificationError);
+      } else {
+        console.warn("Fleet approval notification failed:", notificationError?.message || notificationError);
+      }
+    }
+
+    const isoDate = decidedAt.toISOString();
+    return {
+      success: true,
+      message: `Fleet ${decision.toLowerCase()} successfully.`,
+      data: isApprove
+        ? { fleetId: updated._id.toString(), approvalStatus: "APPROVED", status: "ACTIVE", approvedAt: isoDate }
+        : { fleetId: updated._id.toString(), approvalStatus: "REJECTED", status: "INACTIVE", rejectedAt: isoDate, rejectionReason },
+    };
+  }
+
+  return { decideFleetApproval };
 }
 
-module.exports = { createFleetStatusService };
+module.exports = { createFleetApprovalService, createFleetStatusService: createFleetApprovalService };
