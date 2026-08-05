@@ -9,6 +9,7 @@ const { KycAuditError } = require("./kyc-audit.errors");
 const { buildKycAuditEvent } = require("./kyc-audit-event.builder");
 const { countValidatedKycFiles } = require("./kyc-audit-document-count");
 const {
+  hasStoredDocument,
   sanitizeInvalidDocumentTypes,
   collectInvalidKycDocumentTypes,
 } = require("./kyc-audit-invalid-documents");
@@ -20,6 +21,7 @@ module.exports = {
   KycAuditError,
   buildKycAuditEvent,
   countValidatedKycFiles,
+  hasStoredDocument,
   sanitizeInvalidDocumentTypes,
   collectInvalidKycDocumentTypes,
 };

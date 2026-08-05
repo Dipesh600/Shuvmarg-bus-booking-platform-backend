@@ -27,7 +27,7 @@ test("kyc-review-audit-history unit tests", async (t) => {
       User: { findById: () => ({ lean: async () => ({ _id: validUserId }) }), findByIdAndUpdate: async () => ({ _id: validUserId }) },
       applyDocumentVerdicts: (owner, body) => {
         if (body.taxRegistration) {
-          owner.taxRegistration = { verified: body.taxRegistration.verified, rejectionReason: body.taxRegistration.rejectionReason };
+          owner.taxRegistration = { documentUrls: ["tax.pdf"], verified: body.taxRegistration.verified, rejectionReason: body.taxRegistration.rejectionReason };
         }
       },
       invalidDocuments: () => [{ field: "taxRegistration", label: "TAX Registration Document" }],

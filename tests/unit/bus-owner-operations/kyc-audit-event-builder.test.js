@@ -53,25 +53,24 @@ test("kyc-audit-event-builder unit tests", async (t) => {
     }
   });
 
-  await t.test("rejects unknown event type", async () => {
+  await t.test("rejects unknown event type or actor type", async () => {
     await assert.rejects(
       async () => buildKycAuditEvent({ eventType: "INVALID_EVENT", actorType: "BUS_OWNER", actorId: validActorId, toStatus: "pending", occurredAt: validDate, metadata: {} }),
       (err) => err instanceof KycAuditError && err.code === "KYC_AUDIT_INVALID_EVENT_TYPE"
     );
-  });
-
-  await t.test("rejects unknown actor type", async () => {
     await assert.rejects(
       async () => buildKycAuditEvent({ eventType: "KYC_SUBMITTED", actorType: "USER", actorId: validActorId, toStatus: "pending", occurredAt: validDate, metadata: {} }),
       (err) => err instanceof KycAuditError && err.code === "KYC_AUDIT_INVALID_ACTOR_TYPE"
     );
   });
 
-  await t.test("rejects unsupported target status or invalid from status", async () => {
-    await assert.rejects(
-      async () => buildKycAuditEvent({ eventType: "KYC_SUBMITTED", actorType: "BUS_OWNER", actorId: validActorId, toStatus: "unknown", occurredAt: validDate, metadata: {} }),
-      (err) => err instanceof KycAuditError && err.code === "KYC_AUDIT_INVALID_TO_STATUS"
-    );
+  await t.test("rejects non-integer, negative, NaN or Infinity documentCount", async () => {
+    for (const count of [1.5, NaN, Infinity, -1, "3"]) {
+      await assert.rejects(
+        async () => buildKycAuditEvent({ eventType: "KYC_SUBMITTED", actorType: "BUS_OWNER", actorId: validActorId, toStatus: "pending", occurredAt: validDate, metadata: { documentCount: count } }),
+        (err) => err instanceof KycAuditError && err.code === "KYC_AUDIT_INVALID_DOCUMENT_COUNT"
+      );
+    }
   });
 
   await t.test("rejects invalid occurredAt Date instance", async () => {

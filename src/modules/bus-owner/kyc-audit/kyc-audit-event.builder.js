@@ -31,8 +31,8 @@ function validateMetadata(metadata) {
 
   const result = {};
   if (metadata.documentCount !== undefined) {
-    if (typeof metadata.documentCount !== "number" || metadata.documentCount < 0) {
-      throw new KycAuditError("KYC_AUDIT_INVALID_DOCUMENT_COUNT", "documentCount must be a non-negative number.", 400);
+    if (!Number.isSafeInteger(metadata.documentCount) || metadata.documentCount < 0) {
+      throw new KycAuditError("KYC_AUDIT_INVALID_DOCUMENT_COUNT", "documentCount must be a non-negative integer.", 400);
     }
     result.documentCount = metadata.documentCount;
   }

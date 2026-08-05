@@ -2,6 +2,12 @@
 
 const { ALLOWED_INVALID_DOC_TYPES } = require("./kyc-audit.constants");
 
+function hasStoredDocument(section) {
+  if (!section || typeof section !== "object") return false;
+  const urls = Array.isArray(section.documentUrls) ? section.documentUrls : [];
+  return urls.some((value) => typeof value === "string" && value.trim().length > 0);
+}
+
 function sanitizeInvalidDocumentTypes(values) {
   if (!Array.isArray(values)) return [];
   const set = new Set();
@@ -27,16 +33,17 @@ function collectInvalidKycDocumentTypes(owner) {
     "transportLicense",
   ];
   for (const field of singleFields) {
-    if (owner[field] && owner[field].verified === false) {
+    const section = owner[field];
+    if (hasStoredDocument(section) && section.verified === false) {
       invalidList.push(field);
     }
   }
 
   if (Array.isArray(owner.insuranceCertificates)) {
-    const hasUnverifiedInsurance = owner.insuranceCertificates.some(
-      (cert) => cert && cert.verified === false
+    const hasRejectedInsurance = owner.insuranceCertificates.some(
+      (cert) => hasStoredDocument(cert) && cert.verified === false
     );
-    if (hasUnverifiedInsurance) {
+    if (hasRejectedInsurance) {
       invalidList.push("insuranceCertificates");
     }
   }
@@ -45,6 +52,7 @@ function collectInvalidKycDocumentTypes(owner) {
 }
 
 module.exports = {
+  hasStoredDocument,
   sanitizeInvalidDocumentTypes,
   collectInvalidKycDocumentTypes,
 };
