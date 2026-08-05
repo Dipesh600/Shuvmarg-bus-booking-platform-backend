@@ -3,22 +3,32 @@
 const { validateKycDocuments } = require("./kyc-document.validator");
 const { KycSubmissionStateError } = require("./kyc-submission.errors");
 const { collectBusOwnerKycStorageReferences } = require("./kyc-document-references");
+const {
+  buildKycAuditEvent,
+  countValidatedKycFiles,
+  KYC_AUDIT_EVENT,
+  KYC_AUDIT_ACTOR,
+} = require("../kyc-audit");
 
-function createKycSubmissionService({ BusOwner, storageService, logger = console }) {
+function createKycSubmissionService({
+  BusOwner,
+  storageService,
+  clock = () => new Date(),
+  logger = console,
+}) {
   async function submitKyc({ userId, files }) {
-    let busOwner = await BusOwner.findOne({ user: userId });
-    if (!busOwner) {
-      busOwner = new BusOwner({ user: userId });
-    }
+    const existingOwner = await BusOwner.findOne({ user: userId });
+    const isInitialSubmission = !existingOwner;
+    const busOwner = existingOwner || new BusOwner({ user: userId });
 
-    if (busOwner.verificationStatus === "approved") {
+    if (!isInitialSubmission && busOwner.verificationStatus === "approved") {
       throw new KycSubmissionStateError(
         "KYC_SUBMISSION_STATE_CONFLICT",
         "Approved KYC application cannot be overwritten or resubmitted.",
         409
       );
     }
-    if (busOwner.verificationStatus === "pending") {
+    if (!isInitialSubmission && busOwner.verificationStatus === "pending") {
       throw new KycSubmissionStateError(
         "KYC_SUBMISSION_STATE_CONFLICT",
         "KYC application is currently under review. Duplicate submissions are not allowed.",
@@ -27,7 +37,7 @@ function createKycSubmissionService({ BusOwner, storageService, logger = console
     }
 
     const replacedDocumentReferences =
-      busOwner.verificationStatus === "rejected"
+      !isInitialSubmission && busOwner.verificationStatus === "rejected"
         ? collectBusOwnerKycStorageReferences(busOwner)
         : [];
 
@@ -81,6 +91,21 @@ function createKycSubmissionService({ BusOwner, storageService, logger = console
       busOwner.verificationStatus = "pending";
       busOwner.rejectionReason = null;
       busOwner.kycReview = { reviewedBy: null, reviewedAt: null };
+
+      if (!Array.isArray(busOwner.kycAuditHistory)) {
+        busOwner.kycAuditHistory = [];
+      }
+      const documentCount = countValidatedKycFiles(normalizedFiles);
+      const auditEvent = buildKycAuditEvent({
+        eventType: isInitialSubmission ? KYC_AUDIT_EVENT.SUBMITTED : KYC_AUDIT_EVENT.RESUBMITTED,
+        actorType: KYC_AUDIT_ACTOR.BUS_OWNER,
+        actorId: userId,
+        fromStatus: isInitialSubmission ? null : "rejected",
+        toStatus: "pending",
+        occurredAt: clock(),
+        metadata: { documentCount },
+      });
+      busOwner.kycAuditHistory.push(auditEvent);
 
       await busOwner.save();
 
