@@ -7,6 +7,8 @@ const DOCUMENT_TYPE_SEGMENTS = Object.freeze({
   taxRegistration: "tax-registration",
   transportLicense: "transport-license",
   insuranceCertificates: "insurance-certificate",
+  ownerIdentity: "owner-identity",
+  bankDetails: "bank-details",
 });
 
 function createKycDocumentStorageService({

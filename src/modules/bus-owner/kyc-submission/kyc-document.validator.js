@@ -38,12 +38,12 @@ function validateSingleFile(file, field) {
   return { file, detectedFormat, safeExtension };
 }
 
-function validateKycDocuments(files) {
+function validateKycDocuments(files, policyConfig = KYC_DOCUMENT_POLICY) {
   if (!files || typeof files !== "object" || Object.keys(files).length === 0) {
     throw new KycDocumentValidationError("KYC_FILES_REQUIRED", "No KYC documents were uploaded. Please attach all required files.");
   }
 
-  const allowedFields = Object.keys(KYC_DOCUMENT_POLICY);
+  const allowedFields = Object.keys(policyConfig);
   const presentFields = Object.keys(files);
 
   for (const field of presentFields) {
@@ -53,7 +53,7 @@ function validateKycDocuments(files) {
   }
 
   for (const field of allowedFields) {
-    const policy = KYC_DOCUMENT_POLICY[field];
+    const policy = policyConfig[field];
     if (policy.required && (!files[field] || (Array.isArray(files[field]) && files[field].length === 0))) {
       throw new KycDocumentValidationError("KYC_REQUIRED_DOCUMENT_MISSING", `Required document field '${field}' is missing.`, field);
     }
@@ -67,7 +67,7 @@ function validateKycDocuments(files) {
     if (!rawValue) continue;
 
     const fileList = Array.isArray(rawValue) ? rawValue : [rawValue];
-    const policy = KYC_DOCUMENT_POLICY[field];
+    const policy = policyConfig[field];
 
     if (!policy.multiple && fileList.length > 1) {
       throw new KycDocumentValidationError("KYC_TOO_MANY_FILES", `Field '${field}' accepts only a single file, but ${fileList.length} were provided.`, field);
@@ -91,6 +91,7 @@ function validateKycDocuments(files) {
 }
 
 module.exports = {
+  validateSingleFile,
   validateKycDocuments,
   validateFilenameHygiene,
   matchesSignature,
