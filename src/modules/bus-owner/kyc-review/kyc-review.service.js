@@ -8,37 +8,19 @@ const { syncReviewedOwnerUser } = require("./kyc-review-user-sync.service");
 const { getKycReviewerActor, assertCanReviewBusOwnerKyc } = require("./kyc-review-actor.policy");
 const { resolveKycReviewer } = require("./kyc-review-reviewer.resolver");
 const { assertReviewerIsIndependent } = require("./kyc-review-separation-of-duty.policy");
+const { buildKycAuditEvent, collectInvalidKycDocumentTypes, KYC_AUDIT_EVENT, KYC_AUDIT_ACTOR } = require("../kyc-audit");
 
 function normalizeActorInput(actorInput) {
-  if (
-    actorInput &&
-    typeof actorInput === "object" &&
-    typeof actorInput.adminId === "string" &&
-    actorInput.adminId.trim() &&
-    typeof actorInput.tokenRole === "string" &&
-    actorInput.tokenRole.trim()
-  ) {
-    return {
-      adminId: actorInput.adminId.trim(),
-      tokenRole: actorInput.tokenRole.trim(),
-    };
+  if (actorInput && typeof actorInput === "object" && typeof actorInput.adminId === "string" && actorInput.adminId.trim() && typeof actorInput.tokenRole === "string" && actorInput.tokenRole.trim()) {
+    return { adminId: actorInput.adminId.trim(), tokenRole: actorInput.tokenRole.trim() };
   }
   if (actorInput && typeof actorInput === "object" && actorInput.adminInfo) {
     return getKycReviewerActor(actorInput);
   }
-
   throw new KycReviewError("KYC_REVIEW_UNAUTHORIZED", "Authenticated reviewer identity is required.", 401);
 }
 
-function createKycReviewService({
-  Admin,
-  BusOwner,
-  User,
-  applyDocumentVerdicts,
-  invalidDocuments,
-  clock = () => new Date(),
-  logger = console,
-}) {
+function createKycReviewService({ Admin, BusOwner, User, applyDocumentVerdicts, invalidDocuments, clock = () => new Date(), logger = console }) {
   async function reviewKyc(body, actorInput) {
     const actor = normalizeActorInput(actorInput);
     const { id, targetStatus, rejectionReason } = validateKycReviewRequest(body);
@@ -61,11 +43,24 @@ function createKycReviewService({
       applyDocumentVerdicts(owner, body);
     }
 
+    const reviewedAt = clock();
+    const invalidDocumentTypes = targetStatus === KYC_REVIEW_STATUS.REJECTED ? collectInvalidKycDocumentTypes(owner) : [];
+
+    const auditEvent = buildKycAuditEvent({
+      eventType: targetStatus === KYC_REVIEW_STATUS.APPROVED ? KYC_AUDIT_EVENT.APPROVED : KYC_AUDIT_EVENT.REJECTED,
+      actorType: KYC_AUDIT_ACTOR.ADMIN,
+      actorId: reviewer._id,
+      fromStatus: KYC_REVIEW_STATUS.PENDING,
+      toStatus: targetStatus,
+      occurredAt: reviewedAt,
+      metadata: { invalidDocumentTypes, reasonProvided: targetStatus === KYC_REVIEW_STATUS.REJECTED },
+    });
+
     const updateFields = {
       verificationStatus: targetStatus,
       rejectionReason: targetStatus === KYC_REVIEW_STATUS.REJECTED ? rejectionReason : null,
       "kycReview.reviewedBy": reviewer._id,
-      "kycReview.reviewedAt": clock(),
+      "kycReview.reviewedAt": reviewedAt,
     };
 
     const docFields = ["companyRegistration", "ownerIdentity", "taxRegistration", "transportLicense"];
@@ -81,16 +76,12 @@ function createKycReviewService({
 
     const updatedOwner = await BusOwner.findOneAndUpdate(
       { _id: owner._id, verificationStatus: KYC_REVIEW_STATUS.PENDING },
-      { $set: updateFields },
+      { $set: updateFields, $push: { kycAuditHistory: auditEvent } },
       { new: true, runValidators: true }
     );
 
     if (!updatedOwner) {
-      throw new KycReviewError(
-        "KYC_REVIEW_INVALID_TRANSITION",
-        `Cannot transition KYC review status from '${owner.verificationStatus}' to '${targetStatus}'.`,
-        409
-      );
+      throw new KycReviewError("KYC_REVIEW_INVALID_TRANSITION", `Cannot transition KYC review status from '${owner.verificationStatus}' to '${targetStatus}'.`, 409);
     }
 
     let syncedUser = null;

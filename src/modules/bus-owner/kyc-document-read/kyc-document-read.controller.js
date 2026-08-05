@@ -30,6 +30,7 @@ function sanitizeKycDetailDescriptors(busOwner) {
     });
   }
 
+  delete cloned.kycAuditHistory;
   return cloned;
 }
 
