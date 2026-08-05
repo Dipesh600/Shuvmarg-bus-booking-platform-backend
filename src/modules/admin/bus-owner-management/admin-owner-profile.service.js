@@ -9,6 +9,25 @@ const { formatAdminOwnerProfileResponse } = require("./admin-owner-profile.dto")
 const { KYC_SIGNIFICANT_FIELDS } = require("./admin-owner-profile.constants");
 const { AdminOwnerProfileError } = require("./admin-owner-profile.errors");
 
+async function restoreUserWithoutMasking({ repository, user, updatedUser, userSnapshot, logger }) {
+  try {
+    const restored = await repository.restoreUserSnapshot({
+      userId: user._id,
+      expectedCurrentVersion: updatedUser.__v,
+      snapshot: userSnapshot,
+    });
+
+    if (!restored) {
+      logger.error(
+        "User profile rollback skipped because the guarded version no longer matched.",
+        { userId: String(user._id), expectedVersion: updatedUser.__v }
+      );
+    }
+  } catch (rollbackError) {
+    logger.error("User profile rollback failed:", rollbackError);
+  }
+}
+
 function createAdminOwnerProfileService(deps = {}) {
   const repository = deps.repository;
   const resolveActor = deps.resolveAuthorizedAdminActor || resolveAuthorizedAdminActor;
@@ -99,13 +118,7 @@ function createAdminOwnerProfileService(deps = {}) {
 
     if (!updatedOwner) {
       if (userWasUpdated) {
-        try {
-          await repository.restoreUserSnapshot({ userId: user._id, expectedCurrentVersion: updatedUser.__v, snapshot: userSnapshot });
-        } catch (rollbackErr) {
-          if (logger && typeof logger.error === "function") {
-            logger.error("User profile rollback failed:", rollbackErr);
-          }
-        }
+        await restoreUserWithoutMasking({ repository, user, updatedUser, userSnapshot, logger });
       }
       if (ownerUpdateError) throw ownerUpdateError;
       throw new AdminOwnerProfileError("OWNER_PROFILE_CONCURRENT_MODIFICATION", "Bus Owner profile was modified by another request.", 409);
@@ -117,4 +130,4 @@ function createAdminOwnerProfileService(deps = {}) {
   return { updateAdminOwnerProfile };
 }
 
-module.exports = { createAdminOwnerProfileService };
+module.exports = { createAdminOwnerProfileService, restoreUserWithoutMasking };
