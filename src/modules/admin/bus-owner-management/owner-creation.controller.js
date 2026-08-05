@@ -1,32 +1,29 @@
 "use strict";
 
-const { createBusOwner } = require("./owner-creation.service.js");
-const {
-  hasRequiredOwnerFields,
-} = require("./request-validation.policy.js");
+const { createAdminOwnerCreationService } = require("./admin-owner-creation.service");
+const { getAdminActor } = require("./admin-actor.resolver");
+const { mapAdminKycError } = require("./admin-kyc-error.mapper");
 
-const createBusOwnerFull = async (req, res) => {
+const defaultCreationService = createAdminOwnerCreationService();
+
+const createBusOwnerFull = async (req, res, deps = {}) => {
+  const service = deps.service || defaultCreationService;
   try {
-    if (!hasRequiredOwnerFields(req.body)) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields for Company or Bank details.",
-      });
-    }
-    const result = await createBusOwner(req.body, req.files || {});
-    if (result.error) return res.status(400).json(result.error);
+    const actor = getAdminActor(req);
+    const result = await service.createAdminBusOwner({
+      body: req.body,
+      files: req.files || {},
+      actor,
+    });
     return res.status(201).json({
       success: true,
       message: "Bus Owner registered successfully with PENDING KYC status.",
-      busOwnerId: result.owner.busOwnerId,
-      userId: result.user._id,
+      busOwnerId: result.busOwnerId,
+      userId: result.userId,
     });
   } catch (error) {
-    console.error("createBusOwnerFull error:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Internal Server Error!",
-    });
+    const { statusCode, payload } = mapAdminKycError(error);
+    return res.status(statusCode).json(payload);
   }
 };
 
