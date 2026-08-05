@@ -36,17 +36,17 @@ test("read date mapper converts valid dates and returns null for invalid", () =>
 });
 
 test("read error mapper sanitizes 500 errors and preserves domain status codes", () => {
-  const notFound = new ReadContractNotFoundError("NOT_FOUND", "Entity missing");
+  const notFound = new ReadContractNotFoundError("FLEET_NOT_FOUND", "Fleet record not found.");
   const mappedNotFound = mapReadError(notFound);
   assert.equal(mappedNotFound.statusCode, 404);
-  assert.equal(mappedNotFound.payload.code, "NOT_FOUND");
+  assert.equal(mappedNotFound.payload.error.code, "FLEET_NOT_FOUND");
 
   const silentLogger = { error: () => {} };
   const rawErr = new Error("Database crashed secret key 123");
   const mapped500 = mapReadError(rawErr, silentLogger);
   assert.equal(mapped500.statusCode, 500);
-  assert.equal(mapped500.payload.message, "Internal server error");
-  assert.equal(mapped500.payload.code, undefined);
+  assert.equal(mapped500.payload.error.message, "Internal server error.");
+  assert.equal(mapped500.payload.error.code, "INTERNAL_SERVER_ERROR");
 });
 
 test("fleet and KYC document descriptor mappers map database state accurately", () => {

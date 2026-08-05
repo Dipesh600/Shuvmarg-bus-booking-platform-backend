@@ -11,6 +11,8 @@ function escapeRegex(str) {
   return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+const { isOwnerVerificationStatus } = require("../../../contracts");
+
 function createAdminBusOwnerRepository({
   BusOwnerModel = BusOwner,
   UserModel = User,
@@ -20,7 +22,7 @@ function createAdminBusOwnerRepository({
     const filter = {};
     if (verificationStatus) {
       const norm = String(verificationStatus).toLowerCase();
-      if (!["pending", "approved", "rejected"].includes(norm)) {
+      if (!isOwnerVerificationStatus(norm)) {
         throw new ReadContractValidationError(
           "READ_INVALID_FILTER",
           "Verification status filter must be one of: pending, approved, rejected."

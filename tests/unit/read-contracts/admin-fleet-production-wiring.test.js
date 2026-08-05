@@ -33,17 +33,17 @@ test("production admin fleet management module wiring contract tests", async (t)
     const listRes = await invoke(adminFleetModule.getAllFleet, unauthReq);
     assert.equal(listRes.statusCode, 401);
     assert.equal(listRes.body.success, false);
-    assert.equal(listRes.body.code, "UNAUTHORIZED_ADMIN");
+    assert.equal(listRes.body.error.code, "UNAUTHORIZED_ADMIN");
 
     const detailRes = await invoke(adminFleetModule.getFleetById, unauthReq);
     assert.equal(detailRes.statusCode, 401);
     assert.equal(detailRes.body.success, false);
-    assert.equal(detailRes.body.code, "UNAUTHORIZED_ADMIN");
+    assert.equal(detailRes.body.error.code, "UNAUTHORIZED_ADMIN");
 
     const setupRes = await invoke(adminFleetModule.getFleetSetupStatus, unauthReq);
     assert.equal(setupRes.statusCode, 401);
     assert.equal(setupRes.body.success, false);
-    assert.equal(setupRes.body.code, "UNAUTHORIZED_ADMIN");
+    assert.equal(setupRes.body.error.code, "UNAUTHORIZED_ADMIN");
   });
 
   await t.test("active exported module handlers return stabilized DTO shapes and call canonical setup service", async () => {

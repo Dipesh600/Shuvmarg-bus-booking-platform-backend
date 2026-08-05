@@ -99,21 +99,24 @@ test("controllers sanitize all unexpected 500 error responses", async () => {
     },
   });
 
-  const endpoints = [
+  const readEndpoints = [
     ["getAllFleet", { query: {} }],
     ["getFleetById", { params: { id: "f1" } }],
-    ["getFleetDashboard", {}],
     ["getFleetSetupStatus", { params: { id: "f1" } }],
   ];
 
-  for (const [method, req] of endpoints) {
+  for (const [method, req] of readEndpoints) {
     const res = await invoke(controller[method], req);
     assert.equal(res.statusCode, 500);
-    assert.deepEqual(res.body, {
-      success: false,
-      message: "Internal server error",
-    });
-    assert.equal(res.body.error, undefined, `${method} must not leak raw error message property`);
-    assert.equal(res.body.message.includes("Sensitive DB"), false, `${method} must not leak internal exception message`);
+    assert.equal(res.body.success, false);
+    assert.equal(res.body.error.code, "INTERNAL_SERVER_ERROR");
+    assert.equal(res.body.error.message, "Internal server error.");
   }
+
+  const dashboardRes = await invoke(controller.getFleetDashboard, {});
+  assert.equal(dashboardRes.statusCode, 500);
+  assert.deepEqual(dashboardRes.body, {
+    success: false,
+    message: "Internal server error",
+  });
 });
