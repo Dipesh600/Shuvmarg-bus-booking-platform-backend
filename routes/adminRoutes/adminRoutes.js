@@ -241,6 +241,8 @@ router.get("/busRoutes/:id", adminMiddleware, adminBusRouteController.getRouteBy
 router.patch("/busRoutes/:id", adminMiddleware, adminBusRouteController.updateRouteByAdmin);
 router.delete("/busRoutes/:id", adminMiddleware, adminBusRouteController.deleteRouteByAdmin);
 
+const { adminFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
+
 // Dedicated Fleet Management (Admin on behalf of Owner)
 router.post("/fleet/createForOwner", adminMiddleware, adminFleetController.createFleetForOwner);
 router.get("/fleet/owner/:ownerId", adminMiddleware, adminFleetController.getFleetsByOwner);
@@ -249,6 +251,8 @@ router.patch("/fleet/update/:id", adminMiddleware, adminFleetController.updateFl
 router.delete("/fleet/delete/:id", adminMiddleware, adminFleetController.deleteFleetByAdmin);
 router.patch("/fleet/resubmit/:id", adminMiddleware, adminFleetController.resubmitFleetByAdmin);
 router.patch("/fleet/reupload-doc/:id", adminMiddleware, adminFleetController.reuploadFleetDocument);
+router.put("/fleet/:fleetId/documents/:slot", adminMiddleware, adminFleetDocumentController.uploadDocument);
+router.get("/fleet/:fleetId/documents/:slot/read-url", adminMiddleware, adminFleetDocumentController.getDocumentReadUrl);
 
 // ─── TRIP CONTROL CENTER (Platform-wide oversight — read-only) ────────────────
 // Exception triage dashboard with per-trip booking aggregation

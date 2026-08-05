@@ -64,6 +64,10 @@ function normaliseKey(rawKey) {
  * @returns {boolean}
  */
 function isKeyAllowed(resolvedKey) {
+    if (!resolvedKey || typeof resolvedKey !== 'string') return false;
+    if (resolvedKey.includes('/fleets/') || resolvedKey.startsWith('fleet-documents/') || resolvedKey.startsWith('fleet-images/')) {
+        return false;
+    }
     return ALLOWED_PREFIXES.some((prefix) => resolvedKey.startsWith(prefix));
 }
 

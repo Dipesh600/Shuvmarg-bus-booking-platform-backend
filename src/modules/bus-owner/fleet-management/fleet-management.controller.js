@@ -49,7 +49,7 @@ function createFleetManagementController({ fleetService, logger = console }) {
     } catch (error) {
       logger.error("getMyFleets error:", error);
       return res.status(500).json({
-        success: false, message: "Internal Server Error", error: error.message,
+        success: false, message: "Internal Server Error",
       });
     }
   }

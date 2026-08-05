@@ -82,7 +82,6 @@ const getFleetsByOwner = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Internal Server Error",
-            error: error.message,
         });
     }
 };
@@ -179,32 +178,12 @@ const resubmitFleetByAdmin = async (req, res) => {
     }
 };
 
+const { adminFleetDocumentController } = require("../../../src/modules/fleet/document-lifecycle");
+
 // ─── Re-upload a single failed document on a REJECTED fleet ──────────────────
-// PATCH /fleet/reupload-doc/:id
-// Body (multipart): docSlot (string) + file
-// This is the OWNER's action — fixes a specific flagged document so
-// they can eventually resubmit without the admin rejecting it again.
+// Adapter delegating directly to secured document-lifecycle service
 const reuploadFleetDocument = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { docSlot } = req.body;
-        const file = req.files?.[docSlot] || req.file;
-
-        if (!id) return res.status(400).json({ success: false, message: "Fleet ID is required." });
-        if (!docSlot) return res.status(400).json({ success: false, message: "docSlot is required (e.g. fitnessCert)." });
-        if (!file) return res.status(400).json({ success: false, message: `No file provided for slot: ${docSlot}.` });
-
-        const fleet = await fleetService.reuploadFleetDocument(id, docSlot, file, null);
-        return res.status(200).json({
-            success: true,
-            message: `Document '${docSlot}' replaced successfully. Fix any remaining failed documents, then resubmit.`,
-            data: fleet,
-        });
-    } catch (error) {
-        console.error("reuploadFleetDocument error:", error);
-        const status = error.message.includes("found") ? 404 : 400;
-        return res.status(status).json({ success: false, message: error.message });
-    }
+    return adminFleetDocumentController.uploadDocument(req, res);
 };
 
 // Delete Fleet by Admin

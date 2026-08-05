@@ -48,6 +48,12 @@ const fleetApprovalFields = {
     default: [],
     select: false,
   },
+
+  fleetDocumentAuditHistory: {
+    type: [require("./fleet-document-audit.schema")],
+    default: [],
+    select: false,
+  },
 };
 
 module.exports = fleetApprovalFields;

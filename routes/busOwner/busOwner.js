@@ -26,11 +26,17 @@ router.get("/kycDocumentReadUrl", kycDocumentRead.getKycDocumentReadUrl);
 // ── REQUIRE APPROVED KYC FOR ALL ROUTES BELOW ─────────────────────────────────
 router.use(requireApprovedBusOwner);
 
+const { busOwnerFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
+
 router.post("/submitFleetForVerification", fleetManagement.submitFleetForVerification);
 router.get("/myFleets", fleetManagement.getMyFleets);
 router.post("/getFleetById", fleetManagement.getFleetById);
 router.patch("/updateFleet", fleetManagement.updateFleet);
 router.delete("/deleteFleet", fleetManagement.deleteFleet);
+
+// Fleet Document Lifecycle
+router.put("/fleets/:fleetId/documents/:slot", busOwnerFleetDocumentController.uploadDocument);
+router.get("/fleets/:fleetId/documents/:slot/read-url", busOwnerFleetDocumentController.getDocumentReadUrl);
 
 // Boarding Points
 router.post("/createBoardingPoint", boardingPointManagement.createBoardingPoint);
