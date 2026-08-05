@@ -1,39 +1,54 @@
 "use strict";
 
-function mapFleetSetupStatus(fleet, setupServiceResult = {}) {
-  if (!fleet) return null;
-  const fleetId = String(fleet._id || fleet.id || "");
-  const fleetCode = fleet.fleetId || null;
+function mapFleetSetupStatus(canonicalData) {
+  if (!canonicalData) return null;
 
-  const isApproved = Boolean(fleet.isApproved || fleet.approvalStatus === "APPROVED");
-  const hasSeatTemplate = Boolean(fleet.seatTemplateId);
-  const hasRoute = Boolean(fleet.route?.from && fleet.route?.to);
-  const isOperational = String(fleet.status || "").toUpperCase() === "ACTIVE";
+  const steps = canonicalData.steps || {};
 
-  const steps = [
-    { step: 1, key: "verification", label: "Fleet Verification", complete: isApproved },
-    { step: 2, key: "seat_layout", label: "Seat Layout Template", complete: hasSeatTemplate },
-    { step: 3, key: "route_assignment", label: "Route Assignment", complete: hasRoute },
-    { step: 4, key: "activation", label: "Fleet Activation", complete: isOperational },
+  const stepItems = [
+    { key: "routeAssigned", label: "Route Assignment", complete: Boolean(steps.routeAssigned) },
+    { key: "routeConfigured", label: "Route Configuration", complete: Boolean(steps.routeConfigured) },
+    { key: "driverAssigned", label: "Driver Assignment", complete: Boolean(steps.driverAssigned) },
+    { key: "scheduleCreated", label: "Schedule Creation", complete: Boolean(steps.scheduleCreated) },
+    { key: "returnTripLinked", label: "Return Trip Linkage", complete: Boolean(steps.returnTripLinked) },
+    { key: "activated", label: "Fleet Activation", complete: Boolean(steps.activated) },
   ];
 
-  const completedCount = steps.filter((s) => s.complete).length;
-  const setupComplete = Boolean(fleet.setupComplete || completedCount === steps.length);
+  const completedCount = stepItems.filter((s) => s.complete).length;
+  const totalCount = stepItems.length;
+  const percentage = Math.round((completedCount / totalCount) * 100);
+
+  const blockingReasons = stepItems
+    .filter((s) => !s.complete)
+    .map((s) => `${s.label} incomplete`);
 
   return {
-    fleetId,
-    fleetCode,
-    setupComplete,
+    fleetId: String(canonicalData.fleetId || ""),
+    busName: canonicalData.busName || null,
+    busNumber: canonicalData.busNumber || null,
+    approvalStatus: canonicalData.approvalStatus || null,
+    setupComplete: Boolean(steps.activated),
+    nextStep: canonicalData.nextStep || "complete",
+    isFullyOperational: Boolean(canonicalData.isFullyOperational || steps.activated),
+    steps,
+    stepDetails: stepItems,
     progress: {
       completedSteps: completedCount,
-      totalSteps: steps.length,
-      percentage: Math.round((completedCount / steps.length) * 100),
+      totalSteps: totalCount,
+      percentage,
     },
-    steps,
-    blockingReasons: setupServiceResult.blockingReasons || (setupComplete ? [] : steps.filter((s) => !s.complete).map((s) => `${s.label} incomplete`)),
+    blockingReasons,
+    scheduleId: canonicalData.scheduleId || null,
+    returnScheduleId: canonicalData.returnScheduleId || null,
+    assignedCorridor: canonicalData.assignedCorridor || null,
+    assignedRouteConfigs: canonicalData.assignedRouteConfigs || [],
+    assignedDriver: canonicalData.assignedDriver || null,
+    outboundScheduleData: canonicalData.outboundScheduleData || null,
+    returnScheduleData: canonicalData.returnScheduleData || null,
   };
 }
 
 module.exports = {
   mapFleetSetupStatus,
 };
+

@@ -59,14 +59,6 @@ function createFleetReadRepository({
     return mapAdminFleetDetail(fleet);
   }
 
-  async function findFleetSetupStatusDataById(id) {
-    const fleet = await FleetModel.findById(id).lean();
-    if (!fleet) {
-      throw new ReadContractNotFoundError("FLEET_NOT_FOUND", "Fleet record not found.");
-    }
-    return fleet;
-  }
-
   async function findOwnerPaginatedFleets({ userId, page, limit, skip }) {
     const ownerIds = await resolveOwnerObjectIds(userId);
     const filter = {
@@ -103,7 +95,6 @@ function createFleetReadRepository({
   return {
     findAdminPaginatedFleets,
     findAdminFleetDetailById,
-    findFleetSetupStatusDataById,
     findOwnerPaginatedFleets,
     findOwnerFleetDetailById,
   };

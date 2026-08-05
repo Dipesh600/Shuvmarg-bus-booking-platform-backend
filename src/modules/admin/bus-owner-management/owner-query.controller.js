@@ -21,6 +21,14 @@ function createOwnerQueryController({
 
     async getBusOwnerById(req, res) {
       try {
+        const id = req.body?.id || req.query?.id || req.params?.id;
+        if (!id) {
+          return res.status(400).json({ success: false, message: "Id is required!" });
+        }
+        const mongoose = require("mongoose");
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+          return res.status(400).json({ success: false, message: "Invalid id format!" });
+        }
         const result = await adminBusOwnerReadService.getBusOwnerDetail(req);
         return res.status(200).json(result);
       } catch (error) {
@@ -33,8 +41,16 @@ function createOwnerQueryController({
 
 const defaultController = createOwnerQueryController();
 
-module.exports = {
+const exportsObj = {
   getAllBusOwners: defaultController.getAllBusOwners,
   getBusOwnerById: defaultController.getBusOwnerById,
-  createOwnerQueryController,
 };
+
+Object.defineProperty(exportsObj, "createOwnerQueryController", {
+  value: createOwnerQueryController,
+  enumerable: false,
+  writable: false,
+  configurable: true,
+});
+
+module.exports = exportsObj;

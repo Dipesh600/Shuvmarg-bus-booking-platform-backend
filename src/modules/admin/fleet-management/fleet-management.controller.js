@@ -12,15 +12,29 @@ function send(res, result) {
 }
 
 function createFleetManagementController({
+  listFleets,
+  getFleetDetail,
   updateFleetStatus,
   getFleetDashboard,
-  readService = defaultReadService,
+  getFleetSetupStatus,
+  readService,
   console: logger = console,
 } = {}) {
+  const effectiveReadService =
+    readService ||
+    (getFleetSetupStatus
+      ? createFleetReadService({ getCanonicalSetupStatus: getFleetSetupStatus })
+      : defaultReadService);
+
   return {
     async getAllFleet(req, res) {
       try {
-        const result = await readService.listFleetsForAdmin(req);
+        if (listFleets) {
+          const result = await listFleets(req.query || {});
+          if (result && typeof result.statusCode === "number") return send(res, result);
+          return res.status(200).json(result);
+        }
+        const result = await effectiveReadService.listFleetsForAdmin(req);
         return res.status(200).json(result);
       } catch (error) {
         const { statusCode, payload } = mapReadError(error, logger);
@@ -30,7 +44,13 @@ function createFleetManagementController({
 
     async getFleetById(req, res) {
       try {
-        const result = await readService.getFleetDetailForAdmin(req);
+        if (getFleetDetail) {
+          const id = req.params?.id || req.body?.id || req.query?.id;
+          const result = await getFleetDetail(id);
+          if (result && typeof result.statusCode === "number") return send(res, result);
+          return res.status(200).json(result);
+        }
+        const result = await effectiveReadService.getFleetDetailForAdmin(req);
         return res.status(200).json(result);
       } catch (error) {
         const { statusCode, payload } = mapReadError(error, logger);
@@ -66,7 +86,13 @@ function createFleetManagementController({
 
     async getFleetSetupStatus(req, res) {
       try {
-        const result = await readService.getFleetSetupStatusForAdmin(req);
+        if (getFleetSetupStatus && !readService) {
+          const id = req.params?.id || req.body?.id || req.query?.id;
+          const result = await getFleetSetupStatus(id);
+          if (result && typeof result.statusCode === "number") return send(res, result);
+          return res.status(200).json(result);
+        }
+        const result = await effectiveReadService.getFleetSetupStatusForAdmin(req);
         return res.status(200).json(result);
       } catch (error) {
         const { statusCode, payload } = mapReadError(error, logger);

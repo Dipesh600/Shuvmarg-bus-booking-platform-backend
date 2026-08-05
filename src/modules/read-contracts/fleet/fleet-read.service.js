@@ -1,41 +1,21 @@
 "use strict";
 
 const mongoose = require("mongoose");
-const { getAdminActor, resolveAuthorizedAdminActor } = require("../../admin/bus-owner-management/admin-actor.resolver");
+const { resolveAuthorizedAdminActor } = require("../../admin/bus-owner-management/admin-actor.resolver");
 const { parsePagination, formatPagination } = require("../common/read-pagination.policy");
-const { ReadContractValidationError, ReadContractUnauthorizedError, ReadContractForbiddenError } = require("../common/read-errors");
+const { ReadContractValidationError, ReadContractNotFoundError } = require("../common/read-errors");
 const { createFleetReadRepository } = require("./fleet-read.repository");
 const { mapFleetSetupStatus } = require("./fleet-setup-status.dto");
+const { createDefaultCanonicalSetupService } = require("./canonical-setup-service.resolver");
+const { authorizeAdmin, authorizeOwner } = require("./fleet-read-auth.guard");
 
 function createFleetReadService({
   repository = createFleetReadRepository(),
+  getCanonicalSetupStatus = createDefaultCanonicalSetupService(),
   resolveAdminActor = resolveAuthorizedAdminActor,
 } = {}) {
-  async function authorizeAdmin(req) {
-    const actor = getAdminActor(req);
-    if (!actor) {
-      throw new ReadContractUnauthorizedError("UNAUTHORIZED_ADMIN", "Admin authentication required.");
-    }
-    const resolved = await resolveAdminActor(actor);
-    if (!resolved) {
-      throw new ReadContractUnauthorizedError("UNAUTHORIZED_ADMIN", "Admin authentication required.");
-    }
-    if (resolved.status === "inactive" || resolved.isLocked) {
-      throw new ReadContractForbiddenError("READ_FORBIDDEN", "Admin account is inactive or locked.");
-    }
-    return resolved;
-  }
-
-  function authorizeOwner(req) {
-    const userId = req.userInfo?.id;
-    if (!userId || typeof userId !== "string") {
-      throw new ReadContractUnauthorizedError("UNAUTHORIZED_OWNER", "Bus owner authentication required.");
-    }
-    return userId;
-  }
-
   async function listFleetsForAdmin(req) {
-    await authorizeAdmin(req);
+    await authorizeAdmin(req, resolveAdminActor);
     const { page, limit, skip } = parsePagination(req.query);
     const { search, status, approvalStatus, ownerId } = req.query || {};
 
@@ -49,49 +29,47 @@ function createFleetReadService({
       ownerId,
     });
 
-    const pagination = formatPagination({ page, limit, totalItems });
     return {
       success: true,
       data: {
         items,
-        pagination,
+        pagination: formatPagination({ page, limit, totalItems }),
       },
     };
   }
 
   async function getFleetDetailForAdmin(req) {
-    await authorizeAdmin(req);
+    await authorizeAdmin(req, resolveAdminActor);
     const id = req.params?.id || req.body?.id || req.query?.id;
 
     if (!id || typeof id !== "string") {
       throw new ReadContractValidationError("READ_INVALID_ID", "Fleet ID is required.");
     }
-
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new ReadContractValidationError("READ_INVALID_ID", "Invalid fleet ID format.");
     }
 
     const data = await repository.findAdminFleetDetailById(id);
-    return {
-      success: true,
-      data,
-    };
+    return { success: true, data };
   }
 
   async function getFleetSetupStatusForAdmin(req) {
-    await authorizeAdmin(req);
+    await authorizeAdmin(req, resolveAdminActor);
     const id = req.params?.id || req.body?.id || req.query?.id;
 
     if (!id || typeof id !== "string" || !mongoose.Types.ObjectId.isValid(id)) {
       throw new ReadContractValidationError("READ_INVALID_ID", "Valid fleet ID is required.");
     }
 
-    const fleetRawData = await repository.findFleetSetupStatusDataById(id);
-    const setupData = mapFleetSetupStatus(fleetRawData);
+    const result = await getCanonicalSetupStatus(id);
+    if (!result || result.statusCode === 404) {
+      throw new ReadContractNotFoundError("FLEET_NOT_FOUND", "Fleet record not found.");
+    }
 
+    const canonicalData = result.body?.data || result.data || result;
     return {
       success: true,
-      data: setupData,
+      data: mapFleetSetupStatus(canonicalData),
     };
   }
 
@@ -106,12 +84,11 @@ function createFleetReadService({
       skip,
     });
 
-    const pagination = formatPagination({ page, limit, totalItems });
     return {
       success: true,
       data: {
         items,
-        pagination,
+        pagination: formatPagination({ page, limit, totalItems }),
       },
     };
   }
@@ -129,10 +106,7 @@ function createFleetReadService({
       userId: authenticatedUserId,
     });
 
-    return {
-      success: true,
-      data,
-    };
+    return { success: true, data };
   }
 
   return {
