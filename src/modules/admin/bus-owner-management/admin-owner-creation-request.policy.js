@@ -26,6 +26,21 @@ const REQUIRED_BODY_FIELDS = Object.freeze([
   "branchName",
 ]);
 
+const FIELD_MAX_LENGTHS = Object.freeze({
+  companyName: 100,
+  ownerName: 100,
+  phone: 20,
+  email: 254,
+  address: 255,
+  bankName: 100,
+  accountHolderName: 100,
+  accountNumber: 30,
+  branchName: 100,
+  swiftCode: 20,
+  panNumber: 30,
+  registrationNumber: 50,
+});
+
 function createBodyValidationError(message, field = null, code = "ADMIN_CREATION_INVALID_BODY") {
   const error = new Error(message);
   error.statusCode = 400;
@@ -81,6 +96,17 @@ function validateAdminOwnerCreationBody(body) {
     }
   }
 
+  for (const field of ALLOWED_BODY_FIELDS) {
+    const val = sanitized[field];
+    if (val && FIELD_MAX_LENGTHS[field] && val.length > FIELD_MAX_LENGTHS[field]) {
+      throw createBodyValidationError(
+        `Field '${field}' exceeds maximum length of ${FIELD_MAX_LENGTHS[field]} characters.`,
+        field,
+        "ADMIN_CREATION_FIELD_TOO_LONG"
+      );
+    }
+  }
+
   const normalizedPhone = normalizePhone(sanitized.phone);
   if (!normalizedPhone) {
     throw createBodyValidationError("Invalid phone number format for bus owner.", "phone", "ADMIN_CREATION_INVALID_PHONE");
@@ -102,6 +128,7 @@ function validateAdminOwnerCreationBody(body) {
 module.exports = {
   ALLOWED_BODY_FIELDS,
   REQUIRED_BODY_FIELDS,
+  FIELD_MAX_LENGTHS,
   validateAdminOwnerCreationBody,
   normalizePhone,
 };

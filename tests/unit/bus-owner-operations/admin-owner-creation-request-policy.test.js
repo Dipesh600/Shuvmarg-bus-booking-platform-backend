@@ -55,4 +55,19 @@ test("admin-owner-creation-request-policy unit tests", async (t) => {
       (err) => err.code === "ADMIN_CREATION_INVALID_EMAIL"
     );
   });
+
+  await t.test("rejects fields exceeding maximum lengths", async () => {
+    assert.throws(
+      () => validateAdminOwnerCreationBody({ ...validBody, companyName: "A".repeat(101) }),
+      (err) => err.code === "ADMIN_CREATION_FIELD_TOO_LONG" && err.field === "companyName"
+    );
+    assert.throws(
+      () => validateAdminOwnerCreationBody({ ...validBody, email: "A".repeat(250) + "@ex.com" }),
+      (err) => err.code === "ADMIN_CREATION_FIELD_TOO_LONG" && err.field === "email"
+    );
+    assert.throws(
+      () => validateAdminOwnerCreationBody({ ...validBody, accountNumber: "1".repeat(31) }),
+      (err) => err.code === "ADMIN_CREATION_FIELD_TOO_LONG" && err.field === "accountNumber"
+    );
+  });
 });

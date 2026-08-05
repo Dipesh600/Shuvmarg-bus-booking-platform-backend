@@ -4,6 +4,18 @@ const Admin = require("../../../../models/adminModel");
 
 const ALLOWED_ADMIN_ROLES = Object.freeze(["SUPER_ADMIN", "ADMIN", "SUB_ADMIN"]);
 
+function getAdminActor(req) {
+  if (!req || typeof req !== "object") return null;
+  const adminInfo = req.adminInfo;
+  if (!adminInfo || typeof adminInfo !== "object" || !adminInfo.id || !adminInfo.role) {
+    return null;
+  }
+  return {
+    adminId: String(adminInfo.id),
+    tokenRole: adminInfo.role,
+  };
+}
+
 async function resolveAuthorizedAdminActor(authInfo, deps = {}) {
   const AdminModel = deps.Admin || Admin;
   if (!authInfo || typeof authInfo !== "object") {
@@ -13,15 +25,15 @@ async function resolveAuthorizedAdminActor(authInfo, deps = {}) {
     throw error;
   }
 
-  const rawId = authInfo.id || authInfo._id || authInfo.adminId;
-  if (!rawId) {
+  const { adminId, tokenRole } = authInfo;
+  if (!adminId || !tokenRole) {
     const error = new Error("Admin identity reference missing from token payload.");
     error.statusCode = 401;
     error.code = "ADMIN_IDENTITY_MISSING";
     throw error;
   }
 
-  const admin = await AdminModel.findById(rawId).lean();
+  const admin = await AdminModel.findById(adminId).lean();
   if (!admin) {
     const error = new Error("Authenticated admin record not found.");
     error.statusCode = 401;
@@ -50,7 +62,7 @@ async function resolveAuthorizedAdminActor(authInfo, deps = {}) {
     throw error;
   }
 
-  if (authInfo.tokenRole && authInfo.tokenRole !== admin.role) {
+  if (tokenRole !== admin.role) {
     const error = new Error("Admin token role does not match active account role.");
     error.statusCode = 403;
     error.code = "ADMIN_ROLE_MISMATCH";
@@ -61,6 +73,7 @@ async function resolveAuthorizedAdminActor(authInfo, deps = {}) {
 }
 
 module.exports = {
+  getAdminActor,
   resolveAuthorizedAdminActor,
   ALLOWED_ADMIN_ROLES,
 };

@@ -1,6 +1,7 @@
 "use strict";
 
 const { createAdminKycReuploadService } = require("./admin-kyc-reupload.service");
+const { getAdminActor } = require("./admin-actor.resolver");
 const { mapAdminKycError } = require("./admin-kyc-error.mapper");
 
 const defaultReuploadService = createAdminKycReuploadService();
@@ -8,7 +9,7 @@ const defaultReuploadService = createAdminKycReuploadService();
 const reuploadKycDocument = async (req, res, deps = {}) => {
   const service = deps.service || defaultReuploadService;
   try {
-    const actor = req.adminInfo || req.user || {};
+    const actor = getAdminActor(req);
     const { id, documentType } = req.body || {};
     const file = (req.files || {}).document || (req.files || {})[documentType];
 

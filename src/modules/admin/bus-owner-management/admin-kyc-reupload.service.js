@@ -64,35 +64,43 @@ function createAdminKycReuploadService(deps = {}) {
       throw uploadErr;
     }
 
-    const auditEvent = buildKycAuditEvent({
-      eventType: "KYC_RESUBMITTED",
-      actorType: "ADMIN",
-      actorId: admin._id,
-      fromStatus: "rejected",
-      toStatus: "pending",
-      occurredAt: now,
-      metadata: { documentCount: 1 },
-    });
+    let updated;
+    try {
+      const auditEvent = buildKycAuditEvent({
+        eventType: "KYC_RESUBMITTED",
+        actorType: "ADMIN",
+        actorId: admin._id,
+        fromStatus: "rejected",
+        toStatus: "pending",
+        occurredAt: now,
+        metadata: { documentCount: 1 },
+      });
 
-    const updated = await BusOwnerModel.findOneAndUpdate(
-      { _id: owner._id, verificationStatus: "rejected" },
-      {
-        $set: {
-          verificationStatus: "pending",
-          rejectionReason: null,
-          "kycReview.reviewedBy": null,
-          "kycReview.reviewedAt": null,
-          [`${documentType}.documentUrls`]: [newObjectKey],
-          [`${documentType}.verified`]: false,
-          [`${documentType}.rejectionReason`]: null,
+      updated = await BusOwnerModel.findOneAndUpdate(
+        { _id: owner._id, verificationStatus: "rejected" },
+        {
+          $set: {
+            verificationStatus: "pending",
+            rejectionReason: null,
+            "kycReview.reviewedBy": null,
+            "kycReview.reviewedAt": null,
+            [`${documentType}.documentUrls`]: [newObjectKey],
+            [`${documentType}.verified`]: false,
+            [`${documentType}.rejectionReason`]: null,
+          },
+          $push: { kycAuditHistory: auditEvent },
         },
-        $push: { kycAuditHistory: auditEvent },
-      },
-      { new: true, runValidators: true }
-    );
+        { new: true, runValidators: true }
+      );
+    } catch (dbErr) {
+      if (newObjectKey) {
+        await storageService.deleteMany([newObjectKey]).catch(() => {});
+      }
+      throw dbErr;
+    }
 
     if (!updated) {
-      if (newObjectKey) await storageService.deleteMany([newObjectKey]);
+      if (newObjectKey) await storageService.deleteMany([newObjectKey]).catch(() => {});
       const err = new Error("Concurrent modification detected. KYC status is no longer rejected.");
       err.statusCode = 409;
       err.code = "KYC_REUPLOAD_CONFLICT";
@@ -100,7 +108,7 @@ function createAdminKycReuploadService(deps = {}) {
     }
 
     if (oldObjectKey) {
-      await storageService.deleteMany([oldObjectKey]);
+      await storageService.deleteMany([oldObjectKey]).catch(() => {});
     }
 
     return {

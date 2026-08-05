@@ -50,7 +50,7 @@ test("admin-kyc-reupload-security unit tests", async (t) => {
       ownerId: validOwnerId,
       documentType: "taxRegistration",
       file: makeFile("new-tax"),
-      actor: { id: validAdminId },
+      actor: { adminId: validAdminId, tokenRole: "ADMIN" },
     });
 
     assert.equal(result.verificationStatus, "pending");
@@ -83,7 +83,7 @@ test("admin-kyc-reupload-security unit tests", async (t) => {
       const service = createAdminKycReuploadService(deps);
 
       await assert.rejects(
-        async () => service.reuploadRejectedKycDocument({ ownerId: validOwnerId, documentType: "taxRegistration", file: makeFile("new-tax"), actor: { id: validAdminId } }),
+        async () => service.reuploadRejectedKycDocument({ ownerId: validOwnerId, documentType: "taxRegistration", file: makeFile("new-tax"), actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
         (err) => err.statusCode === 409 && err.code === "KYC_REUPLOAD_INVALID_STATE"
       );
     }
@@ -95,7 +95,7 @@ test("admin-kyc-reupload-security unit tests", async (t) => {
 
     for (const documentType of ["bankDetails", "insuranceCertificates", "invalidType"]) {
       await assert.rejects(
-        async () => service.reuploadRejectedKycDocument({ ownerId: validOwnerId, documentType, file: makeFile("new-doc"), actor: { id: validAdminId } }),
+        async () => service.reuploadRejectedKycDocument({ ownerId: validOwnerId, documentType, file: makeFile("new-doc"), actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
         (err) => err.statusCode === 400 && err.code === "KYC_REUPLOAD_INVALID_DOCUMENT_TYPE"
       );
     }

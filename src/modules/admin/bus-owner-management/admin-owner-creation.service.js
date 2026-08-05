@@ -104,20 +104,6 @@ function createAdminOwnerCreationService(deps = {}) {
       if (!preparedIdentity.isNew) {
         commitResult = await addRole(preparedIdentity.existingUser, deps);
       }
-
-      if (preparedIdentity.isNew) {
-        await notifyUser({
-          phone: sanitizedBody.phone,
-          email: sanitizedBody.email,
-          ownerName: sanitizedBody.ownerName,
-          password: preparedIdentity.password,
-        }, deps);
-      }
-
-      return {
-        busOwnerId: busOwner.busOwnerId || busOwner._id.toString(),
-        userId: commitResult.user._id,
-      };
     } catch (err) {
       if (newlyUploadedKeys.length > 0) {
         await storageService.deleteMany(newlyUploadedKeys);
@@ -130,6 +116,28 @@ function createAdminOwnerCreationService(deps = {}) {
       }
       throw err;
     }
+
+    if (preparedIdentity.isNew) {
+      try {
+        await notifyUser({
+          phone: sanitizedBody.phone,
+          email: sanitizedBody.email,
+          ownerName: sanitizedBody.ownerName,
+          password: preparedIdentity.password,
+        }, deps);
+      } catch (notificationError) {
+        if (deps.logger && typeof deps.logger.warn === "function") {
+          deps.logger.warn("Admin-created owner notification failed:", notificationError);
+        } else {
+          console.warn("Admin-created owner notification failed:", notificationError?.message || notificationError);
+        }
+      }
+    }
+
+    return {
+      busOwnerId: busOwner.busOwnerId || busOwner._id.toString(),
+      userId: commitResult.user._id,
+    };
   }
 
   return { createAdminBusOwner };

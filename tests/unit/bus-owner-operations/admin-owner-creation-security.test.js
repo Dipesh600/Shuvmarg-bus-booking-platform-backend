@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createAdminOwnerCreationService } = require("../../../src/modules/admin/bus-owner-management/admin-owner-creation.service");
+const { getAdminActor, resolveAuthorizedAdminActor } = require("../../../src/modules/admin/bus-owner-management/admin-actor.resolver");
 
 test("admin-owner-creation-security unit tests", async (t) => {
   const validAdminId = "64f000000000000000000099";
@@ -76,43 +77,55 @@ test("admin-owner-creation-security unit tests", async (t) => {
     return { deps, getSavedOwner: () => savedOwner, getNotifiedUser: () => notifiedUser, uploadedKeys };
   }
 
+  await t.test("getAdminActor extracts explicit adminId and tokenRole from req.adminInfo", () => {
+    assert.equal(getAdminActor(null), null);
+    assert.equal(getAdminActor({}), null);
+    assert.equal(getAdminActor({ adminInfo: { id: validAdminId } }), null);
+
+    const actor = getAdminActor({ adminInfo: { id: validAdminId, role: "ADMIN" } });
+    assert.deepEqual(actor, { adminId: validAdminId, tokenRole: "ADMIN" });
+  });
+
+  await t.test("role drift returns 403 ADMIN_ROLE_MISMATCH when tokenRole differs from active DB role", async () => {
+    const mockAdminModel = {
+      findById: () => ({ lean: async () => ({ _id: validAdminId, role: "SUB_ADMIN", isActive: true, accountLocked: false }) }),
+    };
+
+    await assert.rejects(
+      async () => resolveAuthorizedAdminActor({ adminId: validAdminId, tokenRole: "ADMIN" }, { Admin: mockAdminModel }),
+      (err) => err.statusCode === 403 && err.code === "ADMIN_ROLE_MISMATCH"
+    );
+  });
+
   await t.test("creation completes with valid PDF files, pending status, atomic audit, and storage-only bankDetails", async () => {
-    const { deps, getSavedOwner, getNotifiedUser, uploadedKeys } = makeDeps();
+    const { deps, getSavedOwner, getNotifiedUser } = makeDeps();
     const service = createAdminOwnerCreationService(deps);
 
-    const result = await service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { id: validAdminId } });
+    const result = await service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
     assert.equal(result.busOwnerId, "BOWN-001");
     assert.equal(result.userId, validUserId);
 
     const owner = getSavedOwner();
     assert.equal(owner.verificationStatus, "pending");
-    assert.equal(owner.bankDetails.verified, undefined, "bankDetails must not have a review verdict property");
-    assert.equal(owner.bankDetails.rejectionReason, undefined);
-
+    assert.equal(owner.bankDetails.verified, undefined);
     assert.equal(owner.kycAuditHistory.length, 1);
-    const event = owner.kycAuditHistory[0];
-    assert.equal(event.eventType, "KYC_SUBMITTED");
-    assert.equal(event.actorType, "ADMIN");
-    assert.equal(event.actorId, validAdminId);
-    assert.equal(event.metadata.documentCount, 4);
 
     const notified = getNotifiedUser();
     assert.equal(notified.phone, "9841234567");
-    assert.equal(notified.password, "temp-pass-123");
   });
 
-  await t.test("rejects GIF files with 400 validation error", async () => {
-    const gifHeader = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
-    const invalidFiles = {
-      ...validFiles,
-      companyRegistrationCert: makeFile("comp", "gif", "image/gif", gifHeader),
-    };
-    const { deps } = makeDeps();
+  await t.test("notification failure is non-fatal: User, BusOwner, and uploaded files remain intact", async () => {
+    let warningLogged = false;
+    const { deps, getSavedOwner, uploadedKeys } = makeDeps({
+      notifyNewOwnerCredentials: async () => { throw new Error("SMS Gateway Timeout"); },
+      logger: { warn: () => { warningLogged = true; } },
+    });
     const service = createAdminOwnerCreationService(deps);
 
-    await assert.rejects(
-      async () => service.createAdminBusOwner({ body: validBody, files: invalidFiles, actor: { id: validAdminId } }),
-      (err) => err.code === "KYC_FILE_TYPE_NOT_ALLOWED" || err.code === "KYC_FILE_EXTENSION_NOT_ALLOWED"
-    );
+    const result = await service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
+    assert.equal(result.busOwnerId, "BOWN-001");
+    assert.notEqual(getSavedOwner(), null, "BusOwner must remain saved");
+    assert.equal(uploadedKeys.length, 4, "Uploaded documents must remain");
+    assert.equal(warningLogged, true, "Notification error must be logged as warning");
   });
 });

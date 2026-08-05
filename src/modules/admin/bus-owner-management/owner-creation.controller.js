@@ -1,6 +1,7 @@
 "use strict";
 
 const { createAdminOwnerCreationService } = require("./admin-owner-creation.service");
+const { getAdminActor } = require("./admin-actor.resolver");
 const { mapAdminKycError } = require("./admin-kyc-error.mapper");
 
 const defaultCreationService = createAdminOwnerCreationService();
@@ -8,7 +9,7 @@ const defaultCreationService = createAdminOwnerCreationService();
 const createBusOwnerFull = async (req, res, deps = {}) => {
   const service = deps.service || defaultCreationService;
   try {
-    const actor = req.adminInfo || req.user || {};
+    const actor = getAdminActor(req);
     const result = await service.createAdminBusOwner({
       body: req.body,
       files: req.files || {},
