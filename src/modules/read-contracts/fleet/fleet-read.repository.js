@@ -1,5 +1,6 @@
 "use strict";
 
+const mongoose = require("mongoose");
 const Fleet = require("../../../../models/fleetModel");
 const BusOwner = require("../../../../models/busOwnerModel");
 const { ReadContractValidationError, ReadContractNotFoundError } = require("../common/read-errors");
@@ -7,60 +8,26 @@ const { mapAdminFleetListItem } = require("./admin-fleet-list.dto");
 const { mapAdminFleetDetail } = require("./admin-fleet-detail.dto");
 const { mapBusOwnerFleetListItem } = require("./bus-owner-fleet-list.dto");
 const { mapBusOwnerFleetDetail } = require("./bus-owner-fleet-detail.dto");
-
-function escapeRegex(str) {
-  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+const { buildAdminFleetFilter } = require("./fleet-read-filter.builder");
 
 function createFleetReadRepository({
   FleetModel = Fleet,
   BusOwnerModel = BusOwner,
 } = {}) {
   async function resolveOwnerObjectIds(userId) {
+    if (!userId || typeof userId !== "string" || !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ReadContractValidationError("READ_INVALID_FILTER", "Invalid ownerId filter.");
+    }
     const owner = await BusOwnerModel.findOne({ user: userId }).select("_id user").lean();
     const ids = [userId];
     if (owner?._id) ids.push(owner._id);
     return ids;
   }
 
-  async function findAdminPaginatedFleets({ page, limit, skip, search, status, approvalStatus, ownerId }) {
-    const filter = {};
-
-    if (approvalStatus) {
-      if (!["PENDING", "APPROVED", "REJECTED"].includes(approvalStatus.toUpperCase())) {
-        throw new ReadContractValidationError(
-          "READ_INVALID_FILTER",
-          "Approval status filter must be one of: PENDING, APPROVED, REJECTED."
-        );
-      }
-      filter.approvalStatus = approvalStatus.toUpperCase();
-    }
-
-    if (status) {
-      filter.status = status;
-    }
-
-    if (ownerId) {
-      const ownerIds = await resolveOwnerObjectIds(ownerId);
-      filter.$or = [{ ownerId: { $in: ownerIds } }, { busOwnerId: { $in: ownerIds } }];
-    }
-
-    if (search && typeof search === "string" && search.trim().length > 0) {
-      const safeSearch = escapeRegex(search.trim());
-      const searchFilter = {
-        $or: [
-          { busName: new RegExp(safeSearch, "i") },
-          { busNumber: new RegExp(safeSearch, "i") },
-          { fleetId: new RegExp(safeSearch, "i") },
-        ],
-      };
-      if (filter.$or) {
-        filter.$and = [{ $or: filter.$or }, searchFilter];
-        delete filter.$or;
-      } else {
-        filter.$or = searchFilter.$or;
-      }
-    }
+  async function findAdminPaginatedFleets(params) {
+    const { page, limit, skip, ownerId } = params;
+    const ownerIds = ownerId ? await resolveOwnerObjectIds(ownerId) : [];
+    const filter = buildAdminFleetFilter(params, ownerIds);
 
     const [rawFleets, totalItems] = await Promise.all([
       FleetModel.find(filter)
@@ -90,6 +57,14 @@ function createFleetReadRepository({
     }
 
     return mapAdminFleetDetail(fleet);
+  }
+
+  async function findFleetSetupStatusDataById(id) {
+    const fleet = await FleetModel.findById(id).lean();
+    if (!fleet) {
+      throw new ReadContractNotFoundError("FLEET_NOT_FOUND", "Fleet record not found.");
+    }
+    return fleet;
   }
 
   async function findOwnerPaginatedFleets({ userId, page, limit, skip }) {
@@ -128,6 +103,7 @@ function createFleetReadRepository({
   return {
     findAdminPaginatedFleets,
     findAdminFleetDetailById,
+    findFleetSetupStatusDataById,
     findOwnerPaginatedFleets,
     findOwnerFleetDetailById,
   };

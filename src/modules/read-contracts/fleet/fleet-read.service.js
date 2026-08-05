@@ -13,9 +13,14 @@ function createFleetReadService({
 } = {}) {
   async function authorizeAdmin(req) {
     const actor = getAdminActor(req);
-    if (!actor) return null;
+    if (!actor) {
+      throw new ReadContractUnauthorizedError("UNAUTHORIZED_ADMIN", "Admin authentication required.");
+    }
     const resolved = await resolveAdminActor(actor);
-    if (!resolved || resolved.status === "inactive" || resolved.isLocked) {
+    if (!resolved) {
+      throw new ReadContractUnauthorizedError("UNAUTHORIZED_ADMIN", "Admin authentication required.");
+    }
+    if (resolved.status === "inactive" || resolved.isLocked) {
       throw new ReadContractForbiddenError("READ_FORBIDDEN", "Admin account is inactive or locked.");
     }
     return resolved;
@@ -81,8 +86,8 @@ function createFleetReadService({
       throw new ReadContractValidationError("READ_INVALID_ID", "Valid fleet ID is required.");
     }
 
-    const fleetDetail = await repository.findAdminFleetDetailById(id);
-    const setupData = mapFleetSetupStatus(fleetDetail);
+    const fleetRawData = await repository.findFleetSetupStatusDataById(id);
+    const setupData = mapFleetSetupStatus(fleetRawData);
 
     return {
       success: true,

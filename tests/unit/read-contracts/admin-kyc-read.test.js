@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createAdminKycReadService } = require("../../../src/modules/read-contracts/admin-kyc/admin-kyc-read.service");
-const { ReadContractForbiddenError, ReadContractValidationError } = require("../../../src/modules/read-contracts/common/read-errors");
+const { ReadContractUnauthorizedError, ReadContractValidationError } = require("../../../src/modules/read-contracts/common/read-errors");
 
 test("admin kyc read service enforces fresh admin authorization", async () => {
   let repositoryCalled = false;
@@ -21,18 +21,17 @@ test("admin kyc read service enforces fresh admin authorization", async () => {
   });
 
   const req = { adminInfo: { id: "admin1", role: "ADMIN" }, query: {} };
-  await assert.rejects(() => service.listKycQueue(req), ReadContractForbiddenError);
+  await assert.rejects(() => service.listKycQueue(req), ReadContractUnauthorizedError);
   assert.equal(repositoryCalled, false);
 });
 
 test("admin kyc list returns canonical envelope and document summary", async () => {
-  const mockOwner = {
+  const mockKyc = {
     _id: "507f1f77bcf86cd799439011",
     busOwnerId: "SUV-MARG-BOWNER-ABC-001",
-    user: { _id: "507f1f77bcf86cd799439022", name: "John Owner", email: "john@example.com" },
-    companyName: "John Express",
+    user: { _id: "507f1f77bcf86cd799439022", name: "Jane Owner", email: "jane@example.com" },
+    companyName: "Jane Express",
     verificationStatus: "pending",
-    companyRegistration: { documentUrls: ["http://s3/doc1"], verified: true },
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-02"),
   };
@@ -40,15 +39,14 @@ test("admin kyc list returns canonical envelope and document summary", async () 
   const mockRepo = {
     findPaginatedKycs: async () => ({
       items: [{
-        ownerId: String(mockOwner._id),
-        ownerCode: mockOwner.busOwnerId,
-        userId: String(mockOwner.user._id),
-        name: mockOwner.user.name,
-        companyName: mockOwner.companyName,
-        verificationStatus: mockOwner.verificationStatus,
-        documentSummary: { totalSlots: 6, present: 1, missing: 5, verified: 1, unverified: 0, rejected: 0 },
-        createdAt: mockOwner.createdAt.toISOString(),
-        updatedAt: mockOwner.updatedAt.toISOString(),
+        ownerId: String(mockKyc._id),
+        ownerCode: mockKyc.busOwnerId,
+        userId: String(mockKyc.user._id),
+        companyName: mockKyc.companyName,
+        verificationStatus: mockKyc.verificationStatus,
+        documentSummary: { totalSlots: 6, present: 3, missing: 3, verified: 0, unverified: 3, rejected: 0 },
+        createdAt: mockKyc.createdAt.toISOString(),
+        updatedAt: mockKyc.updatedAt.toISOString(),
       }],
       totalItems: 1,
     }),
@@ -64,8 +62,8 @@ test("admin kyc list returns canonical envelope and document summary", async () 
 
   assert.equal(res.success, true);
   assert.equal(res.data.items.length, 1);
+  assert.equal(res.data.items[0].ownerId, "507f1f77bcf86cd799439011");
   assert.equal(res.data.items[0].documentSummary.totalSlots, 6);
-  assert.equal(res.data.items[0].documentSummary.verified, 1);
 });
 
 test("admin kyc detail validates invalid object id format", async () => {

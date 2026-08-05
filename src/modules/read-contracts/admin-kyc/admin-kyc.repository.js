@@ -11,13 +11,14 @@ function createAdminKycRepository({
   async function findPaginatedKycs({ page, limit, skip, verificationStatus }) {
     const filter = {};
     if (verificationStatus) {
-      if (!["pending", "approved", "rejected"].includes(verificationStatus)) {
+      const norm = String(verificationStatus).toLowerCase();
+      if (!["pending", "approved", "rejected"].includes(norm)) {
         throw new ReadContractValidationError(
           "READ_INVALID_FILTER",
           "Verification status filter must be one of: pending, approved, rejected."
         );
       }
-      filter.verificationStatus = verificationStatus;
+      filter.verificationStatus = norm;
     }
 
     const [rawList, totalItems] = await Promise.all([

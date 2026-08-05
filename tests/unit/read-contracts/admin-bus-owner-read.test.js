@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createAdminBusOwnerReadService } = require("../../../src/modules/read-contracts/admin-bus-owner/admin-bus-owner-read.service");
-const { ReadContractForbiddenError, ReadContractValidationError } = require("../../../src/modules/read-contracts/common/read-errors");
+const { ReadContractUnauthorizedError, ReadContractValidationError } = require("../../../src/modules/read-contracts/common/read-errors");
 
 test("admin bus owner read service enforces fresh admin authorization", async () => {
   let repositoryCalled = false;
@@ -21,7 +21,7 @@ test("admin bus owner read service enforces fresh admin authorization", async ()
   });
 
   const req = { adminInfo: { id: "admin1", role: "ADMIN" }, query: {} };
-  await assert.rejects(() => service.listBusOwners(req), ReadContractForbiddenError);
+  await assert.rejects(() => service.listBusOwners(req), ReadContractUnauthorizedError);
   assert.equal(repositoryCalled, false);
 });
 

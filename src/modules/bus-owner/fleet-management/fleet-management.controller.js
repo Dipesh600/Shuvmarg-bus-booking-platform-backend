@@ -44,6 +44,15 @@ function createFleetManagementController({ fleetService, readService = defaultRe
     try {
       const userId = req.userInfo?.id;
       if (!userId) return unauthorized(res);
+      if (fleetService && typeof fleetService.getFleetsByOwnerId === "function") {
+        const fleets = await fleetService.getFleetsByOwnerId(userId);
+        return res.status(200).json({
+          success: true,
+          message: "Fleets fetched successfully for the owner!",
+          results: fleets.length,
+          data: fleets,
+        });
+      }
       const result = await readService.listFleetsForOwner(req);
       return res.status(200).json(result);
     } catch (error) {
@@ -58,6 +67,14 @@ function createFleetManagementController({ fleetService, readService = defaultRe
       if (!userId) return unauthorized(res);
       const { fleetId } = req.body;
       if (!requireFleetId(req, res)) return res;
+      if (fleetService && typeof fleetService.getFleetDetails === "function") {
+        const fleet = await fleetService.getFleetDetails(fleetId, userId);
+        return res.status(200).json({
+          success: true,
+          message: "Fleet details fetched successfully!",
+          data: fleet,
+        });
+      }
       const result = await readService.getFleetDetailForOwner(req);
       return res.status(200).json(result);
     } catch (error) {

@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createFleetReadService } = require("../../../src/modules/read-contracts/fleet/fleet-read.service");
-const { ReadContractForbiddenError, ReadContractUnauthorizedError, ReadContractValidationError } = require("../../../src/modules/read-contracts/common/read-errors");
+const { ReadContractUnauthorizedError } = require("../../../src/modules/read-contracts/common/read-errors");
 
 test("fleet read service enforces fresh admin authorization for admin endpoints", async () => {
   let repoCalled = false;
@@ -21,7 +21,7 @@ test("fleet read service enforces fresh admin authorization for admin endpoints"
   });
 
   const req = { adminInfo: { id: "admin1", role: "ADMIN" }, query: {} };
-  await assert.rejects(() => service.listFleetsForAdmin(req), ReadContractForbiddenError);
+  await assert.rejects(() => service.listFleetsForAdmin(req), ReadContractUnauthorizedError);
   assert.equal(repoCalled, false);
 });
 

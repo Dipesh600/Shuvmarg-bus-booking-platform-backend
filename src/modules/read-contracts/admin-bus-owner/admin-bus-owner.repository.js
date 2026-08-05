@@ -19,17 +19,22 @@ function createAdminBusOwnerRepository({
   async function findPaginatedOwners({ page, limit, skip, search, verificationStatus }) {
     const filter = {};
     if (verificationStatus) {
-      if (!["pending", "approved", "rejected"].includes(verificationStatus)) {
+      const norm = String(verificationStatus).toLowerCase();
+      if (!["pending", "approved", "rejected"].includes(norm)) {
         throw new ReadContractValidationError(
           "READ_INVALID_FILTER",
           "Verification status filter must be one of: pending, approved, rejected."
         );
       }
-      filter.verificationStatus = verificationStatus;
+      filter.verificationStatus = norm;
     }
 
     if (search && typeof search === "string" && search.trim().length > 0) {
-      const safeSearch = escapeRegex(search.trim());
+      const trimmed = search.trim();
+      if (trimmed.length > 100) {
+        throw new ReadContractValidationError("READ_INVALID_FILTER", "Search term exceeds maximum length of 100 characters.");
+      }
+      const safeSearch = escapeRegex(trimmed);
       const matchingUsers = await UserModel.find({
         $or: [
           { name: new RegExp(safeSearch, "i") },

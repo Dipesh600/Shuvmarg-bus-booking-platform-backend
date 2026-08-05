@@ -2,13 +2,13 @@
 
 function mapFleetSetupStatus(fleet, setupServiceResult = {}) {
   if (!fleet) return null;
-  const fleetId = String(fleet._id || fleet.id);
+  const fleetId = String(fleet._id || fleet.id || "");
   const fleetCode = fleet.fleetId || null;
 
   const isApproved = Boolean(fleet.isApproved || fleet.approvalStatus === "APPROVED");
   const hasSeatTemplate = Boolean(fleet.seatTemplateId);
   const hasRoute = Boolean(fleet.route?.from && fleet.route?.to);
-  const isOperational = fleet.status === "active";
+  const isOperational = String(fleet.status || "").toUpperCase() === "ACTIVE";
 
   const steps = [
     { step: 1, key: "verification", label: "Fleet Verification", complete: isApproved },

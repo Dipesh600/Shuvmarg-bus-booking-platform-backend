@@ -2,100 +2,139 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-
-const { createAdminBusOwnerReadService } = require("../../../src/modules/read-contracts/admin-bus-owner/admin-bus-owner-read.service");
-const { createAdminKycReadService } = require("../../../src/modules/read-contracts/admin-kyc/admin-kyc-read.service");
-const { createFleetReadService } = require("../../../src/modules/read-contracts/fleet/fleet-read.service");
-const { createBusOwnerReadService } = require("../../../src/modules/read-contracts/bus-owner/bus-owner-read.service");
+const { createOwnerQueryController } = require("../../../src/modules/admin/bus-owner-management/owner-query.controller");
+const { createKycQueryController } = require("../../../src/modules/admin/bus-owner-management/kyc-query.controller");
+const { createFleetManagementController } = require("../../../src/modules/admin/fleet-management/fleet-management.controller");
 
 function mockRes() {
-  const res = {};
-  res.status = (code) => {
-    res.statusCode = code;
-    return res;
+  let resStatus = 200;
+  let resBody = null;
+  return {
+    status(code) { resStatus = code; return this; },
+    json(payload) { resBody = payload; return this; },
+    result() { return { status: resStatus, body: resBody }; },
   };
-  res.json = (body) => {
-    res.body = body;
-    return res;
-  };
-  return res;
 }
 
-test("endpoint contract test for admin bus owner list and detail", async () => {
-  const mockRepo = {
-    findPaginatedOwners: async () => ({ items: [{ ownerId: "owner-1", name: "Owner Name" }], totalItems: 1 }),
-    findOwnerDetailById: async () => ({ ownerId: "owner-1", profile: { name: "Owner Name" } }),
-  };
-  const service = createAdminBusOwnerReadService({
-    repository: mockRepo,
-    resolveAdminActor: async () => ({ status: "active", isLocked: false }),
+test("admin read endpoint contract integration tests", async (t) => {
+  const adminReq = { adminInfo: { id: "507f1f77bcf86cd799439010", role: "ADMIN" } };
+
+  await t.test("1. GET /api/admin/getAllBusOwners endpoint contract", async () => {
+    const controller = createOwnerQueryController({
+      adminBusOwnerReadService: {
+        listBusOwners: async () => ({
+          success: true,
+          data: {
+            items: [{ ownerId: "bo-1", userId: "u-1", busOwnerId: "SUV-BOWNER-1", companyName: "Express" }],
+            pagination: { page: 1, limit: 20, totalItems: 1, totalPages: 1 },
+          },
+        }),
+      },
+    });
+    const res = mockRes();
+    await controller.getAllBusOwners({ ...adminReq, query: {} }, res);
+
+    assert.equal(res.result().status, 200);
+    assert.equal(res.result().body.success, true);
+    assert.equal(res.result().body.data.items[0].ownerId, "bo-1");
+    assert.equal("password" in res.result().body.data.items[0], false);
   });
 
-  const listReq = { adminInfo: { id: "admin-1", role: "ADMIN" }, query: { page: 1, limit: 10 } };
-  const listRes = await service.listBusOwners(listReq);
-  assert.equal(listRes.success, true);
-  assert.equal(listRes.data.items[0].ownerId, "owner-1");
+  await t.test("2. POST /api/admin/getBusOwnerDetails endpoint contract", async () => {
+    const controller = createOwnerQueryController({
+      adminBusOwnerReadService: {
+        getBusOwnerDetail: async () => ({
+          success: true,
+          data: { ownerId: "bo-1", userId: "u-1", companyName: "Express", fleets: [] },
+        }),
+      },
+    });
+    const res = mockRes();
+    await controller.getBusOwnerById({ ...adminReq, body: { id: "507f1f77bcf86cd799439011" } }, res);
 
-  const detailReq = { adminInfo: { id: "admin-1", role: "ADMIN" }, body: { id: "507f1f77bcf86cd799439011" } };
-  const detailRes = await service.getBusOwnerDetail(detailReq);
-  assert.equal(detailRes.success, true);
-  assert.equal(detailRes.data.ownerId, "owner-1");
-});
-
-test("endpoint contract test for admin kyc queue and detail", async () => {
-  const mockRepo = {
-    findPaginatedKycs: async () => ({ items: [{ ownerId: "owner-1", verificationStatus: "pending" }], totalItems: 1 }),
-    findKycDetailById: async () => ({ ownerId: "owner-1", verificationStatus: "pending" }),
-  };
-  const service = createAdminKycReadService({
-    repository: mockRepo,
-    resolveAdminActor: async () => ({ status: "active", isLocked: false }),
+    assert.equal(res.result().status, 200);
+    assert.equal(res.result().body.success, true);
+    assert.equal(res.result().body.data.ownerId, "bo-1");
   });
 
-  const queueReq = { adminInfo: { id: "admin-1", role: "ADMIN" }, query: {} };
-  const queueRes = await service.listKycQueue(queueReq);
-  assert.equal(queueRes.success, true);
+  await t.test("3. GET /api/admin/getAllBusOwnerKycs endpoint contract", async () => {
+    const controller = createKycQueryController({
+      readService: {
+        listKycQueue: async () => ({
+          success: true,
+          data: { items: [{ ownerId: "bo-1", companyName: "Express" }], pagination: { page: 1, limit: 20, totalItems: 1, totalPages: 1 } },
+        }),
+      },
+    });
+    const res = mockRes();
+    await controller.getAllBusOwnerKycs({ ...adminReq, query: {} }, res);
 
-  const detailReq = { adminInfo: { id: "admin-1", role: "ADMIN" }, body: { id: "507f1f77bcf86cd799439011" } };
-  const detailRes = await service.getKycDetail(detailReq);
-  assert.equal(detailRes.success, true);
-});
-
-test("endpoint contract test for bus owner profile and kyc status", async () => {
-  const mockUser = { _id: "user-1", name: "John Owner", email: "john@example.com" };
-  const mockOwner = { _id: "owner-1", busOwnerId: "SUV-MARG-BOWNER-001", verificationStatus: "approved" };
-
-  const service = createBusOwnerReadService({
-    UserModel: { findById: () => ({ select: () => ({ lean: async () => mockUser }) }) },
-    BusOwnerModel: { findOne: () => ({ lean: async () => mockOwner }) },
+    assert.equal(res.result().status, 200);
+    assert.equal(res.result().body.success, true);
   });
 
-  const profileReq = { userInfo: { id: "user-1" } };
-  const profileRes = await service.getOwnProfile(profileReq);
-  assert.equal(profileRes.success, true);
-  assert.equal(profileRes.data.ownerId, "owner-1");
+  await t.test("4. POST /api/admin/getBusOwnerKycDetails endpoint contract", async () => {
+    const controller = createKycQueryController({
+      readService: {
+        getKycDetail: async () => ({
+          success: true,
+          data: { ownerId: "bo-1", verificationStatus: "pending", documentDescriptors: {} },
+        }),
+      },
+    });
+    const res = mockRes();
+    await controller.getBusOwnerKycById({ ...adminReq, body: { id: "507f1f77bcf86cd799439011" } }, res);
 
-  const kycRes = await service.getOwnKycStatus(profileReq);
-  assert.equal(kycRes.success, true);
-  assert.equal(kycRes.data.verificationStatus, "approved");
-});
-
-test("endpoint contract test for fleet read service admin and owner routes", async () => {
-  const mockRepo = {
-    findAdminPaginatedFleets: async () => ({ items: [{ fleetId: "507f1f77bcf86cd799439011", fleetCode: "SUV-MARG-FLEET-001" }], totalItems: 1 }),
-    findAdminFleetDetailById: async () => ({ fleetId: "507f1f77bcf86cd799439011", fleetCode: "SUV-MARG-FLEET-001" }),
-    findOwnerPaginatedFleets: async () => ({ items: [{ fleetId: "507f1f77bcf86cd799439011" }], totalItems: 1 }),
-    findOwnerFleetDetailById: async () => ({ fleetId: "507f1f77bcf86cd799439011" }),
-  };
-
-  const service = createFleetReadService({
-    repository: mockRepo,
-    resolveAdminActor: async () => ({ status: "active", isLocked: false }),
+    assert.equal(res.result().status, 200);
+    assert.equal(res.result().body.data.ownerId, "bo-1");
   });
 
-  const adminListRes = await service.listFleetsForAdmin({ adminInfo: { id: "admin-1", role: "ADMIN" }, query: {} });
-  assert.equal(adminListRes.success, true);
+  await t.test("5. GET /api/admin/fleet/getAllFleet endpoint contract", async () => {
+    const controller = createFleetManagementController({
+      readService: {
+        listFleetsForAdmin: async () => ({
+          success: true,
+          data: { items: [{ fleetId: "f-1", fleetCode: "FLEET-001" }], pagination: { page: 1, limit: 20, totalItems: 1, totalPages: 1 } },
+        }),
+      },
+    });
+    const res = mockRes();
+    await controller.getAllFleet({ ...adminReq, query: {} }, res);
 
-  const ownerListRes = await service.listFleetsForOwner({ userInfo: { id: "user-1" }, query: {} });
-  assert.equal(ownerListRes.success, true);
+    assert.equal(res.result().status, 200);
+    assert.equal(res.result().body.data.items[0].fleetId, "f-1");
+  });
+
+  await t.test("6 & 7. GET /api/admin/fleet/getById/:id & legacy details/:id endpoint contract", async () => {
+    const canonicalController = createFleetManagementController({
+      readService: {
+        getFleetDetailForAdmin: async () => ({
+          success: true,
+          data: { fleetId: "f-1", fleetCode: "FLEET-001", busName: "Super Deluxe" },
+        }),
+      },
+    });
+
+    const res1 = mockRes();
+    await canonicalController.getFleetById({ ...adminReq, params: { id: "507f1f77bcf86cd799439011" } }, res1);
+
+    assert.equal(res1.result().status, 200);
+    assert.equal(res1.result().body.data.fleetCode, "FLEET-001");
+  });
+
+  await t.test("8. GET /api/admin/fleet/:id/setup-status endpoint contract", async () => {
+    const controller = createFleetManagementController({
+      readService: {
+        getFleetSetupStatusForAdmin: async () => ({
+          success: true,
+          data: { fleetId: "f-1", fleetCode: "FLEET-001", setupComplete: true, progress: { completedSteps: 4, totalSteps: 4 } },
+        }),
+      },
+    });
+    const res = mockRes();
+    await controller.getFleetSetupStatus({ ...adminReq, params: { id: "507f1f77bcf86cd799439011" } }, res);
+
+    assert.equal(res.result().status, 200);
+    assert.equal(res.result().body.data.progress.completedSteps, 4);
+  });
 });

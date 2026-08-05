@@ -5,24 +5,36 @@ const { mapReadError } = require("../../read-contracts/common/read-error.mapper"
 
 const defaultService = createAdminBusOwnerReadService();
 
-const getAllBusOwners = async (req, res) => {
-  try {
-    const result = await defaultService.listBusOwners(req);
-    return res.status(200).json(result);
-  } catch (error) {
-    const { statusCode, payload } = mapReadError(error);
-    return res.status(statusCode).json(payload);
-  }
-};
+function createOwnerQueryController({
+  adminBusOwnerReadService = defaultService,
+} = {}) {
+  return {
+    async getAllBusOwners(req, res) {
+      try {
+        const result = await adminBusOwnerReadService.listBusOwners(req);
+        return res.status(200).json(result);
+      } catch (error) {
+        const { statusCode, payload } = mapReadError(error);
+        return res.status(statusCode).json(payload);
+      }
+    },
 
-const getBusOwnerById = async (req, res) => {
-  try {
-    const result = await defaultService.getBusOwnerDetail(req);
-    return res.status(200).json(result);
-  } catch (error) {
-    const { statusCode, payload } = mapReadError(error);
-    return res.status(statusCode).json(payload);
-  }
-};
+    async getBusOwnerById(req, res) {
+      try {
+        const result = await adminBusOwnerReadService.getBusOwnerDetail(req);
+        return res.status(200).json(result);
+      } catch (error) {
+        const { statusCode, payload } = mapReadError(error);
+        return res.status(statusCode).json(payload);
+      }
+    },
+  };
+}
 
-module.exports = { getAllBusOwners, getBusOwnerById };
+const defaultController = createOwnerQueryController();
+
+module.exports = {
+  getAllBusOwners: defaultController.getAllBusOwners,
+  getBusOwnerById: defaultController.getBusOwnerById,
+  createOwnerQueryController,
+};

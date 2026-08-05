@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 const { getAdminActor, resolveAuthorizedAdminActor } = require("../../admin/bus-owner-management/admin-actor.resolver");
 const { parsePagination, formatPagination } = require("../common/read-pagination.policy");
-const { ReadContractValidationError, ReadContractForbiddenError } = require("../common/read-errors");
+const { ReadContractValidationError, ReadContractUnauthorizedError, ReadContractForbiddenError } = require("../common/read-errors");
 const { createAdminBusOwnerRepository } = require("./admin-bus-owner.repository");
 
 function createAdminBusOwnerReadService({
@@ -12,9 +12,14 @@ function createAdminBusOwnerReadService({
 } = {}) {
   async function authorizeAdmin(req) {
     const actor = getAdminActor(req);
-    if (!actor) return null;
+    if (!actor) {
+      throw new ReadContractUnauthorizedError("UNAUTHORIZED_ADMIN", "Admin authentication required.");
+    }
     const resolved = await resolveAdminActor(actor);
-    if (!resolved || resolved.status === "inactive" || resolved.isLocked) {
+    if (!resolved) {
+      throw new ReadContractUnauthorizedError("UNAUTHORIZED_ADMIN", "Admin authentication required.");
+    }
+    if (resolved.status === "inactive" || resolved.isLocked) {
       throw new ReadContractForbiddenError("READ_FORBIDDEN", "Admin account is inactive or locked.");
     }
     return resolved;
