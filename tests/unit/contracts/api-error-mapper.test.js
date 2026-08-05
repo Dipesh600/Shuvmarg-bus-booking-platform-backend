@@ -53,6 +53,21 @@ test("mapApiError canonical envelope formatting", async (t) => {
     assert.equal(result.payload.error.code, "INTERNAL_SERVER_ERROR");
   });
 
+  await t.test("plain objects with ReadContract name are NOT trusted and fall back to 500", () => {
+    // An attacker or misconfigured module can craft: { name: "ReadContractValidationError" }
+    // The mapper must not treat this as a trusted domain error.
+    const fakeNamedError = {
+      name: "ReadContractValidationError",
+      code: "READ_INVALID_FILTER",
+      details: { mongoQuery: "db.fleets.find()", databaseHost: "10.0.0.1" },
+    };
+    const result = mapApiError(fakeNamedError, { error() {} });
+    assert.equal(result.statusCode, 500);
+    assert.equal(result.payload.error.code, "INTERNAL_SERVER_ERROR");
+    // Sensitive internal detail must not leak
+    assert.equal(result.payload.error.details, null);
+  });
+
   await t.test("sanitizeErrorDetails enforces per-code allowlists and strips unallowed fields", () => {
     const err = new ApiError("READ_INVALID_FILTER", {
       details: {

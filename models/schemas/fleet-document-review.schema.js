@@ -1,7 +1,7 @@
 "use strict";
 
 const mongoose = require("mongoose");
-const { DOCUMENT_REVIEW_VALUES } = require("../../src/contracts");
+const { DOCUMENT_REVIEW_VALUES } = require("../../src/contracts/status/document-review.status");
 
 const fleetDocumentReviewSchema = new mongoose.Schema(
   {

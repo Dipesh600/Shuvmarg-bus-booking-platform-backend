@@ -27,8 +27,8 @@ function mapApiError(error, logger = console) {
     };
   }
 
-  // Explicit class adapter for ReadContractError
-  if (error instanceof ReadContractError || (error && error.name && error.name.startsWith("ReadContract"))) {
+  // Explicit class adapter for ReadContractError — instanceof only, no name-based trust
+  if (error instanceof ReadContractError) {
     const code = API_ERROR_REGISTRY[error.code] ? error.code : "INTERNAL_SERVER_ERROR";
     const reg = API_ERROR_REGISTRY[code];
     const details = sanitizeErrorDetails(code, error.details);

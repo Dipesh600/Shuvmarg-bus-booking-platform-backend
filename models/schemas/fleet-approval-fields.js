@@ -1,10 +1,8 @@
 "use strict";
 
 const mongoose = require("mongoose");
-const {
-  FLEET_OPERATIONAL_VALUES,
-  FLEET_APPROVAL_VALUES,
-} = require("../../src/contracts");
+const { FLEET_OPERATIONAL_VALUES } = require("../../src/contracts/status/fleet-operational.status");
+const { FLEET_APPROVAL_VALUES } = require("../../src/contracts/status/fleet-approval.status");
 const fleetApprovalAuditSchema = require("./fleet-approval-audit.schema");
 
 const fleetApprovalFields = {
