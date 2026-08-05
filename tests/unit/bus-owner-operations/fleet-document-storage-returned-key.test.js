@@ -8,81 +8,92 @@ const createUploadService = require("../../../src/modules/fleet/document-lifecyc
 test("fleet-document-storage-returned-key unit tests", async (t) => {
   const fleetId = "64f000000000000000000001";
   const userId = "64f000000000000000000002";
-  const pdfBuffer = Buffer.from("%PDF-1.4 header");
+  const jpgHeader = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
 
-  await t.test("uploadPrivate returns stored object key from string or object", async () => {
-    const s1 = createFleetDocumentStorageService({ uploadFileToS3: async () => "key-123.pdf" });
-    const k1 = await s1.uploadPrivate({ file: {}, objectKey: "key-123.pdf" });
-    assert.equal(k1, "key-123.pdf");
+  await t.test("mismatch deletes actual returned key, does NOT delete requested key, preserves mismatch error", async () => {
+    let deletedKeys = [];
+    const storage = createFleetDocumentStorageService({
+      uploadFileToS3: async () => "actual-unexpected-key.jpg",
+      deleteObjectFromS3: async (key) => { deletedKeys.push(key); },
+    });
 
-    const s2 = createFleetDocumentStorageService({ uploadFileToS3: async () => ({ objectKey: "key-456.pdf" }) });
-    const k2 = await s2.uploadPrivate({ file: {}, objectKey: "key-456.pdf" });
-    assert.equal(k2, "key-456.pdf");
-  });
-
-  await t.test("missing returned key fails safely", async () => {
-    const s = createFleetDocumentStorageService({ uploadFileToS3: async () => null });
     await assert.rejects(
-      async () => s.uploadPrivate({ file: {}, objectKey: "k.pdf" }),
-      (err) => err.message.includes("Storage upload did not return an object key")
-    );
-  });
-
-  await t.test("public URL return is rejected and not treated as objectKey", async () => {
-    const s = createFleetDocumentStorageService({ uploadFileToS3: async () => "https://s3.amazonaws.com/bucket/file.pdf" });
-    await assert.rejects(
-      async () => s.uploadPrivate({ file: {}, objectKey: "k.pdf" }),
-      (err) => err.message.includes("Storage returned a public URL")
-    );
-  });
-
-  await t.test("returned key mismatch is rejected when exact-key contract is required", async () => {
-    const s = createFleetDocumentStorageService({ uploadFileToS3: async () => "different-key.pdf" });
-    await assert.rejects(
-      async () => s.uploadPrivate({ file: {}, objectKey: "requested-key.pdf" }),
+      async () => storage.uploadPrivate({ file: {}, objectKey: "requested-key.jpg" }),
       (err) => err.message.includes("Storage returned an unexpected object key")
     );
+
+    assert.deepEqual(deletedKeys, ["actual-unexpected-key.jpg"]);
+    assert.ok(!deletedKeys.includes("requested-key.jpg"));
   });
 
-  await t.test("uploadPrivate returned key is persisted to DB and used for compensation", async () => {
-    let persistedKey = null;
-    let deletedKey = null;
+  await t.test("cleanup failure does not mask mismatch error", async () => {
+    const loggerErrors = [];
+    const storage = createFleetDocumentStorageService({
+      uploadFileToS3: async () => "bad-key.jpg",
+      deleteObjectFromS3: async () => { throw new Error("S3 Delete API network error"); },
+    });
+
+    await assert.rejects(
+      async () => storage.uploadPrivate({ file: {}, objectKey: "req.jpg" }, { error: (msg) => loggerErrors.push(msg) }),
+      (err) => err.message.includes("Storage returned an unexpected object key")
+    );
+
+    assert.ok(loggerErrors.some((m) => m.includes("S3 Mismatch Compensation Delete Failed")));
+  });
+
+  await t.test("public URL result is cleaned when key can be derived and URL is never persisted", async () => {
+    let deletedKeys = [];
+    const storage = createFleetDocumentStorageService({
+      uploadFileToS3: async () => "https://s3.amazonaws.com/bucket/fleet-documents/1/fitnessCert/abc.pdf",
+      deleteObjectFromS3: async (key) => { deletedKeys.push(key); },
+    });
+
+    await assert.rejects(
+      async () => storage.uploadPrivate({ file: {}, objectKey: "req.pdf" }),
+      (err) => err.message.includes("Storage returned a public URL")
+    );
+
+    assert.deepEqual(deletedKeys, ["bucket/fleet-documents/1/fitnessCert/abc.pdf"]);
+  });
+
+  await t.test("multi-image upload compensation: second image mismatch cleans second object AND first image", async () => {
+    let deletedKeys = [];
+    let uploadCount = 0;
 
     const repo = {
       findFleetForDocumentUpdate: async () => ({ _id: fleetId, ownerId: userId, approvalStatus: "PENDING", __v: 1 }),
-      atomicDocumentUpdate: async ({ update }) => {
-        persistedKey = update.$set["fleetDocuments.fitnessCert.objectKey"];
-        return null; // Force concurrency compensation
-      },
     };
 
-    const storage = {
-      buildPrivateObjectKey: () => "req-key.pdf",
-      uploadPrivate: async () => "canonical-key.pdf",
-      deleteNewObjectOrReport: async (keys) => { deletedKey = keys[0]; },
-      deleteOldObjectBestEffort: async () => {},
-    };
+    const storageService = createFleetDocumentStorageService({
+      uploadFileToS3: async (file, { objectKey }) => {
+        uploadCount++;
+        if (uploadCount === 1) return objectKey;
+        return "mismatched-img2.jpg";
+      },
+      deleteObjectFromS3: async (key) => { deletedKeys.push(key); },
+    });
 
     const service = createUploadService({
       repository: repo,
-      storage,
+      storage: storageService,
       resolveActor: async () => ({ actorType: "BUS_OWNER", actorId: userId, userId }),
     });
 
-    const file = { name: "doc.pdf", mimetype: "application/pdf", data: pdfBuffer, size: 100 };
+    const file1 = { name: "img1.jpg", mimetype: "image/jpeg", data: jpgHeader, size: 100 };
+    const file2 = { name: "img2.jpg", mimetype: "image/jpeg", data: jpgHeader, size: 100 };
 
     await assert.rejects(
       async () => service.uploadDocument({
         fleetId,
-        slot: "fitnessCert",
+        slot: "fleetImages",
         body: {},
-        files: { fitnessCert: file },
+        files: { fleetImages: [file1, file2] },
         actorContext: { userInfo: { id: userId, role: "busOwner" } },
       }),
-      (err) => err.code === "FLEET_DOCUMENT_CONCURRENT_MODIFICATION"
+      (err) => err.message.includes("Storage returned an unexpected object key")
     );
 
-    assert.equal(persistedKey, "canonical-key.pdf");
-    assert.equal(deletedKey, "canonical-key.pdf");
+    assert.ok(deletedKeys.includes("mismatched-img2.jpg"));
+    assert.ok(deletedKeys.some((k) => k.startsWith("fleet-images/")));
   });
 });

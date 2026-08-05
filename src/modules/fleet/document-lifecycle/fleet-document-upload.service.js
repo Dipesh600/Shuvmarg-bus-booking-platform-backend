@@ -57,6 +57,9 @@ function createFleetDocumentUploadService(deps = {}) {
         });
       }
     } catch (err) {
+      if (err?.uploadedObjectKey && !uploadedKeys.includes(err.uploadedObjectKey)) {
+        uploadedKeys.push(err.uploadedObjectKey);
+      }
       if (uploadedKeys.length > 0) {
         await storage.deleteNewObjectOrReport(uploadedKeys, logger);
       }

@@ -1,4 +1,14 @@
+"use strict";
+
 const crypto = require("node:crypto");
+
+class FleetStorageContractError extends Error {
+  constructor(message, context = {}) {
+    super(message);
+    this.name = "FleetStorageContractError";
+    this.uploadedObjectKey = context.uploadedObjectKey;
+  }
+}
 
 function randomUuid() {
   return crypto.randomUUID();
@@ -13,11 +23,32 @@ function buildPrivateObjectKey(fleetId, slot, extension) {
   return `fleet-documents/${fleetId}/${slot}/${uuid}.${ext}`;
 }
 
+function extractKeyFromUrl(urlStr) {
+  try {
+    const parsed = new URL(urlStr);
+    const pathname = parsed.pathname.replace(/^\/+/, "");
+    return pathname || null;
+  } catch {
+    return null;
+  }
+}
+
+async function safeDeleteUploadedKey(deleteObjectFromS3, key, logger) {
+  if (!key || !deleteObjectFromS3) return;
+  try {
+    await deleteObjectFromS3(key);
+  } catch (err) {
+    if (logger && logger.error) {
+      logger.error(`[S3 Mismatch Compensation Delete Failed] Key: ${key}:`, err);
+    }
+  }
+}
+
 function createFleetDocumentStorageService(deps = {}) {
   const uploadFileToS3 = deps.uploadFileToS3;
   const deleteObjectFromS3 = deps.deleteObjectFromS3;
 
-  async function uploadPrivate({ file, objectKey }) {
+  async function uploadPrivate({ file, objectKey }, logger = console) {
     if (!uploadFileToS3) {
       throw new Error("uploadFileToS3 function is required.");
     }
@@ -29,15 +60,26 @@ function createFleetDocumentStorageService(deps = {}) {
         : result?.objectKey || result?.key;
 
     if (!storedKey) {
-      throw new Error("Storage upload did not return an object key.");
+      throw new FleetStorageContractError("Storage upload did not return an object key.");
     }
 
     if (/^https?:\/\//i.test(storedKey)) {
-      throw new Error("Storage returned a public URL instead of an object key.");
+      const derivedKey = extractKeyFromUrl(storedKey);
+      if (derivedKey) {
+        await safeDeleteUploadedKey(deleteObjectFromS3, derivedKey, logger);
+      }
+      throw new FleetStorageContractError(
+        "Storage returned a public URL instead of an object key.",
+        { uploadedObjectKey: derivedKey }
+      );
     }
 
     if (objectKey && storedKey !== objectKey) {
-      throw new Error("Storage returned an unexpected object key.");
+      await safeDeleteUploadedKey(deleteObjectFromS3, storedKey, logger);
+      throw new FleetStorageContractError(
+        "Storage returned an unexpected object key.",
+        { uploadedObjectKey: storedKey }
+      );
     }
 
     return storedKey;
@@ -80,4 +122,5 @@ function createFleetDocumentStorageService(deps = {}) {
 module.exports = {
   buildPrivateObjectKey,
   createFleetDocumentStorageService,
+  FleetStorageContractError,
 };
