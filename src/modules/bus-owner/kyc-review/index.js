@@ -1,5 +1,6 @@
 "use strict";
 
+const Admin = require("../../../../models/adminModel");
 const BusOwner = require("../../../../models/busOwnerModel");
 const User = require("../../../../models/userModel");
 const {
@@ -11,8 +12,12 @@ const {
 } = require("../../admin/bus-owner-management/kyc-notification.service");
 const { createKycReviewService } = require("./kyc-review.service");
 const { createKycReviewController } = require("./kyc-review.controller");
+const { getKycReviewerActor, assertCanReviewBusOwnerKyc } = require("./kyc-review-actor.policy");
+const { resolveKycReviewer } = require("./kyc-review-reviewer.resolver");
+const { assertReviewerIsIndependent } = require("./kyc-review-separation-of-duty.policy");
 
 const reviewService = createKycReviewService({
+  Admin,
   BusOwner,
   User,
   applyDocumentVerdicts,
@@ -28,4 +33,8 @@ module.exports = {
   updateBusOwnerKyc: controller.updateBusOwnerKyc,
   createKycReviewService,
   createKycReviewController,
+  getKycReviewerActor,
+  assertCanReviewBusOwnerKyc,
+  resolveKycReviewer,
+  assertReviewerIsIndependent,
 };
