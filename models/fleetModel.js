@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const fleetApprovalFields = require("./schemas/fleet-approval-fields");
 
 const BusSchema = new mongoose.Schema(
     {
@@ -196,44 +197,7 @@ const BusSchema = new mongoose.Schema(
             type: Number
         },
 
-        status: {
-            type: String,
-            enum: ["ACTIVE", "INACTIVE", "MAINTENANCE"],
-            default: "ACTIVE"
-        },
-
-        approvalStatus: {
-            type: String,
-            enum: ["PENDING", "APPROVED", "REJECTED"],
-            default: "PENDING"
-        },
-
-        approvedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "SuperAdmin",
-            default: null
-        },
-
-        approvedAt: {
-            type: Date,
-            default: null
-        },
-
-        rejectedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "SuperAdmin",
-            default: null
-        },
-
-        rejectedAt: {
-            type: Date,
-            default: null
-        },
-
-        rejectionReason: {
-            type: String,
-            default: null
-        },
+        ...fleetApprovalFields,
 
         // ── Per-document review results (set by admin during KYC review) ────────
         // Each key maps to a document slot. Status: 'pending' | 'approved' | 'rejected'

@@ -1,5 +1,8 @@
 "use strict";
 
+const { getAdminActor } = require("../bus-owner-management/admin-actor.resolver");
+const { mapFleetApprovalError } = require("./fleet-approval-error.mapper");
+
 function send(res, result) {
   return res.status(result.statusCode).json(result.body);
 }
@@ -10,18 +13,17 @@ function createFleetManagementController({
   updateFleetStatus,
   getFleetDashboard,
   getFleetSetupStatus,
-  console,
+  console: logger = console,
 }) {
   return {
     async getAllFleet(req, res) {
       try {
         return send(res, await listFleets(req.query));
       } catch (error) {
-        console.error("Error fetching fleets:", error);
+        logger.error("Error fetching fleets:", error);
         return res.status(500).json({
           success: false,
           message: "Internal server error",
-          error: error.message,
         });
       }
     },
@@ -30,25 +32,25 @@ function createFleetManagementController({
       try {
         return send(res, await getFleetDetail(req.params.id));
       } catch (error) {
-        console.error("Error fetching fleet by ID:", error);
+        logger.error("Error fetching fleet by ID:", error);
         return res.status(500).json({
           success: false,
           message: "Internal server error",
-          error: error.message,
         });
       }
     },
 
     async updateFleetStatus(req, res) {
       try {
-        return send(res, await updateFleetStatus(req.body));
-      } catch (error) {
-        console.error("Error updating fleet status:", error);
-        return res.status(500).json({
-          success: false,
-          message: "Internal server error",
-          error: error.message,
+        const result = await updateFleetStatus({
+          ...(req.body || {}),
+          actor: getAdminActor(req),
         });
+        return res.status(200).json(result);
+      } catch (error) {
+        logger.error("Error updating fleet status:", error);
+        const { statusCode, payload } = mapFleetApprovalError(error);
+        return res.status(statusCode).json(payload);
       }
     },
 
@@ -56,11 +58,10 @@ function createFleetManagementController({
       try {
         return send(res, await getFleetDashboard());
       } catch (error) {
-        console.error("Error fetching fleet dashboard stats:", error);
+        logger.error("Error fetching fleet dashboard stats:", error);
         return res.status(500).json({
           success: false,
           message: "Internal server error",
-          error: error.message,
         });
       }
     },
@@ -69,9 +70,11 @@ function createFleetManagementController({
       try {
         return send(res, await getFleetSetupStatus(req.params.id));
       } catch (error) {
-        return res
-          .status(500)
-          .json({ success: false, message: error.message });
+        logger.error("Error fetching fleet setup status:", error);
+        return res.status(500).json({
+          success: false,
+          message: "Internal server error",
+        });
       }
     },
   };

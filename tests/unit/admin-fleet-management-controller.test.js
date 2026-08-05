@@ -30,7 +30,7 @@ function makeController(overrides = {}) {
   return createFleetManagementController({
     listFleets: ok,
     getFleetDetail: ok,
-    updateFleetStatus: ok,
+    updateFleetStatus: async () => ({ success: true, message: "Fleet approved successfully." }),
     getFleetDashboard: ok,
     getFleetSetupStatus: ok,
     console: { error() {} },
@@ -57,7 +57,7 @@ test("controllers forward exact request boundaries to services", async () => {
     },
     updateFleetStatus: async (value) => {
       received.push(["status", value]);
-      return { statusCode: 203, body: { status: true } };
+      return { success: true, data: { status: "APPROVED" } };
     },
   });
   assert.equal(
@@ -70,33 +70,42 @@ test("controllers forward exact request boundaries to services", async () => {
   assert.deepEqual(received, [
     ["list", { grounded: "true" }],
     ["detail", "f1"],
-    ["status", { status: "APPROVED" }],
+    ["status", { status: "APPROVED", actor: null }],
   ]);
 });
 
-test("controllers preserve endpoint-specific 500 contracts", async () => {
-  const error = new Error("database down");
+test("controllers sanitize all unexpected 500 error responses", async () => {
+  const error = new Error("Sensitive DB connection error text");
   const controller = makeController({
     listFleets: async () => {
+      throw error;
+    },
+    getFleetDetail: async () => {
+      throw error;
+    },
+    getFleetDashboard: async () => {
       throw error;
     },
     getFleetSetupStatus: async () => {
       throw error;
     },
   });
-  assert.deepEqual(await invoke(controller.getAllFleet, { query: {} }), {
-    statusCode: 500,
-    body: {
+
+  const endpoints = [
+    ["getAllFleet", { query: {} }],
+    ["getFleetById", { params: { id: "f1" } }],
+    ["getFleetDashboard", {}],
+    ["getFleetSetupStatus", { params: { id: "f1" } }],
+  ];
+
+  for (const [method, req] of endpoints) {
+    const res = await invoke(controller[method], req);
+    assert.equal(res.statusCode, 500);
+    assert.deepEqual(res.body, {
       success: false,
       message: "Internal server error",
-      error: "database down",
-    },
-  });
-  assert.deepEqual(
-    await invoke(controller.getFleetSetupStatus, { params: { id: "f1" } }),
-    {
-      statusCode: 500,
-      body: { success: false, message: "database down" },
-    }
-  );
+    });
+    assert.equal(res.body.error, undefined, `${method} must not leak raw error message property`);
+    assert.equal(res.body.message.includes("Sensitive DB"), false, `${method} must not leak internal exception message`);
+  }
 });
