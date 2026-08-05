@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { busOwnerKycAuditEventSchema } = require("./schemas/bus-owner-kyc-audit.schema");
+const busOwnerAuditFields = require("./schemas/bus-owner-audit-fields");
 
 const busOwnerSchema = new mongoose.Schema(
   {
@@ -88,10 +88,7 @@ const busOwnerSchema = new mongoose.Schema(
       },
       reviewedAt: { type: Date, default: null },
     },
-    kycAuditHistory: {
-      type: [busOwnerKycAuditEventSchema],
-      default: [],
-    },
+    ...busOwnerAuditFields,
   },
   { timestamps: true }
 );
