@@ -10,22 +10,8 @@ test("admin-owner-creation-rollback unit tests", async (t) => {
   const pdfHeader = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
   const makeFile = (name) => ({ name: `${name}.pdf`, data: pdfHeader, size: pdfHeader.length, mimetype: "application/pdf" });
 
-  const validFiles = {
-    companyRegistrationCert: makeFile("comp"),
-    panCardImage: makeFile("tax"),
-    ownerCitizenship: makeFile("id"),
-  };
-
-  const validBody = {
-    companyName: "Shuvmarg Yatayat",
-    ownerName: "Hari Bahadur",
-    phone: "9841234567",
-    address: "Kathmandu",
-    bankName: "Nabil Bank",
-    accountHolderName: "Hari Bahadur",
-    accountNumber: "001001001001",
-    branchName: "Kantipath",
-  };
+  const validFiles = { companyRegistrationCert: makeFile("comp"), panCardImage: makeFile("tax"), ownerCitizenship: makeFile("id") };
+  const validBody = { companyName: "Shuvmarg Yatayat", ownerName: "Hari Bahadur", phone: "9841234567", address: "Kathmandu", bankName: "Nabil Bank", accountHolderName: "Hari", accountNumber: "001", branchName: "K" };
 
   await t.test("new user save failure deletes newly created User and uploaded S3 objects without sending notifications", async () => {
     let deletedUser = null;
@@ -42,23 +28,19 @@ test("admin-owner-creation-rollback unit tests", async (t) => {
         uploadDocument: async ({ documentType }) => `key-${documentType}`,
         deleteMany: async (keys) => { deletedKeys = keys; return { deleted: keys, failed: [] }; },
       },
-      BusOwner: function () {
-        this.save = async () => { throw new Error("DB Save Failed"); };
-      },
+      BusOwner: function () { this.save = async () => { throw new Error("DB Save Failed"); }; },
       mongooseTypesObjectId: function () { return { toString: () => "owner-1" }; },
     };
     deps.BusOwner.findByIdAndDelete = async () => {};
 
     const service = createAdminOwnerCreationService(deps);
-
     await assert.rejects(
-      async () => service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { id: validAdminId } }),
+      async () => service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
       (err) => err.message === "DB Save Failed"
     );
-
-    assert.equal(deletedUser, validUserId, "Must delete operation-created User upon failure");
-    assert.deepEqual(deletedKeys, ["key-companyRegistration", "key-taxRegistration", "key-ownerIdentity"], "Must delete uploaded S3 keys");
-    assert.equal(notified, false, "Must not send notification on failure");
+    assert.equal(deletedUser, validUserId);
+    assert.deepEqual(deletedKeys, ["key-companyRegistration", "key-taxRegistration", "key-ownerIdentity"]);
+    assert.equal(notified, false);
   });
 
   await t.test("existing user role update failure deletes created BusOwner and uploaded files without deleting pre-existing User", async () => {
@@ -75,23 +57,76 @@ test("admin-owner-creation-rollback unit tests", async (t) => {
         uploadDocument: async ({ documentType }) => `key-${documentType}`,
         deleteMany: async (keys) => { deletedKeys = keys; return { deleted: keys, failed: [] }; },
       },
-      BusOwner: function (data) {
-        this._id = data._id;
-        this.save = async () => this;
-      },
+      BusOwner: function (data) { this._id = data._id; this.save = async () => this; },
       mongooseTypesObjectId: function () { return { toString: () => "owner-existing" }; },
     };
     deps.BusOwner.findByIdAndDelete = async (id) => { deletedOwner = id; };
 
     const service = createAdminOwnerCreationService(deps);
-
     await assert.rejects(
-      async () => service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { id: validAdminId } }),
+      async () => service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
       (err) => err.message === "Role Update Failed"
     );
-
-    assert.equal(deletedUser, null, "Must NEVER delete a pre-existing User");
-    assert.equal(deletedOwner.toString(), "owner-existing", "Must delete newly created BusOwner");
+    assert.equal(deletedUser, null);
+    assert.equal(deletedOwner.toString(), "owner-existing");
     assert.deepEqual(deletedKeys, ["key-companyRegistration", "key-taxRegistration", "key-ownerIdentity"]);
+  });
+
+  await t.test("S3 cleanup throws but BusOwner deletion and User rollback are still attempted, original error preserved, and cleanup error logged", async () => {
+    let busOwnerDeleteAttempted = false;
+    let userRollbackAttempted = false;
+    let loggedErrors = [];
+
+    const originalError = new Error("Role Update Failed");
+    const deps = {
+      resolveAuthorizedAdminActor: async () => ({ _id: validAdminId, role: "ADMIN", isActive: true }),
+      prepareOwnerIdentity: async () => ({ existingUser: { _id: validUserId }, isNew: false }),
+      addOwnerRoleToExistingUser: async () => { throw originalError; },
+      rollbackUserIdentity: async () => { userRollbackAttempted = true; },
+      logger: { error: (msg, err) => { loggedErrors.push({ msg, err }); } },
+      storageService: {
+        uploadDocument: async ({ documentType }) => `key-${documentType}`,
+        deleteMany: async () => { throw new Error("S3 Delete Network Failure"); },
+      },
+      BusOwner: function (data) { this._id = data._id; this.save = async () => this; },
+      mongooseTypesObjectId: function () { return { toString: () => "owner-err" }; },
+    };
+    deps.BusOwner.findByIdAndDelete = async () => { busOwnerDeleteAttempted = true; };
+
+    const service = createAdminOwnerCreationService(deps);
+    await assert.rejects(
+      async () => service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
+      (err) => err === originalError
+    );
+    assert.equal(busOwnerDeleteAttempted, true);
+    assert.equal(userRollbackAttempted, true);
+    assert.equal(loggedErrors.length, 1);
+  });
+
+  await t.test("Multiple cleanup failures preserve original error and log all failures", async () => {
+    let loggedErrors = [];
+    const originalError = new Error("DB Save Crash");
+
+    const deps = {
+      resolveAuthorizedAdminActor: async () => ({ _id: validAdminId, role: "ADMIN", isActive: true }),
+      prepareOwnerIdentity: async () => ({ userData: { name: "Hari" }, password: "pass", isNew: true }),
+      createUnnotifiedUser: async () => ({ user: { _id: validUserId }, wasCreated: true, roleWasAdded: false }),
+      rollbackUserIdentity: async () => { throw new Error("User Rollback DB Error"); },
+      logger: { error: (msg, err) => { loggedErrors.push({ msg, err }); } },
+      storageService: {
+        uploadDocument: async ({ documentType }) => `key-${documentType}`,
+        deleteMany: async () => { throw new Error("S3 Delete Exception"); },
+      },
+      BusOwner: function (data) { this._id = data._id; this.save = async () => { throw originalError; }; },
+      mongooseTypesObjectId: function () { return { toString: () => "owner-multi-err" }; },
+    };
+    deps.BusOwner.findByIdAndDelete = async () => { throw new Error("BusOwner Delete Error"); };
+
+    const service = createAdminOwnerCreationService(deps);
+    await assert.rejects(
+      async () => service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
+      (err) => err === originalError
+    );
+    assert.equal(loggedErrors.length, 3);
   });
 });

@@ -9,6 +9,7 @@ const { resolveAuthorizedAdminActor } = require("./admin-actor.resolver");
 const { normalizeAdminKycFiles } = require("./admin-kyc-document-mapping.policy");
 const { ADMIN_CREATION_KYC_POLICY } = require("./admin-kyc-document.policy");
 const { validateAdminOwnerCreationBody } = require("./admin-owner-creation-request.policy");
+const { runCreationRollback } = require("./admin-owner-creation-rollback.helper");
 const {
   prepareOwnerIdentity,
   createUnnotifiedUser,
@@ -50,8 +51,7 @@ function createAdminOwnerCreationService(deps = {}) {
       const now = clock();
 
       for (const docType of Object.keys(validatedFiles)) {
-        const fileItems = validatedFiles[docType];
-        for (const item of fileItems) {
+        for (const item of validatedFiles[docType]) {
           const key = await storageService.uploadDocument({ validatedFile: item, ownerId, documentType: docType });
           newlyUploadedKeys.push(key);
         }
@@ -104,17 +104,18 @@ function createAdminOwnerCreationService(deps = {}) {
       if (!preparedIdentity.isNew) {
         commitResult = await addRole(preparedIdentity.existingUser, deps);
       }
-    } catch (err) {
-      if (newlyUploadedKeys.length > 0) {
-        await storageService.deleteMany(newlyUploadedKeys);
-      }
-      if (busOwner && busOwner._id) {
-        await BusOwnerModel.findByIdAndDelete(busOwner._id).catch(() => {});
-      }
-      if (commitResult) {
-        await rollbackUser(commitResult, deps);
-      }
-      throw err;
+    } catch (originalError) {
+      await runCreationRollback({
+        storageService,
+        uploadedKeys: newlyUploadedKeys,
+        BusOwnerModel,
+        busOwner,
+        rollbackUser,
+        commitResult,
+        deps,
+        logger: deps.logger,
+      });
+      throw originalError;
     }
 
     if (preparedIdentity.isNew) {
@@ -143,4 +144,4 @@ function createAdminOwnerCreationService(deps = {}) {
   return { createAdminBusOwner };
 }
 
-module.exports = { createAdminOwnerCreationService };
+module.exports = { createAdminOwnerCreationService, runCreationRollback };
