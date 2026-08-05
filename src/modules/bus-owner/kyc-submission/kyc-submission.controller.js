@@ -16,7 +16,7 @@ function createKycSubmissionController({
   storageService,
   kycDocumentReadService,
   kycSubmissionService = createKycSubmissionService({ BusOwner, storageService }),
-}) {
+} = {}) {
   async function submitBusOwnerKyc(req, res) {
     try {
       const userId = req.userInfo?.id;

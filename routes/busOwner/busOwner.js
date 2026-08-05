@@ -19,6 +19,19 @@ const fareRuleCon = require("../../controllers/busOwnerController/fareRuleContro
 // Applied to ALL routes in this router — no individual `auth` needed.
 router.use(auth, verifyRoleFromDB, busOwnerMiddleware);
 
+const { createBusOwnerReadService } = require("../../src/modules/read-contracts/bus-owner/bus-owner-read.service");
+const { mapReadError } = require("../../src/modules/read-contracts/common/read-error.mapper");
+const busOwnerReadService = createBusOwnerReadService();
+
+router.get("/profile", async (req, res) => {
+  try {
+    const result = await busOwnerReadService.getOwnProfile(req);
+    return res.status(200).json(result);
+  } catch (error) {
+    const { statusCode, payload } = mapReadError(error);
+    return res.status(statusCode).json(payload);
+  }
+});
 router.post("/submitBusOwnerKyc", busOwnerKyc.submitBusOwnerKyc);
 router.get("/myBusOwnerKycStatus", busOwnerKyc.getMyBusOwnerKycStatus);
 router.get("/kycDocumentReadUrl", kycDocumentRead.getKycDocumentReadUrl);
