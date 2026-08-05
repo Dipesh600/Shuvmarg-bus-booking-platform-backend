@@ -1,12 +1,13 @@
 "use strict";
 
 const mongoose = require("mongoose");
+const { DOCUMENT_REVIEW_VALUES } = require("../../src/contracts");
 
 const fleetDocumentReviewSchema = new mongoose.Schema(
   {
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: DOCUMENT_REVIEW_VALUES,
       default: "pending",
     },
     reason: {

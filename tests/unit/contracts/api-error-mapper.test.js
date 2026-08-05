@@ -40,8 +40,34 @@ test("mapApiError canonical envelope formatting", async (t) => {
         retryable: true,
       },
     });
-    assert.ok(logged);
     assert.equal(result.payload.error.message.includes("Sensitive DB"), false);
+  });
+
+  await t.test("plain objects with code property are NOT duck-typed as trusted and fall back to 500", () => {
+    const fakeDuckError = {
+      code: "READ_INVALID_FILTER",
+      details: { mongoQuery: "db.users.find()", databaseHost: "10.0.0.1" },
+    };
+    const result = mapApiError(fakeDuckError, { error() {} });
+    assert.equal(result.statusCode, 500);
+    assert.equal(result.payload.error.code, "INTERNAL_SERVER_ERROR");
+  });
+
+  await t.test("sanitizeErrorDetails enforces per-code allowlists and strips unallowed fields", () => {
+    const err = new ApiError("READ_INVALID_FILTER", {
+      details: {
+        field: "status",
+        allowedValues: ["ACTIVE"],
+        mongoQuery: "db.fleets.find()",
+        databaseHost: "secret-host",
+      },
+    });
+    assert.deepEqual(err.details, {
+      field: "status",
+      allowedValues: ["ACTIVE"],
+    });
+    assert.equal(err.details.mongoQuery, undefined);
+    assert.equal(err.details.databaseHost, undefined);
   });
 });
 

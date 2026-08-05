@@ -5,6 +5,8 @@ const { ReadContractValidationError, ReadContractNotFoundError } = require("../c
 const { mapAdminKycQueueItem } = require("./admin-kyc-list.dto");
 const { mapAdminKycDetail } = require("./admin-kyc-detail.dto");
 
+const { isOwnerVerificationStatus } = require("../../../contracts");
+
 function createAdminKycRepository({
   BusOwnerModel = BusOwner,
 } = {}) {
@@ -12,7 +14,7 @@ function createAdminKycRepository({
     const filter = {};
     if (verificationStatus) {
       const norm = String(verificationStatus).toLowerCase();
-      if (!["pending", "approved", "rejected"].includes(norm)) {
+      if (!isOwnerVerificationStatus(norm)) {
         throw new ReadContractValidationError(
           "READ_INVALID_FILTER",
           "Verification status filter must be one of: pending, approved, rejected."

@@ -1,18 +1,22 @@
 "use strict";
 
 const mongoose = require("mongoose");
+const {
+  FLEET_OPERATIONAL_VALUES,
+  FLEET_APPROVAL_VALUES,
+} = require("../../src/contracts");
 const fleetApprovalAuditSchema = require("./fleet-approval-audit.schema");
 
 const fleetApprovalFields = {
   status: {
     type: String,
-    enum: ["ACTIVE", "INACTIVE", "MAINTENANCE"],
+    enum: FLEET_OPERATIONAL_VALUES,
     default: "INACTIVE",
   },
 
   approvalStatus: {
     type: String,
-    enum: ["PENDING", "APPROVED", "REJECTED"],
+    enum: FLEET_APPROVAL_VALUES,
     default: "PENDING",
   },
 

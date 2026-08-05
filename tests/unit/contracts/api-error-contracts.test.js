@@ -70,7 +70,7 @@ test("ApiError class immutability requirements", async (t) => {
   await t.test("details sanitization strips stack, cause, password, token, and unapproved keys", () => {
     const err = new ApiError("READ_INVALID_FILTER", {
       details: {
-        fields: ["status", "ownerId"],
+        field: "status",
         stack: "Error at line 123",
         cause: "DB connection dropped",
         password: "secretpassword",
@@ -79,7 +79,7 @@ test("ApiError class immutability requirements", async (t) => {
       cause: new Error("Underlying cause"),
     });
 
-    assert.deepEqual(err.details, { fields: ["status", "ownerId"] });
+    assert.deepEqual(err.details, { field: "status" });
     assert.equal(err.cause.message, "Underlying cause");
     assert.equal(err.details.stack, undefined);
     assert.equal(err.details.cause, undefined);

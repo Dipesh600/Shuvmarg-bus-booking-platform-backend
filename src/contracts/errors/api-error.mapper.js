@@ -1,7 +1,6 @@
-"use strict";
-
-const { ApiError } = require("./api-error");
+const { ApiError, sanitizeErrorDetails } = require("./api-error");
 const { API_ERROR_REGISTRY } = require("./registry");
+const { ReadContractError } = require("../../modules/read-contracts/common/read-errors");
 
 function buildCanonicalPayload(code, message, details = null, retryable = false) {
   return {
@@ -28,15 +27,17 @@ function mapApiError(error, logger = console) {
     };
   }
 
-  // Handle ReadContractError instances or known domain error shapes
-  if (error && typeof error.code === "string" && API_ERROR_REGISTRY[error.code]) {
-    const reg = API_ERROR_REGISTRY[error.code];
+  // Explicit class adapter for ReadContractError
+  if (error instanceof ReadContractError || (error && error.name && error.name.startsWith("ReadContract"))) {
+    const code = API_ERROR_REGISTRY[error.code] ? error.code : "INTERNAL_SERVER_ERROR";
+    const reg = API_ERROR_REGISTRY[code];
+    const details = sanitizeErrorDetails(code, error.details);
     return {
       statusCode: reg.statusCode,
       payload: buildCanonicalPayload(
-        error.code,
+        code,
         reg.message,
-        error.details || null,
+        details,
         reg.retryable
       ),
     };

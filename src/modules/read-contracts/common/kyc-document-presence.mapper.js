@@ -1,6 +1,7 @@
 "use strict";
 
 const { toIsoDate } = require("./read-date.mapper");
+const { deriveKycDocumentState } = require("../../../contracts");
 
 function hasDocumentUrls(doc) {
   if (!doc) return false;
@@ -17,6 +18,7 @@ function mapSingularKycDescriptor(owner, slot) {
   const fileCount = Array.isArray(doc?.documentUrls)
     ? doc.documentUrls.length
     : (present ? 1 : 0);
+  const state = deriveKycDocumentState({ present, verified, rejectionReason });
 
   const result = {
     slot,
@@ -25,6 +27,7 @@ function mapSingularKycDescriptor(owner, slot) {
     fileCount,
     verified,
     rejectionReason,
+    state,
   };
 
   if (slot === "taxRegistration") {

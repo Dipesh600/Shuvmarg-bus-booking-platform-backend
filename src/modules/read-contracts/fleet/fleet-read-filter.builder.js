@@ -7,12 +7,14 @@ function escapeRegex(str) {
   return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+const { FLEET_APPROVAL_VALUES, FLEET_OPERATIONAL_VALUES } = require("../../../contracts");
+
 function buildAdminFleetFilter({ search, status, approvalStatus, ownerId }, ownerIds) {
   const filter = {};
 
   if (approvalStatus) {
     const norm = String(approvalStatus).toUpperCase();
-    if (!["PENDING", "APPROVED", "REJECTED"].includes(norm)) {
+    if (!FLEET_APPROVAL_VALUES.includes(norm)) {
       throw new ReadContractValidationError("READ_INVALID_FILTER", "Invalid approvalStatus filter.");
     }
     filter.approvalStatus = norm;
@@ -20,7 +22,7 @@ function buildAdminFleetFilter({ search, status, approvalStatus, ownerId }, owne
 
   if (status) {
     const norm = String(status).toUpperCase();
-    if (!["ACTIVE", "INACTIVE", "MAINTENANCE"].includes(norm)) {
+    if (!FLEET_OPERATIONAL_VALUES.includes(norm)) {
       throw new ReadContractValidationError("READ_INVALID_FILTER", "Invalid status filter.");
     }
     filter.status = new RegExp(`^${norm}$`, "i");
