@@ -41,6 +41,10 @@ const {
   createFleetManagementController,
 } = require("./fleet-management.controller");
 
+const {
+  createFleetReadService,
+} = require("../../read-contracts/fleet/fleet-read.service");
+
 const repository = createFleetRepository({ Bus, Trip, Schedule });
 const setupRepository = createFleetSetupRepository({
   Bus,
@@ -68,17 +72,17 @@ const approvalService = createFleetApprovalService({
   logger: console,
 });
 
+const canonicalSetupService = createFleetSetupService({
+  repository: setupRepository,
+});
+
+const fleetReadService = createFleetReadService({
+  getCanonicalSetupStatus: canonicalSetupService,
+});
+
 module.exports = createFleetManagementController({
-  listFleets: createFleetListService({
-    repository,
-    policy: queryPolicy,
-    mapper: { mapFleet },
-  }),
-  getFleetDetail: createFleetDetailService({ mongoose, repository }),
+  readService: fleetReadService,
   updateFleetStatus: approvalService.decideFleetApproval,
   getFleetDashboard: createFleetDashboardService({ repository }),
-  getFleetSetupStatus: createFleetSetupService({
-    repository: setupRepository,
-  }),
   console,
 });
