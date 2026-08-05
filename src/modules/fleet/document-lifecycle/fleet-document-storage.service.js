@@ -21,8 +21,26 @@ function createFleetDocumentStorageService(deps = {}) {
     if (!uploadFileToS3) {
       throw new Error("uploadFileToS3 function is required.");
     }
-    const resultKey = await uploadFileToS3(file, { objectKey });
-    return resultKey || objectKey;
+    const result = await uploadFileToS3(file, { objectKey, private: true });
+
+    const storedKey =
+      typeof result === "string"
+        ? result
+        : result?.objectKey || result?.key;
+
+    if (!storedKey) {
+      throw new Error("Storage upload did not return an object key.");
+    }
+
+    if (/^https?:\/\//i.test(storedKey)) {
+      throw new Error("Storage returned a public URL instead of an object key.");
+    }
+
+    if (objectKey && storedKey !== objectKey) {
+      throw new Error("Storage returned an unexpected object key.");
+    }
+
+    return storedKey;
   }
 
   async function deleteNewObjectOrReport(keys, logger = console) {

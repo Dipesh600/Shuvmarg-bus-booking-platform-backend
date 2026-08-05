@@ -45,13 +45,13 @@ function createFleetDocumentUploadService(deps = {}) {
       for (let i = 0; i < fileList.length; i++) {
         const fileObj = fileList[i];
         const valInfo = validatedFiles[i];
-        const key = storage.buildPrivateObjectKey(fleetId, slot, valInfo.extension);
-        await storage.uploadPrivate({ file: fileObj, objectKey: key });
-        uploadedKeys.push(key);
+        const requestedKey = storage.buildPrivateObjectKey(fleetId, slot, valInfo.extension);
+        const storedObjectKey = await storage.uploadPrivate({ file: fileObj, objectKey: requestedKey });
+        uploadedKeys.push(storedObjectKey);
 
         newAssets.push({
           imageId: crypto.randomUUID(),
-          objectKey: key,
+          objectKey: storedObjectKey,
           mimeType: valInfo.mimeType,
           size: valInfo.size,
         });
