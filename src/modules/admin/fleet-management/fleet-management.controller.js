@@ -24,7 +24,6 @@ function createFleetManagementController({
         return res.status(500).json({
           success: false,
           message: "Internal server error",
-          error: error.message,
         });
       }
     },
@@ -37,20 +36,16 @@ function createFleetManagementController({
         return res.status(500).json({
           success: false,
           message: "Internal server error",
-          error: error.message,
         });
       }
     },
 
     async updateFleetStatus(req, res) {
       try {
-        const actor = getAdminActor(req);
-        const input = { ...(req.body || {}) };
-        if (actor) input.actor = actor;
-        const result = await updateFleetStatus(input);
-        if (result && typeof result === "object" && result.statusCode) {
-          return send(res, result);
-        }
+        const result = await updateFleetStatus({
+          ...(req.body || {}),
+          actor: getAdminActor(req),
+        });
         return res.status(200).json(result);
       } catch (error) {
         logger.error("Error updating fleet status:", error);
@@ -67,7 +62,6 @@ function createFleetManagementController({
         return res.status(500).json({
           success: false,
           message: "Internal server error",
-          error: error.message,
         });
       }
     },
@@ -76,9 +70,11 @@ function createFleetManagementController({
       try {
         return send(res, await getFleetSetupStatus(req.params.id));
       } catch (error) {
-        return res
-          .status(500)
-          .json({ success: false, message: error.message });
+        logger.error("Error fetching fleet setup status:", error);
+        return res.status(500).json({
+          success: false,
+          message: "Internal server error",
+        });
       }
     },
   };
