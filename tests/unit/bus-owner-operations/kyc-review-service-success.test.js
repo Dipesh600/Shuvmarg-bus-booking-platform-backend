@@ -6,7 +6,7 @@ const { createKycReviewService } = require("../../../src/modules/bus-owner/kyc-r
 
 test("kyc-review-service success tests", async (t) => {
   const fixedDate = new Date("2026-08-04T12:00:00Z");
-  const mockAdmin = { _id: "64f000000000000000000099", role: "ADMIN", isActive: true, email: "admin@shuvmarg.com" };
+  const mockAdmin = { _id: "64f000000000000000000099", adminId: "SUMA-ADM-001", role: "ADMIN", isActive: true, email: "admin@shuvmarg.com" };
   const mockAdminModel = { findById: () => ({ lean: async () => mockAdmin }) };
 
   await t.test("pending -> approved updates state, user sync, review metadata, and ownerIdentity approval verdict", async () => {
@@ -41,10 +41,11 @@ test("kyc-review-service success tests", async (t) => {
     };
 
     const mockUserModel = {
-      findByIdAndUpdate: async (userId, update) => {
+      findByIdAndUpdate: (userId, update) => {
         userSyncCall = { userId, update };
+        return { lean: async () => ({ _id: userId, status: "active", isVerified: true }) };
       },
-      findById: () => ({ lean: async () => ({ _id: "64f000000000000000000002", email: "owner@test.com" }) }),
+      findById: () => ({ lean: async () => ({ _id: "64f000000000000000000002", status: "pending", isVerified: false }) }),
     };
 
     const service = createKycReviewService({
@@ -62,7 +63,7 @@ test("kyc-review-service success tests", async (t) => {
 
     const result = await service.reviewKyc(
       { id: "64f000000000000000000001", verificationStatus: "approved" },
-      "64f000000000000000000099"
+      { adminId: "64f000000000000000000099", tokenRole: "ADMIN" }
     );
 
     assert.equal(atomicQuery.verificationStatus, "pending");
@@ -74,6 +75,8 @@ test("kyc-review-service success tests", async (t) => {
     assert.equal(atomicUpdate.$set["kycReview.reviewedAt"], fixedDate);
     assert.deepEqual(userSyncCall.update.$set, { status: "active", isVerified: true });
     assert.equal(result.status, "approved");
+    assert.equal(result.user.status, "active");
+    assert.equal(result.user.isVerified, true);
     assert.equal(result.data.verificationStatus, "approved");
   });
 
@@ -105,7 +108,10 @@ test("kyc-review-service success tests", async (t) => {
     };
 
     const mockUserModel = {
-      findByIdAndUpdate: async (userId, update) => { userSyncCall = { userId, update }; },
+      findByIdAndUpdate: (userId, update) => {
+        userSyncCall = { userId, update };
+        return { lean: async () => ({ _id: userId, isVerified: false }) };
+      },
       findById: () => ({ lean: async () => ({ _id: "64f000000000000000000002" }) }),
     };
 
@@ -128,13 +134,14 @@ test("kyc-review-service success tests", async (t) => {
         rejectionReason: "  Document unreadable  ",
         ownerIdentity: { verified: false, rejectionReason: "Identity document is unreadable" },
       },
-      "64f000000000000000000099"
+      { adminId: "64f000000000000000000099", tokenRole: "ADMIN" }
     );
 
     assert.equal(atomicUpdate.$set["ownerIdentity.verified"], false);
     assert.equal(atomicUpdate.$set["ownerIdentity.rejectionReason"], "Identity document is unreadable");
     assert.equal(result.data.verificationStatus, "rejected");
     assert.equal(result.data.rejectionReason, "Document unreadable");
+    assert.equal(result.user.isVerified, false);
     assert.deepEqual(userSyncCall.update.$set, { isVerified: false });
     assert.deepEqual(result.documents, ["ownerIdentity"]);
   });

@@ -7,6 +7,7 @@ const { createKycReviewService } = require("../../../src/modules/bus-owner/kyc-r
 test("kyc-review-service failure tests", async (t) => {
   const mockAdmin = { _id: "admin1", role: "ADMIN", isActive: true, email: "admin@shuvmarg.com" };
   const mockAdminModel = { findById: () => ({ lean: async () => mockAdmin }) };
+  const validActor = { adminId: "admin1", tokenRole: "ADMIN" };
 
   await t.test("missing reviewer identity returns HTTP 401", async () => {
     const service = createKycReviewService({ Admin: mockAdminModel, BusOwner: {}, User: {} });
@@ -20,7 +21,7 @@ test("kyc-review-service failure tests", async (t) => {
     const mockBusOwnerModel = { findOne: async () => null };
     const service = createKycReviewService({ Admin: mockAdminModel, BusOwner: mockBusOwnerModel, User: {} });
     await assert.rejects(
-      async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "approved" }, "admin1"),
+      async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "approved" }, validActor),
       (err) => err.code === "KYC_REVIEW_NOT_FOUND" && err.statusCode === 404
     );
   });
@@ -31,7 +32,7 @@ test("kyc-review-service failure tests", async (t) => {
     const service = createKycReviewService({ Admin: mockAdminModel, BusOwner: mockBusOwnerModel, User: {} });
 
     await assert.rejects(
-      async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "rejected", rejectionReason: "Tax doc invalid" }, "admin1"),
+      async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "rejected", rejectionReason: "Tax doc invalid" }, validActor),
       (err) => err.code === "KYC_REVIEW_INVALID_TRANSITION" && err.statusCode === 409
     );
   });
@@ -42,7 +43,7 @@ test("kyc-review-service failure tests", async (t) => {
     const service = createKycReviewService({ Admin: mockAdminModel, BusOwner: mockBusOwnerModel, User: {} });
 
     await assert.rejects(
-      async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "rejected", rejectionReason: "   " }, "admin1"),
+      async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "rejected", rejectionReason: "   " }, validActor),
       (err) => err.code === "KYC_REVIEW_REASON_REQUIRED" && err.statusCode === 400
     );
   });
@@ -56,7 +57,7 @@ test("kyc-review-service failure tests", async (t) => {
     const service = createKycReviewService({ Admin: mockAdminModel, BusOwner: mockBusOwnerModel, User: {} });
 
     await assert.rejects(
-      async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "approved" }, "admin1"),
+      async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "approved" }, validActor),
       (err) => err.code === "KYC_REVIEW_INVALID_TRANSITION" && err.statusCode === 409
     );
   });

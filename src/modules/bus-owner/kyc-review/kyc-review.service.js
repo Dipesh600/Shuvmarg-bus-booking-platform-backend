@@ -10,13 +10,23 @@ const { resolveKycReviewer } = require("./kyc-review-reviewer.resolver");
 const { assertReviewerIsIndependent } = require("./kyc-review-separation-of-duty.policy");
 
 function normalizeActorInput(actorInput) {
-  if (typeof actorInput === "string" && actorInput.trim() !== "") {
-    return { adminId: actorInput.trim(), tokenRole: null };
+  if (
+    actorInput &&
+    typeof actorInput === "object" &&
+    typeof actorInput.adminId === "string" &&
+    actorInput.adminId.trim() &&
+    typeof actorInput.tokenRole === "string" &&
+    actorInput.tokenRole.trim()
+  ) {
+    return {
+      adminId: actorInput.adminId.trim(),
+      tokenRole: actorInput.tokenRole.trim(),
+    };
   }
-  if (actorInput && typeof actorInput === "object") {
-    if (actorInput.adminId) return actorInput;
-    if (actorInput.adminInfo) return getKycReviewerActor(actorInput);
+  if (actorInput && typeof actorInput === "object" && actorInput.adminInfo) {
+    return getKycReviewerActor(actorInput);
   }
+
   throw new KycReviewError("KYC_REVIEW_UNAUTHORIZED", "Authenticated reviewer identity is required.", 401);
 }
 
@@ -54,7 +64,7 @@ function createKycReviewService({
     const updateFields = {
       verificationStatus: targetStatus,
       rejectionReason: targetStatus === KYC_REVIEW_STATUS.REJECTED ? rejectionReason : null,
-      "kycReview.reviewedBy": reviewer.adminId || String(reviewer._id),
+      "kycReview.reviewedBy": reviewer._id,
       "kycReview.reviewedAt": clock(),
     };
 
@@ -83,8 +93,9 @@ function createKycReviewService({
       );
     }
 
+    let syncedUser = null;
     try {
-      await syncReviewedOwnerUser({ userId: updatedOwner.user, targetStatus, User, logger });
+      syncedUser = await syncReviewedOwnerUser({ userId: updatedOwner.user, targetStatus, User, logger });
     } catch (userSyncErr) {
       logger.error("KYC review user sync failed for owner:", updatedOwner._id, userSyncErr);
       throw new KycReviewError("KYC_REVIEW_USER_SYNC_FAILED", "Internal Server Error", 500);
@@ -94,7 +105,7 @@ function createKycReviewService({
 
     return {
       owner: updatedOwner,
-      user: busOwnerUser || { _id: updatedOwner.user },
+      user: syncedUser || busOwnerUser || { _id: updatedOwner.user },
       status: targetStatus,
       documents: invalidDocs,
       data: {

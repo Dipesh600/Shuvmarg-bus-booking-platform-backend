@@ -82,7 +82,7 @@ const busOwnerSchema = new mongoose.Schema(
     kycReview: {
       reviewedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Admin",
         default: null,
       },
       reviewedAt: { type: Date, default: null },
