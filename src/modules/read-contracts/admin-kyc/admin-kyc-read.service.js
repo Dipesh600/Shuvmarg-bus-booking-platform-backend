@@ -49,7 +49,7 @@ function createAdminKycReadService({
 
   async function getKycDetail(req) {
     await authorizeAdmin(req);
-    const id = req.body?.id || req.query?.id || req.params?.id;
+    const id = req.params?.kycId || req.params?.id;
 
     if (!id || typeof id !== "string") {
       throw new ReadContractValidationError("READ_INVALID_ID", "KYC owner ID is required.");

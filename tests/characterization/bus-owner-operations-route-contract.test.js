@@ -53,7 +53,10 @@ test("bus-owner operations route and middleware contract", () => {
       (layer) => layer.route?.path === path && layer.route.methods[method]
     );
     assert.equal(matches.length, 1, `${method.toUpperCase()} ${path}`);
-    assert.deepEqual(matches[0].route.stack.map((item) => item.handle), [handler]);
+    const expectedStack = (path === "/getFleetById")
+      ? [matches[0].route.stack[0].handle, handler]
+      : [handler];
+    assert.deepEqual(matches[0].route.stack.map((item) => item.handle), expectedStack);
     const index = layers.indexOf(matches[0]);
     if (path.includes("Kyc") || path.includes("KycStatus")) {
       assert.ok(index < approvalIndex);

@@ -19,31 +19,25 @@ const fareRuleCon = require("../../controllers/busOwnerController/fareRuleContro
 // Applied to ALL routes in this router — no individual `auth` needed.
 router.use(auth, verifyRoleFromDB, busOwnerMiddleware);
 
-const { createBusOwnerReadService } = require("../../src/modules/read-contracts/bus-owner/bus-owner-read.service");
-const { mapReadError } = require("../../src/modules/read-contracts/common/read-error.mapper");
-const busOwnerReadService = createBusOwnerReadService();
+// Frontend Read Routes & Compatibility Aliases (profile, kyc-status)
+const {
+  registerBusOwnerUnapprovedReadRoutes,
+  registerBusOwnerApprovedReadRoutes,
+} = require("./frontendReadRoutes.js");
+registerBusOwnerUnapprovedReadRoutes(router);
 
-router.get("/profile", async (req, res) => {
-  try {
-    const result = await busOwnerReadService.getOwnProfile(req);
-    return res.status(200).json(result);
-  } catch (error) {
-    const { statusCode, payload } = mapReadError(error);
-    return res.status(statusCode).json(payload);
-  }
-});
 router.post("/submitBusOwnerKyc", busOwnerKyc.submitBusOwnerKyc);
-router.get("/myBusOwnerKycStatus", busOwnerKyc.getMyBusOwnerKycStatus);
 router.get("/kycDocumentReadUrl", kycDocumentRead.getKycDocumentReadUrl);
 
 // ── REQUIRE APPROVED KYC FOR ALL ROUTES BELOW ─────────────────────────────────
 router.use(requireApprovedBusOwner);
 
+// Fleets (requires approved KYC)
+registerBusOwnerApprovedReadRoutes(router, { requireApprovedBusOwner: null });
+
 const { busOwnerFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
 
 router.post("/submitFleetForVerification", fleetManagement.submitFleetForVerification);
-router.get("/myFleets", fleetManagement.getMyFleets);
-router.post("/getFleetById", fleetManagement.getFleetById);
 router.patch("/updateFleet", fleetManagement.updateFleet);
 router.delete("/deleteFleet", fleetManagement.deleteFleet);
 

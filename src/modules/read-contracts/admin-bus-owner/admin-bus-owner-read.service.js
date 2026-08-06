@@ -50,7 +50,7 @@ function createAdminBusOwnerReadService({
 
   async function getBusOwnerDetail(req) {
     await authorizeAdmin(req);
-    const id = req.body?.id || req.query?.id || req.params?.id;
+    const id = req.params?.ownerId || req.params?.id;
 
     if (!id || typeof id !== "string") {
       throw new ReadContractValidationError("READ_INVALID_ID", "Bus owner ID is required.");

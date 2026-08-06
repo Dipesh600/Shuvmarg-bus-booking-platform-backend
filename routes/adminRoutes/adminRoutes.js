@@ -102,13 +102,13 @@ router.patch("/registry/discovery/:id/refine-stops", adminMiddleware, routeDisco
 router.patch("/finalizeAgentSetup", adminMiddleware, agentSetup.finalizeAgentSetup);
 router.patch("/agentKycStatus", adminMiddleware, agentKycReview.updateAgentKyc);
 
-// Bus Owner
+// Frontend Read Routes & Compatibility Aliases
+const { registerAdminFrontendReadRoutes } = require("./frontendReadRoutes.js");
+registerAdminFrontendReadRoutes(router);
+
+// Bus Owner Write / Admin Operations
 router.post("/busOwner/create", adminMiddleware, busOwnerController.createBusOwnerFull);
 router.post("/busOwner/reuploadKycDocument", adminMiddleware, busOwnerController.reuploadKycDocument);
-router.get("/getAllBusOwners", adminMiddleware, busOwnerController.getAllBusOwners);
-router.post("/getBusOwnerDetails", adminMiddleware, busOwnerController.getBusOwnerById);
-router.get("/getAllBusOwnerKycs", adminMiddleware, busOwnerController.getAllBusOwnerKycs);
-router.post("/getBusOwnerKycDetails", adminMiddleware, busOwnerController.getBusOwnerKycById);
 // router.post("/makeUserBusOwner", adminMiddleware, busOwnerController.makeUserBusOwner);
 router.patch("/busOwnerKycStatus", adminMiddleware, busOwnerController.updateBusOwnerKyc);
 router.patch("/busOwner/update", adminMiddleware, busOwnerController.updateBusOwnerProfile);
@@ -129,13 +129,9 @@ router.post(
   adminMiddleware,
   adminPushnotification.sendSingleUserToPushnotification
 );
-// Bus Owner Fleet
-router.get("/fleet/getAllFleet",        adminMiddleware, busOwnerFleetController.getAllFleet);
-router.get("/fleet/getById/:id",        adminMiddleware, busOwnerFleetController.getFleetById);
+// Bus Owner Fleet Operations
 router.patch("/fleet/update-status",    adminMiddleware, busOwnerFleetController.updateFleetStatus);
 router.get('/fleet/fleetDashboard',     adminMiddleware, busOwnerFleetController.getFleetDashboard);
-// D1 — Setup status wizard: which steps are complete for this fleet?
-router.get("/fleet/:id/setup-status",   adminMiddleware, busOwnerFleetController.getFleetSetupStatus);
 
 // Fleet Profile Workstation — full operational dashboard for a single bus
 router.get("/fleet/:id/workstation",                      adminMiddleware, fleetWorkstation.getFleetWorkstation);
@@ -240,7 +236,7 @@ router.delete("/busRoutes/:id", adminMiddleware, adminBusRouteController.deleteR
 // Dedicated Fleet Management (Admin on behalf of Owner)
 router.post("/fleet/createForOwner", adminMiddleware, adminFleetController.createFleetForOwner);
 router.get("/fleet/owner/:ownerId", adminMiddleware, adminFleetController.getFleetsByOwner);
-router.get("/fleet/details/:id", adminMiddleware, adminFleetController.getFleetById);
+// router.get("/fleet/details/:id" mounted via adminFrontendReadRoutes)
 router.patch("/fleet/update/:id", adminMiddleware, adminFleetController.updateFleetByAdmin);
 router.delete("/fleet/delete/:id", adminMiddleware, adminFleetController.deleteFleetByAdmin);
 router.patch("/fleet/resubmit/:id", adminMiddleware, adminFleetController.resubmitFleetByAdmin);
