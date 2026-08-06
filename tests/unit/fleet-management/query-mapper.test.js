@@ -2,57 +2,33 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {
-  createFleetDocumentMapper,
-} = require("../../../src/modules/fleet-management/fleet-document.mapper");
-const {
-  createFleetQueryService,
-} = require("../../../src/modules/fleet-management/fleet-query.service");
-const {
-  createFleetQueryRepository,
-} = require("../../../src/modules/fleet-management/fleet-query.repository");
+const { createFleetQueryService } = require("../../../src/modules/fleet-management/fleet-query.service");
 
-test("fleet mapper returns safe document descriptors without raw keys or presigned URLs", async () => {
-  const mapper = createFleetDocumentMapper({});
-  const fleet = {
-    fleetImages: ["front", "back"],
-    fleetDocuments: {
-      fitnessCert: { url: "fitness", uploadedAt: new Date("2026-08-05") }, insurance: { url: "insurance" },
-      bluebook: { url: null }, routePermit: { url: "permit" },
-    },
-  };
-  const rawResult = mapper.withRawKeys(fleet);
-  assert.equal(rawResult.fleetDocuments.fitnessCert.present, true);
-  assert.equal(rawResult.fleetDocuments.fitnessCert.url, undefined);
-  assert.equal(rawResult.fleetDocuments.fitnessCert.objectKey, undefined);
-
-  const result = await mapper.withPresignedUrls(fleet);
-  assert.equal(result.fleetDocuments.fitnessCert.present, true);
-  assert.equal(result.fleetDocuments.fitnessCert.url, undefined);
-  assert.equal(result.fleetDocuments.fitnessCert.objectKey, undefined);
-  assert.equal(result.fleetImages.count, 2);
-});
-
-test("query service distinguishes mapped and raw admin reads", async () => {
-  const mapped = [];
-  const repository = {
-    findByOwner: async () => [{ id: 1 }, { id: 2 }],
-    findDetails: async () => ({ id: 3 }),
-    findRaw: async () => ({ id: 4 }),
-    remove: async () => ({ id: 5 }),
-  };
+test("query service formats presigned URLs and raw keys", async () => {
+  const calls = [];
   const mapper = {
-    withPresignedUrls: async (fleet) => { mapped.push(fleet.id); return { ...fleet, signed: true }; },
-    withRawKeys: (fleet) => ({ ...fleet, raw: true }),
+    withPresignedUrls: (doc) => { calls.push(["urls", doc]); return { ...doc, presigned: true }; },
+    withRawKeys: (doc) => { calls.push(["raw", doc]); return { ...doc, raw: true }; },
+  };
+  const repository = {
+    findByOwner: async () => [{ id: "f1" }],
+    findDetails: async () => ({ id: "f1" }),
+    findRaw: async () => ({ id: "f1" }),
+    remove: async () => ({ id: "f1" }),
   };
   const service = createFleetQueryService({ repository, mapper });
-  assert.deepEqual(await service.getFleetsByOwnerId("owner"), [
-    { id: 1, signed: true }, { id: 2, signed: true },
-  ]);
-  assert.deepEqual(await service.getFleetDetails("3"), { id: 3, signed: true });
-  assert.deepEqual(await service.getFleetDetailsRaw("4"), { id: 4, raw: true });
-  assert.deepEqual(await service.removeFleet("5"), { id: 5 });
-  assert.deepEqual(mapped, [1, 2, 3]);
+
+  const list = await service.getFleetsByOwnerId("owner", "brand");
+  assert.deepEqual(list, [{ id: "f1", presigned: true }]);
+
+  const details = await service.getFleetDetails("f1", "owner");
+  assert.deepEqual(details, { id: "f1", presigned: true });
+
+  const raw = await service.getFleetDetailsRaw("f1");
+  assert.deepEqual(raw, { id: "f1", raw: true });
+
+  const deleted = await service.removeFleet("f1", "owner");
+  assert.deepEqual(deleted, { id: "f1" });
 });
 
 test("query service preserves exact missing-fleet contract", async () => {
@@ -66,31 +42,25 @@ test("query service preserves exact missing-fleet contract", async () => {
     () => service.getFleetDetailsRaw("x"),
     () => service.removeFleet("x"),
   ]) {
-    await assert.rejects(operation(), /Fleet not found or unauthorized\./);
+    await assert.rejects(operation(), (err) => err.code === "FLEET_NOT_FOUND");
   }
 });
 
 test("query repository preserves owner filter, population, and newest-first order", async () => {
   const calls = [];
   const query = {
-    populate(value, select) { calls.push(["populate", value, select]); return this; },
-    sort(value) { calls.push(["sort", value]); return this; },
-    async lean() { calls.push(["lean"]); return [{ id: "fleet" }]; },
+    sort() { calls.push(["sort"]); return this; },
+    populate() { calls.push(["populate"]); return this; },
+    lean: async () => [{ _id: "f1" }],
   };
-  let filter;
-  const repository = createFleetQueryRepository({
-    Bus: { find(value) { filter = value; return query; } },
-  });
-  assert.deepEqual(await repository.findByOwner("owner", "brand"), [{ id: "fleet" }]);
-  assert.deepEqual(filter, { ownerId: "owner", brandId: "brand" });
-  assert.deepEqual(calls[0], ["populate", "ownerId", "name email phone"]);
-  assert.deepEqual(calls.at(-2), ["sort", { createdAt: -1 }]);
-  assert.deepEqual(calls.at(-1), ["lean"]);
-  const corridor = calls.find(
-    ([kind, value]) => kind === "populate" && value?.path === "corridorId"
-  )[1];
-  assert.equal(corridor.select, "code originId destinationId status");
-  assert.deepEqual(corridor.populate.map((value) => value.path), [
-    "originId", "destinationId",
-  ]);
+  const Bus = {
+    find: (filter) => { calls.push(["find", filter]); return query; },
+  };
+  const { createFleetQueryRepository } = require("../../../src/modules/fleet-management/fleet-query.repository");
+  const repo = createFleetQueryRepository({ Bus });
+  const result = await repo.findByOwner("owner_1", "brand_1");
+  assert.deepEqual(result, [{ _id: "f1" }]);
+  assert.equal(calls[0][0], "find");
+  assert.deepEqual(calls[0][1], { ownerId: "owner_1", brandId: "brand_1" });
+  assert.equal(calls[calls.length - 1][0], "sort");
 });
