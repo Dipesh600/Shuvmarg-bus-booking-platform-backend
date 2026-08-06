@@ -1,5 +1,6 @@
 "use strict";
 
+const { ApiError } = require("../../../contracts");
 const { validateKycDocuments } = require("./kyc-document.validator");
 const { validateOnboardingBody } = require("./bus-owner-onboarding.validator");
 const { KycSubmissionStateError } = require("./kyc-submission.errors");
@@ -20,13 +21,13 @@ function createKycSubmissionService({
   logger = console,
 }) {
   async function submitKyc({ userId, onboardingData, files }) {
-    // 1. Validate body before any I/O
+    // 1. Validate body before database/storage I/O
     const normalized = validateOnboardingBody(onboardingData);
 
-    // 2. Validate documents before any I/O
+    // 2. Validate documents before database/storage I/O
     const normalizedFiles = validateKycDocuments(files);
 
-    // 3. Load owner record and enforce KYC state machine (before User load)
+    // 3. Load owner record and enforce KYC state machine (before loading User or uploading documents)
     const existingOwner = await BusOwner.findOne({ user: userId });
     const isInitialSubmission = !existingOwner;
     const busOwner = existingOwner || new BusOwner({ user: userId });
@@ -46,16 +47,24 @@ function createKycSubmissionService({
       );
     }
 
-    // 4. Load user (only needed for approved/pending-free submissions)
-    const user = User ? await User.findById(userId) : null;
+    // 4. Require linked user account
+    const user = User && typeof User.findById === "function" ? await User.findById(userId) : null;
+    if (!user) {
+      throw new ApiError("BUS_OWNER_ONBOARDING_USER_NOT_FOUND");
+    }
 
-    // 5. Snapshot old rejected document keys before touching anything
+    // 5. Require transaction support
+    if (!mongoose || typeof mongoose.startSession !== "function") {
+      throw new ApiError("BUS_OWNER_ONBOARDING_TRANSACTION_UNAVAILABLE");
+    }
+
+    // 6. Snapshot old rejected document keys before touching anything
     const replacedDocumentReferences =
       !isInitialSubmission && busOwner.verificationStatus === "rejected"
         ? collectBusOwnerKycStorageReferences(busOwner)
         : [];
 
-    // 6. Upload documents (outside transaction — S3 is not transactional)
+    // 7. Upload documents (outside transaction — S3 is not transactional)
     const newlyUploadedObjectKeys = [];
     const singleDocFields = ["companyRegistration", "taxRegistration", "transportLicense"];
     const ownerId = busOwner._id ? busOwner._id.toString() : userId;
@@ -101,7 +110,7 @@ function createKycSubmissionService({
         busOwner.insuranceCertificates = insuranceItems;
       }
 
-      // 7. Apply normalized profile data to both records before transaction
+      // 8. Apply normalized profile data to both records before transaction
       busOwner.companyName = normalized.companyName;
       busOwner.taxRegistration = busOwner.taxRegistration || {};
       busOwner.taxRegistration.panNumber = normalized.panNumber;
@@ -132,35 +141,20 @@ function createKycSubmissionService({
       });
       busOwner.kycAuditHistory.push(auditEvent);
 
-      // 8. Persist both records inside a transaction
-      if (mongoose && typeof mongoose.startSession === "function" && user) {
-        const session = await mongoose.startSession();
-        session.startTransaction();
-        try {
-          if (user) {
-            user.name = normalized.ownerName;
-            user.address = normalized.address;
-            await user.save({ session });
-          }
-          await busOwner.save({ session });
-          await session.commitTransaction();
-        } catch (txErr) {
-          await session.abortTransaction();
-          throw txErr;
-        } finally {
-          session.endSession();
-        }
-      } else {
-        // Fallback for test environments without real mongoose sessions
-        if (user) {
+      // 9. Persist both User and BusOwner inside a transaction using session.withTransaction
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
           user.name = normalized.ownerName;
           user.address = normalized.address;
-          await user.save();
-        }
-        await busOwner.save();
+          await user.save({ session });
+          await busOwner.save({ session });
+        });
+      } finally {
+        await session.endSession();
       }
 
-      // 9. Clean old rejected objects only after successful commit
+      // 10. Clean old rejected objects only after successful commit
       if (replacedDocumentReferences.length > 0 && typeof storageService.deleteMany === "function") {
         try {
           const oldCleanupResult = await storageService.deleteMany(replacedDocumentReferences);

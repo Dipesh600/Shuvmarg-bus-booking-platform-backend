@@ -3,8 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createKycSubmissionService } = require("../../../src/modules/bus-owner/kyc-submission/kyc-submission.service");
-const { makeValidFiles } = require("./helpers/kyc-test-fixtures");
-const { PDF_BUFFER, makeFile } = require("./helpers/kyc-test-fixtures");
+const { makeValidFiles, PDF_BUFFER, makeFile } = require("./helpers/kyc-test-fixtures");
 
 const VALID_BODY = {
   companyName: "Nepal Transport Co.",
@@ -16,6 +15,17 @@ const VALID_BODY = {
   accountHolderName: "Raju Shrestha",
   accountNumber: "12345678901234",
   branchName: "Newroad Branch",
+};
+
+const MockUser = {
+  findById: async () => ({ name: null, address: null, save: async () => {} }),
+};
+
+const mockMongoose = {
+  startSession: async () => ({
+    withTransaction: async (fn) => { await fn(); },
+    endSession: async () => {},
+  }),
 };
 
 test("kyc-submission.service failure and rollback tests", async (t) => {
@@ -34,6 +44,8 @@ test("kyc-submission.service failure and rollback tests", async (t) => {
 
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
       storageService: {
         uploadDocument: async () => { uploadCalls++; return "owners/1/doc.pdf"; },
         deleteMany: async () => { deleteCalls++; return { deleted: [], failed: [] }; },
@@ -65,6 +77,8 @@ test("kyc-submission.service failure and rollback tests", async (t) => {
 
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
       storageService: {
         uploadDocument: async () => { throw new Error("S3 Upload 1 Failed"); },
         deleteMany: async (keys) => { deletedObjectKeys.push(...keys); return { deleted: keys, failed: [] }; },
@@ -94,6 +108,8 @@ test("kyc-submission.service failure and rollback tests", async (t) => {
 
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
       storageService: {
         uploadDocument: async ({ documentType }) => {
           uploadCalls++;
@@ -130,8 +146,17 @@ test("kyc-submission.service failure and rollback tests", async (t) => {
       companyRegistration: { documentUrls: ["owners/1/old-c.pdf"] },
     });
 
+    const mockFailingMongoose = {
+      startSession: async () => ({
+        withTransaction: async (fn) => { await fn(); },
+        endSession: async () => {},
+      }),
+    };
+
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockFailingMongoose,
       storageService: {
         uploadDocument: async ({ documentType }) => {
           uploadCalls++;

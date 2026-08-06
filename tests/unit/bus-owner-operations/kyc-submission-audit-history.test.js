@@ -28,6 +28,17 @@ test("kyc-submission-audit-history unit tests", async (t) => {
     branchName: "Newroad Branch",
   };
 
+  const MockUser = {
+    findById: async () => ({ name: null, address: null, save: async () => {} }),
+  };
+
+  const mockMongoose = {
+    startSession: async () => ({
+      withTransaction: async (fn) => { await fn(); },
+      endSession: async () => {},
+    }),
+  };
+
   const mockStorageService = {
     uploadDocument: async () => "kyc-docs/key-1.pdf",
     deleteMany: async () => ({ failed: [] }),
@@ -45,6 +56,8 @@ test("kyc-submission-audit-history unit tests", async (t) => {
 
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
       storageService: mockStorageService,
       clock: () => fixedDate,
     });
@@ -85,7 +98,13 @@ test("kyc-submission-audit-history unit tests", async (t) => {
     };
 
     const MockBusOwner = { findOne: async () => existingRejected };
-    const service = createKycSubmissionService({ BusOwner: MockBusOwner, storageService: mockStorageService, clock: () => fixedDate });
+    const service = createKycSubmissionService({
+      BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
+      storageService: mockStorageService,
+      clock: () => fixedDate,
+    });
 
     const res = await service.submitKyc({ userId, onboardingData: validBody, files: validFiles });
     assert.equal(res.success, true);
@@ -109,7 +128,12 @@ test("kyc-submission-audit-history unit tests", async (t) => {
       deleteMany: async (keys) => { rollbackCount = keys.length; },
     };
 
-    const service = createKycSubmissionService({ BusOwner: MockBusOwner, storageService: storage });
+    const service = createKycSubmissionService({
+      BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
+      storageService: storage,
+    });
     await assert.rejects(async () => service.submitKyc({ userId, onboardingData: validBody, files: validFiles }), (err) => err.message === "DB Save Error");
     assert.equal(rollbackCount, 3);
   });

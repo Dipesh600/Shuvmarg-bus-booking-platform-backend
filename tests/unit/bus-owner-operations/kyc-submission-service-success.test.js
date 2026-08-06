@@ -17,6 +17,17 @@ const VALID_BODY = {
   branchName: "Newroad Branch",
 };
 
+const MockUser = {
+  findById: async () => ({ name: null, address: null, save: async () => {} }),
+};
+
+const mockMongoose = {
+  startSession: async () => ({
+    withTransaction: async (fn) => { await fn(); },
+    endSession: async () => {},
+  }),
+};
+
 test("kyc-submission.service success and state tests", async (t) => {
   await t.test("state rules: approved or pending state blocks resubmission with HTTP 409", async () => {
     function MockBusOwner(val) { Object.assign(this, val); }
@@ -61,6 +72,8 @@ test("kyc-submission.service success and state tests", async (t) => {
 
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
       storageService: {
         uploadDocument: async ({ documentType }) => {
           callOrder.push(`upload:${documentType}`);
@@ -104,6 +117,8 @@ test("kyc-submission.service success and state tests", async (t) => {
 
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
       logger: mockLogger,
       storageService: {
         uploadDocument: async ({ documentType }) => `owners/1/new-${documentType}.pdf`,

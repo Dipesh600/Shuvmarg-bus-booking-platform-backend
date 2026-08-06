@@ -1,8 +1,17 @@
 "use strict";
 
+const { ApiError } = require("../../../contracts");
 const { KycDocumentValidationError, BusOwnerOnboardingValidationError } = require("./kyc-submission.errors");
 
 function handleKycSubmissionError(error, res) {
+  if (error instanceof ApiError) {
+    return res.status(error.statusCode).json({
+      success: false,
+      code: error.code,
+      message: error.message,
+    });
+  }
+
   if (error instanceof BusOwnerOnboardingValidationError) {
     const body = {
       success: false,

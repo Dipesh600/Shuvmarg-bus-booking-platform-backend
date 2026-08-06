@@ -17,6 +17,17 @@ const VALID_BODY = {
   branchName: "Newroad Branch",
 };
 
+const MockUser = {
+  findById: async () => ({ name: null, address: null, save: async () => {} }),
+};
+
+const mockMongoose = {
+  startSession: async () => ({
+    withTransaction: async (fn) => { await fn(); },
+    endSession: async () => {},
+  }),
+};
+
 test("bus-owner KYC submission controller submit contracts", async (t) => {
   await t.test("submission creates owner and sets all document state upon valid payload", async () => {
     const uploads = [];
@@ -29,6 +40,8 @@ test("bus-owner KYC submission controller submit contracts", async (t) => {
 
     const controller = createKycSubmissionController({
       BusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
       storageService: {
         uploadDocument: async ({ documentType }) => {
           uploads.push(documentType);
@@ -62,9 +75,10 @@ test("bus-owner KYC submission controller submit contracts", async (t) => {
     function MockBusOwner(val) { Object.assign(this, val); }
     MockBusOwner.findOne = async () => null;
 
-    const controller = createKycSubmissionController({ BusOwner: MockBusOwner, storageService: {} });
+    const controller = createKycSubmissionController({
+      BusOwner: MockBusOwner, User: MockUser, mongoose: mockMongoose, storageService: {},
+    });
     const res = responseRecorder();
-    // No body — body validation fires before file validation
     await controller.submitBusOwnerKyc({ userInfo: { id: "owner" }, body: undefined, files: makeValidFiles() }, res);
 
     assert.equal(res.result().status, 400);
@@ -76,7 +90,9 @@ test("bus-owner KYC submission controller submit contracts", async (t) => {
     function MockBusOwner(val) { Object.assign(this, val); }
     MockBusOwner.findOne = async () => null;
 
-    const controller = createKycSubmissionController({ BusOwner: MockBusOwner, storageService: {} });
+    const controller = createKycSubmissionController({
+      BusOwner: MockBusOwner, User: MockUser, mongoose: mockMongoose, storageService: {},
+    });
     const res = responseRecorder();
     await controller.submitBusOwnerKyc({ userInfo: { id: "owner" }, body: VALID_BODY, files: {} }, res);
 
@@ -96,6 +112,8 @@ test("bus-owner KYC submission controller submit contracts", async (t) => {
 
     const controller = createKycSubmissionController({
       BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
       storageService: { uploadDocument: async () => { storageCalled = true; return ""; } },
     });
 
@@ -119,7 +137,9 @@ test("bus-owner KYC submission controller submit contracts", async (t) => {
     function BusOwner() {}
     BusOwner.findOne = async () => { throw new Error("Sensitive DB connection string"); };
 
-    const controller = createKycSubmissionController({ BusOwner, storageService: {} });
+    const controller = createKycSubmissionController({
+      BusOwner, User: MockUser, mongoose: mockMongoose, storageService: {},
+    });
     const res = responseRecorder();
     await controller.submitBusOwnerKyc(
       { userInfo: { id: "owner" }, body: VALID_BODY, files: makeValidFiles() },

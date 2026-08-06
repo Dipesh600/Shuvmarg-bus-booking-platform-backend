@@ -31,6 +31,18 @@ const BUS_OWNER_ERRORS = Object.freeze({
     domain: "bus-owner",
     retryable: false,
   }),
+  BUS_OWNER_ONBOARDING_USER_NOT_FOUND: Object.freeze({
+    statusCode: 404,
+    message: "Authenticated user account was not found.",
+    domain: "bus-owner",
+    retryable: false,
+  }),
+  BUS_OWNER_ONBOARDING_TRANSACTION_UNAVAILABLE: Object.freeze({
+    statusCode: 500,
+    message: "Onboarding persistence is temporarily unavailable.",
+    domain: "bus-owner",
+    retryable: false,
+  }),
 });
 
 module.exports = { BUS_OWNER_ERRORS };

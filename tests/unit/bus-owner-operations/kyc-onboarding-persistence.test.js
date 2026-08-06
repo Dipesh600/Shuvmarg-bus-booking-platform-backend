@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { ApiError } = require("../../../src/contracts");
 const { createKycSubmissionService } = require(
   "../../../src/modules/bus-owner/kyc-submission/kyc-submission.service"
 );
@@ -33,18 +34,19 @@ const VALID_BODY = {
   branchName: "Newroad Branch",
 };
 
-function mockSession(shouldFail = false) {
+function mockSession(shouldFailOnCommit = false, failOnStart = false) {
   const calls = [];
   return {
     calls,
     session: {
-      startTransaction: () => calls.push("startTransaction"),
-      commitTransaction: async () => {
-        if (shouldFail) throw new Error("Commit failed");
+      withTransaction: async (fn) => {
+        if (failOnStart) throw new Error("Transaction start failed");
+        calls.push("withTransaction");
+        await fn();
+        if (shouldFailOnCommit) throw new Error("Commit failed");
         calls.push("commitTransaction");
       },
-      abortTransaction: async () => calls.push("abortTransaction"),
-      endSession: () => calls.push("endSession"),
+      endSession: async () => calls.push("endSession"),
     },
   };
 }
@@ -89,7 +91,7 @@ test("kyc-onboarding-persistence: new owner saves User and BusOwner inside trans
 
   assert.equal(res.success, true);
   assert.deepEqual(res.data, { verificationStatus: "pending" });
-  assert.deepEqual(mock.calls, ["startTransaction", "commitTransaction", "endSession"]);
+  assert.deepEqual(mock.calls, ["withTransaction", "commitTransaction", "endSession"]);
   assert.deepEqual(userSaveCalls, ["with-session"]);
   assert.deepEqual(busOwnerSaveCalls, ["with-session"]);
   assert.equal(createdOwner.companyName, "Nepal Transport Co.");
@@ -99,12 +101,11 @@ test("kyc-onboarding-persistence: new owner saves User and BusOwner inside trans
 });
 
 test("kyc-onboarding-persistence: ownerName and address written to User, not BusOwner", async () => {
-  let savedUser;
   const mock = mockSession();
 
   const MockUser = { findById: async () => ({
     name: null, address: null,
-    save: async () => { savedUser = this; },
+    save: async () => {},
   })};
 
   function MockBusOwner(val) {
@@ -113,16 +114,16 @@ test("kyc-onboarding-persistence: ownerName and address written to User, not Bus
   }
   MockBusOwner.findOne = async () => null;
 
+  const userRef = await MockUser.findById("user-1");
+  const mockUserWithTracking = { ...userRef };
+  MockUser.findById = async () => mockUserWithTracking;
+
   const service = createKycSubmissionService({
     BusOwner: MockBusOwner,
     User: MockUser,
     mongoose: makeMockMongoose(mock.session),
     storageService: { uploadDocument: async () => "key.pdf" },
   });
-
-  const userRef = await MockUser.findById("user-1");
-  const mockUserWithTracking = { ...userRef };
-  MockUser.findById = async () => mockUserWithTracking;
 
   await service.submitKyc({
     userId: "user-1",
@@ -135,6 +136,71 @@ test("kyc-onboarding-persistence: ownerName and address written to User, not Bus
   assert.equal("ownerName" in ({}), false, "BusOwner must not receive ownerName field");
 });
 
+test("kyc-onboarding-persistence: linked User not found returns typed 404 error without uploads or BusOwner save", async () => {
+  let uploadCalls = 0;
+  let busOwnerSaved = false;
+
+  const MockUser = { findById: async () => null };
+
+  function MockBusOwner(val) {
+    Object.assign(this, val);
+    this.save = async () => { busOwnerSaved = true; };
+  }
+  MockBusOwner.findOne = async () => null;
+
+  const service = createKycSubmissionService({
+    BusOwner: MockBusOwner,
+    User: MockUser,
+    mongoose: makeMockMongoose(mockSession().session),
+    storageService: {
+      uploadDocument: async () => { uploadCalls++; return "key.pdf"; },
+    },
+  });
+
+  await assert.rejects(
+    () => service.submitKyc({ userId: "non-existent-user", onboardingData: VALID_BODY, files: makeValidFiles() }),
+    (err) => err instanceof ApiError && err.code === "BUS_OWNER_ONBOARDING_USER_NOT_FOUND" && err.statusCode === 404
+  );
+
+  assert.equal(uploadCalls, 0, "No S3 uploads must occur when User is not found");
+  assert.equal(busOwnerSaved, false, "BusOwner must not be saved when User is not found");
+});
+
+test("kyc-onboarding-persistence: mongoose session unavailable returns typed 500 error without saves or uncleaned uploads", async () => {
+  let uploadCalls = 0;
+  const deletedKeys = [];
+  let userSaved = false;
+  let busOwnerSaved = false;
+
+  const MockUser = { findById: async () => ({
+    save: async () => { userSaved = true; },
+  })};
+
+  function MockBusOwner(val) {
+    Object.assign(this, val);
+    this.save = async () => { busOwnerSaved = true; };
+  }
+  MockBusOwner.findOne = async () => null;
+
+  const service = createKycSubmissionService({
+    BusOwner: MockBusOwner,
+    User: MockUser,
+    mongoose: null, // Session unavailable
+    storageService: {
+      uploadDocument: async ({ documentType }) => { uploadCalls++; return `key/${documentType}.pdf`; },
+      deleteMany: async (keys) => { deletedKeys.push(...keys); return { failed: [] }; },
+    },
+  });
+
+  await assert.rejects(
+    () => service.submitKyc({ userId: "u", onboardingData: VALID_BODY, files: makeValidFiles() }),
+    (err) => err instanceof ApiError && err.code === "BUS_OWNER_ONBOARDING_TRANSACTION_UNAVAILABLE" && err.statusCode === 500
+  );
+
+  assert.equal(userSaved, false, "User must not be saved when mongoose session is unavailable");
+  assert.equal(busOwnerSaved, false, "BusOwner must not be saved when mongoose session is unavailable");
+});
+
 test("kyc-onboarding-persistence: body validation failure uploads nothing", async () => {
   let uploadCalls = 0;
   const MockUser = { findById: async () => ({}) };
@@ -144,7 +210,7 @@ test("kyc-onboarding-persistence: body validation failure uploads nothing", asyn
   const service = createKycSubmissionService({
     BusOwner: MockBusOwner,
     User: MockUser,
-    mongoose: { startSession: async () => ({}) },
+    mongoose: makeMockMongoose(mockSession().session),
     storageService: { uploadDocument: async () => { uploadCalls++; return "key.pdf"; } },
   });
 
@@ -155,19 +221,18 @@ test("kyc-onboarding-persistence: body validation failure uploads nothing", asyn
   assert.equal(uploadCalls, 0, "No uploads should occur when body validation fails");
 });
 
-test("kyc-onboarding-persistence: transaction abort on User save failure leaves BusOwner unchanged", async () => {
+test("kyc-onboarding-persistence: User save succeeds but BusOwner save fails -> transaction aborted and neither database change persists", async () => {
   const mock = mockSession();
-  const originalUserName = "Old Name";
+  let userSaveCallCount = 0;
 
   const MockUser = { findById: async () => ({
-    name: originalUserName, address: "old",
-    save: async () => { throw new Error("User write failed"); },
+    name: "Old Name", address: "Old Address",
+    save: async () => { userSaveCallCount++; },
   })};
 
-  let busOwnerSaved = false;
   function MockBusOwner(val) {
     Object.assign(this, val);
-    this.save = async () => { busOwnerSaved = true; };
+    this.save = async () => { throw new Error("BusOwner DB write error"); };
   }
   MockBusOwner.findOne = async () => null;
 
@@ -184,51 +249,58 @@ test("kyc-onboarding-persistence: transaction abort on User save failure leaves 
 
   await assert.rejects(
     () => service.submitKyc({ userId: "u", onboardingData: VALID_BODY, files: makeValidFiles() }),
-    (err) => err.message === "User write failed"
+    (err) => err.message === "BusOwner DB write error"
   );
 
-  assert.equal(mock.calls.includes("abortTransaction"), true, "Transaction must be aborted");
-  assert.equal(busOwnerSaved, false, "BusOwner.save must not succeed when transaction aborts");
   assert.equal(deletedKeys.length, 3, "Newly uploaded keys must be cleaned after transaction failure");
+  assert.equal(mock.calls.includes("endSession"), true, "Session must be ended");
 });
 
-test("kyc-onboarding-persistence: transaction abort on BusOwner save failure cleans new uploads", async () => {
-  const mock = mockSession();
+test("kyc-onboarding-persistence: transaction start/commit fails -> uploaded keys cleaned and old rejected keys preserved", async () => {
+  const mock = mockSession(true); // Fails on commit
   const MockUser = { findById: async () => ({
     name: null, address: null,
     save: async () => {},
   })};
 
-  let uploadCount = 0;
-  const deletedKeys = [];
+  const oldDocKey = "old-rejected-key.pdf";
+  const oldOwnerData = {
+    verificationStatus: "rejected",
+    companyRegistration: { documentUrls: [oldDocKey] },
+    taxRegistration: { documentUrls: [] },
+    transportLicense: { documentUrls: [] },
+    insuranceCertificates: [],
+    kycAuditHistory: [],
+  };
 
   function MockBusOwner(val) {
     Object.assign(this, val);
-    this.save = async () => { throw new Error("BusOwner write failed"); };
+    this.save = async () => {};
   }
-  MockBusOwner.findOne = async () => null;
+  MockBusOwner.findOne = async () => new MockBusOwner(oldOwnerData);
 
+  const deletedKeys = [];
   const service = createKycSubmissionService({
     BusOwner: MockBusOwner,
     User: MockUser,
     mongoose: makeMockMongoose(mock.session),
     storageService: {
-      uploadDocument: async ({ documentType }) => {
-        uploadCount++;
-        return `key/${documentType}.pdf`;
-      },
+      uploadDocument: async ({ documentType }) => `new-key/${documentType}.pdf`,
       deleteMany: async (keys) => { deletedKeys.push(...keys); return { failed: [] }; },
     },
   });
 
   await assert.rejects(
     () => service.submitKyc({ userId: "u", onboardingData: VALID_BODY, files: makeValidFiles() }),
-    (err) => err.message === "BusOwner write failed"
+    (err) => err.message === "Commit failed"
   );
 
-  assert.equal(mock.calls.includes("abortTransaction"), true);
-  assert.equal(uploadCount, 3);
-  assert.equal(deletedKeys.length, 3, "All newly uploaded keys cleaned on BusOwner save failure");
+  assert.equal(
+    deletedKeys.includes(oldDocKey), false,
+    "Old rejected document must NOT be deleted when transaction fails"
+  );
+  assert.equal(deletedKeys.length, 3, "New uploaded documents MUST be deleted when transaction fails");
+  assert.equal(mock.calls.includes("endSession"), true);
 });
 
 test("kyc-onboarding-persistence: approved owner cannot resubmit", async () => {
@@ -296,52 +368,6 @@ test("kyc-onboarding-persistence: rejected owner data replaced on resubmission",
   assert.equal(savedOwner.taxRegistration.panNumber, "123456789");
   assert.equal(savedOwner.bankDetails.bankName, "Nepal Bank");
   assert.equal(savedOwner.verificationStatus, "pending");
-});
-
-test("kyc-onboarding-persistence: old rejected documents preserved when transaction fails", async () => {
-  const mock = mockSession(true); // commit will fail
-  const MockUser = { findById: async () => ({
-    name: null, address: null,
-    save: async () => {},
-  })};
-
-  const oldDocKey = "old-rejected-key.pdf";
-  const oldOwnerData = {
-    verificationStatus: "rejected",
-    companyRegistration: { documentUrls: [oldDocKey] },
-    taxRegistration: { documentUrls: [] },
-    transportLicense: { documentUrls: [] },
-    insuranceCertificates: [],
-    kycAuditHistory: [],
-  };
-
-  function MockBusOwner(val) {
-    Object.assign(this, val);
-    this.save = async () => {};
-  }
-  MockBusOwner.findOne = async () => new MockBusOwner(oldDocKey ? oldOwnerData : {});
-
-  const deletedKeys = [];
-  const service = createKycSubmissionService({
-    BusOwner: MockBusOwner,
-    User: MockUser,
-    mongoose: makeMockMongoose(mock.session),
-    storageService: {
-      uploadDocument: async ({ documentType }) => `new-key/${documentType}.pdf`,
-      deleteMany: async (keys) => { deletedKeys.push(...keys); return { failed: [] }; },
-    },
-  });
-
-  await assert.rejects(
-    () => service.submitKyc({ userId: "u", onboardingData: VALID_BODY, files: makeValidFiles() }),
-    (err) => err.message === "Commit failed"
-  );
-
-  assert.equal(
-    deletedKeys.includes(oldDocKey), false,
-    "Old rejected document must NOT be deleted when transaction fails"
-  );
-  assert.equal(mock.calls.includes("abortTransaction"), true);
 });
 
 test("kyc-onboarding-persistence: unexpected error returns as-is (no message classification)", async () => {
