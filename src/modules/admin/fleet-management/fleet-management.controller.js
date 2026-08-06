@@ -30,6 +30,11 @@ function createFleetManagementController({
 
     async getFleetById(req, res) {
       try {
+        const id = req.params?.fleetId || req.params?.id || req.body?.fleetId || req.body?.id;
+        if (id) {
+          req.params = req.params || {};
+          req.params.fleetId = id;
+        }
         const result = await readService.getFleetDetailForAdmin(req);
         return res.status(200).json(result);
       } catch (error) {
@@ -66,6 +71,11 @@ function createFleetManagementController({
 
     async getFleetSetupStatus(req, res) {
       try {
+        const id = req.params?.fleetId || req.params?.id || req.body?.fleetId || req.body?.id;
+        if (id) {
+          req.params = req.params || {};
+          req.params.fleetId = id;
+        }
         const result = await readService.getFleetSetupStatusForAdmin(req);
         return res.status(200).json(result);
       } catch (error) {

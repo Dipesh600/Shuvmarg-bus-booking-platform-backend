@@ -21,13 +21,10 @@ function createOwnerQueryController({
 
     async getBusOwnerById(req, res) {
       try {
-        const id = req.body?.id || req.query?.id || req.params?.id;
-        if (!id) {
-          return res.status(400).json({ success: false, message: "Id is required!" });
-        }
-        const mongoose = require("mongoose");
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-          return res.status(400).json({ success: false, message: "Invalid id format!" });
+        const id = req.params?.ownerId || req.params?.id || req.body?.ownerId || req.body?.id;
+        if (id) {
+          req.params = req.params || {};
+          req.params.ownerId = id;
         }
         const result = await adminBusOwnerReadService.getBusOwnerDetail(req);
         return res.status(200).json(result);

@@ -65,7 +65,13 @@ function createFleetManagementController({ fleetService, readService = defaultRe
     try {
       const userId = req.userInfo?.id;
       if (!userId) return unauthorized(res);
-      const { fleetId } = req.body;
+      const fleetId = req.params?.fleetId || req.params?.id || req.body?.fleetId || req.body?.id;
+      if (fleetId) {
+        req.params = req.params || {};
+        req.params.fleetId = fleetId;
+        req.body = req.body || {};
+        req.body.fleetId = fleetId;
+      }
       if (!requireFleetId(req, res)) return res;
       if (fleetService && typeof fleetService.getFleetDetails === "function") {
         const fleet = await fleetService.getFleetDetails(fleetId, userId);
@@ -79,7 +85,7 @@ function createFleetManagementController({ fleetService, readService = defaultRe
       return res.status(200).json(result);
     } catch (error) {
       logger.error("getFleetById error:", error);
-      return res.status(error.message.includes("found") ? 404 : 500).json({
+      return res.status(error.message?.includes("found") ? 404 : 500).json({
         success: false, message: error.message || "Internal Server Error",
       });
     }

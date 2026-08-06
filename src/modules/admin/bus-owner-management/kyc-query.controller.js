@@ -4,20 +4,26 @@ const { createAdminKycReadService } = require("../../read-contracts/admin-kyc/ad
 const { mapReadError } = require("../../read-contracts/common/read-error.mapper");
 const { sanitizeKycDetailDescriptors } = require("../../bus-owner/kyc-document-read/kyc-document-read.controller");
 
+const defaultService = createAdminKycReadService();
+
 function createKycQueryController(options = {}) {
-  const { BusOwnerModel, kycDocumentReadService, readService = createAdminKycReadService() } = options;
+  const { BusOwnerModel, kycDocumentReadService, readService = defaultService } = options;
 
   const getBusOwnerKycById = async (req, res) => {
     try {
-      const id = req.body?.id || req.query?.id || req.params?.id;
-      if (!id) {
-        return res.status(400).json({ success: false, message: "Id is required!" });
-      }
-      const mongoose = require("mongoose");
-      if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({ success: false, message: "Invalid id format!" });
+      const id = req.params?.kycId || req.params?.id || req.body?.kycId || req.body?.id;
+      if (id) {
+        req.params = req.params || {};
+        req.params.kycId = id;
       }
       if (BusOwnerModel || kycDocumentReadService) {
+        if (!id) {
+          return res.status(400).json({ success: false, message: "Id is required!" });
+        }
+        const mongoose = require("mongoose");
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+          return res.status(400).json({ success: false, message: "Invalid id format!" });
+        }
         const Model = BusOwnerModel || require("../../../../models/busOwnerModel");
         let query1 = Model.findOne({ user: id });
         if (query1 && typeof query1.lean !== "function" && typeof query1.populate === "function") {
@@ -51,7 +57,7 @@ function createKycQueryController(options = {}) {
 
   const getAllBusOwnerKycs = async (req, res) => {
     try {
-      const result = await readService.listKycQueue(req);
+      const result = await (readService.listKycQueue ? readService.listKycQueue(req) : readService.listKycs(req));
       return res.status(200).json(result);
     } catch (error) {
       const { statusCode, payload } = mapReadError(error);
