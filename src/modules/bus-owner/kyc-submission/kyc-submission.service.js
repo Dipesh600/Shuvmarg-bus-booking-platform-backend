@@ -5,6 +5,7 @@ const { validateKycDocuments } = require("./kyc-document.validator");
 const { validateOnboardingBody } = require("./bus-owner-onboarding.validator");
 const { KycSubmissionStateError } = require("./kyc-submission.errors");
 const { collectBusOwnerKycStorageReferences } = require("./kyc-document-references");
+const { uploadOnboardingDocuments } = require("./kyc-submission-document-upload.service");
 const {
   buildKycAuditEvent,
   countValidatedKycFiles,
@@ -21,13 +22,9 @@ function createKycSubmissionService({
   logger = console,
 }) {
   async function submitKyc({ userId, onboardingData, files }) {
-    // 1. Validate body before database/storage I/O
     const normalized = validateOnboardingBody(onboardingData);
-
-    // 2. Validate documents before database/storage I/O
     const normalizedFiles = validateKycDocuments(files);
 
-    // 3. Load owner record and enforce KYC state machine (before loading User or uploading documents)
     const existingOwner = await BusOwner.findOne({ user: userId });
     const isInitialSubmission = !existingOwner;
     const busOwner = existingOwner || new BusOwner({ user: userId });
@@ -47,70 +44,32 @@ function createKycSubmissionService({
       );
     }
 
-    // 4. Require linked user account
     const user = User && typeof User.findById === "function" ? await User.findById(userId) : null;
     if (!user) {
       throw new ApiError("BUS_OWNER_ONBOARDING_USER_NOT_FOUND");
     }
 
-    // 5. Require transaction support
     if (!mongoose || typeof mongoose.startSession !== "function") {
       throw new ApiError("BUS_OWNER_ONBOARDING_TRANSACTION_UNAVAILABLE");
     }
 
-    // 6. Snapshot old rejected document keys before touching anything
     const replacedDocumentReferences =
       !isInitialSubmission && busOwner.verificationStatus === "rejected"
         ? collectBusOwnerKycStorageReferences(busOwner)
         : [];
 
-    // 7. Upload documents (outside transaction — S3 is not transactional)
     const newlyUploadedObjectKeys = [];
-    const singleDocFields = ["companyRegistration", "taxRegistration", "transportLicense"];
     const ownerId = busOwner._id ? busOwner._id.toString() : userId;
 
     try {
-      for (const field of singleDocFields) {
-        if (normalizedFiles[field]) {
-          const documentObjectKeys = [];
-          for (const validatedFile of normalizedFiles[field]) {
-            const key = await storageService.uploadDocument({
-              validatedFile,
-              ownerId,
-              documentType: field,
-            });
-            newlyUploadedObjectKeys.push(key);
-            documentObjectKeys.push(key);
-          }
-          busOwner[field] = busOwner[field] || {};
-          busOwner[field].documentUrls = documentObjectKeys;
-          busOwner[field].verified = false;
-          busOwner[field].rejectionReason = null;
-        }
-      }
+      await uploadOnboardingDocuments({
+        normalizedFiles,
+        storageService,
+        ownerId,
+        busOwner,
+        newlyUploadedObjectKeys,
+      });
 
-      if (normalizedFiles.insuranceCertificates) {
-        const insuranceItems = [];
-        for (const validatedFile of normalizedFiles.insuranceCertificates) {
-          const key = await storageService.uploadDocument({
-            validatedFile,
-            ownerId,
-            documentType: "insuranceCertificates",
-          });
-          newlyUploadedObjectKeys.push(key);
-          insuranceItems.push({
-            insurerName: null,
-            policyNumber: null,
-            validTill: null,
-            documentUrls: [key],
-            verified: false,
-            rejectionReason: null,
-          });
-        }
-        busOwner.insuranceCertificates = insuranceItems;
-      }
-
-      // 8. Apply normalized profile data to both records before transaction
       busOwner.companyName = normalized.companyName;
       busOwner.taxRegistration = busOwner.taxRegistration || {};
       busOwner.taxRegistration.panNumber = normalized.panNumber;
@@ -141,7 +100,6 @@ function createKycSubmissionService({
       });
       busOwner.kycAuditHistory.push(auditEvent);
 
-      // 9. Persist both User and BusOwner inside a transaction using session.withTransaction
       const session = await mongoose.startSession();
       try {
         await session.withTransaction(async () => {
@@ -154,7 +112,6 @@ function createKycSubmissionService({
         await session.endSession();
       }
 
-      // 10. Clean old rejected objects only after successful commit
       if (replacedDocumentReferences.length > 0 && typeof storageService.deleteMany === "function") {
         try {
           const oldCleanupResult = await storageService.deleteMany(replacedDocumentReferences);
@@ -172,7 +129,6 @@ function createKycSubmissionService({
         data: { verificationStatus: "pending" },
       };
     } catch (err) {
-      // Roll back newly uploaded S3 objects on any failure
       if (newlyUploadedObjectKeys.length > 0 && typeof storageService.deleteMany === "function") {
         try {
           const cleanupResult = await storageService.deleteMany(newlyUploadedObjectKeys);
