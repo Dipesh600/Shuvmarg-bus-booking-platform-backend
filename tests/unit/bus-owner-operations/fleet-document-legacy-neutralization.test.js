@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { ApiError } = require("../../../src/contracts");
 const { parseCreationInput } = require("../../../src/modules/fleet-management/fleet-creation.policy");
 const { restrictOwnerUpdate } = require("../../../src/modules/fleet-management/fleet-update.policy");
 const { isKeyAllowed } = require("../../../src/modules/shared/document-proxy/document-proxy.policy");
@@ -11,11 +12,11 @@ test("fleet-document-legacy-neutralization unit tests", async (t) => {
   await t.test("parseCreationInput rejects client-supplied fleetDocuments or fleetImages", () => {
     assert.throws(
       () => parseCreationInput({ busName: "Bus", busNumber: "BA1PA1234", busType: "AC", totalSeats: 30, vehicleType: "bus", fleetDocuments: { fitnessCert: { url: "http://evil.com" } } }),
-      (err) => err.message.includes("forbidden")
+      (err) => err.code === "FLEET_VALIDATION_FAILED" || err instanceof ApiError
     );
     assert.throws(
       () => parseCreationInput({ busName: "Bus", busNumber: "BA1PA1234", busType: "AC", totalSeats: 30, vehicleType: "bus", fleetImages: ["http://evil.com"] }),
-      (err) => err.message.includes("forbidden")
+      (err) => err.code === "FLEET_VALIDATION_FAILED" || err instanceof ApiError
     );
   });
 

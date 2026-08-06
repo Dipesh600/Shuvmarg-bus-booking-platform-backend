@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { ApiError } = require("../../../src/contracts");
 const { createFleetManagementController } = require("../../../src/modules/bus-owner/fleet-management/fleet-management.controller");
 const { ReadContractError } = require("../../../src/modules/read-contracts/common/read-errors");
 
@@ -80,9 +81,9 @@ test("bus-owner fleet management contracts", async (t) => {
 
   await t.test("mutation service error wording preserves canonical status mapping", async () => {
     const service = {
-      createFleet: async () => { throw new Error("fleet exists"); },
-      updateFleetDetails: async () => { throw new Error("fleet not found"); },
-      removeFleet: async () => { throw new Error("fleet not found"); },
+      createFleet: async () => { throw new ApiError("FLEET_ALREADY_EXISTS"); },
+      updateFleetDetails: async () => { throw new ApiError("FLEET_NOT_FOUND"); },
+      removeFleet: async () => { throw new ApiError("FLEET_NOT_FOUND"); },
     };
     const handlers = createFleetManagementController({ fleetService: service, logger: { error() {} } });
     for (const [name, status] of [["submitFleetForVerification", 409], ["updateFleet", 404], ["deleteFleet", 404]]) {

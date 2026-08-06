@@ -1,5 +1,7 @@
 "use strict";
 
+const { ApiError } = require("../../contracts");
+
 function parseJson(value, fallback) {
   if (!value) return fallback;
   try {
@@ -14,12 +16,12 @@ function parseCreationInput(data) {
     "busName", "busNumber", "busType", "totalSeats", "vehicleType",
   ];
   if (required.some((field) => !data[field])) {
-    throw new Error("Missing required fleet fields.");
+    throw new ApiError("FLEET_VALIDATION_FAILED");
   }
   const forbidden = ["fleetDocuments", "fleetImages", "url", "objectKey", "storageKey"];
   for (const field of forbidden) {
     if (data[field] !== undefined) {
-      throw new Error(`Direct document field '${field}' is forbidden during fleet creation.`);
+      throw new ApiError("FLEET_VALIDATION_FAILED");
     }
   }
   let seatConfig = null;
@@ -28,7 +30,7 @@ function parseCreationInput(data) {
       seatConfig = typeof data.seatConfig === "string"
         ? JSON.parse(data.seatConfig) : data.seatConfig;
     } catch {
-      throw new Error("Invalid seatConfig JSON.");
+      throw new ApiError("FLEET_VALIDATION_FAILED");
     }
   }
   return {
@@ -51,24 +53,24 @@ function createFleetCreationPolicy({
 }) {
   async function validateReferences(input) {
     if (await Bus.findOne({ busNumber: input.busNumber })) {
-      throw new Error("Bus number already exists!");
+      throw new ApiError("FLEET_ALREADY_EXISTS");
     }
     if (input.amenitiesId && !await BusAmenities.findById(input.amenitiesId)) {
-      throw new Error("Invalid amenitiesId provided.");
+      throw new ApiError("FLEET_VALIDATION_FAILED");
     }
     if (input.amenityIds.length > 0) {
       const count = await BusAmenities.countDocuments({
         _id: { $in: input.amenityIds },
       });
       if (count !== input.amenityIds.length) {
-        throw new Error("One or more amenityIds are invalid.");
+        throw new ApiError("FLEET_VALIDATION_FAILED");
       }
     }
     if (
       input.boardingPointId &&
       !await BoardingPoints.findById(input.boardingPointId)
     ) {
-      throw new Error("Invalid boardingPointId provided.");
+      throw new ApiError("FLEET_VALIDATION_FAILED");
     }
   }
 
@@ -77,12 +79,9 @@ function createFleetCreationPolicy({
     const brand = await OperatorBrand.findById(brandId)
       .select("status brandName")
       .lean();
-    if (!brand) throw new Error("Brand not found. Verify brandId is correct.");
+    if (!brand) throw new ApiError("FLEET_VALIDATION_FAILED");
     if (brand.status === "SUSPENDED") {
-      throw new Error(
-        `Brand "${brand.brandName}" is currently suspended. ` +
-        "Reinstate the brand before adding new fleets."
-      );
+      throw new ApiError("FLEET_VALIDATION_FAILED");
     }
   }
 

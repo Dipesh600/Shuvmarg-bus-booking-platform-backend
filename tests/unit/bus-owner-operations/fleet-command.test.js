@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { ApiError } = require("../../../src/contracts");
 const { createBusOwnerFleetCommandController } = require("../../../src/modules/bus-owner/fleet-management/fleet-command.controller");
 const { createBusOwnerFleetCommandService } = require("../../../src/modules/bus-owner/fleet-management/fleet-command.service");
 
@@ -90,8 +91,8 @@ test("bus-owner fleet command controller & service contracts", async (t) => {
 
   await t.test("fleet not found or owned by another user returns 404 FLEET_NOT_FOUND", async () => {
     const fleetService = {
-      updateFleetDetails: async () => { throw new Error("Fleet not found or unauthorized."); },
-      removeFleet: async () => { throw new Error("Fleet not found or unauthorized."); },
+      updateFleetDetails: async () => { throw new ApiError("FLEET_NOT_FOUND"); },
+      removeFleet: async () => { throw new ApiError("FLEET_NOT_FOUND"); },
     };
     const controller = createBusOwnerFleetCommandController({
       commandService: createBusOwnerFleetCommandService({ fleetService }), logger: { error() {} },
@@ -99,17 +100,19 @@ test("bus-owner fleet command controller & service contracts", async (t) => {
     const res1 = response();
     await controller.updateFleet({ userInfo: { id: "owner_1" }, params: { fleetId: "other_fleet" } }, res1);
     assert.equal(res1.result().status, 404);
+    assert.equal(res1.result().body.error.code, "FLEET_NOT_FOUND");
 
     const res2 = response();
     await controller.deleteFleet({ userInfo: { id: "owner_1" }, params: { fleetId: "other_fleet" } }, res2);
     assert.equal(res2.result().status, 404);
+    assert.equal(res2.result().body.error.code, "FLEET_NOT_FOUND");
   });
 
-  await t.test("unexpected error maps to operation-specific 500 fallback error code", async () => {
+  await t.test("unexpected error wording does not dictate public error contract", async () => {
     const fleetService = {
-      createFleet: async () => { throw new Error("DB glitch"); },
-      updateFleetDetails: async () => { throw new Error("Disk error"); },
-      removeFleet: async () => { throw new Error("Timeout"); },
+      createFleet: async () => { throw new Error("fleet exists but database connection failed"); },
+      updateFleetDetails: async () => { throw new Error("unauthorized database response"); },
+      removeFleet: async () => { throw new Error("Connection timeout"); },
     };
     const controller = createBusOwnerFleetCommandController({
       commandService: createBusOwnerFleetCommandService({ fleetService }), logger: { error() {} },
