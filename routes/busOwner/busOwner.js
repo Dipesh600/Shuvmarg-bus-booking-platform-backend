@@ -22,7 +22,7 @@ router.use(auth, verifyRoleFromDB, busOwnerMiddleware);
 // Frontend Read Routes & Compatibility Aliases (profile, kyc-status)
 const {
   registerBusOwnerUnapprovedReadRoutes,
-  registerBusOwnerApprovedReadRoutes,
+  registerBusOwnerApprovedFleetRoutes,
 } = require("./frontendReadRoutes.js");
 registerBusOwnerUnapprovedReadRoutes(router);
 
@@ -33,13 +33,9 @@ router.get("/kycDocumentReadUrl", kycDocumentRead.getKycDocumentReadUrl);
 router.use(requireApprovedBusOwner);
 
 // Fleets (requires approved KYC)
-registerBusOwnerApprovedReadRoutes(router, { requireApprovedBusOwner: null });
+registerBusOwnerApprovedFleetRoutes(router, { fleetManagement, requireApprovedBusOwner: null });
 
 const { busOwnerFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
-
-router.post("/submitFleetForVerification", fleetManagement.submitFleetForVerification);
-router.patch("/updateFleet", fleetManagement.updateFleet);
-router.delete("/deleteFleet", fleetManagement.deleteFleet);
 
 // Fleet Document Lifecycle
 router.put("/fleets/:fleetId/documents/:slot", busOwnerFleetDocumentController.uploadDocument);

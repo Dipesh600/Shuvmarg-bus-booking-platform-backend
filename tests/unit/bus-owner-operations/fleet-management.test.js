@@ -34,7 +34,7 @@ test("bus-owner fleet management contracts", async (t) => {
       },
     };
     const handlers = createFleetManagementController({ fleetService, readService });
-    const mutReq = { userInfo: { id: "owner" }, body: { fleetId: "fleet", field: "value" }, files: { photo: "file" } };
+    const mutReq = { userInfo: { id: "owner" }, params: { fleetId: "fleet" }, body: { fleetId: "fleet", field: "value" }, files: { photo: "file" } };
     const readListReq = { userInfo: { id: "owner" }, query: {} };
     const readDetailReq = { userInfo: { id: "owner" }, params: { fleetId: "fleet" } };
 
@@ -58,9 +58,10 @@ test("bus-owner fleet management contracts", async (t) => {
       fleetService: { updateFleetDetails: async () => { called = true; } },
     });
     const res = response();
-    await handlers.updateFleet({ userInfo: { id: "owner" }, body: {} }, res);
+    await handlers.updateFleet({ userInfo: { id: "owner" }, params: {} }, res);
     assert.equal(called, false);
-    assert.deepEqual(res.result(), { status: 400, body: { success: false, message: "Fleet ID is required." } });
+    assert.equal(res.result().status, 400);
+    assert.equal(res.result().body.error.code, "FLEET_INVALID_ID");
   });
 
   await t.test("read service errors return canonical error envelope", async () => {
@@ -77,7 +78,7 @@ test("bus-owner fleet management contracts", async (t) => {
     });
   });
 
-  await t.test("mutation service error wording preserves legacy status mapping", async () => {
+  await t.test("mutation service error wording preserves canonical status mapping", async () => {
     const service = {
       createFleet: async () => { throw new Error("fleet exists"); },
       updateFleetDetails: async () => { throw new Error("fleet not found"); },
@@ -86,7 +87,7 @@ test("bus-owner fleet management contracts", async (t) => {
     const handlers = createFleetManagementController({ fleetService: service, logger: { error() {} } });
     for (const [name, status] of [["submitFleetForVerification", 409], ["updateFleet", 404], ["deleteFleet", 404]]) {
       const res = response();
-      await handlers[name]({ userInfo: { id: "owner" }, body: { fleetId: "fleet" } }, res);
+      await handlers[name]({ userInfo: { id: "owner" }, params: { fleetId: "fleet" }, body: { fleetId: "fleet" } }, res);
       assert.equal(res.result().status, status);
     }
   });
