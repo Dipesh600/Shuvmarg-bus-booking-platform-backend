@@ -9,14 +9,21 @@ const VALID_DOC_SLOTS = [
 function createFleetReviewService({ repository, storage, mapper }) {
   async function resubmitFleet(fleetId, ownerId = null) {
     const fleet = await repository.findDocument(fleetId, ownerId);
-    if (!fleet) throw new ApiError("FLEET_NOT_FOUND");
+    if (!fleet) throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.");
     if (fleet.approvalStatus !== "REJECTED") {
-      throw new ApiError("FLEET_VALIDATION_FAILED");
+      throw new ApiError(
+        "FLEET_VALIDATION_FAILED",
+        `Only REJECTED fleets can be resubmitted. Current status: ${fleet.approvalStatus}.`
+      );
     }
     const failed = Object.entries(fleet.documentReviews || {})
       .filter(([, value]) => value?.status === "rejected");
     if (failed.length > 0) {
-      throw new ApiError("FLEET_VALIDATION_FAILED");
+      throw new ApiError(
+        "FLEET_VALIDATION_FAILED",
+        "Please re-upload the following failed documents before resubmitting: " +
+        `${failed.map(([name]) => name).join(", ")}.`
+      );
     }
     fleet.approvalStatus = "PENDING";
     fleet.status = "INACTIVE";
@@ -39,12 +46,18 @@ function createFleetReviewService({ repository, storage, mapper }) {
     ownerId = null
   ) {
     if (!VALID_DOC_SLOTS.includes(docSlot)) {
-      throw new ApiError("FLEET_VALIDATION_FAILED");
+      throw new ApiError(
+        "FLEET_VALIDATION_FAILED",
+        `Invalid document slot: ${docSlot}. Must be one of: ${VALID_DOC_SLOTS.join(", ")}.`
+      );
     }
     const fleet = await repository.findDocument(fleetId, ownerId);
-    if (!fleet) throw new ApiError("FLEET_NOT_FOUND");
+    if (!fleet) throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.");
     if (!["REJECTED", "APPROVED"].includes(fleet.approvalStatus)) {
-      throw new ApiError("FLEET_VALIDATION_FAILED");
+      throw new ApiError(
+        "FLEET_VALIDATION_FAILED",
+        "Documents can only be replaced on REJECTED or APPROVED fleets."
+      );
     }
     await storage.replaceDocument(fleet, docSlot, file);
     const status = fleet.approvalStatus === "REJECTED" ? "fixed" : "pending";

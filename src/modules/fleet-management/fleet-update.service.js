@@ -16,7 +16,7 @@ function createFleetUpdateService({
     ownerId = null
   ) {
     const fleet = await repository.findDocument(fleetId, ownerId);
-    if (!fleet) throw new ApiError("FLEET_NOT_FOUND");
+    if (!fleet) throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.");
     if (ownerId) policy.restrictOwnerUpdate(updateData);
     policy.lockApprovedIdentity(fleet, updateData);
     const images = await storage.replaceFleetImages(fleet, files);

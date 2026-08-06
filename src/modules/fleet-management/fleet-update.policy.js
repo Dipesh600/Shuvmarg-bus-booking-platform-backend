@@ -75,7 +75,7 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
     const normalized = String(updateData.busNumber).trim().toUpperCase();
     if (normalized !== fleet.busNumber) {
       if (await Bus.findOne({ busNumber: normalized })) {
-        throw new ApiError("FLEET_ALREADY_EXISTS");
+        throw new ApiError("FLEET_ALREADY_EXISTS", "New bus number already exists!");
       }
       updateData.busNumber = normalized;
     }
@@ -97,7 +97,10 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
         tripStatus: { $in: ["SCHEDULED", "BOARDING", "DELAYED"] },
       });
       if (count > 0) {
-        throw new ApiError("FLEET_VALIDATION_FAILED");
+        throw new ApiError(
+          "FLEET_VALIDATION_FAILED",
+          `Cannot modify seat layout. This fleet has ${count} active future trip(s) scheduled. Please drain or cancel future trips first.`
+        );
       }
     } catch (error) {
       if (error instanceof ApiError) throw error;
