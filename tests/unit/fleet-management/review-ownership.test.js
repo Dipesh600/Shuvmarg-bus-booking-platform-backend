@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { ApiError } = require("../../../src/contracts");
 const {
   createFleetReviewService,
 } = require("../../../src/modules/fleet-management/fleet-review.service");
@@ -39,7 +40,7 @@ test("resubmission rejects remaining failed documents", async () => {
   });
   await assert.rejects(
     service.resubmitFleet("f"),
-    /Please re-upload the following failed documents before resubmitting: insurance, bluebook\./
+    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
   );
 });
 

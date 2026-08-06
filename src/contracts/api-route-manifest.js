@@ -81,4 +81,32 @@ const FRONTEND_READ_ROUTES = Object.freeze({
   }),
 });
 
-module.exports = { FRONTEND_READ_ROUTES };
+const busOwnerFleet = Object.freeze({
+  list: Object.freeze({
+    method: "GET",
+    path: "/api/busowner/fleets",
+    aliases: Object.freeze(["/api/busowner/myFleets"]),
+  }),
+  detail: Object.freeze({
+    method: "GET",
+    path: "/api/busowner/fleets/:fleetId",
+    aliases: Object.freeze(["/api/busowner/getFleetById"]),
+  }),
+  create: Object.freeze({
+    method: "POST",
+    path: "/api/busowner/fleets",
+    aliases: Object.freeze(["/api/busowner/submitFleetForVerification"]),
+  }),
+  update: Object.freeze({
+    method: "PATCH",
+    path: "/api/busowner/fleets/:fleetId",
+    aliases: Object.freeze(["/api/busowner/updateFleet"]),
+  }),
+  delete: Object.freeze({
+    method: "DELETE",
+    path: "/api/busowner/fleets/:fleetId",
+    aliases: Object.freeze(["/api/busowner/deleteFleet"]),
+  }),
+});
+
+module.exports = { FRONTEND_READ_ROUTES, busOwnerFleet };

@@ -1,5 +1,7 @@
 "use strict";
 
+const { ApiError } = require("../../contracts");
+
 const OWNER_PERMITTED_FIELDS = new Set([
   "busName",
   "busNumber",
@@ -73,7 +75,7 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
     const normalized = String(updateData.busNumber).trim().toUpperCase();
     if (normalized !== fleet.busNumber) {
       if (await Bus.findOne({ busNumber: normalized })) {
-        throw new Error("New bus number already exists!");
+        throw new ApiError("FLEET_ALREADY_EXISTS", "New bus number already exists!");
       }
       updateData.busNumber = normalized;
     }
@@ -95,13 +97,13 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
         tripStatus: { $in: ["SCHEDULED", "BOARDING", "DELAYED"] },
       });
       if (count > 0) {
-        throw new Error(
-          `Cannot modify seat layout. This fleet has ${count} active future ` +
-          "trip(s) scheduled. Please drain or cancel future trips first."
+        throw new ApiError(
+          "FLEET_VALIDATION_FAILED",
+          `Cannot modify seat layout. This fleet has ${count} active future trip(s) scheduled. Please drain or cancel future trips first.`
         );
       }
     } catch (error) {
-      if (error.message.includes("Cannot modify")) throw error;
+      if (error instanceof ApiError) throw error;
       logger.error("Trip verification failed during layout update:", error);
     }
   }

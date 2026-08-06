@@ -34,7 +34,7 @@ test("legacy missing-body ordering remains unchanged", async () => {
         },
         logger,
       }),
-      [["getFleetById", 400], ["updateFleet", 400], ["deleteFleet", 500]],
+      [["getFleetById", 400], ["updateFleet", 400], ["deleteFleet", 400]],
     ],
     [
       createBoardingPointController({

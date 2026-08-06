@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { FRONTEND_READ_ROUTES } = require("../../../src/contracts/frontend-read-routes.js");
+const { FRONTEND_READ_ROUTES } = require("../../../src/contracts/api-route-manifest.js");
 
 test("Frontend read routes manifest contract & validity", async (t) => {
   await t.test("1. Manifest is frozen", () => {
