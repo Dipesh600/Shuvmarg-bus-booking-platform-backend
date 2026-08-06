@@ -5,6 +5,29 @@ const assert = require("node:assert/strict");
 const { createKycSubmissionService } = require("../../../src/modules/bus-owner/kyc-submission/kyc-submission.service");
 const { makeValidFiles } = require("./helpers/kyc-test-fixtures");
 
+const VALID_BODY = {
+  companyName: "Nepal Transport Co.",
+  ownerName: "Raju Shrestha",
+  address: "Kathmandu, Nepal",
+  panNumber: "123456789",
+  registrationNumber: "REG-001",
+  bankName: "Nepal Bank",
+  accountHolderName: "Raju Shrestha",
+  accountNumber: "12345678901234",
+  branchName: "Newroad Branch",
+};
+
+const MockUser = {
+  findById: async () => ({ name: null, address: null, save: async () => {} }),
+};
+
+const mockMongoose = {
+  startSession: async () => ({
+    withTransaction: async (fn) => { await fn(); },
+    endSession: async () => {},
+  }),
+};
+
 test("kyc-submission.service success and state tests", async (t) => {
   await t.test("state rules: approved or pending state blocks resubmission with HTTP 409", async () => {
     function MockBusOwner(val) { Object.assign(this, val); }
@@ -12,14 +35,14 @@ test("kyc-submission.service success and state tests", async (t) => {
 
     const serviceApproved = createKycSubmissionService({ BusOwner: MockBusOwner, storageService: {} });
     await assert.rejects(
-      async () => serviceApproved.submitKyc({ userId: "user-1", files: makeValidFiles() }),
+      async () => serviceApproved.submitKyc({ userId: "user-1", onboardingData: VALID_BODY, files: makeValidFiles() }),
       (err) => err.code === "KYC_SUBMISSION_STATE_CONFLICT" && err.statusCode === 409
     );
 
     MockBusOwner.findOne = async () => ({ verificationStatus: "pending" });
     const servicePending = createKycSubmissionService({ BusOwner: MockBusOwner, storageService: {} });
     await assert.rejects(
-      async () => servicePending.submitKyc({ userId: "user-1", files: makeValidFiles() }),
+      async () => servicePending.submitKyc({ userId: "user-1", onboardingData: VALID_BODY, files: makeValidFiles() }),
       (err) => err.code === "KYC_SUBMISSION_STATE_CONFLICT" && err.statusCode === 409
     );
   });
@@ -49,6 +72,8 @@ test("kyc-submission.service success and state tests", async (t) => {
 
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
       storageService: {
         uploadDocument: async ({ documentType }) => {
           callOrder.push(`upload:${documentType}`);
@@ -61,7 +86,7 @@ test("kyc-submission.service success and state tests", async (t) => {
       },
     });
 
-    const res = await service.submitKyc({ userId: "user-1", files: makeValidFiles() });
+    const res = await service.submitKyc({ userId: "user-1", onboardingData: VALID_BODY, files: makeValidFiles() });
     assert.equal(res.success, true);
     assert.equal(savedOwner.verificationStatus, "pending");
     assert.equal(savedOwner.rejectionReason, null);
@@ -92,6 +117,8 @@ test("kyc-submission.service success and state tests", async (t) => {
 
     const service = createKycSubmissionService({
       BusOwner: MockBusOwner,
+      User: MockUser,
+      mongoose: mockMongoose,
       logger: mockLogger,
       storageService: {
         uploadDocument: async ({ documentType }) => `owners/1/new-${documentType}.pdf`,
@@ -99,7 +126,7 @@ test("kyc-submission.service success and state tests", async (t) => {
       },
     });
 
-    const res = await service.submitKyc({ userId: "user-1", files: makeValidFiles() });
+    const res = await service.submitKyc({ userId: "user-1", onboardingData: VALID_BODY, files: makeValidFiles() });
     assert.equal(res.success, true);
     assert.equal(loggedErrors.length, 1);
     assert.equal(loggedErrors[0][0], "KYC replaced-document cleanup failures:");

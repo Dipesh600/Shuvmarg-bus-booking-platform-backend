@@ -1,8 +1,11 @@
 "use strict";
 
+const { ApiError } = require("../../../contracts");
 const { validateKycDocuments } = require("./kyc-document.validator");
+const { validateOnboardingBody } = require("./bus-owner-onboarding.validator");
 const { KycSubmissionStateError } = require("./kyc-submission.errors");
 const { collectBusOwnerKycStorageReferences } = require("./kyc-document-references");
+const { uploadOnboardingDocuments } = require("./kyc-submission-document-upload.service");
 const {
   buildKycAuditEvent,
   countValidatedKycFiles,
@@ -12,11 +15,16 @@ const {
 
 function createKycSubmissionService({
   BusOwner,
+  User,
   storageService,
+  mongoose,
   clock = () => new Date(),
   logger = console,
 }) {
-  async function submitKyc({ userId, files }) {
+  async function submitKyc({ userId, onboardingData, files }) {
+    const normalized = validateOnboardingBody(onboardingData);
+    const normalizedFiles = validateKycDocuments(files);
+
     const existingOwner = await BusOwner.findOne({ user: userId });
     const isInitialSubmission = !existingOwner;
     const busOwner = existingOwner || new BusOwner({ user: userId });
@@ -36,57 +44,42 @@ function createKycSubmissionService({
       );
     }
 
+    const user = User && typeof User.findById === "function" ? await User.findById(userId) : null;
+    if (!user) {
+      throw new ApiError("BUS_OWNER_ONBOARDING_USER_NOT_FOUND");
+    }
+
+    if (!mongoose || typeof mongoose.startSession !== "function") {
+      throw new ApiError("BUS_OWNER_ONBOARDING_TRANSACTION_UNAVAILABLE");
+    }
+
     const replacedDocumentReferences =
       !isInitialSubmission && busOwner.verificationStatus === "rejected"
         ? collectBusOwnerKycStorageReferences(busOwner)
         : [];
 
-    const normalizedFiles = validateKycDocuments(files);
     const newlyUploadedObjectKeys = [];
-    const singleDocFields = ["companyRegistration", "taxRegistration", "transportLicense"];
     const ownerId = busOwner._id ? busOwner._id.toString() : userId;
 
     try {
-      for (const field of singleDocFields) {
-        if (normalizedFiles[field]) {
-          const documentObjectKeys = [];
-          for (const validatedFile of normalizedFiles[field]) {
-            const key = await storageService.uploadDocument({
-              validatedFile,
-              ownerId,
-              documentType: field,
-            });
-            newlyUploadedObjectKeys.push(key);
-            documentObjectKeys.push(key);
-          }
+      await uploadOnboardingDocuments({
+        normalizedFiles,
+        storageService,
+        ownerId,
+        busOwner,
+        newlyUploadedObjectKeys,
+      });
 
-          busOwner[field] = busOwner[field] || {};
-          busOwner[field].documentUrls = documentObjectKeys;
-          busOwner[field].verified = false;
-          busOwner[field].rejectionReason = null;
-        }
-      }
-
-      if (normalizedFiles.insuranceCertificates) {
-        const insuranceItems = [];
-        for (const validatedFile of normalizedFiles.insuranceCertificates) {
-          const key = await storageService.uploadDocument({
-            validatedFile,
-            ownerId,
-            documentType: "insuranceCertificates",
-          });
-          newlyUploadedObjectKeys.push(key);
-          insuranceItems.push({
-            insurerName: null,
-            policyNumber: null,
-            validTill: null,
-            documentUrls: [key],
-            verified: false,
-            rejectionReason: null,
-          });
-        }
-        busOwner.insuranceCertificates = insuranceItems;
-      }
+      busOwner.companyName = normalized.companyName;
+      busOwner.taxRegistration = busOwner.taxRegistration || {};
+      busOwner.taxRegistration.panNumber = normalized.panNumber;
+      busOwner.taxRegistration.registrationNumber = normalized.registrationNumber;
+      busOwner.bankDetails = busOwner.bankDetails || {};
+      busOwner.bankDetails.bankName = normalized.bankName;
+      busOwner.bankDetails.accountHolderName = normalized.accountHolderName;
+      busOwner.bankDetails.accountNumber = normalized.accountNumber;
+      busOwner.bankDetails.branchName = normalized.branchName;
+      busOwner.bankDetails.swiftCode = normalized.swiftCode;
 
       busOwner.verificationStatus = "pending";
       busOwner.rejectionReason = null;
@@ -107,7 +100,17 @@ function createKycSubmissionService({
       });
       busOwner.kycAuditHistory.push(auditEvent);
 
-      await busOwner.save();
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          user.name = normalized.ownerName;
+          user.address = normalized.address;
+          await user.save({ session });
+          await busOwner.save({ session });
+        });
+      } finally {
+        await session.endSession();
+      }
 
       if (replacedDocumentReferences.length > 0 && typeof storageService.deleteMany === "function") {
         try {
@@ -122,7 +125,8 @@ function createKycSubmissionService({
 
       return {
         success: true,
-        message: "Bus owner KYC submitted successfully",
+        message: "Bus owner onboarding submitted successfully",
+        data: { verificationStatus: "pending" },
       };
     } catch (err) {
       if (newlyUploadedObjectKeys.length > 0 && typeof storageService.deleteMany === "function") {

@@ -13,9 +13,11 @@ function unauthorized(res) {
 
 function createKycSubmissionController({
   BusOwner,
+  User,
+  mongoose,
   storageService,
   kycDocumentReadService,
-  kycSubmissionService = createKycSubmissionService({ BusOwner, storageService }),
+  kycSubmissionService = createKycSubmissionService({ BusOwner, User, mongoose, storageService }),
 } = {}) {
   async function submitBusOwnerKyc(req, res) {
     try {
@@ -24,6 +26,7 @@ function createKycSubmissionController({
 
       const result = await kycSubmissionService.submitKyc({
         userId,
+        onboardingData: req.body,
         files: req.files,
       });
 
