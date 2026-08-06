@@ -13,12 +13,6 @@ const FLEET_ERRORS = Object.freeze({
     domain: "fleet",
     retryable: false,
   }),
-  FLEET_FORBIDDEN: Object.freeze({
-    statusCode: 403,
-    message: "You are not authorized to perform this operation on this fleet.",
-    domain: "fleet",
-    retryable: false,
-  }),
   FLEET_ALREADY_EXISTS: Object.freeze({
     statusCode: 409,
     message: "Fleet record with these details already exists.",
@@ -32,13 +26,13 @@ const FLEET_ERRORS = Object.freeze({
     retryable: false,
   }),
   FLEET_CREATE_FAILED: Object.freeze({
-    statusCode: 400,
+    statusCode: 500,
     message: "Failed to create fleet record.",
     domain: "fleet",
     retryable: false,
   }),
   FLEET_UPDATE_FAILED: Object.freeze({
-    statusCode: 400,
+    statusCode: 500,
     message: "Failed to update fleet record.",
     domain: "fleet",
     retryable: false,
@@ -46,12 +40,6 @@ const FLEET_ERRORS = Object.freeze({
   FLEET_DELETE_FAILED: Object.freeze({
     statusCode: 500,
     message: "Failed to delete fleet record.",
-    domain: "fleet",
-    retryable: false,
-  }),
-  FLEET_NOT_OWNED: Object.freeze({
-    statusCode: 403,
-    message: "Fleet is not owned by authenticated bus owner.",
     domain: "fleet",
     retryable: false,
   }),

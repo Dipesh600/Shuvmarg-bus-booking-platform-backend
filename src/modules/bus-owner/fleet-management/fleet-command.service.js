@@ -9,18 +9,27 @@ function createBusOwnerFleetCommandService({ fleetService }) {
       throw new ApiError("AUTHENTICATION_REQUIRED");
     }
 
-    const fleet = await fleetService.createFleet(
-      ownerId,
-      req.body,
-      req.files,
-      "BUS_OWNER"
-    );
+    try {
+      const fleet = await fleetService.createFleet(
+        ownerId,
+        req.body,
+        req.files,
+        "BUS_OWNER"
+      );
 
-    return {
-      success: true,
-      message: "Fleet details submitted for verification successfully!",
-      data: { fleet },
-    };
+      return {
+        success: true,
+        message: "Fleet details submitted for verification successfully!",
+        data: { fleet },
+      };
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      const msg = (err?.message || "").toLowerCase();
+      if (msg.includes("exists")) {
+        throw new ApiError("FLEET_ALREADY_EXISTS");
+      }
+      throw err;
+    }
   }
 
   async function updateFleetForOwner(req) {
@@ -34,18 +43,27 @@ function createBusOwnerFleetCommandService({ fleetService }) {
       throw new ApiError("FLEET_INVALID_ID");
     }
 
-    const fleet = await fleetService.updateFleetDetails(
-      fleetId,
-      req.body,
-      req.files,
-      ownerId
-    );
+    try {
+      const fleet = await fleetService.updateFleetDetails(
+        fleetId,
+        req.body,
+        req.files,
+        ownerId
+      );
 
-    return {
-      success: true,
-      message: "Fleet details updated successfully!",
-      data: { fleet },
-    };
+      return {
+        success: true,
+        message: "Fleet details updated successfully!",
+        data: { fleet },
+      };
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      const msg = (err?.message || "").toLowerCase();
+      if (msg.includes("not found") || msg.includes("unauthorized") || msg.includes("not owned")) {
+        throw new ApiError("FLEET_NOT_FOUND");
+      }
+      throw err;
+    }
   }
 
   async function deleteFleetForOwner(req) {
@@ -59,13 +77,22 @@ function createBusOwnerFleetCommandService({ fleetService }) {
       throw new ApiError("FLEET_INVALID_ID");
     }
 
-    await fleetService.removeFleet(fleetId, ownerId);
+    try {
+      await fleetService.removeFleet(fleetId, ownerId);
 
-    return {
-      success: true,
-      message: "Fleet deleted successfully!",
-      data: { fleetId },
-    };
+      return {
+        success: true,
+        message: "Fleet deleted successfully!",
+        data: { fleetId },
+      };
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      const msg = (err?.message || "").toLowerCase();
+      if (msg.includes("not found") || msg.includes("unauthorized") || msg.includes("not owned")) {
+        throw new ApiError("FLEET_NOT_FOUND");
+      }
+      throw err;
+    }
   }
 
   return {

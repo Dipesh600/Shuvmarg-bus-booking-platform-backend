@@ -2,7 +2,16 @@
 
 const { ApiError, mapApiError, API_ERROR_CODES } = require("../../../contracts");
 
-function mapFleetCommandError(error, logger = console) {
+const OPERATION_FALLBACKS = {
+  create: "FLEET_CREATE_FAILED",
+  update: "FLEET_UPDATE_FAILED",
+  delete: "FLEET_DELETE_FAILED",
+};
+
+function mapFleetCommandError(error, options = {}) {
+  const logger = options.logger || console;
+  const operation = options.operation || "create";
+
   if (error instanceof ApiError) {
     return mapApiError(error, logger);
   }
@@ -19,17 +28,8 @@ function mapFleetCommandError(error, logger = console) {
     return mapApiError(new ApiError("FLEET_VALIDATION_FAILED"), logger);
   }
 
-  const msg = (error?.message || "").toLowerCase();
-
-  if (msg.includes("exists")) {
-    return mapApiError(new ApiError("FLEET_ALREADY_EXISTS"), logger);
-  }
-
-  if (msg.includes("not found") || msg.includes("unauthorized")) {
-    return mapApiError(new ApiError("FLEET_NOT_FOUND"), logger);
-  }
-
-  return mapApiError(error, logger);
+  const fallbackCode = OPERATION_FALLBACKS[operation] || "FLEET_CREATE_FAILED";
+  return mapApiError(new ApiError(fallbackCode), logger);
 }
 
 module.exports = { mapFleetCommandError };
