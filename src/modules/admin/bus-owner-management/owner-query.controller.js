@@ -21,11 +21,6 @@ function createOwnerQueryController({
 
     async getBusOwnerById(req, res) {
       try {
-        const id = req.params?.ownerId || req.params?.id || req.body?.ownerId || req.body?.id;
-        if (id) {
-          req.params = req.params || {};
-          req.params.ownerId = id;
-        }
         const result = await adminBusOwnerReadService.getBusOwnerDetail(req);
         return res.status(200).json(result);
       } catch (error) {

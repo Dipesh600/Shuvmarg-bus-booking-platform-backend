@@ -4,6 +4,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const express = require("express");
 const { registerAdminFrontendReadRoutes } = require("../../../routes/adminRoutes/frontendReadRoutes.js");
+const {
+  mapLegacyOwnerDetailRequest,
+  mapLegacyKycDetailRequest,
+  mapLegacyFleetDetailRequest,
+  mapLegacyFleetSetupRequest,
+} = require("../../../src/modules/read-contracts/routes/legacy-read-request.adapter.js");
 
 function inspectRouterLayer(router, method, pathPattern) {
   return router.stack.find(
@@ -51,5 +57,19 @@ test("Admin read routes registration & middleware contract", async (t) => {
     const fleetDetail = inspectRouterLayer(router, "GET", "/fleets/:fleetId");
     assert.equal(fleetDetail.route.methods.get, true);
     assert.equal(fleetDetail.route.path.includes(":fleetId"), true);
+  });
+
+  await t.test("5. Legacy alias routes include domain-specific request adapters", () => {
+    const ownerAlias = inspectRouterLayer(router, "POST", "/getBusOwnerDetails");
+    assert.equal(ownerAlias.route.stack[1].handle, mapLegacyOwnerDetailRequest);
+
+    const kycAlias = inspectRouterLayer(router, "POST", "/getBusOwnerKycDetails");
+    assert.equal(kycAlias.route.stack[1].handle, mapLegacyKycDetailRequest);
+
+    const fleetDetailAlias = inspectRouterLayer(router, "GET", "/fleet/getById/:id");
+    assert.equal(fleetDetailAlias.route.stack[1].handle, mapLegacyFleetDetailRequest);
+
+    const fleetSetupAlias = inspectRouterLayer(router, "GET", "/fleet/:id/setup-status");
+    assert.equal(fleetSetupAlias.route.stack[1].handle, mapLegacyFleetSetupRequest);
   });
 });

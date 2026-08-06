@@ -11,12 +11,8 @@ function createKycQueryController(options = {}) {
 
   const getBusOwnerKycById = async (req, res) => {
     try {
-      const id = req.params?.kycId || req.params?.id || req.body?.kycId || req.body?.id;
-      if (id) {
-        req.params = req.params || {};
-        req.params.kycId = id;
-      }
       if (BusOwnerModel || kycDocumentReadService) {
+        const id = req.params?.kycId || req.params?.id || req.body?.kycId || req.body?.id;
         if (!id) {
           return res.status(400).json({ success: false, message: "Id is required!" });
         }

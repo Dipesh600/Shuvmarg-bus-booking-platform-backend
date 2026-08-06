@@ -3,8 +3,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const express = require("express");
-const { createAdminFrontendReadController } = require("../../../src/modules/read-contracts/routes/admin-frontend-read.controller.js");
-const { createBusOwnerFrontendReadController } = require("../../../src/modules/read-contracts/routes/bus-owner-frontend-read.controller.js");
+const { createOwnerQueryController } = require("../../../src/modules/admin/bus-owner-management/owner-query.controller.js");
+const { createFleetManagementController } = require("../../../src/modules/bus-owner/fleet-management/fleet-management.controller.js");
 const { registerAdminFrontendReadRoutes } = require("../../../routes/adminRoutes/frontendReadRoutes.js");
 
 function mockRes() {
@@ -38,7 +38,7 @@ test("Canonical route and compatibility alias success equality", async (t) => {
 
   await t.test("2. Admin bus owner detail success payload equality", async () => {
     const mockData = { ownerId: "bo-100", companyName: "Super Bus" };
-    const controller = createAdminFrontendReadController({
+    const controller = createOwnerQueryController({
       adminBusOwnerReadService: {
         getBusOwnerDetail: async () => ({ success: true, data: mockData }),
       },
@@ -46,8 +46,8 @@ test("Canonical route and compatibility alias success equality", async (t) => {
 
     const res1 = mockRes();
     const res2 = mockRes();
-    await controller.getBusOwnerDetail({ params: { ownerId: "bo-100" } }, res1);
-    await controller.getBusOwnerDetail({ params: { ownerId: "bo-100" } }, res2);
+    await controller.getBusOwnerById({ params: { ownerId: "bo-100" } }, res1);
+    await controller.getBusOwnerById({ params: { ownerId: "bo-100" } }, res2);
 
     assert.deepEqual(res1.result, res2.result);
     assert.equal(res1.result.status, 200);
@@ -57,16 +57,16 @@ test("Canonical route and compatibility alias success equality", async (t) => {
 
   await t.test("3. Bus-owner fleet list success payload equality", async () => {
     const mockList = { items: [{ fleetId: "f-1" }], pagination: { page: 1, limit: 10, totalItems: 1, totalPages: 1 } };
-    const controller = createBusOwnerFrontendReadController({
-      fleetReadService: {
+    const controller = createFleetManagementController({
+      readService: {
         listFleetsForOwner: async () => ({ success: true, data: mockList }),
       },
     });
 
     const res1 = mockRes();
     const res2 = mockRes();
-    await controller.getFleetList({ query: {} }, res1);
-    await controller.getFleetList({ query: {} }, res2);
+    await controller.getMyFleets({ userInfo: { id: "u-1" }, query: {} }, res1);
+    await controller.getMyFleets({ userInfo: { id: "u-1" }, query: {} }, res2);
 
     assert.deepEqual(res1.result, res2.result);
     assert.equal(res1.result.status, 200);

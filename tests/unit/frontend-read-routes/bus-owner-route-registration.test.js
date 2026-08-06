@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const express = require("express");
 const { registerBusOwnerFrontendReadRoutes } = require("../../../routes/busOwner/frontendReadRoutes.js");
+const { mapLegacyFleetDetailRequest } = require("../../../src/modules/read-contracts/routes/legacy-read-request.adapter.js");
 
 function inspectLayer(router, method, pathPattern) {
   return router.stack.find(
@@ -32,7 +33,6 @@ test("Bus-owner read routes registration & middleware contract", async (t) => {
     const profileLayer = inspectLayer(router, "GET", "/profile");
     const kycLayer = inspectLayer(router, "GET", "/kyc-status");
 
-    // Profile and kyc-status handlers do not attach requireApprovedBusOwner in their stack
     assert.equal(profileLayer.route.stack.length, 1);
     assert.equal(kycLayer.route.stack.length, 1);
   });
@@ -48,5 +48,13 @@ test("Bus-owner read routes registration & middleware contract", async (t) => {
       (s) => s.name === "requireApprovedBusOwner"
     );
     assert.equal(hasApprovalCheck, true);
+  });
+
+  await t.test("5. Legacy POST /getFleetById alias includes mapLegacyFleetDetailRequest adapter", () => {
+    const aliasLayer = inspectLayer(router, "POST", "/getFleetById");
+    const hasAdapter = aliasLayer.route.stack.some(
+      (s) => s.handle === mapLegacyFleetDetailRequest
+    );
+    assert.equal(hasAdapter, true);
   });
 });
