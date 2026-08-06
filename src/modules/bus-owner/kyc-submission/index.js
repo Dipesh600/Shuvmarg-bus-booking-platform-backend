@@ -1,6 +1,8 @@
 "use strict";
 
+const mongoose = require("mongoose");
 const BusOwner = require("../../../../models/busOwnerModel");
+const User = require("../../../../models/userModel");
 const {
   uploadFileToS3,
   deleteObjectFromS3,
@@ -27,6 +29,8 @@ const storageService = createKycDocumentStorageService({
 });
 const kycSubmissionService = createKycSubmissionService({
   BusOwner,
+  User,
+  mongoose,
   storageService,
   logger: console,
 });

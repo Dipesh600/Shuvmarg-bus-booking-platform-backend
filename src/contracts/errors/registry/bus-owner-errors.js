@@ -19,6 +19,18 @@ const BUS_OWNER_ERRORS = Object.freeze({
     domain: "bus-owner",
     retryable: false,
   }),
+  BUS_OWNER_ONBOARDING_VALIDATION_FAILED: Object.freeze({
+    statusCode: 400,
+    message: "Onboarding body validation failed.",
+    domain: "bus-owner",
+    retryable: false,
+  }),
+  BUS_OWNER_ONBOARDING_UNKNOWN_FIELD: Object.freeze({
+    statusCode: 400,
+    message: "Onboarding request contains an unknown field.",
+    domain: "bus-owner",
+    retryable: false,
+  }),
 });
 
 module.exports = { BUS_OWNER_ERRORS };

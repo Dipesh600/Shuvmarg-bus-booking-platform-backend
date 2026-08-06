@@ -24,6 +24,7 @@ function createKycSubmissionController({
 
       const result = await kycSubmissionService.submitKyc({
         userId,
+        onboardingData: req.body,
         files: req.files,
       });
 

@@ -1,8 +1,18 @@
 "use strict";
 
-const { KycDocumentValidationError } = require("./kyc-submission.errors");
+const { KycDocumentValidationError, BusOwnerOnboardingValidationError } = require("./kyc-submission.errors");
 
 function handleKycSubmissionError(error, res) {
+  if (error instanceof BusOwnerOnboardingValidationError) {
+    const body = {
+      success: false,
+      code: error.code,
+      message: error.message,
+    };
+    if (error.field) body.field = error.field;
+    return res.status(error.statusCode || 400).json(body);
+  }
+
   if (
     error instanceof KycDocumentValidationError ||
     error.name === "KycDocumentValidationError" ||

@@ -19,7 +19,18 @@ class KycSubmissionStateError extends Error {
   }
 }
 
+class BusOwnerOnboardingValidationError extends Error {
+  constructor(code, message, field = null, statusCode = 400) {
+    super(message);
+    this.name = "BusOwnerOnboardingValidationError";
+    this.code = code;
+    this.field = field;
+    this.statusCode = statusCode;
+  }
+}
+
 module.exports = {
   KycDocumentValidationError,
   KycSubmissionStateError,
+  BusOwnerOnboardingValidationError,
 };

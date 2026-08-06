@@ -3,7 +3,20 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createKycSubmissionService } = require("../../../src/modules/bus-owner/kyc-submission/kyc-submission.service");
-const { PDF_BUFFER, makeFile, makeValidFiles } = require("./helpers/kyc-test-fixtures");
+const { makeValidFiles } = require("./helpers/kyc-test-fixtures");
+const { PDF_BUFFER, makeFile } = require("./helpers/kyc-test-fixtures");
+
+const VALID_BODY = {
+  companyName: "Nepal Transport Co.",
+  ownerName: "Raju Shrestha",
+  address: "Kathmandu, Nepal",
+  panNumber: "123456789",
+  registrationNumber: "REG-001",
+  bankName: "Nepal Bank",
+  accountHolderName: "Raju Shrestha",
+  accountNumber: "12345678901234",
+  branchName: "Newroad Branch",
+};
 
 test("kyc-submission.service failure and rollback tests", async (t) => {
   await t.test("zero side effects: invalid files do not trigger storageService, DB save, or old document deletion", async () => {
@@ -30,7 +43,7 @@ test("kyc-submission.service failure and rollback tests", async (t) => {
     const invalidFiles = { companyRegistration: makeFile("company.pdf", "application/pdf", PDF_BUFFER) };
 
     await assert.rejects(
-      async () => service.submitKyc({ userId: "user-1", files: invalidFiles }),
+      async () => service.submitKyc({ userId: "user-1", onboardingData: VALID_BODY, files: invalidFiles }),
       (err) => err.code === "KYC_REQUIRED_DOCUMENT_MISSING"
     );
 
@@ -59,7 +72,7 @@ test("kyc-submission.service failure and rollback tests", async (t) => {
     });
 
     await assert.rejects(
-      async () => service.submitKyc({ userId: "user-1", files: makeValidFiles() }),
+      async () => service.submitKyc({ userId: "user-1", onboardingData: VALID_BODY, files: makeValidFiles() }),
       (err) => err.message === "S3 Upload 1 Failed"
     );
 
@@ -97,7 +110,7 @@ test("kyc-submission.service failure and rollback tests", async (t) => {
     });
 
     await assert.rejects(
-      async () => service.submitKyc({ userId: "user-1", files: makeValidFiles() }),
+      async () => service.submitKyc({ userId: "user-1", onboardingData: VALID_BODY, files: makeValidFiles() }),
       (err) => err.message === "S3 Upload Failed"
     );
 
@@ -132,7 +145,7 @@ test("kyc-submission.service failure and rollback tests", async (t) => {
     });
 
     await assert.rejects(
-      async () => service.submitKyc({ userId: "user-1", files: makeValidFiles() }),
+      async () => service.submitKyc({ userId: "user-1", onboardingData: VALID_BODY, files: makeValidFiles() }),
       (err) => err.message === "Mongo Write Conflict"
     );
 
