@@ -1,37 +1,10 @@
 "use strict";
 
+const { createBusOwnerFleetReadController } = require("./fleet-read.controller");
 const { createFleetReadService } = require("../../read-contracts/fleet/fleet-read.service");
 const { mapReadError } = require("../../read-contracts/common/read-error.mapper");
 
 const defaultReadService = createFleetReadService();
-
-function createBusOwnerFleetReadController({
-  readService = defaultReadService,
-  logger = console,
-} = {}) {
-  return {
-    async getMyFleets(req, res) {
-      try {
-        const result = await readService.listFleetsForOwner(req);
-        return res.status(200).json(result);
-      } catch (error) {
-        const { statusCode, payload } = mapReadError(error, logger);
-        return res.status(statusCode).json(payload);
-      }
-    },
-
-    async getFleetById(req, res) {
-      try {
-        const result = await readService.getFleetDetailForOwner(req);
-        return res.status(200).json(result);
-      } catch (error) {
-        const { statusCode, payload } = mapReadError(error, logger);
-        return res.status(statusCode).json(payload);
-      }
-    },
-  };
-}
-
 const defaultFleetReadController = createBusOwnerFleetReadController();
 
 function unauthorized(res) {
@@ -71,6 +44,49 @@ function createFleetManagementController({ fleetService, readService = defaultRe
         message: error.message || "Internal Server Error",
       });
     }
+  }
+
+  async function getMyFleets(req, res) {
+    if (fleetService && typeof fleetService.getFleetsByOwnerId === "function") {
+      try {
+        const userId = req.userInfo?.id;
+        if (!userId) return unauthorized(res);
+        const fleets = await fleetService.getFleetsByOwnerId(userId);
+        return res.status(200).json({
+          success: true,
+          message: "Fleets fetched successfully for the owner!",
+          results: fleets.length,
+          data: fleets,
+        });
+      } catch (error) {
+        const { statusCode, payload } = mapReadError(error, logger);
+        return res.status(statusCode).json(payload);
+      }
+    }
+    return readCtrl.getMyFleets(req, res);
+  }
+
+  async function getFleetById(req, res) {
+    if (fleetService && typeof fleetService.getFleetDetails === "function") {
+      try {
+        const userId = req.userInfo?.id;
+        if (!userId) return unauthorized(res);
+        if (!requireFleetId(req, res)) return res;
+        const { fleetId } = req.body;
+        const fleet = await fleetService.getFleetDetails(fleetId, userId);
+        return res.status(200).json({
+          success: true,
+          message: "Fleet details fetched successfully!",
+          data: fleet,
+        });
+      } catch (error) {
+        logger.error("getFleetById error:", error);
+        return res.status(error.message?.includes("found") ? 404 : 500).json({
+          success: false, message: error.message || "Internal Server Error",
+        });
+      }
+    }
+    return readCtrl.getFleetById(req, res);
   }
 
   async function updateFleet(req, res) {
@@ -115,8 +131,8 @@ function createFleetManagementController({ fleetService, readService = defaultRe
 
   return {
     submitFleetForVerification,
-    getMyFleets: readCtrl.getMyFleets,
-    getFleetById: readCtrl.getFleetById,
+    getMyFleets,
+    getFleetById,
     updateFleet,
     deleteFleet,
   };
