@@ -72,17 +72,25 @@ test("creation rejects missing required owner and bank fields", async () => {
 });
 
 test("owner and KYC details preserve canonical READ_INVALID_ID responses", async () => {
-  for (const handler of [ownerQuery.getBusOwnerById, kycQuery.getBusOwnerKycById]) {
-    const missingRes = await invoke(handler, { ...mockAdminReq, body: {} });
-    assert.equal(missingRes.statusCode, 400);
-    assert.equal(missingRes.body.success, false);
-    assert.equal(missingRes.body.error.code, "READ_INVALID_ID");
+  const missingResOwner = await invoke(ownerQuery.getBusOwnerById, { ...mockAdminReq, params: {} });
+  assert.equal(missingResOwner.statusCode, 400);
+  assert.equal(missingResOwner.body.success, false);
+  assert.equal(missingResOwner.body.error.code, "READ_INVALID_ID");
 
-    const invalidRes = await invoke(handler, { ...mockAdminReq, body: { id: "invalid" } });
-    assert.equal(invalidRes.statusCode, 400);
-    assert.equal(invalidRes.body.success, false);
-    assert.equal(invalidRes.body.error.code, "READ_INVALID_ID");
-  }
+  const invalidResOwner = await invoke(ownerQuery.getBusOwnerById, { ...mockAdminReq, params: { ownerId: "invalid" } });
+  assert.equal(invalidResOwner.statusCode, 400);
+  assert.equal(invalidResOwner.body.success, false);
+  assert.equal(invalidResOwner.body.error.code, "READ_INVALID_ID");
+
+  const missingResKyc = await invoke(kycQuery.getBusOwnerKycById, { ...mockAdminReq, params: {} });
+  assert.equal(missingResKyc.statusCode, 400);
+  assert.equal(missingResKyc.body.success, false);
+  assert.equal(missingResKyc.body.error.code, "READ_INVALID_ID");
+
+  const invalidResKyc = await invoke(kycQuery.getBusOwnerKycById, { ...mockAdminReq, params: { kycId: "invalid" } });
+  assert.equal(invalidResKyc.statusCode, 400);
+  assert.equal(invalidResKyc.body.success, false);
+  assert.equal(invalidResKyc.body.error.code, "READ_INVALID_ID");
 
   assert.deepEqual(await invoke(updateBusOwnerKyc, { body: {} }), {
     statusCode: 400,

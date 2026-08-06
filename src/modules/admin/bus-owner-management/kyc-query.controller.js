@@ -2,47 +2,14 @@
 
 const { createAdminKycReadService } = require("../../read-contracts/admin-kyc/admin-kyc-read.service");
 const { mapReadError } = require("../../read-contracts/common/read-error.mapper");
-const { sanitizeKycDetailDescriptors } = require("../../bus-owner/kyc-document-read/kyc-document-read.controller");
 
 const defaultService = createAdminKycReadService();
 
 function createKycQueryController(options = {}) {
-  const { BusOwnerModel, kycDocumentReadService, readService = defaultService } = options;
+  const readService = options.readService || defaultService;
 
   const getBusOwnerKycById = async (req, res) => {
     try {
-      if (BusOwnerModel || kycDocumentReadService) {
-        const id = req.params?.kycId || req.params?.id || req.body?.kycId || req.body?.id;
-        if (!id) {
-          return res.status(400).json({ success: false, message: "Id is required!" });
-        }
-        const mongoose = require("mongoose");
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-          return res.status(400).json({ success: false, message: "Invalid id format!" });
-        }
-        const Model = BusOwnerModel || require("../../../../models/busOwnerModel");
-        let query1 = Model.findOne({ user: id });
-        if (query1 && typeof query1.lean !== "function" && typeof query1.populate === "function") {
-          query1 = query1.populate();
-        }
-        let owner = typeof query1?.lean === "function" ? await query1.lean() : await query1;
-
-        if (!owner) {
-          let query2 = Model.findById(id);
-          if (query2 && typeof query2.lean !== "function" && typeof query2.populate === "function") {
-            query2 = query2.populate();
-          }
-          owner = typeof query2?.lean === "function" ? await query2.lean() : await query2;
-        }
-        if (!owner) {
-          return res.status(404).json({ success: false, message: "Bus owner KYC not found." });
-        }
-        const resolved = kycDocumentReadService
-          ? await kycDocumentReadService.resolveOwnerKycDocuments(owner)
-          : owner;
-        const sanitized = sanitizeKycDetailDescriptors(resolved);
-        return res.status(200).json({ success: true, data: sanitized });
-      }
       const result = await readService.getKycDetail(req);
       return res.status(200).json(result);
     } catch (error) {

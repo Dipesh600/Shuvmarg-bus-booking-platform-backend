@@ -5,6 +5,35 @@ const { mapReadError } = require("../../read-contracts/common/read-error.mapper"
 
 const defaultReadService = createFleetReadService();
 
+function createBusOwnerFleetReadController({
+  readService = defaultReadService,
+  logger = console,
+} = {}) {
+  return {
+    async getMyFleets(req, res) {
+      try {
+        const result = await readService.listFleetsForOwner(req);
+        return res.status(200).json(result);
+      } catch (error) {
+        const { statusCode, payload } = mapReadError(error, logger);
+        return res.status(statusCode).json(payload);
+      }
+    },
+
+    async getFleetById(req, res) {
+      try {
+        const result = await readService.getFleetDetailForOwner(req);
+        return res.status(200).json(result);
+      } catch (error) {
+        const { statusCode, payload } = mapReadError(error, logger);
+        return res.status(statusCode).json(payload);
+      }
+    },
+  };
+}
+
+const defaultFleetReadController = createBusOwnerFleetReadController();
+
 function unauthorized(res) {
   return res.status(401).json({
     success: false,
@@ -19,6 +48,10 @@ function requireFleetId(req, res) {
 }
 
 function createFleetManagementController({ fleetService, readService = defaultReadService, logger = console } = {}) {
+  const readCtrl = (readService === defaultReadService && logger === console)
+    ? defaultFleetReadController
+    : createBusOwnerFleetReadController({ readService, logger });
+
   async function submitFleetForVerification(req, res) {
     try {
       const userId = req.userInfo?.id;
@@ -36,51 +69,6 @@ function createFleetManagementController({ fleetService, readService = defaultRe
       return res.status(error.message.includes("exists") ? 409 : 400).json({
         success: false,
         message: error.message || "Internal Server Error",
-      });
-    }
-  }
-
-  async function getMyFleets(req, res) {
-    try {
-      const userId = req.userInfo?.id;
-      if (!userId) return unauthorized(res);
-      if (fleetService && typeof fleetService.getFleetsByOwnerId === "function") {
-        const fleets = await fleetService.getFleetsByOwnerId(userId);
-        return res.status(200).json({
-          success: true,
-          message: "Fleets fetched successfully for the owner!",
-          results: fleets.length,
-          data: fleets,
-        });
-      }
-      const result = await readService.listFleetsForOwner(req);
-      return res.status(200).json(result);
-    } catch (error) {
-      const { statusCode, payload } = mapReadError(error, logger);
-      return res.status(statusCode).json(payload);
-    }
-  }
-
-  async function getFleetById(req, res) {
-    try {
-      const userId = req.userInfo?.id;
-      if (!userId) return unauthorized(res);
-      if (fleetService && typeof fleetService.getFleetDetails === "function") {
-        if (!requireFleetId(req, res)) return res;
-        const { fleetId } = req.body;
-        const fleet = await fleetService.getFleetDetails(fleetId, userId);
-        return res.status(200).json({
-          success: true,
-          message: "Fleet details fetched successfully!",
-          data: fleet,
-        });
-      }
-      const result = await readService.getFleetDetailForOwner(req);
-      return res.status(200).json(result);
-    } catch (error) {
-      logger.error("getFleetById error:", error);
-      return res.status(error.message?.includes("found") ? 404 : 500).json({
-        success: false, message: error.message || "Internal Server Error",
       });
     }
   }
@@ -126,9 +114,16 @@ function createFleetManagementController({ fleetService, readService = defaultRe
   }
 
   return {
-    submitFleetForVerification, getMyFleets, getFleetById, updateFleet,
+    submitFleetForVerification,
+    getMyFleets: readCtrl.getMyFleets,
+    getFleetById: readCtrl.getFleetById,
+    updateFleet,
     deleteFleet,
   };
 }
 
-module.exports = { createFleetManagementController };
+module.exports = {
+  createFleetManagementController,
+  createBusOwnerFleetReadController,
+  defaultFleetReadController,
+};

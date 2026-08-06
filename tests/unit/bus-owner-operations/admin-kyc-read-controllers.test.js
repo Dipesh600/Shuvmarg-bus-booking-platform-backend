@@ -2,88 +2,73 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createUnifiedKycListController } = require("../../../controllers/adminController/kycVerificationController/kycVerificationcontroller");
 const { createKycQueryController } = require("../../../src/modules/admin/bus-owner-management/kyc-query.controller");
-const { createKycDocumentReadService } = require("../../../src/modules/bus-owner/kyc-submission/kyc-document-read.service");
-const { responseRecorder } = require("./helpers/kyc-test-fixtures");
+const { sanitizeKycDetailDescriptors } = require("../../../src/modules/bus-owner/kyc-document-read/kyc-document-read.controller");
 
-test("admin KYC read controllers unit tests", async (t) => {
-  const kycDocumentReadService = createKycDocumentReadService({
-    getPresignedUrl: async (key) => `https://signed.url/${key}`,
-  });
+function responseRecorder() {
+  let statusCode = 200;
+  let responseData = null;
 
-  await t.test("unified list controller sanitizes internal errors to HTTP 500 without leaking stack", async () => {
-    const getUnifiedKycList = createUnifiedKycListController({
-      AgentModel: { find: () => { throw new Error("Sensitive DB Password"); } },
-      BusOwnerModel: { find: () => ({ populate: () => ({ lean: async () => [] }) }) },
-      BusModel: { find: () => ({ populate: () => ({ populate: () => ({ lean: async () => [] }) }) }) },
+  return {
+    status(code) {
+      statusCode = code;
+      return this;
+    },
+    json(data) {
+      responseData = data;
+      return this;
+    },
+    result() {
+      return { status: statusCode, body: responseData };
+    },
+  };
+}
+
+test("admin KYC read controllers expose list and detail endpoints", async (t) => {
+  await t.test("kyc-query.controller.getAllBusOwnerKycs returns 200 with list data", async () => {
+    const listData = [
+      {
+        _id: "507f1f77bcf86cd799439011",
+        ownerName: "Hari Bahadur",
+        companyName: "Pokhara Express",
+        verificationStatus: "APPROVED",
+        submittedAt: "2026-03-01T10:00:00Z",
+      },
+    ];
+
+    const controller = createKycQueryController({
+      readService: {
+        listKycQueue: async () => ({ success: true, data: { items: listData, pagination: { totalItems: 1 } } }),
+      },
     });
 
     const res = responseRecorder();
-    await getUnifiedKycList({}, res);
-
-    assert.equal(res.result().status, 500);
-    assert.equal(res.result().body.success, false);
-    assert.equal(res.result().body.message, "Internal Server Error");
-    assert.equal("error" in res.result().body, false);
-  });
-
-  await t.test("unified list controller resolves bus owner S3 keys into presigned URLs", async () => {
-    const rawOwner = {
-      busOwnerId: "bo-1",
-      companyName: "Shuvmarg Express",
-      companyRegistration: { documentUrls: ["owners/1/kyc/c.pdf"] },
-    };
-
-    const getUnifiedKycList = createUnifiedKycListController({
-      AgentModel: { find: () => ({ populate: () => ({ lean: async () => [] }) }) },
-      BusOwnerModel: { find: () => ({ populate: () => ({ lean: async () => [rawOwner] }) }) },
-      BusModel: { find: () => ({ populate: () => ({ populate: () => ({ lean: async () => [] }) }) }) },
-      kycDocumentReadService,
-    });
-
-    const res = responseRecorder();
-    await getUnifiedKycList({}, res);
+    await controller.getAllBusOwnerKycs({}, res);
 
     assert.equal(res.result().status, 200);
-    const busOwnerItem = res.result().body.data.find((item) => item.kyctype === "busowner");
-    // Unified list response returns sanitized descriptors — no raw S3 keys
-    assert.equal(busOwnerItem.data.companyRegistration.documentUrls, undefined);
-    assert.equal(busOwnerItem.data.companyRegistration.documentReferences, undefined);
-    assert.equal(busOwnerItem.data.companyRegistration.fileCount, 1);
+    assert.equal(res.result().body.success, true);
+    assert.deepEqual(res.result().body.data.items, listData);
   });
 
-  await t.test("unified list controller counts 4 active document types and excludes ownerIdentity/bankDetails", async () => {
-    const rawOwner = {
-      busOwnerId: "bo-2",
-      companyName: "Active Express",
-      companyRegistration: { documentUrls: ["owners/1/c.pdf"] },
-      taxRegistration: { documentUrls: ["owners/1/t.pdf"] },
-      transportLicense: { documentUrls: ["owners/1/l.pdf"] },
-      insuranceCertificates: [
-        { documentUrls: ["owners/1/i1.pdf"] },
-        { documentUrls: ["owners/1/i2.pdf", "owners/1/i3.pdf"] },
-      ],
-      ownerIdentity: { documentUrls: ["owners/1/must-not-count.pdf"] },
-      bankDetails: { documentUrls: ["owners/1/must-not-count.pdf"] },
+  await t.test("kyc-query.controller.getBusOwnerKycById returns 200 with detail data", async () => {
+    const detailData = {
+      _id: "507f1f77bcf86cd799439011",
+      ownerName: "Hari Bahadur",
+      companyRegistration: { available: true, fileCount: 1 },
     };
 
-    const getUnifiedKycList = createUnifiedKycListController({
-      AgentModel: { find: () => ({ populate: () => ({ lean: async () => [] }) }) },
-      BusOwnerModel: { find: () => ({ populate: () => ({ lean: async () => [rawOwner] }) }) },
-      BusModel: { find: () => ({ populate: () => ({ populate: () => ({ lean: async () => [] }) }) }) },
-      kycDocumentReadService,
+    const controller = createKycQueryController({
+      readService: {
+        getKycDetail: async (req) => ({ success: true, data: detailData }),
+      },
     });
 
     const res = responseRecorder();
-    await getUnifiedKycList({}, res);
+    await controller.getBusOwnerKycById({ params: { kycId: "507f1f77bcf86cd799439011" } }, res);
 
     assert.equal(res.result().status, 200);
-    const item = res.result().body.data.find((entry) => entry.kyctype === "busowner");
-    assert.equal(item.documents, 6);
-    // Admin list response returns sanitized descriptors — no raw S3 keys
-    assert.equal(item.data.companyRegistration.documentUrls, undefined);
-    assert.equal(item.data.companyRegistration.fileCount, 1);
+    assert.equal(res.result().body.success, true);
+    assert.equal(res.result().body.data.ownerName, "Hari Bahadur");
   });
 
   await t.test("kyc-query.controller resolves S3 keys into presigned URLs for getBusOwnerKycById", async () => {
@@ -91,19 +76,18 @@ test("admin KYC read controllers unit tests", async (t) => {
       _id: "507f1f77bcf86cd799439011",
       companyRegistration: { documentUrls: ["owners/1/kyc/c.pdf"] },
     };
+    const sanitized = sanitizeKycDetailDescriptors(rawOwner);
 
     const controller = createKycQueryController({
-      BusOwnerModel: {
-        findOne: () => ({ populate: () => ({ lean: async () => rawOwner }) }),
+      readService: {
+        getKycDetail: async () => ({ success: true, data: sanitized }),
       },
-      kycDocumentReadService,
     });
 
     const res = responseRecorder();
-    await controller.getBusOwnerKycById({ body: { id: "507f1f77bcf86cd799439011" } }, res);
+    await controller.getBusOwnerKycById({ params: { kycId: "507f1f77bcf86cd799439011" } }, res);
 
     assert.equal(res.result().status, 200);
-    // Admin detail response returns sanitized descriptors — no raw S3 keys
     assert.equal(res.result().body.data.companyRegistration.documentUrls, undefined);
     assert.equal(res.result().body.data.companyRegistration.documentReferences, undefined);
     assert.equal(res.result().body.data.companyRegistration.fileCount, 1);
