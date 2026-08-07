@@ -4,12 +4,16 @@ const { createBusOwnerFleetReadController } = require("./fleet-read.controller")
 const { createBusOwnerFleetCommandController } = require("./fleet-command.controller");
 const { createFleetReadService } = require("../../read-contracts/fleet/fleet-read.service");
 
+const { createFleetSubmissionService } = require("../../fleet-management/fleet-submission.service");
+
 const defaultReadService = createFleetReadService();
 const defaultFleetReadController = createBusOwnerFleetReadController();
+const defaultSubmissionService = createFleetSubmissionService();
 
 function createFleetManagementController({
   fleetService,
   readService = defaultReadService,
+  submissionService = defaultSubmissionService,
   commandService,
   logger = console,
 } = {}) {
@@ -20,6 +24,7 @@ function createFleetManagementController({
   const cmdCtrl = createBusOwnerFleetCommandController({
     commandService,
     fleetService,
+    submissionService,
     logger,
   });
 
@@ -31,7 +36,7 @@ function createFleetManagementController({
     updateFleet: cmdCtrl.updateFleet,
     deleteFleet: cmdCtrl.deleteFleet,
 
-    submitFleetForVerification: cmdCtrl.createFleet,
+    submitFleetForVerification: cmdCtrl.submitFleetForVerification,
   };
 }
 

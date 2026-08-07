@@ -53,9 +53,16 @@ function createFleetCreationService({
       routeRequestId: routeRequest?._id || null,
       fleetImages: [],
       fleetDocuments: createFleetDocuments(input),
-      status: input.status || "INACTIVE",
-      approvalStatus: "PENDING",
+      status: "INACTIVE",
+      approvalStatus: "DRAFT",
+      isApproved: false,
+      setupComplete: false,
+      submittedAt: null,
       approvedAt: null,
+      approvedBy: null,
+      rejectedAt: null,
+      rejectedBy: null,
+      rejectionReason: null,
       createdBy,
     });
     const savedFleet = await fleetSkeleton.save();

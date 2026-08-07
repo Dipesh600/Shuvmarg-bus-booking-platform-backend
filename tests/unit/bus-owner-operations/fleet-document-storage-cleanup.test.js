@@ -14,7 +14,7 @@ test("fleet-document-storage-cleanup unit tests", async (t) => {
     const s3Err = new Error("S3 connection drop");
 
     const repo = {
-      findFleetForDocumentUpdate: async () => ({ _id: fleetId, ownerId: userId, approvalStatus: "PENDING", __v: 1 }),
+      findFleetForDocumentUpdate: async () => ({ _id: fleetId, ownerId: userId, approvalStatus: "DRAFT", __v: 1 }),
     };
 
     const storage = {
@@ -51,7 +51,7 @@ test("fleet-document-storage-cleanup unit tests", async (t) => {
       findFleetForDocumentUpdate: async () => ({
         _id: fleetId,
         ownerId: userId,
-        approvalStatus: "PENDING",
+        approvalStatus: "DRAFT",
         __v: 1,
         fleetDocuments: { fitnessCert: { objectKey: "old-key.pdf" } },
       }),

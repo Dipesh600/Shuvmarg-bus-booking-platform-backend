@@ -213,11 +213,13 @@ BusSchema.pre("save", async function (next) {
         ));
     }
 
-    if (busOwner.verificationStatus !== "approved") {
+    if (
+        busOwner.verificationStatus !== "approved" &&
+        this.approvalStatus !== "DRAFT"
+    ) {
         return next(new Error(
-            `OWNER_NOT_APPROVED: Fleet creation requires an approved BusOwner profile ` +
-            `(current status: ${busOwner.verificationStatus}). ` +
-            `Admin approval is required before you can register fleet vehicles.`
+            `OWNER_NOT_APPROVED: Fleet creation for unapproved bus owners must be in DRAFT status ` +
+            `(current business status: ${busOwner.verificationStatus}).`
         ));
     }
 

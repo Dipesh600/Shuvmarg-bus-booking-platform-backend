@@ -46,7 +46,7 @@ test("owner verification status contract tests", async (t) => {
 
 test("fleet approval and operational status contracts", async (t) => {
   await t.test("fleet approval status values match schema", () => {
-    assert.deepEqual(FLEET_APPROVAL_VALUES, ["PENDING", "APPROVED", "REJECTED"]);
+    assert.deepEqual(FLEET_APPROVAL_VALUES, ["DRAFT", "PENDING", "APPROVED", "REJECTED"]);
     assert.equal(isFleetApprovalStatus("APPROVED"), true);
     assert.equal(getFleetApprovalLabel("APPROVED"), "Approved");
   });

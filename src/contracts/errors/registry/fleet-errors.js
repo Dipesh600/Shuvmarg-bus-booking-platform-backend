@@ -43,6 +43,24 @@ const FLEET_ERRORS = Object.freeze({
     domain: "fleet",
     retryable: false,
   }),
+  FLEET_MUTATION_LOCKED: Object.freeze({
+    statusCode: 409,
+    message: "Fleet is locked and cannot be edited or deleted.",
+    domain: "fleet",
+    retryable: false,
+  }),
+  FLEET_SUBMISSION_LOCKED: Object.freeze({
+    statusCode: 409,
+    message: "Fleet cannot be submitted in its current state.",
+    domain: "fleet",
+    retryable: false,
+  }),
+  FLEET_SUBMISSION_INCOMPLETE: Object.freeze({
+    statusCode: 422,
+    message: "Fleet setup or compliance documents are incomplete.",
+    domain: "fleet",
+    retryable: false,
+  }),
 });
 
 module.exports = { FLEET_ERRORS };

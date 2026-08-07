@@ -8,7 +8,7 @@ test("fleet-document-review-reset unit tests", async (t) => {
   const actor = { actorType: "BUS_OWNER", actorId: "64f000000000000000000001" };
   const auditEvent = { occurredAt: new Date("2026-08-05T12:00:00Z") };
 
-  await t.test("resubmitting rejected slot resets documentReviews and moves fleet to PENDING & INACTIVE", () => {
+  await t.test("replacing slot on REJECTED fleet resets documentReviews status to not_submitted while keeping fleet REJECTED", () => {
     const fleet = {
       approvalStatus: "REJECTED",
       status: "INACTIVE",
@@ -24,20 +24,17 @@ test("fleet-document-review-reset unit tests", async (t) => {
       auditEvent,
     });
 
-    assert.equal(update.$set.approvalStatus, "PENDING");
-    assert.equal(update.$set.status, "INACTIVE");
-    assert.equal(update.$set.rejectionReason, null);
+    assert.equal(update.$set.approvalStatus, undefined);
     assert.deepEqual(update.$set["documentReviews.insurance"], {
-      status: "pending",
+      status: "not_submitted",
       reason: null,
       reviewedBy: null,
       reviewedAt: null,
     });
-    assert.equal(update.$push.approvalAuditHistory.eventType, "FLEET_RESUBMITTED");
   });
 
-  await t.test("replacing slot on PENDING fleet resets documentReviews without changing fleet approvalStatus", () => {
-    const fleet = { approvalStatus: "PENDING", status: "INACTIVE" };
+  await t.test("uploading slot on DRAFT fleet sets documentReviews to not_submitted without changing fleet approvalStatus", () => {
+    const fleet = { approvalStatus: "DRAFT", status: "INACTIVE" };
     const update = policy.buildUpdateQuery({
       fleet,
       slot: "bluebook",
@@ -49,7 +46,7 @@ test("fleet-document-review-reset unit tests", async (t) => {
 
     assert.equal(update.$set.approvalStatus, undefined);
     assert.deepEqual(update.$set["documentReviews.bluebook"], {
-      status: "pending",
+      status: "not_submitted",
       reason: null,
       reviewedBy: null,
       reviewedAt: null,

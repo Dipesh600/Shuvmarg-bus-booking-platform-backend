@@ -3,8 +3,8 @@
 const { mapFleetCommandError } = require("./fleet-command-error.mapper");
 const { createBusOwnerFleetCommandService } = require("./fleet-command.service");
 
-function createBusOwnerFleetCommandController({ commandService, fleetService, logger = console }) {
-  const service = commandService || createBusOwnerFleetCommandService({ fleetService });
+function createBusOwnerFleetCommandController({ commandService, fleetService, submissionService, logger = console }) {
+  const service = commandService || createBusOwnerFleetCommandService({ fleetService, submissionService });
 
   async function createFleet(req, res) {
     try {
@@ -36,10 +36,21 @@ function createBusOwnerFleetCommandController({ commandService, fleetService, lo
     }
   }
 
+  async function submitFleetForVerification(req, res) {
+    try {
+      const result = await service.submitFleetForOwner(req);
+      return res.status(200).json(result);
+    } catch (error) {
+      const { statusCode, payload } = mapFleetCommandError(error, { operation: "create", logger });
+      return res.status(statusCode).json(payload);
+    }
+  }
+
   return {
     createFleet,
     updateFleet,
     deleteFleet,
+    submitFleetForVerification,
   };
 }
 

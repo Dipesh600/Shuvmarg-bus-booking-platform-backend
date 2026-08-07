@@ -29,17 +29,17 @@ registerBusOwnerUnapprovedReadRoutes(router);
 router.post("/submitBusOwnerKyc", busOwnerKyc.submitBusOwnerKyc);
 router.get("/kycDocumentReadUrl", kycDocumentRead.getKycDocumentReadUrl);
 
-// ── REQUIRE APPROVED KYC FOR ALL ROUTES BELOW ─────────────────────────────────
-router.use(requireApprovedBusOwner);
-
-// Fleets (requires approved KYC)
-registerBusOwnerApprovedFleetRoutes(router, { fleetManagement, requireApprovedBusOwner: null });
-
 const { busOwnerFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
 
-// Fleet Document Lifecycle
+// Fleets (draft creation, detail, update, delete, and submission endpoints)
+registerBusOwnerApprovedFleetRoutes(router, { fleetManagement });
+
+// Fleet Document Lifecycle (draft document upload & read-url)
 router.put("/fleets/:fleetId/documents/:slot", busOwnerFleetDocumentController.uploadDocument);
 router.get("/fleets/:fleetId/documents/:slot/read-url", busOwnerFleetDocumentController.getDocumentReadUrl);
+
+// ── REQUIRE APPROVED KYC FOR OPERATIONAL ROUTES BELOW ─────────────────────────
+router.use(requireApprovedBusOwner);
 
 // Boarding Points
 router.post("/createBoardingPoint", boardingPointManagement.createBoardingPoint);

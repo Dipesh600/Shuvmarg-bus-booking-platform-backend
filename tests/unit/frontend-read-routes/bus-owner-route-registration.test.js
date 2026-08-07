@@ -37,17 +37,12 @@ test("Bus-owner read routes registration & middleware contract", async (t) => {
     assert.equal(kycLayer.route.stack.length, 1);
   });
 
-  await t.test("4. Fleet routes require requireApprovedBusOwner", () => {
+  await t.test("4. Fleet draft read routes are available before requireApprovedBusOwner", () => {
     const fleetsLayer = inspectLayer(router, "GET", "/fleets");
     const fleetDetailLayer = inspectLayer(router, "GET", "/fleets/:fleetId");
 
-    assert.ok(fleetsLayer.route.stack.length > 1);
-    assert.ok(fleetDetailLayer.route.stack.length > 1);
-
-    const hasApprovalCheck = fleetDetailLayer.route.stack.some(
-      (s) => s.name === "requireApprovedBusOwner"
-    );
-    assert.equal(hasApprovalCheck, true);
+    assert.equal(fleetsLayer.route.stack.length, 1);
+    assert.equal(fleetDetailLayer.route.stack.length, 1);
   });
 
   await t.test("5. Legacy POST /getFleetById alias includes mapLegacyFleetDetailRequest adapter", () => {

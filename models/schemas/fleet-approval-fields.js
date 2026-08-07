@@ -15,7 +15,12 @@ const fleetApprovalFields = {
   approvalStatus: {
     type: String,
     enum: FLEET_APPROVAL_VALUES,
-    default: "PENDING",
+    default: "DRAFT",
+  },
+
+  submittedAt: {
+    type: Date,
+    default: null,
   },
 
   approvedBy: {

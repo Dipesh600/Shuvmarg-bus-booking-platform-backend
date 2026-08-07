@@ -1,6 +1,7 @@
 "use strict";
 
 const FLEET_APPROVAL_STATUS = Object.freeze({
+  DRAFT: "DRAFT",
   PENDING: "PENDING",
   APPROVED: "APPROVED",
   REJECTED: "REJECTED",
@@ -11,6 +12,7 @@ const FLEET_APPROVAL_VALUES = Object.freeze(
 );
 
 const FLEET_APPROVAL_LABELS = Object.freeze({
+  [FLEET_APPROVAL_STATUS.DRAFT]: "Draft",
   [FLEET_APPROVAL_STATUS.PENDING]: "Pending Review",
   [FLEET_APPROVAL_STATUS.APPROVED]: "Approved",
   [FLEET_APPROVAL_STATUS.REJECTED]: "Rejected",
