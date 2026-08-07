@@ -1,17 +1,18 @@
 "use strict";
 
 const errors = require("./fleet-document.errors");
+const { FLEET_APPROVAL_STATUS } = require("../../../contracts/status/fleet-approval.status");
 
 function enforceUploadPolicy(fleet, slot) {
   if (!fleet) throw errors.notFound();
-  if (fleet.approvalStatus === "PENDING") {
+  if (fleet.approvalStatus === FLEET_APPROVAL_STATUS.PENDING) {
     throw errors.forbidden("Documents cannot be uploaded or replaced while fleet is under review.");
   }
-  if (fleet.approvalStatus === "APPROVED") {
+  if (fleet.approvalStatus === FLEET_APPROVAL_STATUS.APPROVED) {
     throw errors.approvedImmutable();
   }
 
-  if (fleet.approvalStatus === "REJECTED") {
+  if (fleet.approvalStatus === FLEET_APPROVAL_STATUS.REJECTED) {
     const slotReview = fleet.documentReviews?.[slot];
     if (slotReview && slotReview.status === "approved") {
       throw errors.slotNotRejected(slot);
@@ -28,7 +29,7 @@ function hasExistingDocument(fleet, slot) {
 }
 
 function classifyAction(fleet, slot) {
-  if (fleet.approvalStatus === "REJECTED") {
+  if (fleet.approvalStatus === FLEET_APPROVAL_STATUS.REJECTED) {
     return "RESUBMITTED";
   }
   return hasExistingDocument(fleet, slot) ? "REPLACED" : "UPLOADED";
@@ -37,7 +38,7 @@ function classifyAction(fleet, slot) {
 function buildUpdateQuery({ fleet, slot, actor, metadata, newAssets, auditEvent }) {
   const now = auditEvent.occurredAt || new Date();
   const setFields = {};
-  const reviewStatus = fleet.approvalStatus === "PENDING" ? "pending" : "not_submitted";
+  const reviewStatus = fleet.approvalStatus === FLEET_APPROVAL_STATUS.PENDING ? "pending" : "not_submitted";
 
   if (slot === "fleetImages") {
     setFields.fleetImages = newAssets.map((asset) => ({

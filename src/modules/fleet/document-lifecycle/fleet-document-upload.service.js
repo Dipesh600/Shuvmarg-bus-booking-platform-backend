@@ -68,7 +68,7 @@ function createFleetDocumentUploadService(deps = {}) {
 
     const now = clock();
     const previousFleetStatus = fleet.approvalStatus;
-    const resultingFleetStatus = fleet.approvalStatus === "REJECTED" ? "PENDING" : fleet.approvalStatus;
+    const resultingFleetStatus = fleet.approvalStatus;
 
     const auditEvent = auditBuilder.buildDocumentAuditEvent({
       action,

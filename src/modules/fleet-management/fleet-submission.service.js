@@ -3,6 +3,7 @@
 const BusModel = require("../../../models/fleetModel");
 const BusOwnerModel = require("../../../models/busOwnerModel");
 const { ApiError } = require("../../contracts");
+const { FLEET_APPROVAL_STATUS } = require("../../contracts/status/fleet-approval.status");
 const { evaluateFleetSubmissionReadiness } = require("./fleet-readiness.evaluator");
 
 function createFleetSubmissionService(deps = {}) {
@@ -35,7 +36,10 @@ function createFleetSubmissionService(deps = {}) {
       throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.", 404);
     }
 
-    if (fleet.approvalStatus === "PENDING" || fleet.approvalStatus === "APPROVED") {
+    if (
+      fleet.approvalStatus === FLEET_APPROVAL_STATUS.PENDING ||
+      fleet.approvalStatus === FLEET_APPROVAL_STATUS.APPROVED
+    ) {
       throw new ApiError(
         "FLEET_SUBMISSION_LOCKED",
         `Fleet is currently ${fleet.approvalStatus.toLowerCase()} and cannot be submitted.`,
@@ -58,11 +62,13 @@ function createFleetSubmissionService(deps = {}) {
       {
         _id: fleetId,
         ownerId,
-        approvalStatus: { $in: ["DRAFT", "REJECTED"] },
+        approvalStatus: {
+          $in: [FLEET_APPROVAL_STATUS.DRAFT, FLEET_APPROVAL_STATUS.REJECTED],
+        },
       },
       {
         $set: {
-          approvalStatus: "PENDING",
+          approvalStatus: FLEET_APPROVAL_STATUS.PENDING,
           status: "INACTIVE",
           setupComplete: true,
           submittedAt: now,
@@ -78,13 +84,16 @@ function createFleetSubmissionService(deps = {}) {
           "documentReviews.bluebook.status": "pending",
           "documentReviews.routePermit.status": "pending",
         },
+        $inc: {
+          __v: 1,
+        },
         $push: {
           approvalAuditHistory: {
             eventType: "FLEET_SUBMITTED",
             actorType: "BUS_OWNER",
             actorId: ownerId,
             fromStatus: fleet.approvalStatus,
-            toStatus: "PENDING",
+            toStatus: FLEET_APPROVAL_STATUS.PENDING,
             occurredAt: now,
           },
         },

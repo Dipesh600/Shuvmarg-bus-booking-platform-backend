@@ -6,6 +6,7 @@ const {
 const {
   createFleetDocuments,
 } = require("./fleet-storage.service");
+const { FLEET_APPROVAL_STATUS } = require("../../contracts/status/fleet-approval.status");
 
 function createFleetCreationService({
   Bus,
@@ -54,7 +55,7 @@ function createFleetCreationService({
       fleetImages: [],
       fleetDocuments: createFleetDocuments(input),
       status: "INACTIVE",
-      approvalStatus: "DRAFT",
+      approvalStatus: FLEET_APPROVAL_STATUS.DRAFT,
       isApproved: false,
       setupComplete: false,
       submittedAt: null,

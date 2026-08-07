@@ -35,9 +35,11 @@ test("fleet-approval-push-validation real Mongoose $push tests", async () => {
       busType: "DELUXE",
       vehicleType: "bus",
       totalSeats: 30,
-      approvalStatus: "REJECTED",
+      approvalStatus: "DRAFT",
       status: "INACTIVE",
     });
+
+    await BusModel.updateOne({ _id: fleet._id }, { $set: { approvalStatus: "REJECTED" } });
 
     // 1. Real Fleet findOneAndUpdate accepts valid FLEET_RESUBMITTED with runValidators enabled
     const updated = await BusModel.findOneAndUpdate(

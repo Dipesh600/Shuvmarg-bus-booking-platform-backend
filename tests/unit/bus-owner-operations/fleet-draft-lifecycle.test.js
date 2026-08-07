@@ -527,3 +527,133 @@ test("31. APPROVED fleet cannot mutate any field through draft endpoint", async 
     { code: "FLEET_MUTATION_LOCKED", statusCode: 409 }
   );
 });
+
+test("32. Document upload race cleans up new storage keys and throws 409 when atomic persistence query matches 0 documents", async () => {
+  const createFleetDocumentUploadService = require("../../../src/modules/fleet/document-lifecycle/fleet-document-upload.service");
+  let deletedKeys = [];
+  const validId = "507f1f77bcf86cd799439011";
+  const mockFleet = createMockFleet({ _id: validId, approvalStatus: "DRAFT", __v: 3 });
+  const mockRepository = {
+    findFleetForDocumentUpdate: async () => mockFleet,
+    atomicDocumentUpdate: async () => null,
+  };
+  const mockStorage = {
+    buildPrivateObjectKey: () => "keys/new_file.pdf",
+    uploadPrivate: async () => "keys/new_file.pdf",
+    deleteNewObjectOrReport: async (keys) => { deletedKeys = keys; },
+  };
+
+  const service = createFleetDocumentUploadService({
+    repository: mockRepository,
+    storage: mockStorage,
+    resolveActor: async () => ({ actorType: "BUS_OWNER", userId: "owner_123" }),
+  });
+
+  const file = { data: Buffer.from("%PDF-1.4 test header content"), name: "doc.pdf", mimetype: "application/pdf", size: 500 };
+  await assert.rejects(
+    service.uploadDocument({
+      fleetId: validId,
+      slot: "insurance",
+      body: { changeReason: "Updating insurance document", policyNumber: "POL-123", validTill: "2027-12-31" },
+      files: { insurance: file },
+      actorContext: { id: "owner_123" },
+    }),
+    (err) => err.code === "FLEET_DOCUMENT_CONCURRENT_MODIFICATION" && err.statusCode === 409
+  );
+
+  assert.deepEqual(deletedKeys, ["keys/new_file.pdf"]);
+  assert.equal(mockFleet.fleetDocuments.insurance.objectKey, "keys/ins.pdf");
+});
+
+test("33. Successful submission increments __v version count", async () => {
+  let incUpdate = null;
+  const mockBusModel = {
+    findOne: () => ({ lean: async () => createMockFleet({ approvalStatus: "DRAFT" }) }),
+    findOneAndUpdate: (query, update) => {
+      incUpdate = update.$inc;
+      return { lean: async () => createMockFleet({ approvalStatus: "PENDING", __v: 1 }) };
+    },
+  };
+  const submissionService = createFleetSubmissionService({
+    BusOwner: mockBusOwnerModel("approved", "owner_123"),
+    Bus: mockBusModel,
+  });
+
+  await submissionService.submitFleetForVerification({ fleetId: "fleet_101", ownerId: "owner_123" });
+  assert.deepEqual(incUpdate, { __v: 1 });
+});
+
+test("34. Correcting a rejected document records REJECTED -> REJECTED in audit event", async () => {
+  const createFleetDocumentUploadService = require("../../../src/modules/fleet/document-lifecycle/fleet-document-upload.service");
+  let capturedAuditEvent = null;
+  const validId = "507f1f77bcf86cd799439011";
+  const rejectedFleet = createMockFleet({
+    _id: validId,
+    approvalStatus: "REJECTED",
+    documentReviews: { insurance: { status: "rejected", reason: "Expired document" } },
+    __v: 1,
+  });
+  const mockRepository = {
+    findFleetForDocumentUpdate: async () => rejectedFleet,
+    atomicDocumentUpdate: async ({ update }) => {
+      capturedAuditEvent = update.$push.fleetDocumentAuditHistory;
+      return { ...rejectedFleet, ...update.$set };
+    },
+  };
+  const mockStorage = {
+    buildPrivateObjectKey: () => "keys/resub.pdf",
+    uploadPrivate: async () => "keys/resub.pdf",
+    deleteNewObjectOrReport: async () => {},
+    deleteOldObjectBestEffort: async () => {},
+  };
+
+  const service = createFleetDocumentUploadService({
+    repository: mockRepository,
+    storage: mockStorage,
+    resolveActor: async () => ({ actorType: "BUS_OWNER", userId: "owner_123" }),
+  });
+
+  const file = { data: Buffer.from("%PDF-1.4 test header content"), name: "doc.pdf", mimetype: "application/pdf", size: 500 };
+  await service.uploadDocument({
+    fleetId: validId,
+    slot: "insurance",
+    body: { changeReason: "Resubmitting valid policy document", policyNumber: "POL-999", validTill: "2028-12-31" },
+    files: { insurance: file },
+    actorContext: { id: "owner_123" },
+  });
+
+  assert.equal(capturedAuditEvent.previousFleetApprovalStatus, "REJECTED");
+  assert.equal(capturedAuditEvent.resultingFleetApprovalStatus, "REJECTED");
+});
+
+test("35. Direct model instantiation rejects non-DRAFT approvalStatus", async () => {
+  const mongoose = require("mongoose");
+  const Bus = require("../../../models/fleetModel");
+  const busInstance = new Bus({
+    ownerId: new mongoose.Types.ObjectId(),
+    busName: "Direct Bus",
+    busNumber: "BA 9 PA 0000",
+    busType: "AC",
+    vehicleType: "bus",
+    totalSeats: 30,
+    approvalStatus: "PENDING",
+  });
+
+  const BusOwner = mongoose.model("BusOwner");
+  const originalFindOne = BusOwner.findOne;
+  BusOwner.findOne = () => ({
+    select: () => ({
+      lean: async () => ({ verificationStatus: "approved" }),
+    }),
+  });
+
+  try {
+    await assert.rejects(
+      busInstance.save(),
+      (err) => err.message.includes("OWNER_NOT_APPROVED") && err.message.includes("DRAFT")
+    );
+  } finally {
+    BusOwner.findOne = originalFindOne;
+  }
+});
+

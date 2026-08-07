@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const fleetApprovalFields = require("./schemas/fleet-approval-fields");
 const fleetDocumentFields = require("./schemas/fleet-document-fields");
+const { FLEET_APPROVAL_STATUS } = require("../src/contracts/status/fleet-approval.status");
 
 const BusSchema = new mongoose.Schema(
     {
@@ -213,13 +214,10 @@ BusSchema.pre("save", async function (next) {
         ));
     }
 
-    if (
-        busOwner.verificationStatus !== "approved" &&
-        this.approvalStatus !== "DRAFT"
-    ) {
+    if (this.approvalStatus !== FLEET_APPROVAL_STATUS.DRAFT) {
         return next(new Error(
-            `OWNER_NOT_APPROVED: Fleet creation for unapproved bus owners must be in DRAFT status ` +
-            `(current business status: ${busOwner.verificationStatus}).`
+            `OWNER_NOT_APPROVED: New fleet records must be created in DRAFT approval status ` +
+            `(attempted status: ${this.approvalStatus}, owner status: ${busOwner.verificationStatus}).`
         ));
     }
 
