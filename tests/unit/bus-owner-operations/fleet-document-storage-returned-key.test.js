@@ -61,7 +61,7 @@ test("fleet-document-storage-returned-key unit tests", async (t) => {
     let uploadCount = 0;
 
     const repo = {
-      findFleetForDocumentUpdate: async () => ({ _id: fleetId, ownerId: userId, approvalStatus: "PENDING", __v: 1 }),
+      findFleetForDocumentUpdate: async () => ({ _id: fleetId, ownerId: userId, approvalStatus: "DRAFT", __v: 1 }),
     };
 
     const storageService = createFleetDocumentStorageService({

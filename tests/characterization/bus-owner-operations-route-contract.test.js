@@ -19,7 +19,7 @@ test("bus-owner operations route and middleware contract", () => {
   const expected = [
     ["post", "/submitBusOwnerKyc", kyc.submitBusOwnerKyc],
     ["get", "/myBusOwnerKycStatus", kyc.getMyBusOwnerKycStatus],
-    ["post", "/submitFleetForVerification", fleet.submitFleetForVerification],
+    ["post", "/submitFleetForVerification", fleet.submitFleetForVerification, [requireApprovedBusOwner, fleet.submitFleetForVerification]],
     ["get", "/myFleets", fleet.getMyFleets],
     ["post", "/getFleetById", fleet.getFleetById, [mapLegacyFleetDetailRequest, fleet.getFleetById]],
     ["patch", "/updateFleet", fleet.updateFleet, [mapLegacyFleetUpdateRequest, fleet.updateFleet]],
@@ -58,7 +58,7 @@ test("bus-owner operations route and middleware contract", () => {
     const expectedStack = customStack || [handler];
     assert.deepEqual(matches[0].route.stack.map((item) => item.handle), expectedStack);
     const index = layers.indexOf(matches[0]);
-    if (path.includes("Kyc") || path.includes("KycStatus")) {
+    if (path.includes("Kyc") || path.includes("KycStatus") || path.includes("Fleet") || path.includes("fleets")) {
       assert.ok(index < approvalIndex);
     } else {
       assert.ok(index > approvalIndex);

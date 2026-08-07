@@ -6,6 +6,7 @@ const {
 const {
   createFleetDocuments,
 } = require("./fleet-storage.service");
+const { FLEET_APPROVAL_STATUS } = require("../../contracts/status/fleet-approval.status");
 
 function createFleetCreationService({
   Bus,
@@ -53,9 +54,16 @@ function createFleetCreationService({
       routeRequestId: routeRequest?._id || null,
       fleetImages: [],
       fleetDocuments: createFleetDocuments(input),
-      status: input.status || "INACTIVE",
-      approvalStatus: "PENDING",
+      status: "INACTIVE",
+      approvalStatus: FLEET_APPROVAL_STATUS.DRAFT,
+      isApproved: false,
+      setupComplete: false,
+      submittedAt: null,
       approvedAt: null,
+      approvedBy: null,
+      rejectedAt: null,
+      rejectedBy: null,
+      rejectionReason: null,
       createdBy,
     });
     const savedFleet = await fleetSkeleton.save();

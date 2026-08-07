@@ -12,7 +12,6 @@ const OWNER_PERMITTED_FIELDS = new Set([
   "seatConfig",
   "amenityIds",
   "corridorId",
-  "setupComplete",
   "brandId",
   "fleetGroupId",
 ]);

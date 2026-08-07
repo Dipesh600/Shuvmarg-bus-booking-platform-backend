@@ -16,7 +16,7 @@ test("fleet-document-persistence unit tests", async (t) => {
       findFleetForDocumentUpdate: async () => ({
         _id: fleetId,
         ownerId: userId,
-        approvalStatus: "PENDING",
+        approvalStatus: "DRAFT",
         __v: 5,
       }),
       atomicDocumentUpdate: async () => null, // version mismatch
@@ -59,7 +59,7 @@ test("fleet-document-persistence unit tests", async (t) => {
       findFleetForDocumentUpdate: async () => ({
         _id: fleetId,
         ownerId: userId,
-        approvalStatus: "PENDING",
+        approvalStatus: "DRAFT",
         __v: 5,
       }),
       atomicDocumentUpdate: async () => { throw dbErr; },

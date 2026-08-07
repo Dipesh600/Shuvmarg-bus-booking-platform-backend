@@ -27,7 +27,7 @@ test("bus-owner fleet command controller & service contracts", async (t) => {
     await controller.createFleet(req, res);
     assert.equal(res.result().status, 201);
     assert.deepEqual(res.result().body, {
-      success: true, message: "Fleet details submitted for verification successfully!", data: { fleet: { _id: "fleet_1" } },
+      success: true, message: "Fleet draft created successfully!", data: { fleet: { _id: "fleet_1" } },
     });
     assert.deepEqual(calls, [["create", "owner_123", req.body, req.files, "BUS_OWNER"]]);
   });

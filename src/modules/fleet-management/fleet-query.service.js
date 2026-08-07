@@ -21,6 +21,15 @@ function createFleetQueryService({ repository, mapper }) {
   }
 
   async function removeFleet(fleetId, ownerId = null) {
+    const existing = await repository.findDocument(fleetId, ownerId);
+    if (!existing) throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.");
+    if (existing.approvalStatus === "PENDING" || existing.approvalStatus === "APPROVED") {
+      throw new ApiError(
+        "FLEET_MUTATION_LOCKED",
+        `Fleet is currently ${existing.approvalStatus.toLowerCase()} and cannot be deleted.`,
+        409
+      );
+    }
     const fleet = await repository.remove(fleetId, ownerId);
     if (!fleet) throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.");
     return fleet;

@@ -2,6 +2,7 @@
 
 const BusOwnerModel = require("../../../../models/busOwnerModel");
 const BusModel = require("../../../../models/fleetModel");
+const { FLEET_APPROVAL_STATUS } = require("../../../contracts/status/fleet-approval.status");
 
 function createFleetDocumentRepository(deps = {}) {
   const Bus = deps.Bus || BusModel;
@@ -37,7 +38,13 @@ function createFleetDocumentRepository(deps = {}) {
 
   async function atomicDocumentUpdate({ fleetId, expectedVersion, update }) {
     return Bus.findOneAndUpdate(
-      { _id: fleetId, __v: expectedVersion },
+      {
+        _id: fleetId,
+        __v: expectedVersion,
+        approvalStatus: {
+          $in: [FLEET_APPROVAL_STATUS.DRAFT, FLEET_APPROVAL_STATUS.REJECTED],
+        },
+      },
       update,
       { new: true, runValidators: true }
     ).lean();

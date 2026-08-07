@@ -24,6 +24,9 @@ test("bus-owner fleet management contracts", async (t) => {
       updateFleetDetails: async (...a) => (mutationCalls.push(["update", ...a]), "updated"),
       removeFleet: async (...a) => mutationCalls.push(["delete", ...a]),
     };
+    const submissionService = {
+      submitFleetForVerification: async (...a) => (mutationCalls.push(["submit", ...a]), { _id: "fleet" }),
+    };
     const readService = {
       listFleetsForOwner: async (req) => {
         readCalls.push(["list", req.userInfo?.id]);
@@ -34,12 +37,12 @@ test("bus-owner fleet management contracts", async (t) => {
         return { success: true, data: { fleetId: req.params?.fleetId } };
       },
     };
-    const handlers = createFleetManagementController({ fleetService, readService });
+    const handlers = createFleetManagementController({ fleetService, readService, submissionService });
     const mutReq = { userInfo: { id: "owner" }, params: { fleetId: "fleet" }, body: { fleetId: "fleet", field: "value" }, files: { photo: "file" } };
     const readListReq = { userInfo: { id: "owner" }, query: {} };
     const readDetailReq = { userInfo: { id: "owner" }, params: { fleetId: "fleet" } };
 
-    const r1 = response(); await handlers.submitFleetForVerification(mutReq, r1); assert.equal(r1.result().status, 201);
+    const r1 = response(); await handlers.createFleet(mutReq, r1); assert.equal(r1.result().status, 201);
     const r2 = response(); await handlers.getMyFleets(readListReq, r2); assert.equal(r2.result().status, 200);
     const r3 = response(); await handlers.getFleetById(readDetailReq, r3); assert.equal(r3.result().status, 200);
     const r4 = response(); await handlers.updateFleet(mutReq, r4); assert.equal(r4.result().status, 200);
@@ -85,7 +88,10 @@ test("bus-owner fleet management contracts", async (t) => {
       updateFleetDetails: async () => { throw new ApiError("FLEET_NOT_FOUND"); },
       removeFleet: async () => { throw new ApiError("FLEET_NOT_FOUND"); },
     };
-    const handlers = createFleetManagementController({ fleetService: service, logger: { error() {} } });
+    const submissionService = {
+      submitFleetForVerification: async () => { throw new ApiError("FLEET_ALREADY_EXISTS"); },
+    };
+    const handlers = createFleetManagementController({ fleetService: service, submissionService, logger: { error() {} } });
     for (const [name, status] of [["submitFleetForVerification", 409], ["updateFleet", 404], ["deleteFleet", 404]]) {
       const res = response();
       await handlers[name]({ userInfo: { id: "owner" }, params: { fleetId: "fleet" }, body: { fleetId: "fleet" } }, res);

@@ -43,6 +43,12 @@ const BUS_OWNER_ERRORS = Object.freeze({
     domain: "bus-owner",
     retryable: false,
   }),
+  PROFILE_NOT_APPROVED: Object.freeze({
+    statusCode: 403,
+    message: "Business verification is required before performing this action.",
+    domain: "bus-owner",
+    retryable: false,
+  }),
 });
 
 module.exports = { BUS_OWNER_ERRORS };

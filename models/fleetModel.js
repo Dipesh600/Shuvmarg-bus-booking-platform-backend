@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const fleetApprovalFields = require("./schemas/fleet-approval-fields");
 const fleetDocumentFields = require("./schemas/fleet-document-fields");
+const { FLEET_APPROVAL_STATUS } = require("../src/contracts/status/fleet-approval.status");
 
 const BusSchema = new mongoose.Schema(
     {
@@ -213,11 +214,10 @@ BusSchema.pre("save", async function (next) {
         ));
     }
 
-    if (busOwner.verificationStatus !== "approved") {
+    if (this.approvalStatus !== FLEET_APPROVAL_STATUS.DRAFT) {
         return next(new Error(
-            `OWNER_NOT_APPROVED: Fleet creation requires an approved BusOwner profile ` +
-            `(current status: ${busOwner.verificationStatus}). ` +
-            `Admin approval is required before you can register fleet vehicles.`
+            `OWNER_NOT_APPROVED: New fleet records must be created in DRAFT approval status ` +
+            `(attempted status: ${this.approvalStatus}, owner status: ${busOwner.verificationStatus}).`
         ));
     }
 

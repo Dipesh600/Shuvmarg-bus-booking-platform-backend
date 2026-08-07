@@ -17,6 +17,13 @@ function createFleetUpdateService({
   ) {
     const fleet = await repository.findDocument(fleetId, ownerId);
     if (!fleet) throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.");
+    if (fleet.approvalStatus === "PENDING" || fleet.approvalStatus === "APPROVED") {
+      throw new ApiError(
+        "FLEET_MUTATION_LOCKED",
+        `Fleet is currently ${fleet.approvalStatus.toLowerCase()} and cannot be edited.`,
+        409
+      );
+    }
     if (ownerId) policy.restrictOwnerUpdate(updateData);
     policy.lockApprovedIdentity(fleet, updateData);
     const images = await storage.replaceFleetImages(fleet, files);

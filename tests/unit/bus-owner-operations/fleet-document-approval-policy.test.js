@@ -40,9 +40,12 @@ test("fleet-document-approval-policy unit tests", async (t) => {
     assert.doesNotThrow(() => policy.enforceUploadPolicy(fleet, "insurance"));
   });
 
-  await t.test("PENDING fleet allows replacement of any slot", () => {
+  await t.test("PENDING fleet rejects replacement of any slot with 403 FLEET_DOCUMENT_FORBIDDEN", () => {
     const fleet = { approvalStatus: "PENDING" };
-    assert.doesNotThrow(() => policy.enforceUploadPolicy(fleet, "fitnessCert"));
+    assert.throws(
+      () => policy.enforceUploadPolicy(fleet, "fitnessCert"),
+      (err) => err.statusCode === 403 && err.code === "FLEET_DOCUMENT_FORBIDDEN"
+    );
   });
 
   await t.test("classifyAction identifies UPLOADED vs REPLACED vs RESUBMITTED", () => {

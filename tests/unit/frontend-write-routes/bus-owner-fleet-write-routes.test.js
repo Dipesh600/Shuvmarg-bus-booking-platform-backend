@@ -28,7 +28,7 @@ test("Bus-owner fleet write routes registration contract", async (t) => {
     assert.ok(inspectLayer(router, "DELETE", "/deleteFleet"));
   });
 
-  await t.test("3. Canonical and alias routes use same terminal handler functions", () => {
+  await t.test("3. Canonical and alias routes use correct terminal handler functions", () => {
     const postFleets = inspectLayer(router, "POST", "/fleets");
     const postSubmit = inspectLayer(router, "POST", "/submitFleetForVerification");
     const patchFleets = inspectLayer(router, "PATCH", "/fleets/:fleetId");
@@ -38,7 +38,7 @@ test("Bus-owner fleet write routes registration contract", async (t) => {
 
     const getTerminalHandler = (layer) => layer.route.stack[layer.route.stack.length - 1].handle;
 
-    assert.equal(getTerminalHandler(postFleets), getTerminalHandler(postSubmit));
+    assert.notEqual(getTerminalHandler(postFleets), getTerminalHandler(postSubmit));
     assert.equal(getTerminalHandler(patchFleets), getTerminalHandler(patchUpdate));
     assert.equal(getTerminalHandler(delFleets), getTerminalHandler(delDelete));
   });

@@ -61,7 +61,7 @@ test("creation preserves route, skeleton, upload, and backlink ordering", async 
   assert.equal(fleet.createdBy, "ADMIN");
   assert.equal(fleet.busNumber, "B1");
   assert.equal(fleet.routeRequestId, "route-1");
-  assert.equal(fleet.approvalStatus, "PENDING");
+  assert.equal(fleet.approvalStatus, "DRAFT");
   assert.deepEqual(fleet.fleetImages, ["image"]);
 });
 

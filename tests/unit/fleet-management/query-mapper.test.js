@@ -44,7 +44,8 @@ test("query service distinguishes mapped and raw admin reads", async () => {
     findByOwner: async () => [{ id: 1 }, { id: 2 }],
     findDetails: async () => ({ id: 3 }),
     findRaw: async () => ({ id: 4 }),
-    remove: async () => ({ id: 5 }),
+    remove: async () => ({ id: 5, approvalStatus: "DRAFT" }),
+    findDocument: async () => ({ id: 5, approvalStatus: "DRAFT" }),
   };
   const mapper = {
     withPresignedUrls: async (fleet) => { mapped.push(fleet.id); return { ...fleet, signed: true }; },
@@ -56,7 +57,7 @@ test("query service distinguishes mapped and raw admin reads", async () => {
   ]);
   assert.deepEqual(await service.getFleetDetails("3"), { id: 3, signed: true });
   assert.deepEqual(await service.getFleetDetailsRaw("4"), { id: 4, raw: true });
-  assert.deepEqual(await service.removeFleet("5"), { id: 5 });
+  assert.deepEqual(await service.removeFleet("5"), { id: 5, approvalStatus: "DRAFT" });
   assert.deepEqual(mapped, [1, 2, 3]);
 });
 
@@ -64,6 +65,7 @@ test("query service preserves exact missing-fleet contract", async () => {
   const repository = {
     findDetails: async () => null,
     findRaw: async () => null,
+    findDocument: async () => null,
     remove: async () => null,
   };
   const service = createFleetQueryService({ repository, mapper: {} });
