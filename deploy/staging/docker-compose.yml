@@ -63,7 +63,9 @@ services:
   # ClamAV is reachable only inside the Compose network. Never publish 3310:
   # the clamd TCP protocol has no built-in authentication or encryption.
   clamav:
-    image: clamav/clamav:1.4_base
+    # The Oracle staging VM is ARM64. The Alpine 1.4_base image is AMD64-only;
+    # this pinned patch-level Debian image publishes an ARM64 manifest.
+    image: clamav/clamav:1.4.5_base-debian13-slim
     container_name: shuvmarg-staging-clamav
     restart: unless-stopped
     networks:
