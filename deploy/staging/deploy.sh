@@ -22,6 +22,8 @@ ENV_FILE="${DEPLOY_DIR}/.env"
 LOCK_FILE="/tmp/shuvmarg-staging-deploy.lock"
 HEALTH_WAIT_SECONDS=60
 HEALTH_CHECK_INTERVAL=5
+PUBLIC_HEALTH_WAIT_SECONDS=60
+PUBLIC_HEALTH_CHECK_INTERVAL=5
 GHCR_REGISTRY="ghcr.io"
 GHCR_USER="${GHCR_USER:-dipesh600}"
 EXPECTED_IMAGE_REPOSITORY="ghcr.io/dipesh600/shuvmarg-bus-booking-platform-backend"
@@ -159,11 +161,25 @@ verify_public_health() {
   local domain
   domain=$(read_env_value STAGING_API_DOMAIN)
   local url="https://${domain}/health"
-  log "Verifying public health endpoint: ${url}"
-  curl --fail --silent --show-error \
-    --connect-timeout 10 \
-    --max-time 30 \
-    "${url}" >/dev/null
+  local elapsed=0
+
+  log "Waiting for public health endpoint (up to ${PUBLIC_HEALTH_WAIT_SECONDS}s): ${url}"
+  while [[ $elapsed -lt ${PUBLIC_HEALTH_WAIT_SECONDS} ]]; do
+    if curl --fail --silent \
+      --connect-timeout 5 \
+      --max-time 10 \
+      "${url}" >/dev/null; then
+      log "Public health endpoint is ready."
+      return 0
+    fi
+
+    sleep "${PUBLIC_HEALTH_CHECK_INTERVAL}"
+    elapsed=$((elapsed + PUBLIC_HEALTH_CHECK_INTERVAL))
+    log "  Public endpoint not ready (${elapsed}s elapsed)"
+  done
+
+  log_error "Public health check timed out after ${PUBLIC_HEALTH_WAIT_SECONDS}s."
+  return 1
 }
 
 rollback() {
