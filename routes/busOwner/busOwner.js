@@ -4,6 +4,11 @@ const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { busOwnerMiddleware } = require("../../middleware/checkRole.js");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner.js");
+const {
+  rejectOversizedKycRequest,
+  kycSubmissionRateLimiter,
+  parseKycSubmissionUpload,
+} = require("../../middleware/kycSubmissionUpload.js");
 const busOwnerKyc = require("../../src/modules/bus-owner/kyc-submission");
 const kycDocumentRead = require("../../src/modules/bus-owner/kyc-document-read");
 const fleetManagement = require("../../src/modules/bus-owner/fleet-management");
@@ -26,8 +31,14 @@ const {
 } = require("./frontendReadRoutes.js");
 registerBusOwnerUnapprovedReadRoutes(router);
 
-router.post("/submitBusOwnerKyc", busOwnerKyc.submitBusOwnerKyc);
-router.get("/kycDocumentReadUrl", kycDocumentRead.getKycDocumentReadUrl);
+router.post(
+  "/submitBusOwnerKyc",
+  kycSubmissionRateLimiter,
+  rejectOversizedKycRequest,
+  parseKycSubmissionUpload,
+  busOwnerKyc.submitBusOwnerKyc
+);
+router.get("/kycDocumentView", kycDocumentRead.viewKycDocument);
 
 const { busOwnerFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
 

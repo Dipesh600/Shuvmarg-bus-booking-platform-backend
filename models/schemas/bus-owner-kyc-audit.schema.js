@@ -46,6 +46,15 @@ const busOwnerKycAuditEventSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
+      malwareScanStatus: {
+        type: String,
+        enum: ["clean", "skipped_non_production"],
+        default: null,
+      },
+      malwareScanEngine: {
+        type: String,
+        default: null,
+      },
     },
   },
   { _id: true, id: false }

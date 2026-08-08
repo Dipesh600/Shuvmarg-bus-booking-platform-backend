@@ -26,6 +26,34 @@ test("kyc-review-service failure tests", async (t) => {
     );
   });
 
+  await t.test("production reviewer cannot approve quarantined documents", async () => {
+    let writeCalls = 0;
+    const mockPendingOwner = {
+      _id: "64f000000000000000000001",
+      verificationStatus: "pending",
+      kycSecurity: { malwareScanStatus: "skipped_non_production" },
+    };
+    const mockBusOwnerModel = {
+      findOne: async () => mockPendingOwner,
+      findOneAndUpdate: async () => { writeCalls += 1; },
+    };
+    const service = createKycReviewService({
+      Admin: mockAdminModel,
+      BusOwner: mockBusOwnerModel,
+      User: {},
+      environment: "production",
+    });
+
+    await assert.rejects(
+      () => service.reviewKyc(
+        { id: "64f000000000000000000001", verificationStatus: "approved" },
+        validActor
+      ),
+      (err) => err.code === "KYC_REVIEW_SECURITY_SCAN_REQUIRED" && err.statusCode === 423
+    );
+    assert.equal(writeCalls, 0);
+  });
+
   await t.test("already approved or rejected owner returns HTTP 409", async () => {
     const mockApprovedOwner = { _id: "64f000000000000000000001", verificationStatus: "approved" };
     const mockBusOwnerModel = { findOne: async () => mockApprovedOwner };

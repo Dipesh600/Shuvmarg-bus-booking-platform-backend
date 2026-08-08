@@ -9,6 +9,7 @@ const { getKycReviewerActor, assertCanReviewBusOwnerKyc } = require("./kyc-revie
 const { resolveKycReviewer } = require("./kyc-review-reviewer.resolver");
 const { assertReviewerIsIndependent } = require("./kyc-review-separation-of-duty.policy");
 const { buildKycAuditEvent, collectInvalidKycDocumentTypes, KYC_AUDIT_EVENT, KYC_AUDIT_ACTOR } = require("../kyc-audit");
+const { isKycMalwareScanReady } = require("../kyc-document-read/kyc-document-reference.service");
 
 function normalizeActorInput(actorInput) {
   if (actorInput && typeof actorInput === "object" && typeof actorInput.adminId === "string" && actorInput.adminId.trim() && typeof actorInput.tokenRole === "string" && actorInput.tokenRole.trim()) {
@@ -20,7 +21,16 @@ function normalizeActorInput(actorInput) {
   throw new KycReviewError("KYC_REVIEW_UNAUTHORIZED", "Authenticated reviewer identity is required.", 401);
 }
 
-function createKycReviewService({ Admin, BusOwner, User, applyDocumentVerdicts, invalidDocuments, clock = () => new Date(), logger = console }) {
+function createKycReviewService({
+  Admin,
+  BusOwner,
+  User,
+  applyDocumentVerdicts,
+  invalidDocuments,
+  clock = () => new Date(),
+  logger = console,
+  environment = process.env.NODE_ENV,
+}) {
   async function reviewKyc(body, actorInput) {
     const actor = normalizeActorInput(actorInput);
     const { id, targetStatus, rejectionReason } = validateKycReviewRequest(body);
@@ -29,6 +39,13 @@ function createKycReviewService({ Admin, BusOwner, User, applyDocumentVerdicts, 
     assertCanReviewBusOwnerKyc({ reviewer, tokenRole: actor.tokenRole });
 
     const owner = await resolveBusOwnerForReviewReference({ id, BusOwner });
+    if (!isKycMalwareScanReady(owner, environment)) {
+      throw new KycReviewError(
+        "KYC_REVIEW_SECURITY_SCAN_REQUIRED",
+        "KYC documents are quarantined until their security scan is complete.",
+        423
+      );
+    }
 
     let busOwnerUser = null;
     if (User && typeof User.findById === "function" && owner.user) {

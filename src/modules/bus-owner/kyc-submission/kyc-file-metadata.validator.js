@@ -13,12 +13,15 @@ function validateFilenameHygiene(filename, field) {
   }
   const name = filename.trim();
   if (
+    name.length > 180 ||
     name.includes("\0") ||
     name.includes("/") ||
     name.includes("\\") ||
     name.includes("..") ||
     name === "." ||
     name === ".." ||
+    name.startsWith(".") ||
+    name.startsWith("-") ||
     name.endsWith(".")
   ) {
     throw new KycDocumentValidationError(

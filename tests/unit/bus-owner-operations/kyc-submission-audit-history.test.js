@@ -7,7 +7,7 @@ const { createKycSubmissionService } = require("../../../src/modules/bus-owner/k
 test("kyc-submission-audit-history unit tests", async (t) => {
   const userId = "64f000000000000000000002";
   const fixedDate = new Date("2026-08-05T12:00:00Z");
-  const pdfBuffer = Buffer.concat([Buffer.from("%PDF-1.4\n%"), Buffer.alloc(100)]);
+  const pdfBuffer = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
   const makeFile = (name) => ({ fieldname: name, originalname: `${name}.pdf`, buffer: pdfBuffer, mimetype: "application/pdf" });
 
   const validFiles = {
@@ -44,11 +44,11 @@ test("kyc-submission-audit-history unit tests", async (t) => {
     deleteMany: async () => ({ failed: [] }),
   };
 
-  await t.test("new owner record (even with schema-default pending status) is initial submission and appends KYC_SUBMITTED", async () => {
+  await t.test("new owner record is initial submission and appends KYC_SUBMITTED", async () => {
     let savedOwner = null;
     const MockBusOwner = function (data) {
       Object.assign(this, data);
-      this.verificationStatus = "pending"; // schema default
+      this.verificationStatus = "not_submitted"; // schema default
       this.kycAuditHistory = undefined; // uninitialized on new record
       this.save = async function () { savedOwner = this; };
     };
@@ -72,11 +72,20 @@ test("kyc-submission-audit-history unit tests", async (t) => {
     assert.equal(event.actorId, userId);
     assert.equal(event.fromStatus, null);
     assert.equal(event.toStatus, "pending");
-    assert.deepEqual(event.metadata, { documentCount: 3 });
+    assert.deepEqual(event.metadata, {
+      documentCount: 3,
+      malwareScanStatus: "skipped_non_production",
+      malwareScanEngine: "disabled",
+    });
   });
 
   await t.test("existing pending owner in DB is rejected as duplicate and appends no event", async () => {
-    const existingOwner = { user: userId, verificationStatus: "pending", kycAuditHistory: [] };
+    const existingOwner = {
+      user: userId,
+      verificationStatus: "pending",
+      companyRegistration: { documentUrls: ["kyc-docs/submitted.pdf"] },
+      kycAuditHistory: [],
+    };
     const MockBusOwner = { findOne: async () => existingOwner };
     const service = createKycSubmissionService({ BusOwner: MockBusOwner, storageService: mockStorageService });
 
@@ -93,6 +102,7 @@ test("kyc-submission-audit-history unit tests", async (t) => {
       _id: "64f000000000000000000001",
       user: userId,
       verificationStatus: "rejected",
+      companyRegistration: { documentUrls: ["kyc-docs/rejected.pdf"] },
       kycAuditHistory: [{ eventType: "KYC_SUBMITTED", actorType: "BUS_OWNER", actorId: userId, fromStatus: null, toStatus: "pending", occurredAt: fixedDate, metadata: { documentCount: 3 } }],
       save: async function () { savedOwner = this; },
     };

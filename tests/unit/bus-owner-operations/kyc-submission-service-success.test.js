@@ -39,7 +39,10 @@ test("kyc-submission.service success and state tests", async (t) => {
       (err) => err.code === "KYC_SUBMISSION_STATE_CONFLICT" && err.statusCode === 409
     );
 
-    MockBusOwner.findOne = async () => ({ verificationStatus: "pending" });
+    MockBusOwner.findOne = async () => ({
+      verificationStatus: "pending",
+      companyRegistration: { documentUrls: ["company.pdf"] },
+    });
     const servicePending = createKycSubmissionService({ BusOwner: MockBusOwner, storageService: {} });
     await assert.rejects(
       async () => servicePending.submitKyc({ userId: "user-1", onboardingData: VALID_BODY, files: makeValidFiles() }),
@@ -96,8 +99,13 @@ test("kyc-submission.service success and state tests", async (t) => {
       "upload:taxRegistration",
       "upload:transportLicense",
       "save",
-      "delete-old:owners/1/old-c.pdf,https://cloudinary.com/old-t.pdf,owners/1/old-l.pdf,owners/1/old-i.pdf",
+      "delete-old:owners/1/old-c.pdf,https://cloudinary.com/old-t.pdf,owners/1/old-l.pdf",
     ]);
+    assert.deepEqual(
+      savedOwner.insuranceCertificates[0].documentUrls,
+      ["owners/1/old-i.pdf"],
+      "an unchanged optional document must be retained"
+    );
   });
 
   await t.test("old cleanup failure logs via logger.error but returns submission success", async () => {

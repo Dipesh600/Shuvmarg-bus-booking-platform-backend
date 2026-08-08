@@ -7,15 +7,16 @@ const { createKycDocumentReadService } = require("../../../src/modules/bus-owner
 const { responseRecorder } = require("./helpers/kyc-test-fixtures");
 
 test("bus-owner KYC submission controller status contracts", async (t) => {
-  await t.test("status response resolves S3 keys into presigned viewUrls and documentReferences", async () => {
+  await t.test("status response returns descriptors without presigning document keys", async () => {
     const owner = {
       verificationStatus: "pending",
       rejectionReason: null,
       companyRegistration: { documentUrls: ["owners/1/kyc/company/doc.pdf"] },
       ignored: "secret",
     };
+    let presignCalls = 0;
     const kycDocumentReadService = createKycDocumentReadService({
-      getPresignedUrl: async (key) => `https://presigned/${key}`,
+      getPresignedUrl: async () => { presignCalls += 1; return "https://presigned/unused"; },
     });
 
     const controller = createKycSubmissionController({
@@ -33,6 +34,7 @@ test("bus-owner KYC submission controller status contracts", async (t) => {
     assert.equal(res.result().body.data.companyRegistration.documentReferences, undefined);
     assert.equal(res.result().body.data.companyRegistration.fileCount, 1);
     assert.equal(res.result().body.data.companyRegistration.available, true);
+    assert.equal(presignCalls, 0);
     assert.equal("ignored" in res.result().body.data, false);
   });
 

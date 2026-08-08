@@ -11,6 +11,24 @@ const ALLOWED_DOCUMENT_TYPES = Object.freeze([
   "ownerIdentity",
 ]);
 
+function isKycMalwareScanReady(busOwner, environment = process.env.NODE_ENV) {
+  const scanStatus = busOwner?.kycSecurity?.malwareScanStatus;
+  if (scanStatus === "clean") return true;
+  if (environment !== "production" && scanStatus === "skipped_non_production") return true;
+  if (environment !== "production" && !scanStatus) return true;
+  return false;
+}
+
+function assertKycMalwareScanAllowsRead(busOwner, environment = process.env.NODE_ENV) {
+  if (isKycMalwareScanReady(busOwner, environment)) return;
+
+  throw new KycDocumentReadError(
+    "KYC_DOCUMENT_SECURITY_SCAN_REQUIRED",
+    "Document is quarantined until its security scan is complete.",
+    423
+  );
+}
+
 function parseNonNegativeIndex(value, fieldName) {
   if (value === undefined || value === null || value === "") {
     return 0;
@@ -43,6 +61,7 @@ function resolveAuthorizedKycDocumentReference({
   }
 
   assertCanReadBusOwnerKycDocument({ actor, busOwner, logger });
+  assertKycMalwareScanAllowsRead(busOwner);
 
   const cIdx = parseNonNegativeIndex(certificateIndex, "certificateIndex");
   const fIdx = parseNonNegativeIndex(fileIndex, "fileIndex");
@@ -92,5 +111,7 @@ function resolveAuthorizedKycDocumentReference({
 module.exports = {
   ALLOWED_DOCUMENT_TYPES,
   parseNonNegativeIndex,
+  isKycMalwareScanReady,
+  assertKycMalwareScanAllowsRead,
   resolveAuthorizedKycDocumentReference,
 };

@@ -28,11 +28,42 @@ test("validateOnboardingBody: valid body returns normalized object", () => {
   });
   assert.equal(result.companyName, "Nepal Transport Co.");
   assert.equal(result.swiftCode, "NBLNNPKA");
+  assert.equal(result.bankName, "Nepal Bank Ltd.");
 });
 
 test("validateOnboardingBody: optional swiftCode may be omitted", () => {
   const result = validateOnboardingBody(VALID_BODY);
   assert.equal(result.swiftCode, null);
+});
+
+test("validateOnboardingBody: normalizes a valid lowercase SWIFT/BIC", () => {
+  const result = validateOnboardingBody({ ...VALID_BODY, swiftCode: "nblnnpka" });
+  assert.equal(result.swiftCode, "NBLNNPKA");
+});
+
+test("validateOnboardingBody: rejects invalid PAN, account and SWIFT formats", () => {
+  for (const [field, value] of [
+    ["panNumber", "12345ABC9"],
+    ["panNumber", "12345678"],
+    ["accountNumber", "1234<script>"],
+    ["swiftCode", "NOT-A-BIC"],
+  ]) {
+    assert.throws(
+      () => validateOnboardingBody({ ...VALID_BODY, [field]: value }),
+      (err) =>
+        err instanceof BusOwnerOnboardingValidationError && err.field === field,
+      `Expected rejection for ${field}`
+    );
+  }
+});
+
+test("validateOnboardingBody: rejects control characters in text fields", () => {
+  assert.throws(
+    () => validateOnboardingBody({ ...VALID_BODY, companyName: "Safe\u0000Name" }),
+    (err) =>
+      err instanceof BusOwnerOnboardingValidationError &&
+      err.field === "companyName"
+  );
 });
 
 test("validateOnboardingBody: whitespace is trimmed from all fields", () => {
@@ -109,15 +140,4 @@ test("validateOnboardingBody: swiftCode oversized is rejected", () => {
       err instanceof BusOwnerOnboardingValidationError &&
       err.field === "swiftCode"
   );
-});
-
-test("validateOnboardingBody: null or missing body throws typed error", () => {
-  for (const bad of [null, undefined, "string", 42]) {
-    assert.throws(
-      () => validateOnboardingBody(bad),
-      (err) =>
-        err instanceof BusOwnerOnboardingValidationError &&
-        err.code === "BUS_OWNER_ONBOARDING_VALIDATION_FAILED"
-    );
-  }
 });

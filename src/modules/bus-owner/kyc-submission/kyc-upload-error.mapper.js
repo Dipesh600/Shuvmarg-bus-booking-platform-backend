@@ -1,7 +1,11 @@
 "use strict";
 
 const { ApiError } = require("../../../contracts");
-const { KycDocumentValidationError, BusOwnerOnboardingValidationError } = require("./kyc-submission.errors");
+const {
+  KycDocumentValidationError,
+  KycMalwareScanError,
+  BusOwnerOnboardingValidationError,
+} = require("./kyc-submission.errors");
 
 function handleKycSubmissionError(error, res) {
   if (error instanceof ApiError) {
@@ -24,7 +28,9 @@ function handleKycSubmissionError(error, res) {
 
   if (
     error instanceof KycDocumentValidationError ||
+    error instanceof KycMalwareScanError ||
     error.name === "KycDocumentValidationError" ||
+    error.name === "KycMalwareScanError" ||
     error.name === "KycSubmissionStateError"
   ) {
     const body = {

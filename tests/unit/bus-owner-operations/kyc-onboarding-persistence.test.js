@@ -6,7 +6,7 @@ const { createKycSubmissionService } = require(
   "../../../src/modules/bus-owner/kyc-submission/kyc-submission.service"
 );
 
-const PDF_BUFFER = Buffer.concat([Buffer.from("%PDF-1.4\n%"), Buffer.alloc(100)]);
+const PDF_BUFFER = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
 function makeFile(name) {
   return { fieldname: name, originalname: `${name}.pdf`, buffer: PDF_BUFFER, mimetype: "application/pdf" };
 }
@@ -90,11 +90,11 @@ test("kyc-onboarding-persistence: new owner saves User and BusOwner inside trans
   assert.deepEqual(busOwnerSaveCalls, ["with-session"]);
   assert.equal(createdOwner.companyName, "Nepal Transport Co.");
   assert.equal(createdOwner.taxRegistration.panNumber, "123456789");
-  assert.equal(createdOwner.bankDetails.bankName, "Nepal Bank");
+  assert.equal(createdOwner.bankDetails.bankName, "Nepal Bank Ltd.");
   assert.equal(createdOwner.verificationStatus, "pending");
 });
 
-test("kyc-onboarding-persistence: ownerName and address written to User, not BusOwner", async () => {
+test("kyc-onboarding-persistence: registered address belongs to BusOwner and does not overwrite User address", async () => {
   const mock = mockSession();
 
   const MockUser = { findById: async () => ({
@@ -102,9 +102,10 @@ test("kyc-onboarding-persistence: ownerName and address written to User, not Bus
     save: async () => {},
   })};
 
+  let savedOwner;
   function MockBusOwner(val) {
     Object.assign(this, val);
-    this.save = async () => {};
+    this.save = async () => { savedOwner = this; };
   }
   MockBusOwner.findOne = async () => null;
 
@@ -126,6 +127,15 @@ test("kyc-onboarding-persistence: ownerName and address written to User, not Bus
   });
 
   assert.equal(mockUserWithTracking.name, "Raju Shrestha");
-  assert.equal(mockUserWithTracking.address, "Kathmandu, Nepal");
+  assert.equal(mockUserWithTracking.address, null);
+  assert.deepEqual(savedOwner.registeredAddress, {
+    tole: "Kathmandu, Nepal",
+    wardNumber: null,
+    municipality: null,
+    district: null,
+    province: null,
+    postalCode: null,
+    country: "Nepal",
+  });
   assert.equal("ownerName" in ({}), false, "BusOwner must not receive ownerName field");
 });

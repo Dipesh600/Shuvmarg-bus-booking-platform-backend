@@ -20,17 +20,17 @@ function extractInsuranceUrls(certificates) {
   );
 }
 
-function collectBusOwnerKycStorageReferences(busOwner) {
+function collectBusOwnerKycStorageReferences(busOwner, fields = null) {
   if (!busOwner || typeof busOwner !== "object") {
     return [];
   }
 
-  const references = [
-    ...extractDocumentUrls(busOwner.companyRegistration),
-    ...extractDocumentUrls(busOwner.taxRegistration),
-    ...extractDocumentUrls(busOwner.transportLicense),
-    ...extractInsuranceUrls(busOwner.insuranceCertificates),
-  ];
+  const selectedFields = fields ? new Set(fields) : null;
+  const references = [];
+  if (!selectedFields || selectedFields.has("companyRegistration")) references.push(...extractDocumentUrls(busOwner.companyRegistration));
+  if (!selectedFields || selectedFields.has("taxRegistration")) references.push(...extractDocumentUrls(busOwner.taxRegistration));
+  if (!selectedFields || selectedFields.has("transportLicense")) references.push(...extractDocumentUrls(busOwner.transportLicense));
+  if (!selectedFields || selectedFields.has("insuranceCertificates")) references.push(...extractInsuranceUrls(busOwner.insuranceCertificates));
 
   return Array.from(new Set(references));
 }

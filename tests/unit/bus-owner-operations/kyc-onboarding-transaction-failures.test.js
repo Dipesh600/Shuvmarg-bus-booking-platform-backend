@@ -7,7 +7,7 @@ const { createKycSubmissionService } = require(
   "../../../src/modules/bus-owner/kyc-submission/kyc-submission.service"
 );
 
-const PDF_BUFFER = Buffer.concat([Buffer.from("%PDF-1.4\n%"), Buffer.alloc(100)]);
+const PDF_BUFFER = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
 function makeFile(name) {
   return { fieldname: name, originalname: `${name}.pdf`, buffer: PDF_BUFFER, mimetype: "application/pdf" };
 }

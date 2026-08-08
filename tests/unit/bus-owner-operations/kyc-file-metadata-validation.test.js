@@ -10,7 +10,7 @@ test("kyc-file-metadata-validation unit tests", async (t) => {
   await t.test("validateFilenameHygiene rejects null byte, slashes, path traversal, and missing ext", () => {
     assert.throws(() => validateFilenameHygiene("doc\0.pdf", "tax"), (e) => e.code === "KYC_INVALID_FILE_PAYLOAD");
     assert.throws(() => validateFilenameHygiene("../doc.pdf", "tax"), (e) => e.code === "KYC_INVALID_FILE_PAYLOAD");
-    assert.throws(() => validateFilenameHygiene(".pdf", "tax"), (e) => e.code === "KYC_FILE_EXTENSION_NOT_ALLOWED");
+    assert.throws(() => validateFilenameHygiene(".pdf", "tax"), (e) => e.code === "KYC_INVALID_FILE_PAYLOAD");
   });
 
   await t.test("validateFileMetadata extracts mime, filename and safe extension", () => {

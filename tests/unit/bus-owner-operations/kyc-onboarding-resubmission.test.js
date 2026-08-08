@@ -6,7 +6,7 @@ const { createKycSubmissionService } = require(
   "../../../src/modules/bus-owner/kyc-submission/kyc-submission.service"
 );
 
-const PDF_BUFFER = Buffer.concat([Buffer.from("%PDF-1.4\n%"), Buffer.alloc(100)]);
+const PDF_BUFFER = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
 function makeFile(name) {
   return { fieldname: name, originalname: `${name}.pdf`, buffer: PDF_BUFFER, mimetype: "application/pdf" };
 }
@@ -128,6 +128,6 @@ test("kyc-onboarding-persistence: rejected owner data replaced on resubmission",
 
   assert.equal(savedOwner.companyName, "Nepal Transport Co.");
   assert.equal(savedOwner.taxRegistration.panNumber, "123456789");
-  assert.equal(savedOwner.bankDetails.bankName, "Nepal Bank");
+  assert.equal(savedOwner.bankDetails.bankName, "Nepal Bank Ltd.");
   assert.equal(savedOwner.verificationStatus, "pending");
 });

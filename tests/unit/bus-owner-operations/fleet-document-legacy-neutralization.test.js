@@ -42,7 +42,7 @@ test("fleet-document-legacy-neutralization unit tests", async (t) => {
     assert.equal(isKeyAllowed("owners/123/brands/b1/fleets/f1/images/img.jpg"), false);
     assert.equal(isKeyAllowed("fleet-documents/f1/fitnessCert/doc.pdf"), false);
     assert.equal(isKeyAllowed("fleet-images/f1/img.jpg"), false);
-    assert.equal(isKeyAllowed("owners/123/kyc/citizenship.pdf"), true);
+    assert.equal(isKeyAllowed("owners/123/kyc/citizenship.pdf"), false);
   });
 
   await t.test("sanitizeFleetDocumentDescriptors strips objectKey and presigned URLs from general DTOs", () => {

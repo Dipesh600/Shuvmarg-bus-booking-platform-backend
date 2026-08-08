@@ -7,7 +7,7 @@ const { createAdminOwnerCreationService } = require("../../../src/modules/admin/
 test("admin-owner-creation-rollback unit tests", async (t) => {
   const validAdminId = "64f000000000000000000099";
   const validUserId = "64f000000000000000000001";
-  const pdfHeader = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+  const pdfHeader = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
   const makeFile = (name) => ({ name: `${name}.pdf`, data: pdfHeader, size: pdfHeader.length, mimetype: "application/pdf" });
 
   const validFiles = { companyRegistrationCert: makeFile("comp"), panCardImage: makeFile("tax"), ownerCitizenship: makeFile("id") };

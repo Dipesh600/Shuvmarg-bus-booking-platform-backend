@@ -175,6 +175,7 @@ curl -fsS https://api-staging.shuvmarg.com/health
 cd /opt/shuvmarg/staging
 docker compose logs -f backend    # backend logs
 docker compose logs -f caddy      # Caddy TLS/proxy logs
+docker compose logs -f clamav     # signature updates and scanner health
 docker compose ps                 # container health status
 ```
 

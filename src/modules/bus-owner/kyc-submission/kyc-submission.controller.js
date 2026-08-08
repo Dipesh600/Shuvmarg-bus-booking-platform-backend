@@ -3,6 +3,7 @@
 const { createKycSubmissionService } = require("./kyc-submission.service");
 const { handleKycSubmissionError } = require("./kyc-upload-error.mapper");
 const { sanitizeKycDetailDescriptors } = require("../kyc-document-read/kyc-document-read.controller");
+const { getEffectiveKycStatus } = require("./kyc-submission-state");
 
 function unauthorized(res) {
   return res.status(401).json({
@@ -49,11 +50,10 @@ function createKycSubmissionController({
         });
       }
 
-      const resolvedOwner = kycDocumentReadService
-        ? await kycDocumentReadService.resolveOwnerKycDocuments(owner)
-        : owner;
-
-      const sanitized = sanitizeKycDetailDescriptors(resolvedOwner);
+      // Status responses expose descriptors only. Do not presign or fetch any
+      // document until the dedicated, scan-gated read endpoint is called.
+      const sanitized = sanitizeKycDetailDescriptors(owner);
+      sanitized.verificationStatus = getEffectiveKycStatus(owner);
 
       const fields = [
         "verificationStatus", "rejectionReason", "companyRegistration",

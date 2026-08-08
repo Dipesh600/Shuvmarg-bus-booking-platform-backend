@@ -3,18 +3,13 @@
 const Agent = require("../../../models/agentModel.js");
 const BusOwner = require("../../../models/busOwnerModel.js");
 const Bus = require("../../../models/fleetModel.js");
-const { getPresignedUrl } = require("../../../services/s3Service.js");
-const { createKycDocumentReadService } = require("../../../src/modules/bus-owner/kyc-submission/kyc-document-read.service.js");
 const { sanitizeKycDetailDescriptors } = require("../../../src/modules/bus-owner/kyc-document-read/kyc-document-read.controller.js");
 const { countBusOwnerKycDocuments } = require("../../../src/modules/bus-owner/kyc-submission/kyc-document-count.js");
-
-const defaultKycDocumentReadService = createKycDocumentReadService({ getPresignedUrl });
 
 function createUnifiedKycListController({
   AgentModel = Agent,
   BusOwnerModel = BusOwner,
   BusModel = Bus,
-  kycDocumentReadService = defaultKycDocumentReadService,
 } = {}) {
   return async function getUnifiedKycList(req, res) {
     try {
@@ -24,13 +19,10 @@ function createUnifiedKycListController({
         BusModel.find().populate("ownerId", "name email phone").populate("brandId", "brandName brandCode logo").lean(),
       ]);
 
-      const busOwners = await Promise.all(
-        rawBusOwners.map(async (owner) => {
-          const resolved = await kycDocumentReadService.resolveOwnerKycDocuments(owner);
-          const docCount = countBusOwnerKycDocuments(resolved);
-          return { resolved, docCount };
-        })
-      );
+      const busOwners = rawBusOwners.map((owner) => ({
+        resolved: owner,
+        docCount: countBusOwnerKycDocuments(owner),
+      }));
 
       const unifiedData = [];
 

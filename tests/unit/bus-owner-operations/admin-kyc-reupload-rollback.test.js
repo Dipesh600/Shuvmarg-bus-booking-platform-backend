@@ -7,7 +7,7 @@ const { createAdminKycReuploadService } = require("../../../src/modules/admin/bu
 test("admin-kyc-reupload-rollback unit tests", async (t) => {
   const validAdminId = "64f000000000000000000099";
   const validOwnerId = "64f000000000000000000002";
-  const pdfHeader = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+  const pdfHeader = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
   const makeFile = () => ({ name: "tax.pdf", data: pdfHeader, size: pdfHeader.length, mimetype: "application/pdf" });
 
   const rejectedOwner = {
