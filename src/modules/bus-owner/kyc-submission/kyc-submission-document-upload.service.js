@@ -7,7 +7,7 @@ async function uploadOnboardingDocuments({
   busOwner,
   newlyUploadedObjectKeys = [],
 }) {
-  const singleDocFields = ["companyRegistration", "taxRegistration", "transportLicense"];
+  const singleDocFields = ["companyRegistration", "taxRegistration", "ownerIdentity"];
 
   for (const field of singleDocFields) {
     if (normalizedFiles[field]) {
@@ -26,27 +26,6 @@ async function uploadOnboardingDocuments({
       busOwner[field].verified = false;
       busOwner[field].rejectionReason = null;
     }
-  }
-
-  if (normalizedFiles.insuranceCertificates) {
-    const insuranceItems = [];
-    for (const validatedFile of normalizedFiles.insuranceCertificates) {
-      const key = await storageService.uploadDocument({
-        validatedFile,
-        ownerId,
-        documentType: "insuranceCertificates",
-      });
-      newlyUploadedObjectKeys.push(key);
-      insuranceItems.push({
-        insurerName: null,
-        policyNumber: null,
-        validTill: null,
-        documentUrls: [key],
-        verified: false,
-        rejectionReason: null,
-      });
-    }
-    busOwner.insuranceCertificates = insuranceItems;
   }
 
   return newlyUploadedObjectKeys;

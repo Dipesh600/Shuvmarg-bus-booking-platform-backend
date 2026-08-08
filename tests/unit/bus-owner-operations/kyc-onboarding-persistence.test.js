@@ -14,7 +14,7 @@ function makeValidFiles() {
   return {
     companyRegistration: [makeFile("companyRegistration")],
     taxRegistration: [makeFile("taxRegistration")],
-    transportLicense: [makeFile("transportLicense")],
+    ownerIdentity: [makeFile("ownerIdentity")],
   };
 }
 

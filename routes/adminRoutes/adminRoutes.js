@@ -47,6 +47,7 @@ const adminWalletCtrl      = require("../../src/modules/admin/wallet-management"
 const transactionCtrl      = require("../../controllers/adminController/transactionController/transactionController.js");
 const routeDiscoveryCtrl   = require("../../src/modules/admin/route-discovery");
 const registryBoardingRoutes = require("./registryBoardingRoutes.js");
+const { rejectOversizedKycRequest, parseKycSubmissionUpload } = require("../../middleware/kycSubmissionUpload.js");
 // Auth Routes
 router.post("/auth/login",   authController.login);
 router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);
@@ -107,8 +108,8 @@ const { registerAdminFrontendReadRoutes } = require("./frontendReadRoutes.js");
 registerAdminFrontendReadRoutes(router);
 
 // Bus Owner Write / Admin Operations
-router.post("/busOwner/create", adminMiddleware, busOwnerController.createBusOwnerFull);
-router.post("/busOwner/reuploadKycDocument", adminMiddleware, busOwnerController.reuploadKycDocument);
+router.post("/busOwner/create", adminMiddleware, rejectOversizedKycRequest, parseKycSubmissionUpload, busOwnerController.createBusOwnerFull);
+router.post("/busOwner/reuploadKycDocument", adminMiddleware, rejectOversizedKycRequest, parseKycSubmissionUpload, busOwnerController.reuploadKycDocument);
 // router.post("/makeUserBusOwner", adminMiddleware, busOwnerController.makeUserBusOwner);
 router.patch("/busOwnerKycStatus", adminMiddleware, busOwnerController.updateBusOwnerKyc);
 router.patch("/busOwner/update", adminMiddleware, busOwnerController.updateBusOwnerProfile);
@@ -244,6 +245,7 @@ router.patch("/fleet/resubmit/:id", adminMiddleware, adminFleetController.resubm
 router.patch("/fleet/reupload-doc/:id", adminMiddleware, adminFleetController.reuploadFleetDocument);
 router.put("/fleet/:fleetId/documents/:slot", adminMiddleware, adminFleetDocumentController.uploadDocument);
 router.get("/fleet/:fleetId/documents/:slot/read-url", adminMiddleware, adminFleetDocumentController.getDocumentReadUrl);
+router.get("/fleet/:fleetId/documents/:slot/view", adminMiddleware, adminFleetDocumentController.viewDocument);
 
 // ─── TRIP CONTROL CENTER (Platform-wide oversight — read-only) ────────────────
 // Exception triage dashboard with per-trip booking aggregation

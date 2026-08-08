@@ -55,6 +55,12 @@ module.exports = {
     createDomainError(msg, 403, "FLEET_DOCUMENT_FORBIDDEN"),
   notFound: (msg = "Fleet document not found.") =>
     createDomainError(msg, 404, "FLEET_DOCUMENT_NOT_FOUND"),
+  legacyReference: () =>
+    createDomainError(
+      "This legacy fleet document must be migrated before it can be previewed securely.",
+      422,
+      "FLEET_DOCUMENT_LEGACY_REFERENCE"
+    ),
   approvedImmutable: () =>
     createDomainError(
       "Approved fleet documents are immutable and cannot be replaced directly.",

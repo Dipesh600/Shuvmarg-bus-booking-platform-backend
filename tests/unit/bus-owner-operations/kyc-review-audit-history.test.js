@@ -11,7 +11,15 @@ test("kyc-review-audit-history unit tests", async (t) => {
   const validAdminId = "64f000000000000000000099";
 
   const activeAdmin = { _id: validAdminId, adminId: "SUMA-ADM-001", role: "ADMIN", isActive: true, email: "admin@a.com" };
-  const pendingOwner = { _id: validOwnerId, user: validUserId, verificationStatus: "pending", kycAuditHistory: [] };
+  const pendingOwner = {
+    _id: validOwnerId,
+    user: validUserId,
+    verificationStatus: "pending",
+    companyRegistration: { documentUrls: ["company.pdf"] },
+    taxRegistration: { documentUrls: ["tax.pdf"] },
+    ownerIdentity: { documentUrls: ["citizenship.pdf"] },
+    kycAuditHistory: [],
+  };
 
   function makeDeps(overrides = {}) {
     let updatePayload = null;

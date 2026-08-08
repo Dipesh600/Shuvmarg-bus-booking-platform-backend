@@ -10,6 +10,7 @@ const { resolveKycReviewer } = require("./kyc-review-reviewer.resolver");
 const { assertReviewerIsIndependent } = require("./kyc-review-separation-of-duty.policy");
 const { buildKycAuditEvent, collectInvalidKycDocumentTypes, KYC_AUDIT_EVENT, KYC_AUDIT_ACTOR } = require("../kyc-audit");
 const { isKycMalwareScanReady } = require("../kyc-document-read/kyc-document-reference.service");
+const { REQUIRED_DOCUMENT_FIELDS, hasStoredDocument } = require("../kyc-submission/kyc-submission-state");
 
 function normalizeActorInput(actorInput) {
   if (actorInput && typeof actorInput === "object" && typeof actorInput.adminId === "string" && actorInput.adminId.trim() && typeof actorInput.tokenRole === "string" && actorInput.tokenRole.trim()) {
@@ -60,6 +61,17 @@ function createKycReviewService({
       applyDocumentVerdicts(owner, body);
     }
 
+    if (targetStatus === KYC_REVIEW_STATUS.APPROVED) {
+      const missingDocuments = REQUIRED_DOCUMENT_FIELDS.filter((field) => !hasStoredDocument(owner[field]));
+      if (missingDocuments.length > 0) {
+        throw new KycReviewError(
+          "KYC_REVIEW_REQUIRED_DOCUMENTS_MISSING",
+          "Company registration, PAN/VAT registration and owner citizenship are required before approval.",
+          409
+        );
+      }
+    }
+
     const reviewedAt = clock();
     const invalidDocumentTypes = targetStatus === KYC_REVIEW_STATUS.REJECTED ? collectInvalidKycDocumentTypes(owner) : [];
 
@@ -80,17 +92,13 @@ function createKycReviewService({
       "kycReview.reviewedAt": reviewedAt,
     };
 
-    const docFields = ["companyRegistration", "ownerIdentity", "taxRegistration", "transportLicense"];
+    const docFields = ["companyRegistration", "ownerIdentity", "taxRegistration"];
     for (const field of docFields) {
       if (owner[field]) {
         updateFields[`${field}.verified`] = owner[field].verified;
         updateFields[`${field}.rejectionReason`] = owner[field].rejectionReason || null;
       }
     }
-    if (Array.isArray(owner.insuranceCertificates)) {
-      updateFields.insuranceCertificates = owner.insuranceCertificates;
-    }
-
     const updatedOwner = await BusOwner.findOneAndUpdate(
       { _id: owner._id, verificationStatus: KYC_REVIEW_STATUS.PENDING },
       { $set: updateFields, $push: { kycAuditHistory: auditEvent } },

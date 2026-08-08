@@ -77,7 +77,13 @@ test("kyc-review-service failure tests", async (t) => {
   });
 
   await t.test("concurrent review where atomic findOneAndUpdate returns null throws HTTP 409", async () => {
-    const mockPendingOwner = { _id: "64f000000000000000000001", verificationStatus: "pending" };
+    const mockPendingOwner = {
+      _id: "64f000000000000000000001",
+      verificationStatus: "pending",
+      companyRegistration: { documentUrls: ["company.pdf"] },
+      taxRegistration: { documentUrls: ["tax.pdf"] },
+      ownerIdentity: { documentUrls: ["citizenship.pdf"] },
+    };
     const mockBusOwnerModel = {
       findOne: async () => mockPendingOwner,
       findOneAndUpdate: async () => null,
@@ -88,5 +94,27 @@ test("kyc-review-service failure tests", async (t) => {
       async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "approved" }, validActor),
       (err) => err.code === "KYC_REVIEW_INVALID_TRANSITION" && err.statusCode === 409
     );
+  });
+
+  await t.test("approval is blocked when any required business KYC document is missing", async () => {
+    let writeCalls = 0;
+    const mockPendingOwner = {
+      _id: "64f000000000000000000001",
+      verificationStatus: "pending",
+      companyRegistration: { documentUrls: ["company.pdf"] },
+      taxRegistration: { documentUrls: ["tax.pdf"] },
+      ownerIdentity: { documentUrls: [] },
+    };
+    const mockBusOwnerModel = {
+      findOne: async () => mockPendingOwner,
+      findOneAndUpdate: async () => { writeCalls += 1; },
+    };
+    const service = createKycReviewService({ Admin: mockAdminModel, BusOwner: mockBusOwnerModel, User: {} });
+
+    await assert.rejects(
+      async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "approved" }, validActor),
+      (err) => err.code === "KYC_REVIEW_REQUIRED_DOCUMENTS_MISSING" && err.statusCode === 409
+    );
+    assert.equal(writeCalls, 0);
   });
 });

@@ -5,10 +5,7 @@ const crypto = require("crypto");
 const DOCUMENT_TYPE_SEGMENTS = Object.freeze({
   companyRegistration: "company-registration",
   taxRegistration: "tax-registration",
-  transportLicense: "transport-license",
-  insuranceCertificates: "insurance-certificate",
   ownerIdentity: "owner-identity",
-  bankDetails: "bank-details",
 });
 
 function createKycDocumentStorageService({

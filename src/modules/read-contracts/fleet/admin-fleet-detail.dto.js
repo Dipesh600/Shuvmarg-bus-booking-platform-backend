@@ -38,16 +38,40 @@ function mapAdminFleetDetail(fleet) {
       busType: fleet.busType || "N/A",
       vehicleType: fleet.vehicleType || "BUS",
       totalSeats: fleet.totalSeats || 0,
+      registrationYear: fleet.registrationYear || null,
+      seatConfig: fleet.seatConfig || null,
       features: Array.isArray(fleet.features) ? fleet.features : [],
     },
     assignment: {
       route: fleet.route ? `${fleet.route.from} - ${fleet.route.to}` : "Unassigned",
       operatorId: brand?._id ? String(brand._id) : null,
       operatorName: brand.brandName || null,
+      operatorCode: brand.brandCode || null,
+      operatorLogo: brand.logo || null,
+      operatorBaseCity: brand.baseCity || null,
+      operatorStatus: brand.status || null,
+      corridor: fleet.corridorId
+        ? {
+            corridorId: String(fleet.corridorId._id || fleet.corridorId),
+            code: fleet.corridorId.code || null,
+            origin: fleet.corridorId.originId?.name || fleet.corridorId.originId?.city || null,
+            destination: fleet.corridorId.destinationId?.name || fleet.corridorId.destinationId?.city || null,
+            status: fleet.corridorId.status || null,
+          }
+        : null,
+      routeRequest: fleet.routeRequestId
+        ? {
+            routeRequestId: String(fleet.routeRequestId._id || fleet.routeRequestId),
+            origin: fleet.routeRequestId.originCity || null,
+            destination: fleet.routeRequestId.destinationCity || null,
+            viaStops: Array.isArray(fleet.routeRequestId.viaStops) ? fleet.routeRequestId.viaStops : [],
+            status: fleet.routeRequestId.status || null,
+          }
+        : null,
     },
     status: fleet.status || "inactive",
     approvalStatus: fleet.approvalStatus || "PENDING",
-    isApproved: fleet.isApproved || false,
+    isApproved: fleet.approvalStatus === "APPROVED" || fleet.isApproved || false,
     rejectionReason: fleet.rejectionReason || null,
     setupComplete: fleet.setupComplete || false,
     documents: docDescriptors,

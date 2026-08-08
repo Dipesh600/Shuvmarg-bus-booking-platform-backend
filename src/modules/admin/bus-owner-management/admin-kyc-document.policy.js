@@ -16,18 +16,12 @@ const ADMIN_CREATION_KYC_POLICY = Object.freeze({
     multiple: false,
     folder: "bus_owner_kyc/owner_identity",
   },
-  bankDetails: {
-    required: false,
-    multiple: false,
-    folder: "bus_owner_kyc/bank_details",
-  },
 });
 
 const ADMIN_REUPLOAD_ALLOWED_TYPES = Object.freeze([
   "companyRegistration",
   "ownerIdentity",
   "taxRegistration",
-  "transportLicense",
 ]);
 
 module.exports = {

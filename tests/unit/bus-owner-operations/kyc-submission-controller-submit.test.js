@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createKycSubmissionController } = require("../../../src/modules/bus-owner/kyc-submission/kyc-submission.controller");
-const { PDF_BUFFER, makeFile, makeValidFiles, responseRecorder } = require("./helpers/kyc-test-fixtures");
+const { makeValidFiles, responseRecorder } = require("./helpers/kyc-test-fixtures");
 
 const VALID_BODY = {
   companyName: "Nepal Transport Co.",
@@ -49,7 +49,6 @@ test("bus-owner KYC submission controller submit contracts", async (t) => {
     });
 
     const validFiles = makeValidFiles();
-    validFiles.insuranceCertificates = [makeFile("ins.pdf", "application/pdf", PDF_BUFFER)];
 
     const res = responseRecorder();
     await controller.submitBusOwnerKyc(
@@ -66,7 +65,7 @@ test("bus-owner KYC submission controller submit contracts", async (t) => {
     });
     assert.equal(created.verificationStatus, "pending");
     assert.equal(created.saved, true);
-    assert.equal(uploads.length, 4);
+    assert.equal(uploads.length, 3);
   });
 
   await t.test("controller returns HTTP 400 with onboarding validation error when body is missing", async () => {

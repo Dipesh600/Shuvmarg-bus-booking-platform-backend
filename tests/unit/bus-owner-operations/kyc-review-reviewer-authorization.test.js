@@ -10,7 +10,14 @@ test("kyc-review-reviewer-authorization zero-side-effect tests", async (t) => {
   const validAdminId = "64f000000000000000000099";
 
   const activeAdmin = { _id: validAdminId, adminId: "SUMA-ADM-001", role: "ADMIN", isActive: true, accountLocked: false, email: "admin@a.com" };
-  const pendingOwner = { _id: validOwnerId, user: validUserId, verificationStatus: "pending" };
+  const pendingOwner = {
+    _id: validOwnerId,
+    user: validUserId,
+    verificationStatus: "pending",
+    companyRegistration: { documentUrls: ["company.pdf"] },
+    taxRegistration: { documentUrls: ["tax.pdf"] },
+    ownerIdentity: { documentUrls: ["citizenship.pdf"] },
+  };
   const ownerUser = { _id: validUserId, email: "owner@o.com", phone: "9800000000" };
 
   function makeMockDeps(overrides = {}) {

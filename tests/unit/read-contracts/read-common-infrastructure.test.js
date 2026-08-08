@@ -73,7 +73,7 @@ test("fleet and KYC document descriptor mappers map database state accurately", 
   assert.equal(kycDescs.companyRegistration.present, true);
   assert.equal(kycDescs.companyRegistration.verified, true);
   const kycSum = calculateKycDocumentSummary(kycDescs);
-  assert.equal(kycSum.totalSlots, 6);
+  assert.equal(kycSum.totalSlots, 3);
   assert.equal(kycSum.present, 1);
   assert.equal(kycSum.verified, 1);
 });

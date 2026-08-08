@@ -66,8 +66,6 @@ test("kyc-submission.service success and state tests", async (t) => {
       verificationStatus: "rejected",
       companyRegistration: { documentUrls: ["owners/1/old-c.pdf", "owners/1/old-c.pdf"] },
       taxRegistration: { documentUrls: ["https://cloudinary.com/old-t.pdf"] },
-      transportLicense: { documentUrls: ["owners/1/old-l.pdf"] },
-      insuranceCertificates: [{ documentUrls: ["owners/1/old-i.pdf"] }],
       ownerIdentity: { documentUrls: ["owners/1/old-identity.pdf"] },
     };
 
@@ -97,15 +95,10 @@ test("kyc-submission.service success and state tests", async (t) => {
     assert.deepEqual(callOrder, [
       "upload:companyRegistration",
       "upload:taxRegistration",
-      "upload:transportLicense",
+      "upload:ownerIdentity",
       "save",
-      "delete-old:owners/1/old-c.pdf,https://cloudinary.com/old-t.pdf,owners/1/old-l.pdf",
+      "delete-old:owners/1/old-c.pdf,https://cloudinary.com/old-t.pdf,owners/1/old-identity.pdf",
     ]);
-    assert.deepEqual(
-      savedOwner.insuranceCertificates[0].documentUrls,
-      ["owners/1/old-i.pdf"],
-      "an unchanged optional document must be retained"
-    );
   });
 
   await t.test("old cleanup failure logs via logger.error but returns submission success", async () => {

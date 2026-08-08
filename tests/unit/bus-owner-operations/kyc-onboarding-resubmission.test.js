@@ -14,7 +14,7 @@ function makeValidFiles() {
   return {
     companyRegistration: [makeFile("companyRegistration")],
     taxRegistration: [makeFile("taxRegistration")],
-    transportLicense: [makeFile("transportLicense")],
+    ownerIdentity: [makeFile("ownerIdentity")],
   };
 }
 
@@ -59,8 +59,7 @@ test("kyc-onboarding-persistence: transaction start/commit fails -> uploaded key
     verificationStatus: "rejected",
     companyRegistration: { documentUrls: [oldDocKey] },
     taxRegistration: { documentUrls: [] },
-    transportLicense: { documentUrls: [] },
-    insuranceCertificates: [],
+    ownerIdentity: { documentUrls: [] },
     kycAuditHistory: [],
   };
 

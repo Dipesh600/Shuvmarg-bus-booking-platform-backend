@@ -61,7 +61,17 @@ function createFleetReadRepository({
     try {
       fleet = await FleetModel.findById(id)
         .populate({ path: "ownerId", select: "name email phone", options: { strictPopulate: false } })
-        .populate({ path: "brandId", select: "brandName brandCode ownerId", options: { strictPopulate: false } })
+        .populate({ path: "brandId", select: "brandName brandCode ownerId logo baseCity status", options: { strictPopulate: false } })
+        .populate({
+          path: "corridorId",
+          select: "code originId destinationId status",
+          populate: [
+            { path: "originId", select: "name city code", options: { strictPopulate: false } },
+            { path: "destinationId", select: "name city code", options: { strictPopulate: false } },
+          ],
+          options: { strictPopulate: false },
+        })
+        .populate({ path: "routeRequestId", select: "originCity destinationCity viaStops status", options: { strictPopulate: false } })
         .populate({ path: "approvedBy", select: "name email", options: { strictPopulate: false } })
         .lean();
     } catch (populateError) {

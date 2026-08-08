@@ -18,14 +18,13 @@ test("admin-kyc-document-mapping unit tests", async (t) => {
       companyRegistrationCert: fakeCompany,
       panCardImage: fakeTax,
       ownerCitizenship: fakeIdentity,
-      bankAuthorizationLetter: fakeBank,
     };
 
     const normalized = normalizeAdminKycFiles(rawFiles);
     assert.equal(normalized.companyRegistration, fakeCompany);
     assert.equal(normalized.taxRegistration, fakeTax);
     assert.equal(normalized.ownerIdentity, fakeIdentity);
-    assert.equal(normalized.bankDetails, fakeBank);
+    assert.equal(normalized.bankDetails, undefined);
   });
 
   await t.test("rejects unknown upload file fields", async () => {

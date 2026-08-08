@@ -68,5 +68,5 @@ test("bus owner getOwnKycStatus returns database-truth descriptors and no fabric
   assert.equal(res.data.submittedAt, undefined);
   assert.equal(res.data.documents.companyRegistration.present, true);
   assert.equal(res.data.documents.companyRegistration.verified, true);
-  assert.equal(res.data.documentSummary.totalSlots, 6);
+  assert.equal(res.data.documentSummary.totalSlots, 3);
 });
