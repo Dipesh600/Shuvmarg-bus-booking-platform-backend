@@ -11,17 +11,13 @@ test("kyc-document-request-validation unit tests", async (t) => {
     const result = validateKycDocuments(files);
     assert.ok(result.companyRegistration);
     assert.ok(result.taxRegistration);
-    assert.ok(result.transportLicense);
+    assert.ok(result.ownerIdentity);
   });
 
-  await t.test("accepts optional insurance files within max limit (<= 5)", () => {
+  await t.test("rejects former fleet and bank document fields", () => {
     const files = makeValidFiles();
-    files.insuranceCertificates = [
-      makeFile("insurance1.pdf", "application/pdf", PDF_BUFFER),
-      makeFile("insurance2.jpeg", "image/jpeg", JPEG_BUFFER),
-    ];
-    const result = validateKycDocuments(files);
-    assert.equal(result.insuranceCertificates.length, 2);
+    files.insuranceCertificates = makeFile("insurance.pdf", "application/pdf", PDF_BUFFER);
+    assert.throws(() => validateKycDocuments(files), (e) => e.code === "KYC_UNKNOWN_DOCUMENT_FIELD");
   });
 
   await t.test("rejects missing or empty files object", () => {
@@ -45,12 +41,6 @@ test("kyc-document-request-validation unit tests", async (t) => {
     const files = makeValidFiles();
     files.companyRegistration = [makeFile("comp1.pdf", "application/pdf", PDF_BUFFER), makeFile("comp2.pdf", "application/pdf", PDF_BUFFER)];
     assert.throws(() => validateKycDocuments(files), (e) => e.code === "KYC_TOO_MANY_FILES" && e.field === "companyRegistration");
-  });
-
-  await t.test("rejects more than 5 insurance files", () => {
-    const files = makeValidFiles();
-    files.insuranceCertificates = Array(6).fill(makeFile("ins.pdf", "application/pdf", PDF_BUFFER));
-    assert.throws(() => validateKycDocuments(files), (e) => e.code === "KYC_TOO_MANY_FILES" && e.statusCode === 413);
   });
 
   await t.test("rejects zero-byte files", () => {

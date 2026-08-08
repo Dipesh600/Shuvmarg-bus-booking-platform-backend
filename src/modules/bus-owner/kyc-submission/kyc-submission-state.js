@@ -3,7 +3,7 @@
 const REQUIRED_DOCUMENT_FIELDS = Object.freeze([
   "companyRegistration",
   "taxRegistration",
-  "transportLicense",
+  "ownerIdentity",
 ]);
 
 function hasStoredDocument(section) {
@@ -28,6 +28,7 @@ function getEffectiveKycStatus(owner) {
 
 module.exports = {
   REQUIRED_DOCUMENT_FIELDS,
+  hasStoredDocument,
   hasKycSubmissionEvidence,
   getEffectiveKycStatus,
 };

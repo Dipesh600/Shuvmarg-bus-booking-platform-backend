@@ -4,6 +4,7 @@ const BusOwner = require("../../../../models/busOwnerModel");
 const { uploadFileToS3, deleteObjectFromS3, buildS3Path } = require("../../../../services/s3Service");
 const { createKycDocumentStorageService } = require("../../bus-owner/kyc-submission/kyc-document-storage.service");
 const { validateKycDocuments } = require("../../bus-owner/kyc-submission/kyc-document.validator");
+const { createKycMalwareScanner } = require("../../bus-owner/kyc-submission/kyc-malware-scanner.service");
 const { buildKycAuditEvent } = require("../../bus-owner/kyc-audit");
 const { resolveAuthorizedAdminActor } = require("./admin-actor.resolver");
 const { normalizeAdminKycFiles } = require("./admin-kyc-document-mapping.policy");
@@ -11,11 +12,8 @@ const { ADMIN_CREATION_KYC_POLICY } = require("./admin-kyc-document.policy");
 const { validateAdminOwnerCreationBody } = require("./admin-owner-creation-request.policy");
 const { runCreationRollback } = require("./admin-owner-creation-rollback.helper");
 const {
-  prepareOwnerIdentity,
-  createUnnotifiedUser,
-  addOwnerRoleToExistingUser,
-  rollbackUserIdentity,
-  notifyNewOwnerCredentials,
+  prepareOwnerIdentity, createUnnotifiedUser, addOwnerRoleToExistingUser,
+  rollbackUserIdentity, notifyNewOwnerCredentials,
 } = require("./admin-owner-identity.service");
 
 function createAdminOwnerCreationService(deps = {}) {
@@ -28,12 +26,14 @@ function createAdminOwnerCreationService(deps = {}) {
   const addRole = deps.addOwnerRoleToExistingUser || addOwnerRoleToExistingUser;
   const rollbackUser = deps.rollbackUserIdentity || rollbackUserIdentity;
   const notifyUser = deps.notifyNewOwnerCredentials || notifyNewOwnerCredentials;
+  const malwareScanner = deps.malwareScanner || createKycMalwareScanner({ clock, logger: deps.logger || console });
 
   async function createAdminBusOwner({ body, files, actor }) {
     const sanitizedBody = validateAdminOwnerCreationBody(body);
     const normalizedFiles = normalizeAdminKycFiles(files);
     const validatedFiles = validateKycDocuments(normalizedFiles, ADMIN_CREATION_KYC_POLICY);
     const admin = await resolveActor(actor, deps);
+    const malwareScan = await malwareScanner.scanValidatedFiles(validatedFiles);
 
     const preparedIdentity = await prepareIdentity(sanitizedBody, deps);
     let commitResult = null;
@@ -83,9 +83,15 @@ function createAdminOwnerCreationService(deps = {}) {
           accountHolderName: sanitizedBody.accountHolderName,
           branchName: sanitizedBody.branchName,
           swiftCode: sanitizedBody.swiftCode || null,
-          documentUrls: fileKeysBySection.bankDetails || [],
         },
         verificationStatus: "pending",
+        kycSecurity: {
+          malwareScanStatus: malwareScan.status,
+          engine: malwareScan.engine,
+          scannedAt: malwareScan.scannedAt,
+          fileCount: malwareScan.fileCount,
+          contentHashes: malwareScan.contentHashes,
+        },
       });
 
       const auditEvent = buildKycAuditEvent({
@@ -135,10 +141,7 @@ function createAdminOwnerCreationService(deps = {}) {
       }
     }
 
-    return {
-      busOwnerId: busOwner.busOwnerId || busOwner._id.toString(),
-      userId: commitResult.user._id,
-    };
+    return { busOwnerId: busOwner.busOwnerId || busOwner._id.toString(), userId: commitResult.user._id };
   }
 
   return { createAdminBusOwner };

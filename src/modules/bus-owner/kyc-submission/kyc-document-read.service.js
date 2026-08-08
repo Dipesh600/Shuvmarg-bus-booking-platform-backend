@@ -55,18 +55,12 @@ function createKycDocumentReadService({ getPresignedUrl }) {
     if (!busOwner || typeof busOwner !== "object") return busOwner;
 
     const cloned = JSON.parse(JSON.stringify(busOwner));
-    const singleDocFields = ["companyRegistration", "taxRegistration", "transportLicense", "ownerIdentity"];
+    const singleDocFields = ["companyRegistration", "taxRegistration", "ownerIdentity"];
 
     for (const field of singleDocFields) {
       if (cloned[field]) {
         cloned[field] = await resolveDocumentSection(cloned[field]);
       }
-    }
-
-    if (Array.isArray(cloned.insuranceCertificates)) {
-      cloned.insuranceCertificates = await Promise.all(
-        cloned.insuranceCertificates.map(resolveDocumentSection)
-      );
     }
 
     return cloned;

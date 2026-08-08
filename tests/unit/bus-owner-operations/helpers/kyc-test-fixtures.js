@@ -25,7 +25,7 @@ function makeValidFiles() {
   return {
     companyRegistration: makeFile("company.pdf", "application/pdf", PDF_BUFFER),
     taxRegistration: makeFile("tax.jpg", "image/jpeg", JPEG_BUFFER),
-    transportLicense: makeFile("license.png", "image/png", PNG_BUFFER),
+    ownerIdentity: makeFile("citizenship.png", "image/png", PNG_BUFFER),
   };
 }
 

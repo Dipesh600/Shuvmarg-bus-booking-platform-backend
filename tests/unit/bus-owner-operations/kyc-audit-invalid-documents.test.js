@@ -34,31 +34,14 @@ test("kyc-audit-invalid-documents unit tests", async (t) => {
     assert.deepEqual(invalid, ["ownerIdentity"]);
   });
 
-  await t.test("empty optional insurance certificate with verified=false is NOT included", async () => {
-    const owner = {
-      insuranceCertificates: [{ documentUrls: [], verified: false }],
-    };
-    const invalid = collectInvalidKycDocumentTypes(owner);
-    assert.deepEqual(invalid, []);
-  });
-
-  await t.test("insurance certificate with documentUrls and verified=false IS included", async () => {
-    const owner = {
-      insuranceCertificates: [{ documentUrls: ["ins.pdf"], verified: false }],
-    };
-    const invalid = collectInvalidKycDocumentTypes(owner);
-    assert.deepEqual(invalid, ["insuranceCertificates"]);
-  });
-
   await t.test("empty schema-default sections never enter audit metadata and canonical ordering remains deterministic", async () => {
     const owner = {
-      transportLicense: { documentUrls: ["t.pdf"], verified: false },
       companyRegistration: { documentUrls: ["c.pdf"], verified: false },
       taxRegistration: { documentUrls: [], verified: false },
-      ownerIdentity: { documentUrls: [], verified: false },
+      ownerIdentity: { documentUrls: ["id.pdf"], verified: false },
     };
     const invalid = collectInvalidKycDocumentTypes(owner);
-    assert.deepEqual(invalid, ["companyRegistration", "transportLicense"]);
+    assert.deepEqual(invalid, ["companyRegistration", "ownerIdentity"]);
   });
 
   await t.test("sanitizeInvalidDocumentTypes filters unknown strings and deduplicates deterministically", async () => {

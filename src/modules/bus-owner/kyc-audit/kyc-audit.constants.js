@@ -16,8 +16,6 @@ const ALLOWED_INVALID_DOC_TYPES = Object.freeze([
   "companyRegistration",
   "ownerIdentity",
   "taxRegistration",
-  "transportLicense",
-  "insuranceCertificates",
 ]);
 
 module.exports = {

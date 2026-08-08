@@ -26,7 +26,7 @@ test("kyc-document-read.service unit tests", async (t) => {
     });
   });
 
-  await t.test("resolveOwnerKycDocuments clones input and resolves all document sections including insurance", async () => {
+  await t.test("resolveOwnerKycDocuments clones input and resolves all three business document sections", async () => {
     const getPresignedUrl = async (key) => `https://signed/${key}`;
     const readService = createKycDocumentReadService({ getPresignedUrl });
 
@@ -34,9 +34,7 @@ test("kyc-document-read.service unit tests", async (t) => {
       verificationStatus: "pending",
       companyRegistration: { documentUrls: ["owners/1/kyc/company/doc1.pdf"] },
       taxRegistration: { documentUrls: ["https://legacy.url/tax.jpg"] },
-      insuranceCertificates: [
-        { insurerName: "AIC", documentUrls: ["owners/1/kyc/insurance/cert.pdf"] },
-      ],
+      ownerIdentity: { documentUrls: ["owners/1/kyc/identity/doc.pdf"] },
       dirtyField: 12345,
     };
 
@@ -51,7 +49,7 @@ test("kyc-document-read.service unit tests", async (t) => {
     assert.equal(resolved.companyRegistration.documentReferences[0].storageReference, "owners/1/kyc/company/doc1.pdf");
     assert.equal(resolved.taxRegistration.documentUrls[0], "https://legacy.url/tax.jpg");
     assert.equal(resolved.taxRegistration.documentReferences[0].legacy, true);
-    assert.equal(resolved.insuranceCertificates[0].documentUrls[0], "https://signed/owners/1/kyc/insurance/cert.pdf");
+    assert.equal(resolved.ownerIdentity.documentUrls[0], "https://signed/owners/1/kyc/identity/doc.pdf");
   });
 
   await t.test("dirty historical DB values (null, numbers, non-strings) do not crash read service", async () => {

@@ -144,18 +144,13 @@ const getBookingsByUser = async (req, res) => {
       })
       .sort({ createdAt: -1 });
 
-    if (!bookings || bookings.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No bookings found for this user.",
-      });
-    }
-
     return res.status(200).json({
       success: true,
-      message: "User bookings fetched successfully!",
+      message: bookings.length > 0
+        ? "User bookings fetched successfully!"
+        : "No bookings found for this user.",
       results: bookings.length,
-      data: bookings,
+      data: bookings || [],
     });
   } catch (error) {
     console.error("Error fetching user bookings:", error);

@@ -57,7 +57,7 @@ function createKycSubmissionController({
 
       const fields = [
         "verificationStatus", "rejectionReason", "companyRegistration",
-        "taxRegistration", "transportLicense", "insuranceCertificates",
+        "taxRegistration", "ownerIdentity",
         "createdAt", "updatedAt",
       ];
       return res.status(200).json({

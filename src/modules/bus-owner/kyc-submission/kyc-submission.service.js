@@ -31,10 +31,6 @@ function createKycSubmissionService({
 
     const rejectedDocumentFields = !isInitialSubmission && busOwner.verificationStatus === "rejected"
       ? Object.keys(KYC_DOCUMENT_POLICY).filter((field) => {
-          if (field === "insuranceCertificates") {
-            return Array.isArray(busOwner.insuranceCertificates) &&
-              busOwner.insuranceCertificates.some((certificate) => Boolean(certificate?.rejectionReason));
-          }
           const section = busOwner[field];
           const hasStoredFile = Array.isArray(section?.documentUrls) && section.documentUrls.length > 0;
           return Boolean(section?.rejectionReason) || (KYC_DOCUMENT_POLICY[field].required && !hasStoredFile);

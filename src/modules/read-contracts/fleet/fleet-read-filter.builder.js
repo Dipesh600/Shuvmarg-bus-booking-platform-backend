@@ -9,7 +9,7 @@ function escapeRegex(str) {
 
 const { FLEET_APPROVAL_VALUES, FLEET_OPERATIONAL_VALUES } = require("../../../contracts");
 
-function buildAdminFleetFilter({ search, status, approvalStatus, ownerId }, ownerIds) {
+function buildAdminFleetFilter({ search, status, approvalStatus, ownerId, brandId, operational }, ownerIds) {
   const filter = {};
 
   if (approvalStatus) {
@@ -32,7 +32,24 @@ function buildAdminFleetFilter({ search, status, approvalStatus, ownerId }, owne
     if (!mongoose.Types.ObjectId.isValid(ownerId)) {
       throw new ReadContractValidationError("READ_INVALID_FILTER", "Invalid ownerId filter.");
     }
-    filter.$or = [{ ownerId: { $in: ownerIds } }, { busOwnerId: { $in: ownerIds } }];
+    filter.ownerId = { $in: ownerIds };
+  }
+
+  if (brandId) {
+    if (!mongoose.Types.ObjectId.isValid(brandId)) {
+      throw new ReadContractValidationError("READ_INVALID_FILTER", "Invalid brandId filter.");
+    }
+    filter.brandId = brandId;
+  }
+
+  if (operational !== undefined) {
+    if (String(operational) !== "true" && String(operational) !== "false") {
+      throw new ReadContractValidationError("READ_INVALID_FILTER", "Invalid operational filter.");
+    }
+    if (String(operational) === "true") {
+      filter.approvalStatus = "APPROVED";
+      filter.setupComplete = true;
+    }
   }
 
   if (search && typeof search === "string" && search.trim().length > 0) {
@@ -48,12 +65,7 @@ function buildAdminFleetFilter({ search, status, approvalStatus, ownerId }, owne
         { fleetId: new RegExp(safeSearch, "i") },
       ],
     };
-    if (filter.$or) {
-      filter.$and = [{ $or: filter.$or }, searchFilter];
-      delete filter.$or;
-    } else {
-      filter.$or = searchFilter.$or;
-    }
+    filter.$or = searchFilter.$or;
   }
 
   return filter;

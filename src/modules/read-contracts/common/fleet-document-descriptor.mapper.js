@@ -36,8 +36,8 @@ function mapFleetSlotDescriptor(fleet, slot) {
   const evidence = extractFleetSlotEvidence(fleet, slot);
   const review = fleet?.documentReviews?.[slot] || {};
 
-  const status = evidence.present ? review.status || "PENDING" : "MISSING";
-  const reason = status === "REJECTED" ? review.rejectionReason || null : null;
+  const status = evidence.present ? String(review.status || "PENDING").toUpperCase() : "MISSING";
+  const reason = status === "REJECTED" ? review.reason || review.rejectionReason || null : null;
 
   return {
     slot,

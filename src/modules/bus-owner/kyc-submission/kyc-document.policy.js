@@ -11,21 +11,15 @@ const KYC_DOCUMENT_POLICY = Object.freeze({
     multiple: false,
     folder: "bus_owner_kyc/tax_registration",
   },
-  transportLicense: {
+  ownerIdentity: {
     required: true,
     multiple: false,
-    folder: "bus_owner_kyc/transport_license",
-  },
-  insuranceCertificates: {
-    required: false,
-    multiple: true,
-    maxFiles: 5,
-    folder: "bus_owner_kyc/insurance",
+    folder: "bus_owner_kyc/owner_identity",
   },
 });
 
 const MAX_INDIVIDUAL_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-const MAX_TOTAL_FILES = 8;
+const MAX_TOTAL_FILES = 3;
 
 const ALLOWED_TRIPLETS = Object.freeze([
   {
