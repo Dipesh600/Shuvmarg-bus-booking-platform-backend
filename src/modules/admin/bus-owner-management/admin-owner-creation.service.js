@@ -12,11 +12,8 @@ const { ADMIN_CREATION_KYC_POLICY } = require("./admin-kyc-document.policy");
 const { validateAdminOwnerCreationBody } = require("./admin-owner-creation-request.policy");
 const { runCreationRollback } = require("./admin-owner-creation-rollback.helper");
 const {
-  prepareOwnerIdentity,
-  createUnnotifiedUser,
-  addOwnerRoleToExistingUser,
-  rollbackUserIdentity,
-  notifyNewOwnerCredentials,
+  prepareOwnerIdentity, createUnnotifiedUser, addOwnerRoleToExistingUser,
+  rollbackUserIdentity, notifyNewOwnerCredentials,
 } = require("./admin-owner-identity.service");
 
 function createAdminOwnerCreationService(deps = {}) {
@@ -144,10 +141,7 @@ function createAdminOwnerCreationService(deps = {}) {
       }
     }
 
-    return {
-      busOwnerId: busOwner.busOwnerId || busOwner._id.toString(),
-      userId: commitResult.user._id,
-    };
+    return { busOwnerId: busOwner.busOwnerId || busOwner._id.toString(), userId: commitResult.user._id };
   }
 
   return { createAdminBusOwner };
