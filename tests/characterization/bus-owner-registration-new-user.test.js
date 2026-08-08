@@ -123,7 +123,7 @@ test('bus-owner registration new-user characterization', async (t) => {
     assert.notEqual(user.password, res.body.user.password);
     const profile = await BusOwner.findOne({ user: user._id });
     assert.equal(profile.companyName, 'Road Lines');
-    assert.equal(profile.verificationStatus, 'pending');
+    assert.equal(profile.verificationStatus, 'not_submitted');
     const refresh = await request(app).post('/api/auth/busowner/refresh')
       .set('Cookie', res.headers['set-cookie']);
     assert.equal(refresh.status, 200);

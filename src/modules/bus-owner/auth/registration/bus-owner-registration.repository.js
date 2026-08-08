@@ -85,7 +85,7 @@ const createBusOwnerProfile = async ({ userId, companyName }) => {
   const busOwner = new BusOwner({
     user: userId,
     companyName: companyName.trim(),
-    verificationStatus: 'pending',
+    verificationStatus: 'not_submitted',
   });
   return busOwner.save();
 };

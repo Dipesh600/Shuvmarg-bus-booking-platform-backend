@@ -2,16 +2,15 @@
 
 const { ApiError } = require("../../../contracts");
 const { validateKycDocuments } = require("./kyc-document.validator");
+const { KYC_DOCUMENT_POLICY } = require("./kyc-document.policy");
 const { validateOnboardingBody } = require("./bus-owner-onboarding.validator");
 const { KycSubmissionStateError } = require("./kyc-submission.errors");
 const { collectBusOwnerKycStorageReferences } = require("./kyc-document-references");
+const { hasKycSubmissionEvidence } = require("./kyc-submission-state");
 const { uploadOnboardingDocuments } = require("./kyc-submission-document-upload.service");
-const {
-  buildKycAuditEvent,
-  countValidatedKycFiles,
-  KYC_AUDIT_EVENT,
-  KYC_AUDIT_ACTOR,
-} = require("../kyc-audit");
+const { createKycMalwareScanner } = require("./kyc-malware-scanner.service");
+const { applyKycSubmissionToOwner } = require("./kyc-submission-owner-update");
+const { cleanupStoredDocuments } = require("./kyc-submission-cleanup");
 
 function createKycSubmissionService({
   BusOwner,
@@ -20,16 +19,42 @@ function createKycSubmissionService({
   mongoose,
   clock = () => new Date(),
   logger = console,
+  malwareScanner = createKycMalwareScanner({ clock, logger }),
 }) {
   async function submitKyc({ userId, onboardingData, files }) {
     const normalized = validateOnboardingBody(onboardingData);
-    const normalizedFiles = validateKycDocuments(files);
 
     const existingOwner = await BusOwner.findOne({ user: userId });
-    const isInitialSubmission = !existingOwner;
+    const isInitialSubmission =
+      !existingOwner || !hasKycSubmissionEvidence(existingOwner);
     const busOwner = existingOwner || new BusOwner({ user: userId });
 
-    if (!isInitialSubmission && busOwner.verificationStatus === "approved") {
+    const rejectedDocumentFields = !isInitialSubmission && busOwner.verificationStatus === "rejected"
+      ? Object.keys(KYC_DOCUMENT_POLICY).filter((field) => {
+          if (field === "insuranceCertificates") {
+            return Array.isArray(busOwner.insuranceCertificates) &&
+              busOwner.insuranceCertificates.some((certificate) => Boolean(certificate?.rejectionReason));
+          }
+          const section = busOwner[field];
+          const hasStoredFile = Array.isArray(section?.documentUrls) && section.documentUrls.length > 0;
+          return Boolean(section?.rejectionReason) || (KYC_DOCUMENT_POLICY[field].required && !hasStoredFile);
+        })
+      : [];
+    const resubmissionPolicy = Object.fromEntries(
+      Object.entries(KYC_DOCUMENT_POLICY).map(([field, policy]) => [
+        field,
+        { ...policy, required: rejectedDocumentFields.includes(field) },
+      ])
+    );
+    const providedFiles = files && typeof files === "object" ? files : {};
+    const normalizedFiles = !isInitialSubmission && Object.keys(providedFiles).length === 0 && rejectedDocumentFields.length === 0
+      ? {}
+      : validateKycDocuments(
+          providedFiles,
+          isInitialSubmission ? KYC_DOCUMENT_POLICY : resubmissionPolicy
+        );
+
+    if (existingOwner && busOwner.verificationStatus === "approved") {
       throw new KycSubmissionStateError(
         "KYC_SUBMISSION_STATE_CONFLICT",
         "Approved KYC application cannot be overwritten or resubmitted.",
@@ -55,13 +80,15 @@ function createKycSubmissionService({
 
     const replacedDocumentReferences =
       !isInitialSubmission && busOwner.verificationStatus === "rejected"
-        ? collectBusOwnerKycStorageReferences(busOwner)
+        ? collectBusOwnerKycStorageReferences(busOwner, Object.keys(normalizedFiles))
         : [];
 
     const newlyUploadedObjectKeys = [];
     const ownerId = busOwner._id ? busOwner._id.toString() : userId;
 
     try {
+      const malwareScan = await malwareScanner.scanValidatedFiles(normalizedFiles);
+
       await uploadOnboardingDocuments({
         normalizedFiles,
         storageService,
@@ -70,41 +97,14 @@ function createKycSubmissionService({
         newlyUploadedObjectKeys,
       });
 
-      busOwner.companyName = normalized.companyName;
-      busOwner.taxRegistration = busOwner.taxRegistration || {};
-      busOwner.taxRegistration.panNumber = normalized.panNumber;
-      busOwner.taxRegistration.registrationNumber = normalized.registrationNumber;
-      busOwner.bankDetails = busOwner.bankDetails || {};
-      busOwner.bankDetails.bankName = normalized.bankName;
-      busOwner.bankDetails.accountHolderName = normalized.accountHolderName;
-      busOwner.bankDetails.accountNumber = normalized.accountNumber;
-      busOwner.bankDetails.branchName = normalized.branchName;
-      busOwner.bankDetails.swiftCode = normalized.swiftCode;
-
-      busOwner.verificationStatus = "pending";
-      busOwner.rejectionReason = null;
-      busOwner.kycReview = { reviewedBy: null, reviewedAt: null };
-
-      if (!Array.isArray(busOwner.kycAuditHistory)) {
-        busOwner.kycAuditHistory = [];
-      }
-      const documentCount = countValidatedKycFiles(normalizedFiles);
-      const auditEvent = buildKycAuditEvent({
-        eventType: isInitialSubmission ? KYC_AUDIT_EVENT.SUBMITTED : KYC_AUDIT_EVENT.RESUBMITTED,
-        actorType: KYC_AUDIT_ACTOR.BUS_OWNER,
-        actorId: userId,
-        fromStatus: isInitialSubmission ? null : "rejected",
-        toStatus: "pending",
-        occurredAt: clock(),
-        metadata: { documentCount },
+      applyKycSubmissionToOwner({
+        busOwner, normalized, malwareScan, normalizedFiles, isInitialSubmission, userId, clock,
       });
-      busOwner.kycAuditHistory.push(auditEvent);
 
       const session = await mongoose.startSession();
       try {
         await session.withTransaction(async () => {
           user.name = normalized.ownerName;
-          user.address = normalized.address;
           await user.save({ session });
           await busOwner.save({ session });
         });
@@ -112,16 +112,10 @@ function createKycSubmissionService({
         await session.endSession();
       }
 
-      if (replacedDocumentReferences.length > 0 && typeof storageService.deleteMany === "function") {
-        try {
-          const oldCleanupResult = await storageService.deleteMany(replacedDocumentReferences);
-          if (oldCleanupResult && oldCleanupResult.failed && oldCleanupResult.failed.length > 0) {
-            logger.error("KYC replaced-document cleanup failures:", oldCleanupResult.failed);
-          }
-        } catch (cleanupErr) {
-          logger.error("KYC replaced-document cleanup unexpected error:", cleanupErr);
-        }
-      }
+      await cleanupStoredDocuments({
+        storageService, references: replacedDocumentReferences, logger,
+        label: "KYC replaced-document cleanup",
+      });
 
       return {
         success: true,
@@ -129,16 +123,10 @@ function createKycSubmissionService({
         data: { verificationStatus: "pending" },
       };
     } catch (err) {
-      if (newlyUploadedObjectKeys.length > 0 && typeof storageService.deleteMany === "function") {
-        try {
-          const cleanupResult = await storageService.deleteMany(newlyUploadedObjectKeys);
-          if (cleanupResult && cleanupResult.failed && cleanupResult.failed.length > 0) {
-            logger.error("KYC S3 upload cleanup failures:", cleanupResult.failed);
-          }
-        } catch (cleanupErr) {
-          logger.error("KYC S3 upload cleanup unexpected error:", cleanupErr);
-        }
-      }
+      await cleanupStoredDocuments({
+        storageService, references: newlyUploadedObjectKeys, logger,
+        label: "KYC S3 upload cleanup",
+      });
       throw err;
     }
   }

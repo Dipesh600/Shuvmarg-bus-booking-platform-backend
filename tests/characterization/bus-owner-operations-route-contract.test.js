@@ -7,6 +7,11 @@ const auth = require("../../middleware/authMiddleware");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB");
 const { busOwnerMiddleware } = require("../../middleware/checkRole");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner");
+const {
+  rejectOversizedKycRequest,
+  kycSubmissionRateLimiter,
+  parseKycSubmissionUpload,
+} = require("../../middleware/kycSubmissionUpload");
 const kyc = require("../../src/modules/bus-owner/kyc-submission");
 const fleet = require("../../src/modules/bus-owner/fleet-management");
 const boarding = require("../../src/modules/bus-owner/boarding-point-management");
@@ -17,7 +22,17 @@ const { mapLegacyFleetDetailRequest } = require("../../src/modules/read-contract
 
 test("bus-owner operations route and middleware contract", () => {
   const expected = [
-    ["post", "/submitBusOwnerKyc", kyc.submitBusOwnerKyc],
+    [
+      "post",
+      "/submitBusOwnerKyc",
+      kyc.submitBusOwnerKyc,
+      [
+        kycSubmissionRateLimiter,
+        rejectOversizedKycRequest,
+        parseKycSubmissionUpload,
+        kyc.submitBusOwnerKyc,
+      ],
+    ],
     ["get", "/myBusOwnerKycStatus", kyc.getMyBusOwnerKycStatus],
     ["post", "/submitFleetForVerification", fleet.submitFleetForVerification, [requireApprovedBusOwner, fleet.submitFleetForVerification]],
     ["get", "/myFleets", fleet.getMyFleets],

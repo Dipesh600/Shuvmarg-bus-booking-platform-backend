@@ -5,7 +5,13 @@ const { KYC_AUDIT_EVENT, KYC_AUDIT_ACTOR } = require("./kyc-audit.constants");
 const { sanitizeInvalidDocumentTypes } = require("./kyc-audit-invalid-documents");
 
 const ALLOWED_STATUSES = Object.freeze(["pending", "approved", "rejected"]);
-const ALLOWED_METADATA_KEYS = Object.freeze(["documentCount", "invalidDocumentTypes", "reasonProvided"]);
+const ALLOWED_METADATA_KEYS = Object.freeze([
+  "documentCount",
+  "invalidDocumentTypes",
+  "reasonProvided",
+  "malwareScanStatus",
+  "malwareScanEngine",
+]);
 
 function validateActorId(actorId) {
   if (!actorId) {
@@ -49,6 +55,20 @@ function validateMetadata(metadata) {
       throw new KycAuditError("KYC_AUDIT_INVALID_REASON_PROVIDED", "reasonProvided must be a boolean.", 400);
     }
     result.reasonProvided = metadata.reasonProvided;
+  }
+
+  if (metadata.malwareScanStatus !== undefined) {
+    if (!["clean", "skipped_non_production"].includes(metadata.malwareScanStatus)) {
+      throw new KycAuditError("KYC_AUDIT_INVALID_MALWARE_SCAN_STATUS", "Invalid malwareScanStatus.", 400);
+    }
+    result.malwareScanStatus = metadata.malwareScanStatus;
+  }
+
+  if (metadata.malwareScanEngine !== undefined) {
+    if (typeof metadata.malwareScanEngine !== "string" || !/^[a-z0-9_-]{2,40}$/i.test(metadata.malwareScanEngine)) {
+      throw new KycAuditError("KYC_AUDIT_INVALID_MALWARE_SCAN_ENGINE", "Invalid malwareScanEngine.", 400);
+    }
+    result.malwareScanEngine = metadata.malwareScanEngine;
   }
 
   return result;

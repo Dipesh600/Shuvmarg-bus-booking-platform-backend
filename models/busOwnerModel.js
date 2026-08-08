@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const busOwnerAuditFields = require("./schemas/bus-owner-audit-fields");
+const registeredAddressSchema = require("./schemas/bus-owner-registered-address");
 
 const busOwnerSchema = new mongoose.Schema(
   {
@@ -16,6 +17,10 @@ const busOwnerSchema = new mongoose.Schema(
     },
     companyName: {
       type: String,
+      default: null,
+    },
+    registeredAddress: {
+      type: registeredAddressSchema,
       default: null,
     },
 
@@ -67,8 +72,8 @@ const busOwnerSchema = new mongoose.Schema(
     /* APPROVAL, REVIEWS & STATUS */
     verificationStatus: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      enum: ["not_submitted", "pending", "approved", "rejected"],
+      default: "not_submitted",
     },
     rejectionReason: {
       type: String,
@@ -88,9 +93,20 @@ const busOwnerSchema = new mongoose.Schema(
       },
       reviewedAt: { type: Date, default: null },
     },
+    kycSecurity: {
+      malwareScanStatus: {
+        type: String,
+        enum: ["clean", "skipped_non_production"],
+        default: null,
+      },
+      engine: { type: String, default: null },
+      scannedAt: { type: Date, default: null },
+      fileCount: { type: Number, min: 0, default: 0 },
+      contentHashes: [{ type: String, select: false }],
+    },
     ...busOwnerAuditFields,
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 // Auto-generate human-readable BusOwner ID: SUV-MARG-BOWNER-ABC-001

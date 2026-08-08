@@ -21,17 +21,20 @@ const {
 const {
   createKycSubmissionController,
 } = require("./kyc-submission.controller");
+const { createKycMalwareScanner } = require("./kyc-malware-scanner.service");
 
 const storageService = createKycDocumentStorageService({
   uploadFileToS3,
   deleteObjectFromS3,
   buildS3Path,
 });
+const malwareScanner = createKycMalwareScanner({ logger: console });
 const kycSubmissionService = createKycSubmissionService({
   BusOwner,
   User,
   mongoose,
   storageService,
+  malwareScanner,
   logger: console,
 });
 const kycDocumentReadService = createKycDocumentReadService({

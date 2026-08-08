@@ -40,19 +40,27 @@ const uploadFileToS3 = async (file, folderOrOptions) => {
     Key: objectKey,
     Body: file.data,
     ContentType: file.mimetype,
+    ServerSideEncryption: "AES256",
   });
 
   await s3Client.send(command);
   return objectKey;
 };
 
-const getPresignedUrl = async (objectKey, expiresInSeconds = 3600) => {
+const getPresignedUrl = async (objectKey, expiresInSeconds = 3600, options = {}) => {
   if (!objectKey) return null;
   if (typeof objectKey === "string" && objectKey.startsWith("http")) return objectKey;
 
   const command = new GetObjectCommand({
     Bucket: process.env.AWS_S3_BUCKET_NAME,
     Key: objectKey,
+    ...(options.download
+      ? {
+          ResponseCacheControl: "no-store, private",
+          ResponseContentDisposition: "attachment",
+          ResponseContentType: "application/octet-stream",
+        }
+      : {}),
   });
   return await getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
 };
@@ -66,6 +74,17 @@ const getDisplayUrl = async (objectKey) => {
     Key: objectKey,
   });
   return await getSignedUrl(s3Client, command, { expiresIn: 604800 });
+};
+
+const getObjectFromS3 = async (objectKey) => {
+  if (!objectKey || typeof objectKey !== "string" || objectKey.startsWith("http")) {
+    throw new Error("S3 object key must be a non-empty storage key.");
+  }
+  const command = new GetObjectCommand({
+    Bucket: process.env.AWS_S3_BUCKET_NAME,
+    Key: objectKey,
+  });
+  return s3Client.send(command);
 };
 
 const deleteObjectFromS3 = async (objectKey) => {
@@ -119,6 +138,7 @@ module.exports = {
   uploadFileToS3,
   getPresignedUrl,
   getDisplayUrl,
+  getObjectFromS3,
   deleteObjectFromS3,
   deleteFromS3,
   listObjectsInFolder,

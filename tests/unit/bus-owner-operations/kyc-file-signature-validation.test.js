@@ -35,4 +35,28 @@ test("kyc-file-signature-validation unit tests", async (t) => {
     files2.taxRegistration = makeFile("fake.jpg", "image/jpeg", PNG_BUFFER);
     assert.throws(() => validateKycDocuments(files2), (e) => e.code === "KYC_FILE_SIGNATURE_MISMATCH" && e.field === "taxRegistration");
   });
+
+  await t.test("rejects malformed file endings and active PDF content", () => {
+    const incomplete = makeValidFiles();
+    incomplete.transportLicense = makeFile(
+      "broken.png",
+      "image/png",
+      Buffer.concat([PNG_BUFFER.subarray(0, 8), Buffer.alloc(12)])
+    );
+    assert.throws(
+      () => validateKycDocuments(incomplete),
+      (e) => e.code === "KYC_UNSAFE_FILE_CONTENT"
+    );
+
+    const activePdf = makeValidFiles();
+    activePdf.companyRegistration = makeFile(
+      "active.pdf",
+      "application/pdf",
+      Buffer.from("%PDF-1.4\n1 0 obj\n<</OpenAction 2 0 R /JavaScript (alert)>>\nendobj\n%%EOF\n")
+    );
+    assert.throws(
+      () => validateKycDocuments(activePdf),
+      (e) => e.code === "KYC_UNSAFE_FILE_CONTENT"
+    );
+  });
 });

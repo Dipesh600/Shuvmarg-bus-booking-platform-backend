@@ -34,7 +34,12 @@ test("kyc-onboarding-persistence: approved owner cannot resubmit", async () => {
 
 test("kyc-onboarding-persistence: pending owner cannot resubmit", async () => {
   function MockBusOwner(val) { Object.assign(this, val); }
-  MockBusOwner.findOne = async () => new MockBusOwner({ verificationStatus: "pending" });
+  MockBusOwner.findOne = async () => new MockBusOwner({
+    verificationStatus: "pending",
+    companyRegistration: { documentUrls: ["company.pdf"] },
+    taxRegistration: { documentUrls: ["tax.pdf"] },
+    transportLicense: { documentUrls: ["license.pdf"] },
+  });
 
   const service = createKycSubmissionService({
     BusOwner: MockBusOwner, User: {}, mongoose: {}, storageService: {},

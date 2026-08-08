@@ -1,4 +1,5 @@
-const admin = require("firebase-admin");
+const { cert, getApps, initializeApp } = require("firebase-admin/app");
+const { getMessaging } = require("firebase-admin/messaging");
 const Notification = require("../../models/localNotificationModel.js");
 
 // Load Firebase credentials from environment variables (production-safe).
@@ -11,12 +12,16 @@ const fcmPrivateKey  = process.env.FCM_PRIVATE_KEY
   : undefined;
 
 let fcmInitialized = false;
+let firebaseApp;
 
-if (!admin.apps.length) {
+if (getApps().length > 0) {
+  [firebaseApp] = getApps();
+  fcmInitialized = true;
+} else {
   if (fcmProjectId && fcmClientEmail && fcmPrivateKey) {
     try {
-      admin.initializeApp({
-        credential: admin.credential.cert({
+      firebaseApp = initializeApp({
+        credential: cert({
           type:         "service_account",
           project_id:   fcmProjectId,
           client_email: fcmClientEmail,
@@ -50,7 +55,7 @@ const notificationManager = async (tokens, title, body) => {
   };
 
   try {
-    const response = await admin.messaging().sendEachForMulticast(message);
+    const response = await getMessaging(firebaseApp).sendEachForMulticast(message);
     console.log("Successfully sent message:", response);
     return { success: true, response };
   } catch (error) {

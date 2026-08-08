@@ -4,6 +4,7 @@ const { KYC_DOCUMENT_POLICY, MAX_INDIVIDUAL_FILE_SIZE, MAX_TOTAL_FILES } = requi
 const { KycDocumentValidationError } = require("./kyc-submission.errors");
 const { validateFileMetadata, validateFilenameHygiene } = require("./kyc-file-metadata.validator");
 const { validateFileSignature, matchesSignature } = require("./kyc-file-signature.validator");
+const { validateFileContent } = require("./kyc-file-content.validator");
 
 function validateSingleFile(file, field) {
   if (!file || typeof file !== "object" || Array.isArray(file)) {
@@ -35,6 +36,7 @@ function validateSingleFile(file, field) {
   }
 
   const { detectedFormat, safeExtension } = validateFileSignature({ buffer, mimeType, extension, field });
+  validateFileContent({ buffer, detectedFormat, field });
   return { file, detectedFormat, safeExtension };
 }
 

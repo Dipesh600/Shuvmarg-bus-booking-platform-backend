@@ -1,6 +1,7 @@
 "use strict";
 
 const { toIsoDate } = require("../common/read-date.mapper");
+const { getEffectiveKycStatus } = require("../../bus-owner/kyc-submission/kyc-submission-state");
 
 function mapBusOwnerProfile(owner, user) {
   if (!owner && !user) return null;
@@ -19,6 +20,17 @@ function mapBusOwnerProfile(owner, user) {
     },
     business: {
       companyName: owner?.companyName || owner?.companyRegistration?.companyName || "N/A",
+      registeredAddress: owner?.registeredAddress
+        ? {
+            tole: owner.registeredAddress.tole || owner.registeredAddress.addressLine1 || null,
+            wardNumber: owner.registeredAddress.wardNumber || null,
+            municipality: owner.registeredAddress.municipality || null,
+            district: owner.registeredAddress.district || null,
+            province: owner.registeredAddress.province || null,
+            postalCode: owner.registeredAddress.postalCode || null,
+            country: owner.registeredAddress.country || "Nepal",
+          }
+        : null,
     },
     bank: {
       present: Boolean(owner?.bankDetails?.accountNumber || owner?.bankDetails?.bankName),
@@ -28,7 +40,7 @@ function mapBusOwnerProfile(owner, user) {
       branchName: owner?.bankDetails?.branchName || null,
       swiftCode: owner?.bankDetails?.swiftCode || null,
     },
-    verificationStatus: owner?.verificationStatus || "pending",
+    verificationStatus: getEffectiveKycStatus(owner),
     rejectionReason: owner?.rejectionReason || null,
     createdAt: toIsoDate(owner?.createdAt || userObj.createdAt),
     updatedAt: toIsoDate(owner?.updatedAt || userObj.updatedAt),

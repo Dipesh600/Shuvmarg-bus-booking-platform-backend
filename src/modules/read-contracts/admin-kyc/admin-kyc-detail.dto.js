@@ -2,6 +2,7 @@
 
 const { toIsoDate } = require("../common/read-date.mapper");
 const { mapKycDocumentDescriptors, calculateKycDocumentSummary } = require("../common/kyc-document-descriptor.mapper");
+const { isKycMalwareScanReady } = require("../../bus-owner/kyc-document-read/kyc-document-reference.service");
 
 function mapAdminReviewer(reviewer) {
   if (!reviewer) return null;
@@ -18,6 +19,15 @@ function mapAdminKycDetail(owner) {
   if (!owner) return null;
   const user = owner.user || {};
   const docDescriptors = mapKycDocumentDescriptors(owner);
+  const securityScanReady = isKycMalwareScanReady(owner);
+  if (!securityScanReady) {
+    for (const descriptor of Object.values(docDescriptors)) {
+      descriptor.available = false;
+      if (Array.isArray(descriptor.items)) {
+        descriptor.items = descriptor.items.map((item) => ({ ...item, available: false }));
+      }
+    }
+  }
   const docSummary = calculateKycDocumentSummary(docDescriptors);
 
   return {
@@ -29,8 +39,24 @@ function mapAdminKycDetail(owner) {
       email: user.email || "N/A",
       phone: user.phone || "N/A",
       companyName: owner.companyName || owner.companyRegistration?.companyName || "N/A",
+      registeredAddress: owner.registeredAddress
+        ? {
+            tole: owner.registeredAddress.tole || owner.registeredAddress.addressLine1 || null,
+            wardNumber: owner.registeredAddress.wardNumber || null,
+            municipality: owner.registeredAddress.municipality || null,
+            district: owner.registeredAddress.district || null,
+            province: owner.registeredAddress.province || null,
+            postalCode: owner.registeredAddress.postalCode || null,
+            country: owner.registeredAddress.country || "Nepal",
+          }
+        : null,
     },
     verificationStatus: owner.verificationStatus || "pending",
+    documentSecurity: {
+      status: owner.kycSecurity?.malwareScanStatus || "quarantined",
+      scannedAt: toIsoDate(owner.kycSecurity?.scannedAt),
+      availableToReview: securityScanReady,
+    },
     rejectionReason: owner.rejectionReason || null,
     documents: docDescriptors,
     documentSummary: docSummary,

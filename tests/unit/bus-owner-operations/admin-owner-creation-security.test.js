@@ -11,7 +11,7 @@ test("admin-owner-creation-security unit tests", async (t) => {
   const validOwnerId = "64f000000000000000000002";
   const fixedDate = new Date("2026-08-05T12:00:00Z");
 
-  const pdfHeader = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+  const pdfHeader = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n");
   const makeFile = (name, ext, mime, buf) => ({
     name: `${name}.${ext}`,
     data: buf,

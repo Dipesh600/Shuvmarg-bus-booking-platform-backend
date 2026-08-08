@@ -19,6 +19,16 @@ class KycSubmissionStateError extends Error {
   }
 }
 
+class KycMalwareScanError extends Error {
+  constructor(code, message, field = null, statusCode = 503) {
+    super(message);
+    this.name = "KycMalwareScanError";
+    this.code = code;
+    this.field = field;
+    this.statusCode = statusCode;
+  }
+}
+
 class BusOwnerOnboardingValidationError extends Error {
   constructor(code, message, field = null, statusCode = 400) {
     super(message);
@@ -31,6 +41,7 @@ class BusOwnerOnboardingValidationError extends Error {
 
 module.exports = {
   KycDocumentValidationError,
+  KycMalwareScanError,
   KycSubmissionStateError,
   BusOwnerOnboardingValidationError,
 };
