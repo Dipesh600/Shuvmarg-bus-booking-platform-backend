@@ -9,6 +9,7 @@ const { mapReadError } = require("../../../src/modules/read-contracts/common/rea
 const { ReadContractValidationError, ReadContractNotFoundError } = require("../../../src/modules/read-contracts/common/read-errors");
 const { mapFleetDocumentDescriptors, calculateFleetDocumentSummary } = require("../../../src/modules/read-contracts/common/fleet-document-descriptor.mapper");
 const { mapKycDocumentDescriptors, calculateKycDocumentSummary } = require("../../../src/modules/read-contracts/common/kyc-document-descriptor.mapper");
+const { mapAdminFleetDetail } = require("../../../src/modules/read-contracts/fleet/admin-fleet-detail.dto");
 
 test("read pagination policy parses defaults and bounds", () => {
   const def = parsePagination();
@@ -66,6 +67,13 @@ test("fleet and KYC document descriptor mappers map database state accurately", 
   assert.equal(fleetSum.totalSlots, 5);
   assert.equal(fleetSum.present, 2);
 
+  const rejectedFleetDescs = mapFleetDocumentDescriptors({
+    fleetDocuments: { insurance: { url: "fleet/insurance.pdf" } },
+    documentReviews: { insurance: { status: "rejected", reason: "Policy expired" } },
+  });
+  assert.equal(rejectedFleetDescs.insurance.status, "REJECTED");
+  assert.equal(rejectedFleetDescs.insurance.reason, "Policy expired");
+
   const kycMock = {
     companyRegistration: { documentUrls: ["http://s3/doc1"], verified: true },
   };
@@ -76,4 +84,39 @@ test("fleet and KYC document descriptor mappers map database state accurately", 
   assert.equal(kycSum.totalSlots, 3);
   assert.equal(kycSum.present, 1);
   assert.equal(kycSum.verified, 1);
+});
+
+test("admin fleet detail exposes review data without exposing storage references", () => {
+  const dto = mapAdminFleetDetail({
+    _id: "64f000000000000000000001",
+    fleetId: "SUV-MARG-FLEET-ABC-001",
+    ownerId: { _id: "64f000000000000000000002", name: "Owner", phone: "9800000000" },
+    brandId: { _id: "64f000000000000000000003", brandName: "Mountain", brandCode: "OB-MNT001" },
+    corridorId: {
+      _id: "64f000000000000000000004",
+      code: "KTM-PKR",
+      originId: { name: "Kathmandu" },
+      destinationId: { name: "Pokhara" },
+      status: "ACTIVE",
+    },
+    busName: "Mountain Express",
+    busNumber: "BA 1 PA 1234",
+    busType: "DELUXE",
+    vehicleType: "bus",
+    totalSeats: 40,
+    registrationYear: 2026,
+    seatConfig: { floors: [{ floorIndex: 0, rows: [] }] },
+    approvalStatus: "APPROVED",
+    fleetImages: ["private/fleet-one.png"],
+    fleetDocuments: { insurance: { url: "private/insurance.pdf", policyNumber: "POL-1" } },
+  });
+
+  assert.equal(dto.vehicle.registrationYear, 2026);
+  assert.equal(dto.vehicle.seatConfig.floors.length, 1);
+  assert.equal(dto.assignment.corridor.origin, "Kathmandu");
+  assert.equal(dto.assignment.operatorCode, "OB-MNT001");
+  assert.equal(dto.isApproved, true);
+  assert.equal(dto.documents.fleetImages.count, 1);
+  assert.equal(JSON.stringify(dto).includes("private/fleet-one.png"), false);
+  assert.equal(JSON.stringify(dto).includes("private/insurance.pdf"), false);
 });
