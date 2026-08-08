@@ -30,28 +30,45 @@ function createFleetReadRepository({
     const ownerIds = ownerId ? await resolveOwnerObjectIds(ownerId) : [];
     const filter = buildAdminFleetFilter(params, ownerIds);
 
-    const [rawFleets, totalItems] = await Promise.all([
-      FleetModel.find(filter)
-        .populate("ownerId", "name email phone")
-        .populate("brandId", "brandName brandCode ownerId")
-        .populate("approvedBy", "name email")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      FleetModel.countDocuments(filter),
-    ]);
+    let rawFleets, totalItems;
+    try {
+      [rawFleets, totalItems] = await Promise.all([
+        FleetModel.find(filter)
+          .populate({ path: "ownerId", select: "name email phone", options: { strictPopulate: false } })
+          .populate({ path: "brandId", select: "brandName brandCode ownerId", options: { strictPopulate: false } })
+          .populate({ path: "approvedBy", select: "name email", options: { strictPopulate: false } })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        FleetModel.countDocuments(filter),
+      ]);
+    } catch (populateError) {
+      // Fallback: query without populate if refs are corrupt
+      console.error("Fleet list populate failed, falling back to unpopulated query:", populateError?.message);
+      [rawFleets, totalItems] = await Promise.all([
+        FleetModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        FleetModel.countDocuments(filter),
+      ]);
+    }
 
     const items = rawFleets.map(mapAdminFleetListItem).filter(Boolean);
     return { items, totalItems };
   }
 
   async function findAdminFleetDetailById(id) {
-    const fleet = await FleetModel.findById(id)
-      .populate("ownerId", "name email phone")
-      .populate("brandId", "brandName brandCode ownerId")
-      .populate("approvedBy", "name email")
-      .lean();
+    let fleet;
+    try {
+      fleet = await FleetModel.findById(id)
+        .populate({ path: "ownerId", select: "name email phone", options: { strictPopulate: false } })
+        .populate({ path: "brandId", select: "brandName brandCode ownerId", options: { strictPopulate: false } })
+        .populate({ path: "approvedBy", select: "name email", options: { strictPopulate: false } })
+        .lean();
+    } catch (populateError) {
+      // Fallback: fetch without populate if refs are corrupt
+      console.error("Fleet detail populate failed, falling back:", populateError?.message);
+      fleet = await FleetModel.findById(id).lean();
+    }
 
     if (!fleet) {
       throw new ReadContractNotFoundError("FLEET_NOT_FOUND", "Fleet record not found.");
