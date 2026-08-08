@@ -45,6 +45,19 @@ test('staging deployment restores the actually running image on startup failure'
   assert.match(deployScript, /rollback/);
 });
 
+test('staging deployment allows bounded proxy readiness before rollback', () => {
+  const deployScript = read('deploy/staging/deploy.sh');
+
+  assert.match(deployScript, /PUBLIC_HEALTH_WAIT_SECONDS=60/);
+  assert.match(
+    deployScript,
+    /while \[\[ \$elapsed -lt \$\{PUBLIC_HEALTH_WAIT_SECONDS\} \]\]; do/,
+  );
+  assert.match(deployScript, /Public health endpoint is ready/);
+  assert.match(deployScript, /Public health check timed out/);
+  assert.match(deployScript, /if ! verify_public_health; then\s+rollback/);
+});
+
 test('staging Caddyfile uses the supplied domain', () => {
   const caddyfile = read('deploy/staging/Caddyfile');
 
