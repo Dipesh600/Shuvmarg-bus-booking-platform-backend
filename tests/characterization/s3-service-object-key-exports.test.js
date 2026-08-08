@@ -15,6 +15,7 @@ test('S3 Service Object-Key Exports Characterization', async (t) => {
       'uploadFileToS3',
       'getPresignedUrl',
       'getDisplayUrl',
+      'getObjectFromS3',
       'deleteObjectFromS3',
       'deleteFromS3',
       'listObjectsInFolder',
