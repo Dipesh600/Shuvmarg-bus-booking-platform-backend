@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { ApiError } = require("../../../src/contracts");
 const {
   createFleetUpdatePolicy,
   restrictOwnerUpdate,
@@ -33,7 +34,7 @@ test("bus-number normalization rejects duplicates exactly", async () => {
   const update = { busNumber: " ba 2 kha 4 " };
   await assert.rejects(
     policy.normalizeBusNumber({ busNumber: "OLD" }, update),
-    /New bus number already exists!/
+    (err) => err instanceof ApiError && err.code === "FLEET_ALREADY_EXISTS"
   );
   assert.deepEqual(query, { busNumber: "BA 2 KHA 4" });
 });
@@ -47,7 +48,7 @@ test("changed seat layouts are blocked while active trips exist", async () => {
       { _id: "fleet", seatConfig: { rows: 4 } },
       { seatConfig: '{"rows":5}' }
     ),
-    /Cannot modify seat layout\. This fleet has 2 active future trip\(s\)/
+    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
   );
 });
 

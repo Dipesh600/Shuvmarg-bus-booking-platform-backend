@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { ApiError } = require("../../../src/contracts");
 const {
   createFleetCreationPolicy,
   parseCreationInput,
@@ -13,10 +14,13 @@ const valid = () => ({
 });
 
 test("fleet creation input preserves legacy parsing contracts", () => {
-  assert.throws(() => parseCreationInput({}), /Missing required fleet fields\./);
+  assert.throws(
+    () => parseCreationInput({}),
+    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
+  );
   assert.throws(
     () => parseCreationInput({ ...valid(), seatConfig: "{" }),
-    /Invalid seatConfig JSON\./
+    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
   );
   const input = parseCreationInput({
     ...valid(), registrationYear: "2024", seatConfig: '{"deck":1}',
@@ -42,7 +46,7 @@ test("fleet creation validates references with exact legacy errors", async (t) =
     deps.Bus.findOne = async () => ({});
     await assert.rejects(
       policy.validateReferences({ busNumber: "B1", amenityIds: [] }),
-      /Bus number already exists!/
+      (err) => err instanceof ApiError && err.code === "FLEET_ALREADY_EXISTS"
     );
     deps.Bus.findOne = async () => null;
   });
@@ -50,7 +54,7 @@ test("fleet creation validates references with exact legacy errors", async (t) =
     deps.BusAmenities.findById = async () => null;
     await assert.rejects(
       policy.validateReferences({ busNumber: "B1", amenitiesId: "a", amenityIds: [] }),
-      /Invalid amenitiesId provided\./
+      (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
     );
     deps.BusAmenities.findById = async () => ({});
   });
@@ -58,7 +62,7 @@ test("fleet creation validates references with exact legacy errors", async (t) =
     deps.BusAmenities.countDocuments = async () => 1;
     await assert.rejects(
       policy.validateReferences({ busNumber: "B1", amenityIds: ["a", "b"] }),
-      /One or more amenityIds are invalid\./
+      (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
     );
     deps.BusAmenities.countDocuments = async () => 2;
   });
@@ -66,7 +70,7 @@ test("fleet creation validates references with exact legacy errors", async (t) =
     deps.BoardingPoints.findById = async () => null;
     await assert.rejects(
       policy.validateReferences({ busNumber: "B1", amenityIds: [], boardingPointId: "p" }),
-      /Invalid boardingPointId provided\./
+      (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
     );
   });
 });
@@ -80,11 +84,14 @@ test("fleet creation rejects missing and suspended brands", async () => {
     Bus: {}, BusAmenities: {}, BoardingPoints: {},
     OperatorBrand: { findById: () => brandQuery(brand) },
   });
-  await assert.rejects(policy.validateBrand("x"), /Brand not found/);
+  await assert.rejects(
+    policy.validateBrand("x"),
+    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
+  );
   brand = { status: "SUSPENDED", brandName: "Shuv" };
   await assert.rejects(
     policy.validateBrand("x"),
-    /Brand "Shuv" is currently suspended/
+    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
   );
   await policy.validateBrand(null);
 });

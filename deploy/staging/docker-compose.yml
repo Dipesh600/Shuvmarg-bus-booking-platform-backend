@@ -38,6 +38,10 @@ services:
     networks:
       - shuvmarg-staging-net
 
+    depends_on:
+      clamav:
+        condition: service_healthy
+
     healthcheck:
       test:
         - CMD
@@ -49,6 +53,29 @@ services:
       start_period: 30s
       retries: 3
 
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ── Private malware scanner ────────────────────────────────────────────────
+  # ClamAV is reachable only inside the Compose network. Never publish 3310:
+  # the clamd TCP protocol has no built-in authentication or encryption.
+  clamav:
+    image: clamav/clamav:1.4_base
+    container_name: shuvmarg-staging-clamav
+    restart: unless-stopped
+    networks:
+      - shuvmarg-staging-net
+    volumes:
+      - clamav_database:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 5
     logging:
       driver: json-file
       options:
@@ -97,3 +124,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+  clamav_database:

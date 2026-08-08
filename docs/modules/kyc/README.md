@@ -12,6 +12,27 @@ KYC modules document admin review flows for submitted identity or business verif
 
 Bus-owner KYC review remains outside this module set in this documentation pass.
 
+## Bus-owner document security gate
+
+Bus-owner KYC files are validated and streamed to a private ClamAV `clamd`
+service before any S3 upload begins. Production is fail closed:
+
+- `KYC_MALWARE_SCAN_MODE=required` is mandatory in production.
+- `CLAMD_HOST`, `CLAMD_PORT` and `CLAMD_TIMEOUT_MS` configure the private daemon.
+- infected files return HTTP 422 and are never stored;
+- unavailable or invalid scanners return HTTP 503 and no files are stored;
+- only submissions recorded with a clean scan can generate reviewer download URLs;
+- the generic document proxy rejects `owners/{id}/kyc/*` keys so it cannot bypass
+  the record-bound scan and authorization gate.
+
+The clamd TCP port has no built-in authentication or encryption and must never be
+publicly exposed. The staging Compose topology keeps it on the private application
+network and persists its signature database. Allocate at least 3 GiB RAM (4 GiB
+preferred) for the scanner host and monitor signature updates and scan failures.
+
+For local development only, `KYC_MALWARE_SCAN_MODE=disabled` skips scanning and
+marks documents `skipped_non_production`; production rejects this mode.
+
 ## Endpoint table
 
 | Method | Full path | Middleware in order | Owning module |

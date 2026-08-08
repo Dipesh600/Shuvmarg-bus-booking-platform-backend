@@ -1,10 +1,9 @@
 "use strict";
 
-const DOCUMENTS = [
-  ["companyRegistration", "bus_owner_kyc/company_registration"],
-  ["taxRegistration", "bus_owner_kyc/tax_registration"],
-  ["transportLicense", "bus_owner_kyc/transport_license"],
-];
+const { createKycSubmissionService } = require("./kyc-submission.service");
+const { handleKycSubmissionError } = require("./kyc-upload-error.mapper");
+const { sanitizeKycDetailDescriptors } = require("../kyc-document-read/kyc-document-read.controller");
+const { getEffectiveKycStatus } = require("./kyc-submission-state");
 
 function unauthorized(res) {
   return res.status(401).json({
@@ -15,52 +14,26 @@ function unauthorized(res) {
 
 function createKycSubmissionController({
   BusOwner,
-  uploadService,
-  logger = console,
-}) {
+  User,
+  mongoose,
+  storageService,
+  kycDocumentReadService,
+  kycSubmissionService = createKycSubmissionService({ BusOwner, User, mongoose, storageService }),
+} = {}) {
   async function submitBusOwnerKyc(req, res) {
     try {
       const userId = req.userInfo?.id;
       if (!userId) return unauthorized(res);
-      let busOwner = await BusOwner.findOne({ user: userId });
-      if (!busOwner) busOwner = new BusOwner({ user: userId });
-      const files = req.files || {};
-      for (const [field, folder] of DOCUMENTS) {
-        if (!files[field]) continue;
-        const urls = await uploadService.uploadMany(files[field], folder);
-        busOwner[field] = busOwner[field] || {};
-        busOwner[field].documentUrls = urls;
-        busOwner[field].verified = false;
-        busOwner[field].rejectionReason = null;
-      }
-      if (files.insuranceCertificates) {
-        const urls = await uploadService.uploadMany(
-          files.insuranceCertificates,
-          "bus_owner_kyc/insurance"
-        );
-        busOwner.insuranceCertificates = urls.map((url) => ({
-          insurerName: null,
-          policyNumber: null,
-          validTill: null,
-          documentUrls: [url],
-          verified: false,
-          rejectionReason: null,
-        }));
-      }
-      busOwner.verificationStatus = "pending";
-      busOwner.rejectionReason = null;
-      await busOwner.save();
-      return res.status(200).json({
-        success: true,
-        message: "Bus owner KYC submitted successfully",
+
+      const result = await kycSubmissionService.submitKyc({
+        userId,
+        onboardingData: req.body,
+        files: req.files,
       });
+
+      return res.status(200).json(result);
     } catch (error) {
-      logger.error("submitBusOwnerKyc error:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Internal Server Error",
-        error: error.message,
-      });
+      return handleKycSubmissionError(error, res);
     }
   }
 
@@ -68,6 +41,7 @@ function createKycSubmissionController({
     try {
       const userId = req.userInfo?.id;
       if (!userId) return unauthorized(res);
+
       const owner = await BusOwner.findOne({ user: userId }).lean();
       if (!owner) {
         return res.status(404).json({
@@ -75,6 +49,12 @@ function createKycSubmissionController({
           message: "Bus owner KYC not found. Please submit your KYC.",
         });
       }
+
+      // Status responses expose descriptors only. Do not presign or fetch any
+      // document until the dedicated, scan-gated read endpoint is called.
+      const sanitized = sanitizeKycDetailDescriptors(owner);
+      sanitized.verificationStatus = getEffectiveKycStatus(owner);
+
       const fields = [
         "verificationStatus", "rejectionReason", "companyRegistration",
         "taxRegistration", "transportLicense", "insuranceCertificates",
@@ -83,19 +63,14 @@ function createKycSubmissionController({
       return res.status(200).json({
         success: true,
         message: "Bus owner KYC status fetched successfully",
-        data: Object.fromEntries(fields.map((field) => [field, owner[field]])),
+        data: Object.fromEntries(fields.map((field) => [field, sanitized[field]])),
       });
     } catch (error) {
-      logger.error("getMyBusOwnerKycStatus error:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Internal Server Error",
-        error: error.message,
-      });
+      return handleKycSubmissionError(error, res);
     }
   }
 
   return { submitBusOwnerKyc, getMyBusOwnerKycStatus };
 }
 
-module.exports = { createKycSubmissionController, DOCUMENTS };
+module.exports = { createKycSubmissionController };

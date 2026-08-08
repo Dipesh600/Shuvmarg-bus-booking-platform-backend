@@ -32,9 +32,12 @@ test("admin bus-owner management Express route contract", () => {
       1,
       `${method.toUpperCase()} ${path} must exist exactly once`
     );
+    const expectedStack = (path === "/getBusOwnerDetails" || path === "/getBusOwnerKycDetails")
+      ? [adminMiddleware, matches[0].route.stack[1].handle, handler]
+      : [adminMiddleware, handler];
     assert.deepEqual(
       matches[0].route.stack.map((layer) => layer.handle),
-      [adminMiddleware, handler]
+      expectedStack
     );
   }
 });

@@ -22,6 +22,17 @@ test('staging Caddy receives only its required public domain', () => {
   assert.doesNotMatch(caddy, /\n\s+env_file:/);
 });
 
+test('staging KYC scanner remains private and gates backend startup', () => {
+  const compose = read('deploy/staging/docker-compose.yml');
+  const envExample = read('deploy/staging/.env.example');
+
+  assert.match(compose, /image:\s*clamav\/clamav:1\.4_base/);
+  assert.match(compose, /clamav:\s*\n\s*condition:\s*service_healthy/);
+  assert.doesNotMatch(compose, /3310:3310/);
+  assert.match(envExample, /KYC_MALWARE_SCAN_MODE=required/);
+  assert.match(envExample, /CLAMD_HOST=clamav/);
+});
+
 test('staging Caddyfile uses the supplied domain', () => {
   const caddyfile = read('deploy/staging/Caddyfile');
 

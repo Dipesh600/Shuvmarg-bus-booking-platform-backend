@@ -103,7 +103,12 @@ test('agent admin conversion characterization', async (t) => {
   await t.test('unexpected error preserves exact generic 500 response', async () => {
     const token = await adminToken();
     const original = User.findById;
-    User.findById = () => { throw new Error('find failed'); };
+    User.findById = (id, ...args) => {
+      if (String(id) === '64f000000000000000000001') {
+        throw new Error('find failed');
+      }
+      return original.call(User, id, ...args);
+    };
     try {
       const res = await convert(token, { id: '64f000000000000000000001' });
       assert.equal(res.status, 500);

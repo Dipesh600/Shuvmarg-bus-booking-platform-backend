@@ -73,3 +73,17 @@ services:
 
       - key: AWS_S3_BUCKET_NAME
         sync: false
+
+      # KYC uploads fail closed until a private ClamAV service is reachable.
+      # Do not expose clamd port 3310 to the public internet.
+      - key: KYC_MALWARE_SCAN_MODE
+        value: required
+
+      - key: CLAMD_HOST
+        sync: false
+
+      - key: CLAMD_PORT
+        value: 3310
+
+      - key: CLAMD_TIMEOUT_MS
+        value: 30000

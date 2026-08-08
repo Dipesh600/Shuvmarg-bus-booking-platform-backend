@@ -4,7 +4,13 @@ const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { busOwnerMiddleware } = require("../../middleware/checkRole.js");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner.js");
+const {
+  rejectOversizedKycRequest,
+  kycSubmissionRateLimiter,
+  parseKycSubmissionUpload,
+} = require("../../middleware/kycSubmissionUpload.js");
 const busOwnerKyc = require("../../src/modules/bus-owner/kyc-submission");
+const kycDocumentRead = require("../../src/modules/bus-owner/kyc-document-read");
 const fleetManagement = require("../../src/modules/bus-owner/fleet-management");
 const boardingPointManagement = require("../../src/modules/bus-owner/boarding-point-management");
 const boardingLocationAssignment = require("../../src/modules/bus-owner/boarding-location-assignment");
@@ -18,17 +24,33 @@ const fareRuleCon = require("../../controllers/busOwnerController/fareRuleContro
 // Applied to ALL routes in this router — no individual `auth` needed.
 router.use(auth, verifyRoleFromDB, busOwnerMiddleware);
 
-router.post("/submitBusOwnerKyc", busOwnerKyc.submitBusOwnerKyc);
-router.get("/myBusOwnerKycStatus", busOwnerKyc.getMyBusOwnerKycStatus);
+// Frontend Read Routes & Compatibility Aliases (profile, kyc-status)
+const {
+  registerBusOwnerUnapprovedReadRoutes,
+  registerBusOwnerApprovedFleetRoutes,
+} = require("./frontendReadRoutes.js");
+registerBusOwnerUnapprovedReadRoutes(router);
 
-// ── REQUIRE APPROVED KYC FOR ALL ROUTES BELOW ─────────────────────────────────
+router.post(
+  "/submitBusOwnerKyc",
+  kycSubmissionRateLimiter,
+  rejectOversizedKycRequest,
+  parseKycSubmissionUpload,
+  busOwnerKyc.submitBusOwnerKyc
+);
+router.get("/kycDocumentView", kycDocumentRead.viewKycDocument);
+
+const { busOwnerFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
+
+// Fleets (draft creation, detail, update, delete, and submission endpoints)
+registerBusOwnerApprovedFleetRoutes(router, { fleetManagement });
+
+// Fleet Document Lifecycle (draft document upload & read-url)
+router.put("/fleets/:fleetId/documents/:slot", busOwnerFleetDocumentController.uploadDocument);
+router.get("/fleets/:fleetId/documents/:slot/read-url", busOwnerFleetDocumentController.getDocumentReadUrl);
+
+// ── REQUIRE APPROVED KYC FOR OPERATIONAL ROUTES BELOW ─────────────────────────
 router.use(requireApprovedBusOwner);
-
-router.post("/submitFleetForVerification", fleetManagement.submitFleetForVerification);
-router.get("/myFleets", fleetManagement.getMyFleets);
-router.post("/getFleetById", fleetManagement.getFleetById);
-router.patch("/updateFleet", fleetManagement.updateFleet);
-router.delete("/deleteFleet", fleetManagement.deleteFleet);
 
 // Boarding Points
 router.post("/createBoardingPoint", boardingPointManagement.createBoardingPoint);

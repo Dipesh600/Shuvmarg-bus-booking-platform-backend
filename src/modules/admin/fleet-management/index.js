@@ -18,6 +18,8 @@ const {
   "../../../../controllers/notificationController/notification_manager"
 );
 const sendOTP = require("../../../../handlers/sparro-otp");
+const { resolveAuthorizedAdminActor } = require("../bus-owner-management/admin-actor.resolver");
+const { buildFleetApprovalAuditEvent } = require("./fleet-approval-audit.builder");
 const queryPolicy = require("./fleet-query.policy");
 const statusPolicy = require("./fleet-status.policy");
 const { mapFleet } = require("./fleet-list.mapper");
@@ -28,7 +30,7 @@ const {
 const { createFleetListService } = require("./fleet-list.service");
 const { createFleetDetailService } = require("./fleet-detail.service");
 const { createFleetSetupService } = require("./fleet-setup.service");
-const { createFleetStatusService } = require("./fleet-status.service");
+const { createFleetApprovalService } = require("./fleet-status.service");
 const {
   createFleetNotificationService,
 } = require("./fleet-notification.service");
@@ -38,6 +40,10 @@ const {
 const {
   createFleetManagementController,
 } = require("./fleet-management.controller");
+
+const {
+  createFleetReadService,
+} = require("../../read-contracts/fleet/fleet-read.service");
 
 const repository = createFleetRepository({ Bus, Trip, Schedule });
 const setupRepository = createFleetSetupRepository({
@@ -57,22 +63,26 @@ const notify = createFleetNotificationService({
   policy: statusPolicy,
 });
 
+const approvalService = createFleetApprovalService({
+  repository,
+  resolveAuthorizedAdminActor,
+  buildFleetApprovalAuditEvent,
+  notify,
+  clock: () => new Date(),
+  logger: console,
+});
+
+const canonicalSetupService = createFleetSetupService({
+  repository: setupRepository,
+});
+
+const fleetReadService = createFleetReadService({
+  getCanonicalSetupStatus: canonicalSetupService,
+});
+
 module.exports = createFleetManagementController({
-  listFleets: createFleetListService({
-    repository,
-    policy: queryPolicy,
-    mapper: { mapFleet },
-  }),
-  getFleetDetail: createFleetDetailService({ mongoose, repository }),
-  updateFleetStatus: createFleetStatusService({
-    repository,
-    policy: statusPolicy,
-    notify,
-    clock: () => new Date(),
-  }),
+  readService: fleetReadService,
+  updateFleetStatus: approvalService.decideFleetApproval,
   getFleetDashboard: createFleetDashboardService({ repository }),
-  getFleetSetupStatus: createFleetSetupService({
-    repository: setupRepository,
-  }),
   console,
 });

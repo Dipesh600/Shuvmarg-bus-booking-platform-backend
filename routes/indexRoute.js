@@ -20,11 +20,13 @@ const activateAuthRoutes = require("./authRoutes/activateAuthRoutes.js");
 const passengerAuthRoutes = require("./authRoutes/passengerAuthRoutes.js");
 
 const partnerLeadRoutes = require("./partnerLeadRoutes.js");
+const contractRoutes = require("./contractRoutes.js");
 
 router.use("/api", userRoute);
 router.use("/api/ticket", ticketRoute);
 router.use("/api/busowner", busOwnerRoute);
 router.use("/api/admin", adminRoutes);
+router.use("/api/contracts", contractRoutes);
 router.use("/api/referral", referralRoutes);
 router.use("/api/reviews", reviewRoutes);
 router.use("/seed", seedRoute);
