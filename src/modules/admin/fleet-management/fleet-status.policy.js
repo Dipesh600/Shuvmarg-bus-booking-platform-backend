@@ -1,7 +1,7 @@
-"use strict";
+const { FLEET_APPROVAL_VALUES } = require("../../../contracts");
 
 function validateStatus(status) {
-  if (["APPROVED", "REJECTED"].includes(status)) return null;
+  if (FLEET_APPROVAL_VALUES.includes(status) && status !== "PENDING") return null;
   return {
     statusCode: 400,
     body: {

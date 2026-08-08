@@ -18,7 +18,6 @@
  *   platform/...                         → Platform assets (scratch themes)
  *   agents/...                           → Agent KYC documents
  *   agent_kyc/...                        → Legacy agent KYC path
- *   bus_owner_docs/...                   → Legacy bus owner documents
  *   misc/...                             → Miscellaneous legacy assets
  */
 const ALLOWED_PREFIXES = [
@@ -28,7 +27,6 @@ const ALLOWED_PREFIXES = [
     'disputes/',
     'platform/',
     'agent_kyc/',
-    'bus_owner_docs/',
     'misc/',
 ];
 
@@ -64,6 +62,13 @@ function normaliseKey(rawKey) {
  * @returns {boolean}
  */
 function isKeyAllowed(resolvedKey) {
+    if (!resolvedKey || typeof resolvedKey !== 'string') return false;
+    // Bus-owner KYC must go through the record-bound KYC read endpoint, which
+    // enforces owner/admin authorization and malware-scan quarantine status.
+    if (/^owners\/[^/]+\/kyc\//.test(resolvedKey)) return false;
+    if (resolvedKey.includes('/fleets/') || resolvedKey.startsWith('fleet-documents/') || resolvedKey.startsWith('fleet-images/')) {
+        return false;
+    }
     return ALLOWED_PREFIXES.some((prefix) => resolvedKey.startsWith(prefix));
 }
 

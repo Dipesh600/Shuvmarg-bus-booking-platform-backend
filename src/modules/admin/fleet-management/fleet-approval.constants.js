@@ -1,0 +1,17 @@
+"use strict";
+
+const FLEET_APPROVAL_EVENTS = Object.freeze({
+  APPROVED: "FLEET_APPROVED",
+  REJECTED: "FLEET_REJECTED",
+});
+
+const FLEET_APPROVAL_STATUSES = Object.freeze({
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+});
+
+module.exports = {
+  FLEET_APPROVAL_EVENTS,
+  FLEET_APPROVAL_STATUSES,
+};

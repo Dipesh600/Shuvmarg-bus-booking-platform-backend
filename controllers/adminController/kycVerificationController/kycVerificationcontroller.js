@@ -1,106 +1,96 @@
+"use strict";
+
 const Agent = require("../../../models/agentModel.js");
 const BusOwner = require("../../../models/busOwnerModel.js");
 const Bus = require("../../../models/fleetModel.js");
+const { sanitizeKycDetailDescriptors } = require("../../../src/modules/bus-owner/kyc-document-read/kyc-document-read.controller.js");
+const { countBusOwnerKycDocuments } = require("../../../src/modules/bus-owner/kyc-submission/kyc-document-count.js");
 
-/**
- * Get unified list of all KYC submissions (Agents, Bus Owners, Fleets)
- * GET /api/admin/kyc/unified-list
- */
-const getUnifiedKycList = async (req, res) => {
+function createUnifiedKycListController({
+  AgentModel = Agent,
+  BusOwnerModel = BusOwner,
+  BusModel = Bus,
+} = {}) {
+  return async function getUnifiedKycList(req, res) {
     try {
-        // 1. Fetch Agents
-        const agents = await Agent.find()
-            .populate("user", "name email phone")
-            .lean();
+      const [agents, rawBusOwners, fleets] = await Promise.all([
+        AgentModel.find().populate("user", "name email phone").lean(),
+        BusOwnerModel.find().populate("user", "name email phone").lean(),
+        BusModel.find().populate("ownerId", "name email phone").populate("brandId", "brandName brandCode logo").lean(),
+      ]);
 
-        // 2. Fetch Bus Owners
-        const busOwners = await BusOwner.find()
-            .populate("user", "name email phone")
-            .lean();
+      const busOwners = rawBusOwners.map((owner) => ({
+        resolved: owner,
+        docCount: countBusOwnerKycDocuments(owner),
+      }));
 
-        // 3. Fetch Fleets (Buses) — populate both owner and brand
-        const fleets = await Bus.find()
-            .populate("ownerId", "name email phone")
-            .populate("brandId", "brandName brandCode logo")
-            .lean();
+      const unifiedData = [];
 
-        const unifiedData = [];
-
-        // Map Agents
-        agents.forEach((agent) => {
-            unifiedData.push({
-                agentId: agent.agentId,
-                companyname: agent.businessName || agent.user?.name || agent.agentId || "N/A",
-                owner: agent.user?.name || "Unknown",
-                location: [agent.municipality, agent.district].filter(Boolean).join(", "),
-                documents: agent.documents ? agent.documents.length : 0,
-                submitdate: agent.submittedAt || agent.createdAt,
-                status: agent.applicationStatus || "DRAFT",
-                kyctype: "agent",
-                data: agent,
-            });
+      agents.forEach((agent) => {
+        unifiedData.push({
+          agentId: agent.agentId,
+          companyname: agent.businessName || agent.user?.name || agent.agentId || "N/A",
+          owner: agent.user?.name || "Unknown",
+          location: [agent.municipality, agent.district].filter(Boolean).join(", "),
+          documents: agent.documents ? agent.documents.length : 0,
+          submitdate: agent.submittedAt || agent.createdAt,
+          status: agent.applicationStatus || "DRAFT",
+          kyctype: "agent",
+          data: agent,
         });
+      });
 
-        // Map Bus Owners
-        busOwners.forEach((owner) => {
-            // Count real uploaded documents across all Bus-Owner-level KYC sections
-            const docCount =
-                (owner.companyRegistration?.documentUrls?.length || 0) +
-                (owner.ownerIdentity?.documentUrls?.length || 0) +
-                (owner.taxRegistration?.documentUrls?.length || 0) +
-                (owner.bankDetails?.documentUrls?.length || 0);
-
-            unifiedData.push({
-                busownerId: owner.busOwnerId,
-                companyname: owner.companyName || "N/A",
-                owner: owner.user?.name || "Unknown",
-                // Normalize date to ISO string so the frontend always formats it the same way
-                submitdate: owner.createdAt,
-                status: owner.verificationStatus,
-                kyctype: "busowner",
-                documents: docCount,
-                data: owner,
-            });
+      busOwners.forEach(({ resolved, docCount }) => {
+        unifiedData.push({
+          busownerId: resolved.busOwnerId,
+          companyname: resolved.companyName || "N/A",
+          owner: resolved.user?.name || "Unknown",
+          submitdate: resolved.createdAt,
+          status: resolved.verificationStatus,
+          kyctype: "busowner",
+          documents: docCount,
+          data: sanitizeKycDetailDescriptors(resolved),
         });
+      });
 
-        // Map Fleets (Buses)
-        fleets.forEach((fleet) => {
-            unifiedData.push({
-                fleetId: fleet.fleetId,
-                // Use real brand name if available, fallback to bus name
-                companyname: fleet.brandId?.brandName || fleet.busName || "N/A",
-                brandId: fleet.brandId?._id || null,
-                owner: fleet.ownerId?.name || "Unknown",
-                submitdate: fleet.createdAt,
-                status: fleet.approvalStatus?.toLowerCase() || "pending",
-                kyctype: "fleet",
-                data: fleet,
-            });
+      fleets.forEach((fleet) => {
+        unifiedData.push({
+          fleetId: fleet.fleetId,
+          companyname: fleet.brandId?.brandName || fleet.busName || "N/A",
+          brandId: fleet.brandId?._id || null,
+          owner: fleet.ownerId?.name || "Unknown",
+          submitdate: fleet.createdAt,
+          status: fleet.approvalStatus?.toLowerCase() || "pending",
+          kyctype: "fleet",
+          data: fleet,
         });
+      });
 
-        // Sort by submit date descending
-        unifiedData.sort((a, b) => new Date(b.submitdate) - new Date(a.submitdate));
+      unifiedData.sort((a, b) => new Date(b.submitdate) - new Date(a.submitdate));
 
-        return res.status(200).json({
-            success: true,
-            message: "Unified KYC list fetched successfully",
-            dashboard: {
-                totalAgents: agents.length,
-                totalBusOwners: busOwners.length,
-                totalFleets: fleets.length,
-            },
-            data: unifiedData,
-        });
+      return res.status(200).json({
+        success: true,
+        message: "Unified KYC list fetched successfully",
+        dashboard: {
+          totalAgents: agents.length,
+          totalBusOwners: rawBusOwners.length,
+          totalFleets: fleets.length,
+        },
+        data: unifiedData,
+      });
     } catch (error) {
-        console.error("getUnifiedKycList error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error",
-            error: error.message,
-        });
+      console.error("getUnifiedKycList error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal Server Error",
+      });
     }
-};
+  };
+}
+
+const getUnifiedKycList = createUnifiedKycListController();
 
 module.exports = {
-    getUnifiedKycList,
+  getUnifiedKycList,
+  createUnifiedKycListController,
 };

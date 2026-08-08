@@ -25,6 +25,7 @@ const boardingPointController = require("../../controllers/adminController/ticke
 const adminAmenityController = require("../../controllers/adminController/amenity/amenityController.js");
 const adminBusRouteController = require("../../controllers/adminController/busOwnerController/busRouteController.js");
 const adminFleetController = require("../../controllers/adminController/busOwnerController/fleetController.js");
+const { adminFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
 const adminTemplateController = require("../../controllers/adminController/busOwnerController/templateController.js");
 const adminTripController = require("../../controllers/adminController/busOwnerController/tripController.js");
 const adminSettlementCon = require("../../controllers/busOwnerController/settlementController.js");
@@ -65,16 +66,11 @@ router.get("/users/:id/transactions", adminMiddleware, admin.getUserTransactions
 
 // Ticket Management Routes
 router.get("/getAllTicket", adminMiddleware, ticketController.getAllTickets);
-
-// Auto Seat Management
 router.post("/auto-seats", adminMiddleware, autoSeat.createAutoSeat);
-
-// Booking Management Routes
 router.get("/booking/getAllBookings", adminMiddleware, bookings.getAllBookings);
 router.get("/booking/stats", adminMiddleware, bookings.getBookingStats);
 router.get("/booking/getBookingById/:bookingid", adminMiddleware, bookings.getBookingById);
 router.post("/booking/getBookingsByUser", adminMiddleware, bookings.getBookingsByUser);
-// Coupon Management Routes
 router.use(couponAdminRoutes);
 
 // Dashboard
@@ -106,17 +102,21 @@ router.patch("/registry/discovery/:id/refine-stops", adminMiddleware, routeDisco
 router.patch("/finalizeAgentSetup", adminMiddleware, agentSetup.finalizeAgentSetup);
 router.patch("/agentKycStatus", adminMiddleware, agentKycReview.updateAgentKyc);
 
-// Bus Owner
+// Frontend Read Routes & Compatibility Aliases
+const { registerAdminFrontendReadRoutes } = require("./frontendReadRoutes.js");
+registerAdminFrontendReadRoutes(router);
+
+// Bus Owner Write / Admin Operations
 router.post("/busOwner/create", adminMiddleware, busOwnerController.createBusOwnerFull);
 router.post("/busOwner/reuploadKycDocument", adminMiddleware, busOwnerController.reuploadKycDocument);
-router.get("/getAllBusOwners", adminMiddleware, busOwnerController.getAllBusOwners);
-router.post("/getBusOwnerDetails", adminMiddleware, busOwnerController.getBusOwnerById);
-router.get("/getAllBusOwnerKycs", adminMiddleware, busOwnerController.getAllBusOwnerKycs);
-router.post("/getBusOwnerKycDetails", adminMiddleware, busOwnerController.getBusOwnerKycById);
 // router.post("/makeUserBusOwner", adminMiddleware, busOwnerController.makeUserBusOwner);
 router.patch("/busOwnerKycStatus", adminMiddleware, busOwnerController.updateBusOwnerKyc);
 router.patch("/busOwner/update", adminMiddleware, busOwnerController.updateBusOwnerProfile);
 router.get("/busOwnerDashboard", adminMiddleware, busOwnerController.getBusOwnerDashboard);
+// KYC document read — returns a short-lived presigned URL for one document file.
+// Admin actor is derived from req.adminInfo set by adminMiddleware.
+const kycDocumentRead = require("../../src/modules/bus-owner/kyc-document-read");
+router.get("/busOwner/kycDocumentReadUrl", adminMiddleware, kycDocumentRead.getKycDocumentReadUrl);
 
 // Push Notification (Admin)
 router.post(
@@ -129,13 +129,9 @@ router.post(
   adminMiddleware,
   adminPushnotification.sendSingleUserToPushnotification
 );
-// Bus Owner Fleet
-router.get("/fleet/getAllFleet",        adminMiddleware, busOwnerFleetController.getAllFleet);
-router.get("/fleet/getById/:id",        adminMiddleware, busOwnerFleetController.getFleetById);
+// Bus Owner Fleet Operations
 router.patch("/fleet/update-status",    adminMiddleware, busOwnerFleetController.updateFleetStatus);
 router.get('/fleet/fleetDashboard',     adminMiddleware, busOwnerFleetController.getFleetDashboard);
-// D1 — Setup status wizard: which steps are complete for this fleet?
-router.get("/fleet/:id/setup-status",   adminMiddleware, busOwnerFleetController.getFleetSetupStatus);
 
 // Fleet Profile Workstation — full operational dashboard for a single bus
 router.get("/fleet/:id/workstation",                      adminMiddleware, fleetWorkstation.getFleetWorkstation);
@@ -240,11 +236,13 @@ router.delete("/busRoutes/:id", adminMiddleware, adminBusRouteController.deleteR
 // Dedicated Fleet Management (Admin on behalf of Owner)
 router.post("/fleet/createForOwner", adminMiddleware, adminFleetController.createFleetForOwner);
 router.get("/fleet/owner/:ownerId", adminMiddleware, adminFleetController.getFleetsByOwner);
-router.get("/fleet/details/:id", adminMiddleware, adminFleetController.getFleetById);
+// router.get("/fleet/details/:id" mounted via adminFrontendReadRoutes)
 router.patch("/fleet/update/:id", adminMiddleware, adminFleetController.updateFleetByAdmin);
 router.delete("/fleet/delete/:id", adminMiddleware, adminFleetController.deleteFleetByAdmin);
 router.patch("/fleet/resubmit/:id", adminMiddleware, adminFleetController.resubmitFleetByAdmin);
 router.patch("/fleet/reupload-doc/:id", adminMiddleware, adminFleetController.reuploadFleetDocument);
+router.put("/fleet/:fleetId/documents/:slot", adminMiddleware, adminFleetDocumentController.uploadDocument);
+router.get("/fleet/:fleetId/documents/:slot/read-url", adminMiddleware, adminFleetDocumentController.getDocumentReadUrl);
 
 // ─── TRIP CONTROL CENTER (Platform-wide oversight — read-only) ────────────────
 // Exception triage dashboard with per-trip booking aggregation

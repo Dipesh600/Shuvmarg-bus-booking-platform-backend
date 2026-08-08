@@ -47,8 +47,8 @@ test('document-proxy policy — normaliseKey', async (t) => {
 
 test('document-proxy policy — isKeyAllowed', async (t) => {
 
-    await t.test('5. owners/ prefix is allowed', () => {
-        assert.equal(policy.isKeyAllowed('owners/123/kyc/doc.pdf'), true);
+    await t.test('5. owners/ KYC prefix is blocked by the generic proxy', () => {
+        assert.equal(policy.isKeyAllowed('owners/123/kyc/doc.pdf'), false);
     });
 
     await t.test('5b. brands/ prefix is allowed', () => {
@@ -71,8 +71,8 @@ test('document-proxy policy — isKeyAllowed', async (t) => {
         assert.equal(policy.isKeyAllowed('agent_kyc/doc.pdf'), true);
     });
 
-    await t.test('5g. bus_owner_docs/ legacy prefix is allowed', () => {
-        assert.equal(policy.isKeyAllowed('bus_owner_docs/old.pdf'), true);
+    await t.test('5g. bus_owner_docs/ legacy prefix is blocked', () => {
+        assert.equal(policy.isKeyAllowed('bus_owner_docs/old.pdf'), false);
     });
 
     await t.test('5h. misc/ prefix is allowed', () => {
@@ -110,7 +110,7 @@ test('document-proxy policy — ALLOWED_PREFIXES', async (t) => {
         assert.ok(policy.ALLOWED_PREFIXES.includes('agent_kyc/'));
     });
 
-    await t.test('bus_owner_docs/ is present', () => {
-        assert.ok(policy.ALLOWED_PREFIXES.includes('bus_owner_docs/'));
+    await t.test('bus_owner_docs/ is absent', () => {
+        assert.equal(policy.ALLOWED_PREFIXES.includes('bus_owner_docs/'), false);
     });
 });

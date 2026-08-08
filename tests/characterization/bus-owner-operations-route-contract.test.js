@@ -7,21 +7,38 @@ const auth = require("../../middleware/authMiddleware");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB");
 const { busOwnerMiddleware } = require("../../middleware/checkRole");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner");
+const {
+  rejectOversizedKycRequest,
+  kycSubmissionRateLimiter,
+  parseKycSubmissionUpload,
+} = require("../../middleware/kycSubmissionUpload");
 const kyc = require("../../src/modules/bus-owner/kyc-submission");
 const fleet = require("../../src/modules/bus-owner/fleet-management");
 const boarding = require("../../src/modules/bus-owner/boarding-point-management");
 const boardingLocations = require("../../src/modules/bus-owner/boarding-location-assignment");
 const amenities = require("../../src/modules/bus-owner/amenity-management");
+const { mapLegacyFleetUpdateRequest, mapLegacyFleetDeleteRequest } = require("../../src/modules/bus-owner/fleet-management/legacy-fleet-write-request.adapter");
+const { mapLegacyFleetDetailRequest } = require("../../src/modules/read-contracts/routes/legacy-read-request.adapter");
 
 test("bus-owner operations route and middleware contract", () => {
   const expected = [
-    ["post", "/submitBusOwnerKyc", kyc.submitBusOwnerKyc],
+    [
+      "post",
+      "/submitBusOwnerKyc",
+      kyc.submitBusOwnerKyc,
+      [
+        kycSubmissionRateLimiter,
+        rejectOversizedKycRequest,
+        parseKycSubmissionUpload,
+        kyc.submitBusOwnerKyc,
+      ],
+    ],
     ["get", "/myBusOwnerKycStatus", kyc.getMyBusOwnerKycStatus],
-    ["post", "/submitFleetForVerification", fleet.submitFleetForVerification],
+    ["post", "/submitFleetForVerification", fleet.submitFleetForVerification, [requireApprovedBusOwner, fleet.submitFleetForVerification]],
     ["get", "/myFleets", fleet.getMyFleets],
-    ["post", "/getFleetById", fleet.getFleetById],
-    ["patch", "/updateFleet", fleet.updateFleet],
-    ["delete", "/deleteFleet", fleet.deleteFleet],
+    ["post", "/getFleetById", fleet.getFleetById, [mapLegacyFleetDetailRequest, fleet.getFleetById]],
+    ["patch", "/updateFleet", fleet.updateFleet, [mapLegacyFleetUpdateRequest, fleet.updateFleet]],
+    ["delete", "/deleteFleet", fleet.deleteFleet, [mapLegacyFleetDeleteRequest, fleet.deleteFleet]],
     ["post", "/createBoardingPoint", boarding.createBoardingPoint],
     ["get", "/getMyBoardingPoints", boarding.getMyBoardingPoints],
     ["patch", "/updateBoardingPoint", boarding.updateBoardingPoint],
@@ -48,14 +65,15 @@ test("bus-owner operations route and middleware contract", () => {
   const approvalIndex = layers.findIndex(
     (layer) => layer.handle === requireApprovedBusOwner
   );
-  for (const [method, path, handler] of expected) {
+  for (const [method, path, handler, customStack] of expected) {
     const matches = layers.filter(
       (layer) => layer.route?.path === path && layer.route.methods[method]
     );
     assert.equal(matches.length, 1, `${method.toUpperCase()} ${path}`);
-    assert.deepEqual(matches[0].route.stack.map((item) => item.handle), [handler]);
+    const expectedStack = customStack || [handler];
+    assert.deepEqual(matches[0].route.stack.map((item) => item.handle), expectedStack);
     const index = layers.indexOf(matches[0]);
-    if (path.includes("Kyc") || path.includes("KycStatus")) {
+    if (path.includes("Kyc") || path.includes("KycStatus") || path.includes("Fleet") || path.includes("fleets")) {
       assert.ok(index < approvalIndex);
     } else {
       assert.ok(index > approvalIndex);

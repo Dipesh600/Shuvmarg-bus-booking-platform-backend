@@ -3,29 +3,35 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  createFleetStatusService,
+  createFleetApprovalService,
 } = require("../../src/modules/admin/fleet-management/fleet-status.service");
-const policy = require("../../src/modules/admin/fleet-management/fleet-status.policy");
+
+const validAdminId = "64f000000000000000000099";
+const validFleetId = "64f000000000000000000002";
 
 function makeService(overrides = {}) {
   const bus = {
-    _id: "f1",
-    busName: "Bus",
-    busNumber: "BA-1",
-    ownerId: null,
-    async save() {
-      this.saved = true;
+    _id: validFleetId,
+    status: "INACTIVE",
+    approvalStatus: "PENDING",
+  };
+  const deps = {
+    resolveAuthorizedAdminActor: async () => ({ _id: validAdminId, role: "ADMIN", isActive: true }),
+    repository: {
+      atomicDecidePendingFleet: async ({ update }) => {
+        bus.status = update.$set.status;
+        bus.approvalStatus = update.$set.approvalStatus;
+        return bus;
+      },
+      findApprovalStatusById: async () => ({ approvalStatus: "PENDING" }),
     },
+    notify: async () => {},
+    clock: () => new Date("2026-03-04T00:00:00Z"),
+    ...overrides,
   };
   return {
     bus,
-    service: createFleetStatusService({
-      repository: { findForStatusUpdate: async () => bus },
-      policy,
-      notify: async () => {},
-      clock: () => new Date("2026-03-04T00:00:00Z"),
-      ...overrides,
-    }),
+    service: createFleetApprovalService(deps),
   };
 }
 
@@ -33,37 +39,45 @@ test("invalid status stops before fleet lookup", async () => {
   let queried = false;
   const { service } = makeService({
     repository: {
-      findForStatusUpdate: async () => {
+      atomicDecidePendingFleet: async () => {
+        queried = true;
+      },
+      findApprovalStatusById: async () => {
         queried = true;
       },
     },
   });
-  const result = await service({ status: "ACTIVE", fleetId: "f1" });
-  assert.equal(result.statusCode, 400);
+  await assert.rejects(
+    async () => service.decideFleetApproval({ status: "INVALID", fleetId: validFleetId, actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
+    (err) => err.code === "FLEET_STATUS_INVALID_STATUS"
+  );
   assert.equal(queried, false);
 });
 
-test("missing fleet preserves exact 404", async () => {
+test("missing fleet throws exact 404 FLEET_NOT_FOUND", async () => {
   const { service } = makeService({
-    repository: { findForStatusUpdate: async () => null },
+    repository: {
+      atomicDecidePendingFleet: async () => null,
+      findApprovalStatusById: async () => null,
+    },
   });
-  assert.deepEqual(
-    await service({ status: "APPROVED", fleetId: "missing" }),
-    {
-      statusCode: 404,
-      body: { success: false, message: "Bus not found" },
-    }
+  await assert.rejects(
+    async () => service.decideFleetApproval({ status: "APPROVED", fleetId: validFleetId, actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
+    (err) => err.statusCode === 404 && err.code === "FLEET_NOT_FOUND"
   );
 });
 
-test("approval saves before notification and preserves response", async () => {
+test("approval saves before notification and preserves response DTO", async () => {
   const order = [];
   const { bus, service } = makeService({
     repository: {
-      findForStatusUpdate: async () => {
-        bus.save = async () => order.push("save");
+      atomicDecidePendingFleet: async ({ update }) => {
+        order.push("save");
+        bus.status = update.$set.status;
+        bus.approvalStatus = update.$set.approvalStatus;
         return bus;
       },
+      findApprovalStatusById: async () => null,
     },
     notify: async (received, state) => {
       order.push("notify");
@@ -71,25 +85,24 @@ test("approval saves before notification and preserves response", async () => {
       assert.equal(state, "APPROVED");
     },
   });
-  const result = await service({ status: "APPROVED", fleetId: "f1" });
+  const result = await service.decideFleetApproval({ status: "APPROVED", fleetId: validFleetId, actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
   assert.deepEqual(order, ["save", "notify"]);
   assert.equal(bus.status, "ACTIVE");
-  assert.equal(result.statusCode, 200);
-  assert.equal(result.body.message, "Fleet status updated to APPROVED");
-  assert.equal(result.body.data, bus);
+  assert.equal(result.success, true);
+  assert.equal(result.data.approvalStatus, "APPROVED");
+  assert.equal(result.data.status, "ACTIVE");
 });
 
-test("notification rejection remains a post-save operation failure", async () => {
+test("notification failure is non-fatal post-save", async () => {
   const error = new Error("email failed");
   const { service, bus } = makeService({
     notify: async () => {
       throw error;
     },
   });
-  await assert.rejects(
-    service({ status: "REJECTED", fleetId: "f1", rejectionReason: "Docs" }),
-    error
-  );
-  assert.equal(bus.saved, true);
-  assert.equal(bus.rejectionReason, "Docs");
+  const result = await service.decideFleetApproval({ status: "REJECTED", fleetId: validFleetId, rejectionReason: "Docs invalid", actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
+  assert.equal(bus.status, "INACTIVE");
+  assert.equal(bus.approvalStatus, "REJECTED");
+  assert.equal(result.success, true);
+  assert.equal(result.data.approvalStatus, "REJECTED");
 });

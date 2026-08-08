@@ -6,10 +6,8 @@ if (!_builtinBuffer.SlowBuffer) {
   _builtinBuffer.SlowBuffer = _builtinBuffer.Buffer;
 }
 require("dotenv").config();
-
 // Pre-register Admin and SuperAdmin schemas to avoid race conditions/MissingSchemaError
 require("./models/adminModel.js");
-
 const express      = require("express");
 const cors         = require("cors");
 const helmet       = require("helmet");
@@ -33,7 +31,6 @@ const { setupReconciliationCron } = require("./services/reconcilePayments.js");
 // Ensure logs directory exists (Winston needs it)
 const logsDir = path.join(__dirname, "logs");
 if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
-
 const app  = express();
 const PORT = process.env.PORT || 7012;
 
@@ -51,13 +48,9 @@ app.use(cors(corsOptions));
 // path-to-regexp v8 (Express 5 / standalone router) does NOT accept bare '*'
 // as a path — use the named wildcard '/{*splat}' instead.
 app.options("/{*splat}", cors(corsOptions));
-
-
 // ── Security Middlewares ──────────────────────────────────────────────────────
 app.use(helmet());
 app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
-
-
 // NoSQL Injection Protection — safe wrapper that avoids the
 // "Cannot set property query of #<IncomingMessage> which has only a getter"
 // error caused by express-mongo-sanitize trying to reassign req.query on
@@ -129,10 +122,16 @@ app.use("/api/ticket/getSeats", seatAvailabilityLimiter);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
-app.use(fileUpload({
+const defaultUploadParser = fileUpload({
   limits: { fileSize: 20 * 1024 * 1024 },  // 20 MB max per file
   abortOnLimit: true,
-}));
+});
+app.use((req, res, next) => {
+  // KYC is parsed inside the authenticated bus-owner router with stricter
+  // per-file, file-count, field-count, request-size and rate limits.
+  if (req.path === "/api/busowner/submitBusOwnerKyc") return next();
+  return defaultUploadParser(req, res, next);
+});
 // ── Structured HTTP Logging ───────────────────────────────────────────────────
 app.use(requestLogger);
 

@@ -1,5 +1,7 @@
 "use strict";
 
+const { ApiError } = require("../../contracts");
+
 const OWNER_PERMITTED_FIELDS = new Set([
   "busName",
   "busNumber",
@@ -8,14 +10,22 @@ const OWNER_PERMITTED_FIELDS = new Set([
   "registrationYear",
   "totalSeats",
   "seatConfig",
-  "fleetImages",
-  "fleetDocuments",
   "amenityIds",
   "corridorId",
-  "setupComplete",
   "brandId",
   "fleetGroupId",
 ]);
+
+const FORBIDDEN_UPDATE_FIELDS = [
+  "fleetDocuments",
+  "fleetImages",
+  "url",
+  "objectKey",
+  "storageKey",
+  "documentReviews",
+  "approvalStatus",
+  "status",
+];
 
 const APPROVED_LOCKED_FIELDS = [
   "busNumber",
@@ -27,6 +37,12 @@ const APPROVED_LOCKED_FIELDS = [
   "corridorId",
 ];
 
+function sanitizeUpdatePayload(updateData) {
+  for (const field of FORBIDDEN_UPDATE_FIELDS) {
+    delete updateData[field];
+  }
+}
+
 function restrictOwnerUpdate(updateData) {
   const sanitized = {};
   for (const key of Object.keys(updateData)) {
@@ -34,9 +50,11 @@ function restrictOwnerUpdate(updateData) {
   }
   for (const key of Object.keys(updateData)) delete updateData[key];
   Object.assign(updateData, sanitized);
+  sanitizeUpdatePayload(updateData);
 }
 
 function lockApprovedIdentity(fleet, updateData) {
+  sanitizeUpdatePayload(updateData);
   if (fleet.approvalStatus !== "APPROVED") return;
   for (const field of APPROVED_LOCKED_FIELDS) delete updateData[field];
 }
@@ -56,7 +74,7 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
     const normalized = String(updateData.busNumber).trim().toUpperCase();
     if (normalized !== fleet.busNumber) {
       if (await Bus.findOne({ busNumber: normalized })) {
-        throw new Error("New bus number already exists!");
+        throw new ApiError("FLEET_ALREADY_EXISTS", "New bus number already exists!");
       }
       updateData.busNumber = normalized;
     }
@@ -78,20 +96,20 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
         tripStatus: { $in: ["SCHEDULED", "BOARDING", "DELAYED"] },
       });
       if (count > 0) {
-        throw new Error(
-          `Cannot modify seat layout. This fleet has ${count} active future ` +
-          "trip(s) scheduled. Please drain or cancel future trips first."
+        throw new ApiError(
+          "FLEET_VALIDATION_FAILED",
+          `Cannot modify seat layout. This fleet has ${count} active future trip(s) scheduled. Please drain or cancel future trips first.`
         );
       }
     } catch (error) {
-      if (error.message.includes("Cannot modify")) throw error;
+      if (error instanceof ApiError) throw error;
       logger.error("Trip verification failed during layout update:", error);
     }
   }
 
   function parseCatalogAndReviews(updateData) {
     parseJsonField(updateData, "amenityIds");
-    parseJsonField(updateData, "documentReviews");
+    sanitizeUpdatePayload(updateData);
   }
 
   return {

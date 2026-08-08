@@ -32,7 +32,7 @@ test("bus-owner operations own the retired controller surface", () => {
   }
   const exportsByModule = [
     ["kyc-submission", 2],
-    ["fleet-management", 5],
+    ["fleet-management", 6],
     ["boarding-point-management", 5],
     ["boarding-location-assignment", 7],
     ["amenity-management", 5],

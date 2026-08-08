@@ -97,7 +97,7 @@ test('document-proxy characterization - streaming', async (t) => {
         stubS3Ok({ ContentType: 'image/jpeg' });
         const user  = await seedAgent();
         const token = tokenFor(user);
-        const res   = await get('owners/abc/kyc/doc.jpg', token);
+        const res   = await get('owners/abc/doc.jpg', token);
         assert.equal(res.status, 200);
         assert.equal(res.headers['content-type'], 'image/jpeg');
         assert.equal(res.headers['cache-control'], 'private, max-age=300');
@@ -115,7 +115,7 @@ test('document-proxy characterization - streaming', async (t) => {
         stubS3Ok();
         const user  = await seedAgent();
         const token = tokenFor(user);
-        const res   = await get('owners/123/kyc/citizenship.pdf', token);
+        const res   = await get('owners/123/citizenship.pdf', token);
         assert.ok(res.headers['content-disposition'].includes('citizenship.pdf'));
     });
 

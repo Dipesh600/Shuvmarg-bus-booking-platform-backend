@@ -30,7 +30,7 @@ pids/
 tmp/
 temp/
 uploads/
-storage/
+/storage/
 coverage/
 jest-cache/
 .nyc_output/

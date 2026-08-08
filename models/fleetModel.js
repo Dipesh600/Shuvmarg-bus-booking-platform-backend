@@ -1,4 +1,7 @@
 const mongoose = require("mongoose");
+const fleetApprovalFields = require("./schemas/fleet-approval-fields");
+const fleetDocumentFields = require("./schemas/fleet-document-fields");
+const { FLEET_APPROVAL_STATUS } = require("../src/contracts/status/fleet-approval.status");
 
 const BusSchema = new mongoose.Schema(
     {
@@ -154,11 +157,6 @@ const BusSchema = new mongoose.Schema(
             index: true
         },
 
-        fleetImages: {
-            type: [String],
-            default: []
-        },
-
         // Denormalized rating (updated on review creation via aggregation)
         averageRating: {
             type: Number,
@@ -172,80 +170,13 @@ const BusSchema = new mongoose.Schema(
             min: 0,
         },
 
-        // Per-vehicle legal documents (separate from owner-level KYC)
-        fleetDocuments: {
-            fitnessCert: {
-                url: { type: String, default: null },
-                validTill: { type: Date, default: null },
-            },
-            insurance: {
-                url: { type: String, default: null },
-                policyNumber: { type: String, default: null },
-                validTill: { type: Date, default: null },
-            },
-            bluebook: {
-                url: { type: String, default: null },
-            },
-            routePermit: {
-                url: { type: String, default: null },
-                validTill: { type: Date, default: null },
-            },
-        },
-
         registrationYear: {
             type: Number
         },
 
-        status: {
-            type: String,
-            enum: ["ACTIVE", "INACTIVE", "MAINTENANCE"],
-            default: "ACTIVE"
-        },
+        ...fleetDocumentFields,
 
-        approvalStatus: {
-            type: String,
-            enum: ["PENDING", "APPROVED", "REJECTED"],
-            default: "PENDING"
-        },
-
-        approvedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "SuperAdmin",
-            default: null
-        },
-
-        approvedAt: {
-            type: Date,
-            default: null
-        },
-
-        rejectedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "SuperAdmin",
-            default: null
-        },
-
-        rejectedAt: {
-            type: Date,
-            default: null
-        },
-
-        rejectionReason: {
-            type: String,
-            default: null
-        },
-
-        // ── Per-document review results (set by admin during KYC review) ────────
-        // Each key maps to a document slot. Status: 'pending' | 'approved' | 'rejected'
-        // This is what the bus owner actually sees when their application is rejected
-        // so they know exactly which file to fix and re-upload.
-        documentReviews: {
-            fleetImages:  { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
-            fitnessCert:  { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
-            insurance:    { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
-            bluebook:     { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
-            routePermit:  { status: { type: String, default: "pending" }, reason: { type: String, default: null } },
-        },
+        ...fleetApprovalFields,
 
         createdBy: {
             type: String,
@@ -283,11 +214,10 @@ BusSchema.pre("save", async function (next) {
         ));
     }
 
-    if (busOwner.verificationStatus !== "approved") {
+    if (this.approvalStatus !== FLEET_APPROVAL_STATUS.DRAFT) {
         return next(new Error(
-            `OWNER_NOT_APPROVED: Fleet creation requires an approved BusOwner profile ` +
-            `(current status: ${busOwner.verificationStatus}). ` +
-            `Admin approval is required before you can register fleet vehicles.`
+            `OWNER_NOT_APPROVED: New fleet records must be created in DRAFT approval status ` +
+            `(attempted status: ${this.approvalStatus}, owner status: ${busOwner.verificationStatus}).`
         ));
     }
 

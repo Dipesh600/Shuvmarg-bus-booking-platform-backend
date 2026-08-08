@@ -107,10 +107,10 @@ test('document-proxy service — validation', async (t) => {
         assert.equal(result.ok, true);
     });
 
-    await t.test('5d. bus_owner_docs/ prefix → ok:true', async () => {
-        mock.method(storage, 'fetchS3Object', async () => fakeS3Response());
+    await t.test('5d. bus_owner_docs/ prefix is blocked', async () => {
         const result = await service.resolveDocument('bus_owner_docs/old.pdf');
-        assert.equal(result.ok, true);
+        assert.equal(result.ok, false);
+        assert.equal(result.status, 403);
     });
 
     // ── 6. Disallowed prefix ───────────────────────────────────────────────────

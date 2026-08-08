@@ -9,6 +9,8 @@ const LOCAL_ORIGINS = [
   "http://localhost:5176",
   "http://localhost:5177",
   "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
   "http://localhost:4173",
 ];
 
@@ -42,7 +44,7 @@ const parseConfiguredOrigins = (originString = "") =>
  */
 const createCorsOptions = ({
   corsAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS,
-  frontendUrl       = process.env.FRONTEND_URL,
+  frontendUrl = process.env.FRONTEND_URL,
 } = {}) => {
   const primary = (corsAllowedOrigins ?? "").trim();
   const fallback = (frontendUrl ?? "").trim();
