@@ -117,6 +117,7 @@ router.get("/busOwnerDashboard", adminMiddleware, busOwnerController.getBusOwner
 // Admin actor is derived from req.adminInfo set by adminMiddleware.
 const kycDocumentRead = require("../../src/modules/bus-owner/kyc-document-read");
 router.get("/busOwner/kycDocumentReadUrl", adminMiddleware, kycDocumentRead.getKycDocumentReadUrl);
+router.get("/busOwner/kycDocumentView", adminMiddleware, kycDocumentRead.viewKycDocument);
 
 // Push Notification (Admin)
 router.post(

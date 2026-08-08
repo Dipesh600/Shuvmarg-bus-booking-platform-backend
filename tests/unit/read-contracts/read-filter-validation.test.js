@@ -6,6 +6,7 @@ const { createFleetReadRepository } = require("../../../src/modules/read-contrac
 const { createAdminBusOwnerRepository } = require("../../../src/modules/read-contracts/admin-bus-owner/admin-bus-owner.repository");
 const { createAdminKycRepository } = require("../../../src/modules/read-contracts/admin-kyc/admin-kyc.repository");
 const { ReadContractValidationError } = require("../../../src/modules/read-contracts/common/read-errors");
+const { buildAdminFleetFilter } = require("../../../src/modules/read-contracts/fleet/fleet-read-filter.builder");
 
 test("read filter validation unit tests", async (t) => {
   await t.test("fleet repository rejects invalid status filter", async () => {
@@ -41,6 +42,29 @@ test("read filter validation unit tests", async (t) => {
 
     await assert.rejects(
       () => repo.findAdminPaginatedFleets({ search: longSearch }),
+      (err) => err instanceof ReadContractValidationError && err.code === "READ_INVALID_FILTER"
+    );
+  });
+
+  await t.test("operational fleet filter selects approved, setup-complete fleets", () => {
+    assert.deepEqual(buildAdminFleetFilter({ operational: "true" }, []), {
+      approvalStatus: "APPROVED",
+      setupComplete: true,
+    });
+  });
+
+  await t.test("fleet filter accepts a valid brand scope", () => {
+    const brandId = "507f1f77bcf86cd799439011";
+    assert.deepEqual(buildAdminFleetFilter({ brandId }, []), { brandId });
+  });
+
+  await t.test("fleet filter rejects invalid operational and brand scopes", () => {
+    assert.throws(
+      () => buildAdminFleetFilter({ operational: "yes" }, []),
+      (err) => err instanceof ReadContractValidationError && err.code === "READ_INVALID_FILTER"
+    );
+    assert.throws(
+      () => buildAdminFleetFilter({ brandId: "not-an-object-id" }, []),
       (err) => err instanceof ReadContractValidationError && err.code === "READ_INVALID_FILTER"
     );
   });

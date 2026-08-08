@@ -16,8 +16,8 @@ function mapAdminReviewer(reviewer) {
 
 function mapAdminFleetDetail(fleet) {
   if (!fleet) return null;
-  const owner = fleet.busOwnerId || {};
-  const ownerUser = owner.user || {};
+  const ownerUser = fleet.ownerId || {};
+  const brand = fleet.brandId || {};
   const docDescriptors = mapFleetDocumentDescriptors(fleet);
   const docSummary = calculateFleetDocumentSummary(docDescriptors);
 
@@ -25,9 +25,9 @@ function mapAdminFleetDetail(fleet) {
     fleetId: String(fleet._id || fleet.id),
     fleetCode: fleet.fleetId || null,
     owner: {
-      ownerId: String(owner._id || owner.id || owner),
-      ownerCode: owner.busOwnerId || null,
-      companyName: owner.companyName || owner.companyRegistration?.companyName || ownerUser.name || "N/A",
+      ownerId: String(ownerUser._id || ownerUser.id || ownerUser),
+      ownerCode: null,
+      companyName: brand.brandName || ownerUser.name || "N/A",
       ownerName: ownerUser.name || "N/A",
       phone: ownerUser.phone || "N/A",
       email: ownerUser.email || "N/A",
@@ -42,8 +42,8 @@ function mapAdminFleetDetail(fleet) {
     },
     assignment: {
       route: fleet.route ? `${fleet.route.from} - ${fleet.route.to}` : "Unassigned",
-      operatorId: fleet.operatorId ? String(fleet.operatorId._id || fleet.operatorId) : null,
-      operatorName: fleet.operatorId?.name || null,
+      operatorId: brand?._id ? String(brand._id) : null,
+      operatorName: brand.brandName || null,
     },
     status: fleet.status || "inactive",
     approvalStatus: fleet.approvalStatus || "PENDING",

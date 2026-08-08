@@ -9,6 +9,7 @@ const ALLOWED_DOCUMENT_TYPES = Object.freeze([
   "transportLicense",
   "insuranceCertificates",
   "ownerIdentity",
+  "bankDetails",
 ]);
 
 function isKycMalwareScanReady(busOwner, environment = process.env.NODE_ENV) {

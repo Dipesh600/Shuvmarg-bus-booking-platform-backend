@@ -18,9 +18,10 @@ function createFleetReadRepository({
     if (!userId || typeof userId !== "string" || !mongoose.Types.ObjectId.isValid(userId)) {
       throw new ReadContractValidationError("READ_INVALID_FILTER", "Invalid ownerId filter.");
     }
-    const owner = await BusOwnerModel.findOne({ user: userId }).select("_id user").lean();
+    const owner = await BusOwnerModel.findOne({ $or: [{ _id: userId }, { user: userId }] }).select("_id user").lean();
     const ids = [userId];
     if (owner?._id) ids.push(owner._id);
+    if (owner?.user) ids.push(owner.user);
     return ids;
   }
 
@@ -31,8 +32,8 @@ function createFleetReadRepository({
 
     const [rawFleets, totalItems] = await Promise.all([
       FleetModel.find(filter)
-        .populate({ path: "busOwnerId", populate: { path: "user", select: "name email phone" } })
-        .populate("operatorId", "name email")
+        .populate("ownerId", "name email phone")
+        .populate("brandId", "brandName brandCode ownerId")
         .populate("approvedBy", "name email")
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -47,8 +48,8 @@ function createFleetReadRepository({
 
   async function findAdminFleetDetailById(id) {
     const fleet = await FleetModel.findById(id)
-      .populate({ path: "busOwnerId", populate: { path: "user", select: "name email phone" } })
-      .populate("operatorId", "name email")
+      .populate("ownerId", "name email phone")
+      .populate("brandId", "brandName brandCode ownerId")
       .populate("approvedBy", "name email")
       .lean();
 
