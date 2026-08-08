@@ -22,6 +22,8 @@ ENV_FILE="${DEPLOY_DIR}/.env"
 LOCK_FILE="/tmp/shuvmarg-staging-deploy.lock"
 HEALTH_WAIT_SECONDS=60
 HEALTH_CHECK_INTERVAL=5
+PUBLIC_HEALTH_WAIT_SECONDS=60
+PUBLIC_HEALTH_CHECK_INTERVAL=5
 GHCR_REGISTRY="ghcr.io"
 GHCR_USER="${GHCR_USER:-dipesh600}"
 EXPECTED_IMAGE_REPOSITORY="ghcr.io/dipesh600/shuvmarg-bus-booking-platform-backend"
@@ -109,8 +111,19 @@ cleanup_auth() {
 trap cleanup_auth EXIT
 
 # ── Capture current image for rollback ───────────────────────────────────────
-PREVIOUS_IMAGE=$(grep -E '^BACKEND_IMAGE=' "${ENV_FILE}" | cut -d= -f2- || true)
-log "Previous image: ${PREVIOUS_IMAGE:-<none>}"
+# Prefer the image of the container that is actually running. A previous failed
+# deployment may have updated .env before Compose rejected a dependency image.
+CONFIGURED_PREVIOUS_IMAGE=$(grep -E '^BACKEND_IMAGE=' "${ENV_FILE}" | cut -d= -f2- || true)
+RUNNING_PREVIOUS_IMAGE=$(docker inspect \
+  --format='{{.Config.Image}}' \
+  shuvmarg-staging-backend 2>/dev/null || true)
+
+if [[ "${RUNNING_PREVIOUS_IMAGE}" =~ ^ghcr\.io/dipesh600/shuvmarg-bus-booking-platform-backend:sha-[0-9a-f]{40}$ ]]; then
+  PREVIOUS_IMAGE="${RUNNING_PREVIOUS_IMAGE}"
+else
+  PREVIOUS_IMAGE="${CONFIGURED_PREVIOUS_IMAGE}"
+fi
+log "Previous running image: ${PREVIOUS_IMAGE:-<none>}"
 
 # ── Authenticate to GHCR (read-only token from VM) ───────────────────────────
 log "Authenticating to GHCR..."
@@ -122,19 +135,7 @@ log "Pulling image: ${NEW_IMAGE}"
 docker pull "${NEW_IMAGE}"
 log "Image pulled successfully."
 
-# ── Update BACKEND_IMAGE in .env ─────────────────────────────────────────────
-# Uses sed in-place; works on both Linux (GNU sed) and macOS (BSD sed via -i '')
-sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${NEW_IMAGE}|" "${ENV_FILE}"
-log "BACKEND_IMAGE updated in ${ENV_FILE}."
-
-# ── Deploy ────────────────────────────────────────────────────────────────────
-cd "${DEPLOY_DIR}"
-
-log "Running: docker compose up -d"
-docker compose --env-file "${ENV_FILE}" up -d
-log "Containers started."
-
-# ── Health check ─────────────────────────────────────────────────────────────
+# ── Health and rollback helpers ──────────────────────────────────────────────
 wait_healthy() {
   local elapsed=0
   local container="shuvmarg-staging-backend"
@@ -160,25 +161,41 @@ verify_public_health() {
   local domain
   domain=$(read_env_value STAGING_API_DOMAIN)
   local url="https://${domain}/health"
-  log "Verifying public health endpoint: ${url}"
-  curl --fail --silent --show-error \
-    --connect-timeout 10 \
-    --max-time 30 \
-    "${url}" >/dev/null
+  local elapsed=0
+
+  log "Waiting for public health endpoint (up to ${PUBLIC_HEALTH_WAIT_SECONDS}s): ${url}"
+  while [[ $elapsed -lt ${PUBLIC_HEALTH_WAIT_SECONDS} ]]; do
+    if curl --fail --silent \
+      --connect-timeout 5 \
+      --max-time 10 \
+      "${url}" >/dev/null; then
+      log "Public health endpoint is ready."
+      return 0
+    fi
+
+    sleep "${PUBLIC_HEALTH_CHECK_INTERVAL}"
+    elapsed=$((elapsed + PUBLIC_HEALTH_CHECK_INTERVAL))
+    log "  Public endpoint not ready (${elapsed}s elapsed)"
+  done
+
+  log_error "Public health check timed out after ${PUBLIC_HEALTH_WAIT_SECONDS}s."
+  return 1
 }
 
-# ── Rollback function ─────────────────────────────────────────────────────────
 rollback() {
   log_error "Deployment failed. Rolling back to: ${PREVIOUS_IMAGE:-<none>}"
 
   if [[ -z "${PREVIOUS_IMAGE:-}" ]]; then
-    log_error "No previous image to roll back to."
+    log_error "No previous image to roll back to. Manual intervention required."
     exit 1
   fi
 
   sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${PREVIOUS_IMAGE}|" "${ENV_FILE}"
 
-  docker compose --env-file "${ENV_FILE}" up -d
+  if ! docker compose --env-file "${ENV_FILE}" up -d; then
+    log_error "Rollback Compose startup failed. Manual intervention required."
+    exit 1
+  fi
   log "Rollback containers started."
 
   if wait_healthy; then
@@ -190,6 +207,22 @@ rollback() {
   exit 1
 }
 
+# ── Update BACKEND_IMAGE in .env ─────────────────────────────────────────────
+# Uses sed in-place; works on both Linux (GNU sed) and macOS (BSD sed via -i '')
+sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${NEW_IMAGE}|" "${ENV_FILE}"
+log "BACKEND_IMAGE updated in ${ENV_FILE}."
+
+# ── Deploy ────────────────────────────────────────────────────────────────────
+cd "${DEPLOY_DIR}"
+
+log "Running: docker compose up -d"
+if ! docker compose --env-file "${ENV_FILE}" up -d; then
+  log_error "Compose startup failed before health verification."
+  rollback
+fi
+log "Containers started."
+
+# ── Health check ─────────────────────────────────────────────────────────────
 if ! wait_healthy; then
   rollback
 fi

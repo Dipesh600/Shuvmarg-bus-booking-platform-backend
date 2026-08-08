@@ -26,11 +26,36 @@ test('staging KYC scanner remains private and gates backend startup', () => {
   const compose = read('deploy/staging/docker-compose.yml');
   const envExample = read('deploy/staging/.env.example');
 
-  assert.match(compose, /image:\s*clamav\/clamav:1\.4_base/);
+  assert.match(
+    compose,
+    /image:\s*clamav\/clamav:1\.4\.5_base-debian13-slim/,
+  );
   assert.match(compose, /clamav:\s*\n\s*condition:\s*service_healthy/);
   assert.doesNotMatch(compose, /3310:3310/);
   assert.match(envExample, /KYC_MALWARE_SCAN_MODE=required/);
   assert.match(envExample, /CLAMD_HOST=clamav/);
+});
+
+test('staging deployment restores the actually running image on startup failure', () => {
+  const deployScript = read('deploy/staging/deploy.sh');
+
+  assert.match(deployScript, /RUNNING_PREVIOUS_IMAGE=\$\(docker inspect/);
+  assert.match(deployScript, /if ! docker compose --env-file "\$\{ENV_FILE\}" up -d; then/);
+  assert.match(deployScript, /Compose startup failed before health verification/);
+  assert.match(deployScript, /rollback/);
+});
+
+test('staging deployment allows bounded proxy readiness before rollback', () => {
+  const deployScript = read('deploy/staging/deploy.sh');
+
+  assert.match(deployScript, /PUBLIC_HEALTH_WAIT_SECONDS=60/);
+  assert.match(
+    deployScript,
+    /while \[\[ \$elapsed -lt \$\{PUBLIC_HEALTH_WAIT_SECONDS\} \]\]; do/,
+  );
+  assert.match(deployScript, /Public health endpoint is ready/);
+  assert.match(deployScript, /Public health check timed out/);
+  assert.match(deployScript, /if ! verify_public_health; then\s+rollback/);
 });
 
 test('staging Caddyfile uses the supplied domain', () => {
