@@ -8,25 +8,20 @@ const { assertVariantCanActivate } = require("./variant-activation.policy.js");
 async function createVariant(data, adminId) {
   const {
     corridorId, name, type, distanceKm, durationMinutes,
-    autoGenerateReturn = false,
+    direction = "FORWARD",
   } = data;
+  if (!["FORWARD", "RETURN"].includes(direction)) {
+    throw new Error("direction must be FORWARD or RETURN.");
+  }
   const corridor = await getCorridorById(corridorId);
   const count = await RouteVariant.countDocuments({ corridorId });
   const index = String(count + 1).padStart(2, "0");
   const forward = await RouteVariant.create({
     code: `${corridor.code}-V${index}`,
     corridorId, name, type, distanceKm, durationMinutes,
-    direction: "FORWARD", createdBy: adminId,
+    direction, status: "DRAFT", createdBy: adminId,
   });
-  if (!autoGenerateReturn) return forward;
-  const returnVariant = await RouteVariant.create({
-    code: `${corridor.code}-V${index}R`,
-    corridorId, name: `${name} (Return)`, type, distanceKm, durationMinutes,
-    direction: "RETURN", returnVariantId: forward._id, createdBy: adminId,
-  });
-  forward.returnVariantId = returnVariant._id;
-  await forward.save();
-  return { forward, return: returnVariant };
+  return forward;
 }
 
 function getVariantsByCorridor(corridorId) {
