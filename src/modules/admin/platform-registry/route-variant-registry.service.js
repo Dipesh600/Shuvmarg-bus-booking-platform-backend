@@ -3,6 +3,7 @@
 const RouteVariant = require("../../../../models/routeVariantModel.js");
 const RouteStop = require("../../../../models/routeStopModel.js");
 const { getCorridorById } = require("./corridor-registry.service.js");
+const { assertVariantCanActivate } = require("./variant-activation.policy.js");
 
 async function createVariant(data, adminId) {
   const {
@@ -49,6 +50,7 @@ async function getVariantById(id) {
 
 async function updateVariant(id, data) {
   const { name, type, distanceKm, durationMinutes, status } = data;
+  if (status === "ACTIVE") await assertVariantCanActivate(await getVariantById(id));
   const variant = await RouteVariant.findByIdAndUpdate(
     id,
     {

@@ -3,23 +3,16 @@
 const RouteDiscovery = require("../../../../models/routeDiscoveryModel.js");
 const Stop = require("../../../../models/stopModel.js");
 const {
-  fetchRouteOptions,
   extractStopCoordinates,
-  geocodeStopName,
 } = require("../../../../services/mapboxClient.js");
+const { fetchGoogleRouteOptions } = require("../../../../services/googleRoutesClient.js");
 
 const loadCoordinates = async (stop, sessionId, label) => {
   let coordinates = extractStopCoordinates(stop);
   if (coordinates) return coordinates;
-  console.log(
-    `[Discovery] Session ${sessionId}: ${label} "${stop.name}" has no coords — geocoding via Mapbox.`
+  throw new Error(
+    `${label} stop "${stop.name}" has no verified map coordinates. Add its location in the Stop Registry before creating a variant draft.`
   );
-  coordinates = await geocodeStopName(stop.name);
-  await Stop.findByIdAndUpdate(stop._id, {
-    "coordinates.lat": coordinates.lat,
-    "coordinates.lng": coordinates.lng,
-  });
-  return coordinates;
 };
 
 const loadRouteOptions = async (session, origin, destination) => {
@@ -30,17 +23,17 @@ const loadRouteOptions = async (session, origin, destination) => {
       session._id,
       "destination"
     );
-    const routeOptions = await fetchRouteOptions(originCoords, destinationCoords);
+    const routeOptions = await fetchGoogleRouteOptions(originCoords, destinationCoords);
     await RouteDiscovery.findByIdAndUpdate(session._id, {
       routeOptions,
       errorMessage: null,
     });
     console.log(
-      `[Discovery] Session ${session._id}: ${routeOptions.length} route option(s) loaded from Mapbox.`
+      `[Discovery] Session ${session._id}: ${routeOptions.length} route option(s) loaded from Google Routes.`
     );
   } catch (error) {
     console.error(
-      `[Discovery] Session ${session._id}: Mapbox fetch failed — ${error.message}`
+      `[Discovery] Session ${session._id}: Google Routes fetch failed — ${error.message}`
     );
     await RouteDiscovery.findByIdAndUpdate(session._id, {
       errorMessage: error.message,
@@ -57,8 +50,8 @@ const createDiscoverySession = async (data, adminId) => {
     throw new Error("Origin and destination cannot be the same stop.");
   }
   const [origin, destination] = await Promise.all([
-    Stop.findById(originStopId).select("name code status").lean(),
-    Stop.findById(destinationStopId).select("name code status").lean(),
+    Stop.findById(originStopId).select("name code status coordinates").lean(),
+    Stop.findById(destinationStopId).select("name code status coordinates").lean(),
   ]);
   if (!origin) throw new Error(`Origin stop not found: ${originStopId}`);
   if (!destination) throw new Error(`Destination stop not found: ${destinationStopId}`);

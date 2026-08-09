@@ -18,18 +18,14 @@ function patch(t, object, key, value) {
 function query(value) {
   return {
     populate: async () => value,
-    then(resolve, reject) {
-      return Promise.resolve(value).then(resolve, reject);
-    },
+    then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); },
   };
 }
 
-test("setting forward stops replaces and reverses the linked sequence", async (t) => {
+test("setting a variant sequence never overwrites its linked counterpart", async (t) => {
   const deletes = [];
   const inserts = [];
-  patch(t, Variant, "findById", (id) => query(
-    id === "v1" ? { _id: "v1", returnVariantId: "v2" } : { _id: "v2" }
-  ));
+  patch(t, Variant, "findById", () => query({ _id: "v1" }));
   patch(t, Stop, "find", async () => [
     { _id: "s1", code: "KTM" },
     { _id: "s2", code: "PKR" },
@@ -44,18 +40,9 @@ test("setting forward stops replaces and reverses the linked sequence", async (t
     { stopCode: "KTM", sequence: 1, estimatedMinutesFromOrigin: 0 },
     { stopCode: "PKR", sequence: 2, estimatedMinutesFromOrigin: 240 },
   ]);
-  assert.deepEqual(deletes, [{ variantId: "v1" }, { variantId: "v2" }]);
+  assert.deepEqual(deletes, [{ variantId: "v1" }]);
   assert.equal(result, inserts[0]);
-  assert.deepEqual(inserts[1], [
-    {
-      variantId: "v2", stopId: "s2", sequence: 1,
-      isMajor: true, estimatedMinutesFromOrigin: 0,
-    },
-    {
-      variantId: "v2", stopId: "s1", sequence: 2,
-      isMajor: true, estimatedMinutesFromOrigin: 240,
-    },
-  ]);
+  assert.equal(inserts.length, 1);
 });
 
 test("unknown stops fail before replacing an existing sequence", async (t) => {

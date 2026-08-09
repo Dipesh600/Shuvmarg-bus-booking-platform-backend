@@ -7,7 +7,7 @@ const resolveCandidate = async (stop, index) => {
   const candidateName = (stop.candidateName || "").trim();
   const coordinates = stop.candidateCoordinates || null;
   let routeStopId = stop.routeStopId || null;
-  let adminAction = "PENDING";
+  let adminAction = stop.adminAction || "PENDING";
   let match = null;
   if (candidateName && !routeStopId) {
     try {
@@ -20,7 +20,6 @@ const resolveCandidate = async (stop, index) => {
   }
   if (match) {
     routeStopId = match.stopId;
-    adminAction = "APPROVED";
   }
   return {
     ...stop,
