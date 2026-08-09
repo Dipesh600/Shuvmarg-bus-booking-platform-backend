@@ -1,60 +1,43 @@
 "use strict";
 
-const axios = require("axios");
 const RouteDiscovery = require("../../../../models/routeDiscoveryModel.js");
-const { extractStopCoordinates } = require("../../../../services/mapboxClient.js");
 const {
   discoverStopsAlongRoute,
 } = require("../../../../services/googlePlacesClient.js");
-const { decodePolyline } = require("./polyline.js");
+const { setDiscoveredStops } = require("./discovered-stop.service.js");
 
-const fetchDirectionsGeometry = async (origin, destination) => {
-  const originCoords = extractStopCoordinates(origin);
-  const destinationCoords = extractStopCoordinates(destination);
-  if (!originCoords || !destinationCoords) return null;
-  try {
-    const { data } = await axios.get(
-      "https://maps.googleapis.com/maps/api/directions/json",
-      {
-        params: {
-          origin: `${origin.name || `${originCoords.lat},${originCoords.lng}`}, Nepal`,
-          destination:
-            `${destination.name || `${destinationCoords.lat},${destinationCoords.lng}`}, Nepal`,
-          mode: "driving",
-          region: "NP",
-          key: process.env.GOOGLE_MAPS_API_KEY,
-        },
-        timeout: 10_000,
-      }
-    );
-    if (data.routes?.length) {
-      return {
-        type: "LineString",
-        coordinates: decodePolyline(data.routes[0].overview_polyline.points),
-      };
-    }
-  } catch (error) {
-    console.warn(
-      `[Discovery] Directions fetch failed (${error.message}), falling back to straight line.`
-    );
-  }
+function endpointCandidate(stop, sequenceOrder, distanceFromOriginKm, durationFromOriginMins) {
   return {
-    type: "LineString",
-    coordinates: [
-      [originCoords.lng, originCoords.lat],
-      [destinationCoords.lng, destinationCoords.lat],
-    ],
+    candidateName: stop.name,
+    candidateCoordinates: stop.coordinates,
+    routeStopId: stop._id,
+    sequenceOrder,
+    distanceFromOriginKm,
+    durationFromOriginMins,
+    adminAction: "APPROVED",
+    source: "CORRIDOR_ENDPOINT",
   };
-};
+}
+
+function withLockedEndpoints(candidates, origin, destination, distanceKm, durationMins) {
+  const endpointNames = new Set([origin.name.toLowerCase(), destination.name.toLowerCase()]);
+  const interior = candidates.filter((candidate) =>
+    !endpointNames.has((candidate.candidateName || "").toLowerCase())
+  );
+  const all = [
+    endpointCandidate(origin, 0, 0, 0),
+    ...interior,
+    endpointCandidate(destination, 0, distanceKm, durationMins),
+  ];
+  return all.map((candidate, index) => ({ ...candidate, sequenceOrder: index }));
+}
 
 const acquireStopsForSelectedRoute = async (session, routeOptionIndex) => {
   try {
     const selectedRoute = session.routeOptions[routeOptionIndex];
     const origin = session.originStopId;
     const destination = session.destinationStopId;
-    const geometry =
-      selectedRoute?.geometry ||
-      (await fetchDirectionsGeometry(origin, destination));
+    const geometry = selectedRoute?.geometry;
     if (!geometry) {
       console.warn(
         `[Discovery] Session ${session._id}: no geometry and stops have no coordinates. Cannot auto-discover stops.`
@@ -68,10 +51,16 @@ const acquireStopsForSelectedRoute = async (session, routeOptionIndex) => {
       origin?.name || "",
       destination?.name || ""
     );
-    await RouteDiscovery.findByIdAndUpdate(session._id, {
-      discoveredStops,
-      status: "STOPS_DISCOVERED",
-    });
+    await setDiscoveredStops(
+      session._id,
+      withLockedEndpoints(
+        discoveredStops,
+        origin,
+        destination,
+        selectedRoute.distanceKm,
+        selectedRoute.durationMins
+      )
+    );
     if (discoveredStops.length === 0) {
       console.warn(
         `[Discovery] Session ${session._id}: Google Places found no bus stops along route.`

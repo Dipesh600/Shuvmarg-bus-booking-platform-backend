@@ -8,9 +8,7 @@ const {
   createVariant,
   createRouteStops,
 } = require("./route-publication-records.service.js");
-const {
-  activateCorridorIfReady,
-} = require("../platform-registry/corridor-registry.service.js");
+const Stop = require("../../../../models/stopModel.js");
 
 const resolveStops = async (activeStops, adminId) => {
   const resolved = [];
@@ -24,6 +22,20 @@ const resolveStops = async (activeStops, adminId) => {
   }
   return resolved;
 };
+
+async function assertPublishableSequence(resolvedStops, originId, destinationId) {
+  if (String(resolvedStops[0].stopId) !== String(originId) ||
+      String(resolvedStops.at(-1).stopId) !== String(destinationId)) {
+    throw new Error("The sequence must start and end at the selected corridor endpoints.");
+  }
+  const stopIds = resolvedStops.map((entry) => entry.stopId);
+  const routeStops = await Stop.find({
+    _id: { $in: stopIds }, status: "ACTIVE", isRouteStop: true,
+  }).select("_id").lean();
+  if (routeStops.length !== stopIds.length) {
+    throw new Error("Every selected sequence item must be an active operational route stop.");
+  }
+}
 
 const publishSession = async (sessionId, publishData = {}, adminId) => {
   const session = await RouteDiscovery.findById(sessionId)
@@ -42,6 +54,7 @@ const publishSession = async (sessionId, publishData = {}, adminId) => {
   const resolvedStops = await resolveStops(activeStops, adminId);
   const origin = session.originStopId;
   const destination = session.destinationStopId;
+  await assertPublishableSequence(resolvedStops, origin._id, destination._id);
   const corridor = await findOrCreateCorridor(
     session,
     origin,
@@ -58,7 +71,6 @@ const publishSession = async (sessionId, publishData = {}, adminId) => {
     adminId
   );
   await createRouteStops(variant, resolvedStops);
-  await activateCorridorIfReady(corridor._id, adminId);
   session.publishedVariant = {
     variantId: variant._id,
     routeStopSequence: resolvedStops.map((entry) => ({

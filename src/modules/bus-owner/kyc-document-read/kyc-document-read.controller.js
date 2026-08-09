@@ -15,7 +15,12 @@ function createKycDocumentReadController({ BusOwner, urlService, logger = consol
         401
       );
     }
-    const ownerId = req.query?.busOwnerId || req.query?.id || req.body?.busOwnerId || req.body?.id;
+    const ownerId =
+      req.query?.busOwnerId ||
+      req.query?.id ||
+      req.body?.busOwnerId ||
+      req.body?.id ||
+      (actor.type === "BUS_OWNER" ? actor.userId : null);
     const { documentType, certificateIndex, fileIndex } = req.query?.documentType ? req.query : (req.body || {});
     if (!ownerId) {
       throw new KycDocumentReadError(

@@ -36,30 +36,23 @@ const createVariant = async (
     distanceKm: selectedRoute?.distanceKm || null,
     durationMinutes: selectedRoute?.durationMins || null,
     direction: "FORWARD",
-    status: "ACTIVE",
+    status: "DRAFT",
     createdBy: adminId,
   });
 };
 
-const uniqueStops = (resolvedStops) => {
+const assertUniqueStops = (resolvedStops) => {
   const seen = new Set();
-  return resolvedStops.filter((entry) => {
+  for (const entry of resolvedStops) {
     const key = entry.stopId?.toString();
-    if (!key || seen.has(key)) {
-      if (key) {
-        console.warn(
-          `[Discovery] Duplicate stopId ${key} in publish — dropping extra occurrence at sequence ${entry.sequenceOrder}.`
-        );
-      }
-      return false;
-    }
+    if (!key || seen.has(key)) throw new Error("A route stop may appear only once in a variant sequence.");
     seen.add(key);
-    return true;
-  });
+  }
 };
 
 const createRouteStops = async (variant, resolvedStops) => {
-  const documents = uniqueStops(resolvedStops).map((entry) => ({
+  assertUniqueStops(resolvedStops);
+  const documents = resolvedStops.map((entry) => ({
     variantId: variant._id,
     stopId: entry.stopId,
     sequence: entry.sequenceOrder + 1,

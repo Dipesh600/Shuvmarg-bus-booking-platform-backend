@@ -37,6 +37,8 @@ const createRegistryStop = async (
     source: "DISCOVERY",
     verificationStatus: "VERIFIED",
     status: "ACTIVE",
+    isRouteStop: true,
+    isSearchable: false,
     createdBy: adminId,
   });
   return stop._id;
@@ -56,6 +58,12 @@ const resolvePublishedStop = async (entry, adminId) => {
   const candidateName = entry.candidateName.trim();
   const coordinates = entry.candidateCoordinates || {};
   const hasCoordinates = Boolean(coordinates.lat && coordinates.lng);
+  if (!hasCoordinates) {
+    throw new Error(
+      `Cannot publish: "${candidateName}" has no verified map coordinates. ` +
+      "Select an existing stop or add the location on the map."
+    );
+  }
   const boundaries = hasCoordinates
     ? await geocodeAdminBoundaries(coordinates.lat, coordinates.lng)
     : { province: "", district: "", municipality: "" };

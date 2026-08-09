@@ -68,17 +68,13 @@ const matchCandidateStop = async (candidateName, coordinates) => {
       const aliases = (nearby.stop.aliases || []).map((alias) =>
         alias.toLowerCase()
       );
-      if (name.toLowerCase() !== canonical && !aliases.includes(name.toLowerCase())) {
-        await Stop.findByIdAndUpdate(nearby.stop._id, {
-          $addToSet: { aliases: name },
-        });
+      if (name.toLowerCase() === canonical || aliases.includes(name.toLowerCase())) {
+        return {
+          stopId: nearby.stop._id,
+          matchType: "PROXIMITY",
+          matchedName: nearby.stop.name,
+        };
       }
-      await fillBoundaries(nearby.stop, boundaries);
-      return {
-        stopId: nearby.stop._id,
-        matchType: "PROXIMITY",
-        matchedName: nearby.stop.name,
-      };
     }
   }
   const nameMatch = await findNameMatch(name, boundaries, true);

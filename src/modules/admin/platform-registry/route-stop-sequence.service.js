@@ -2,11 +2,7 @@
 
 const Stop = require("../../../../models/stopModel.js");
 const RouteStop = require("../../../../models/routeStopModel.js");
-const RouteVariant = require("../../../../models/routeVariantModel.js");
 const { getVariantById } = require("./route-variant-registry.service.js");
-const {
-  activateCorridorIfReady,
-} = require("./corridor-registry.service.js");
 
 function mappedStops(variantId, stops, stopMap) {
   return stops.map((stop) => ({
@@ -18,37 +14,8 @@ function mappedStops(variantId, stops, stopMap) {
   }));
 }
 
-function reversedStops(variantId, stops, stopMap) {
-  const total = Math.max(
-    ...stops.map((stop) => stop.estimatedMinutesFromOrigin || 0)
-  );
-  return [...stops].reverse().map((stop, index) => ({
-    variantId,
-    stopId: stopMap[stop.stopCode.toUpperCase()],
-    sequence: index + 1,
-    isMajor: stop.isMajor !== undefined ? stop.isMajor : true,
-    estimatedMinutesFromOrigin: Math.max(
-      0, total - (stop.estimatedMinutesFromOrigin || 0)
-    ),
-  }));
-}
-
-async function replaceLinkedSequence(variant, stops, stopMap) {
-  if (variant.returnVariantId) {
-    const linked = await RouteVariant.findById(variant.returnVariantId);
-    if (!linked) return;
-    await RouteStop.deleteMany({ variantId: linked._id });
-    await RouteStop.insertMany(reversedStops(linked._id, stops, stopMap));
-    return;
-  }
-  const forward = await RouteVariant.findOne({ returnVariantId: variant._id });
-  if (!forward) return;
-  await RouteStop.deleteMany({ variantId: forward._id });
-  await RouteStop.insertMany(reversedStops(forward._id, stops, stopMap));
-}
-
 async function setVariantStops(variantId, stops) {
-  const variant = await getVariantById(variantId);
+  await getVariantById(variantId);
   const codes = stops.map((stop) => stop.stopCode.toUpperCase());
   const stopDocs = await Stop.find({ code: { $in: codes }, status: "ACTIVE" });
   if (stopDocs.length !== codes.length) {
@@ -63,9 +30,6 @@ async function setVariantStops(variantId, stops) {
   const result = await RouteStop.insertMany(
     mappedStops(variantId, stops, stopMap)
   );
-  await replaceLinkedSequence(variant, stops, stopMap);
-  const corridorId = variant.corridorId?._id || variant.corridorId;
-  if (corridorId) await activateCorridorIfReady(corridorId);
   return result;
 }
 

@@ -63,8 +63,8 @@ const routeVariantSchema = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ["ACTIVE", "INACTIVE"],
-            default: "ACTIVE",
+            enum: ["DRAFT", "ACTIVE", "INACTIVE", "ARCHIVED"],
+            default: "DRAFT",
         },
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
