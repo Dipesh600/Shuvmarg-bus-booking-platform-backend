@@ -44,6 +44,12 @@ const selectRouteOption = async (
       `Must be between 0 and ${session.routeOptions.length - 1}.`
     );
   }
+  // The server-side Google Routes geometry is authoritative. An admin may
+  // improve the human-readable path name, but cannot replace that geometry
+  // with a separately calculated browser route.
+  if (routeMetadata.summary && session.routeOptions[routeOptionIndex]) {
+    session.routeOptions[routeOptionIndex].summary = routeMetadata.summary.trim();
+  }
   session.selectedRouteOptionIndex = routeOptionIndex;
   session.status = "ROUTE_SELECTED";
   await session.save();

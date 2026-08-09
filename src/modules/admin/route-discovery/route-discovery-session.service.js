@@ -2,6 +2,7 @@
 
 const RouteDiscovery = require("../../../../models/routeDiscoveryModel.js");
 const Stop = require("../../../../models/stopModel.js");
+const RouteCorridor = require("../../../../models/routeCorridorModel.js");
 const {
   extractStopCoordinates,
 } = require("../../../../services/mapboxClient.js");
@@ -41,11 +42,37 @@ const loadRouteOptions = async (session, origin, destination) => {
   }
 };
 
-const createDiscoverySession = async (data, adminId) => {
+const resolveCorridorDirection = (corridor, requestedDirection) => {
+  const direction = requestedDirection === "RETURN" ? "RETURN" : "FORWARD";
+  return {
+    direction,
+    originStopId: String(direction === "FORWARD" ? corridor.originId : corridor.destinationId),
+    destinationStopId: String(direction === "FORWARD" ? corridor.destinationId : corridor.originId),
+  };
+};
+
+const resolveSessionEndpoints = async (data) => {
+  const direction = data.direction === "RETURN" ? "RETURN" : "FORWARD";
+  if (data.corridorId) {
+    const corridor = await RouteCorridor.findById(data.corridorId)
+      .select("originId destinationId status code")
+      .lean();
+    if (!corridor) throw new Error(`Corridor not found: ${data.corridorId}`);
+    if (corridor.status === "INACTIVE") {
+      throw new Error(`Corridor "${corridor.code}" is inactive.`);
+    }
+    return { corridor, ...resolveCorridorDirection(corridor, direction) };
+  }
   const { originStopId, destinationStopId } = data;
   if (!originStopId || !destinationStopId) {
-    throw new Error("originStopId and destinationStopId are required.");
+    throw new Error("corridorId is required. Legacy originStopId and destinationStopId are also supported.");
   }
+  return { corridor: null, direction, originStopId: String(originStopId), destinationStopId: String(destinationStopId) };
+};
+
+const createDiscoverySession = async (data, adminId) => {
+  const { corridor, direction, originStopId, destinationStopId } =
+    await resolveSessionEndpoints(data);
   if (originStopId === destinationStopId) {
     throw new Error("Origin and destination cannot be the same stop.");
   }
@@ -74,6 +101,8 @@ const createDiscoverySession = async (data, adminId) => {
     );
   }
   const session = await RouteDiscovery.create({
+    corridorId: corridor?._id || null,
+    direction,
     originStopId,
     destinationStopId,
     status: "DRAFT",
@@ -83,4 +112,8 @@ const createDiscoverySession = async (data, adminId) => {
   return session;
 };
 
-module.exports = { createDiscoverySession };
+module.exports = {
+  createDiscoverySession,
+  resolveSessionEndpoints,
+  resolveCorridorDirection,
+};

@@ -22,7 +22,8 @@ const createVariant = async (
   origin,
   destination,
   publishData,
-  adminId
+  adminId,
+  direction = "FORWARD"
 ) => {
   const count = await RouteVariant.countDocuments({ corridorId: corridor._id });
   const code = `${corridor.code}-V${String(count + 1).padStart(2, "0")}`;
@@ -35,7 +36,7 @@ const createVariant = async (
       `${origin.name} → ${destination.name} (Discovery)`,
     distanceKm: selectedRoute?.distanceKm || null,
     durationMinutes: selectedRoute?.durationMins || null,
-    direction: "FORWARD",
+    direction,
     status: "DRAFT",
     createdBy: adminId,
   });

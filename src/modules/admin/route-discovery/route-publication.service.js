@@ -40,7 +40,8 @@ async function assertPublishableSequence(resolvedStops, originId, destinationId)
 const publishSession = async (sessionId, publishData = {}, adminId) => {
   const session = await RouteDiscovery.findById(sessionId)
     .populate("originStopId", "name code")
-    .populate("destinationStopId", "name code");
+    .populate("destinationStopId", "name code")
+    .populate("corridorId", "code originId destinationId status");
   if (!session) throw new Error("Discovery session not found.");
   assertTransition(session.status, "PUBLISHED");
   const activeStops = session.discoveredStops
@@ -55,11 +56,8 @@ const publishSession = async (sessionId, publishData = {}, adminId) => {
   const origin = session.originStopId;
   const destination = session.destinationStopId;
   await assertPublishableSequence(resolvedStops, origin._id, destination._id);
-  const corridor = await findOrCreateCorridor(
-    session,
-    origin,
-    destination,
-    adminId
+  const corridor = session.corridorId || await findOrCreateCorridor(
+    session, origin, destination, adminId
   );
   const selectedRoute = session.routeOptions[session.selectedRouteOptionIndex];
   const variant = await createVariant(
@@ -68,7 +66,8 @@ const publishSession = async (sessionId, publishData = {}, adminId) => {
     origin,
     destination,
     publishData,
-    adminId
+    adminId,
+    session.direction
   );
   await createRouteStops(variant, resolvedStops);
   session.publishedVariant = {

@@ -1,19 +1,6 @@
 const mongoose = require("mongoose");
 
-/**
- * RouteDiscovery — Working/draft record for a single map-assisted discovery session.
- *
- * Lifecycle: DRAFT → ROUTE_SELECTED → STOPS_DISCOVERED → APPROVED → PUBLISHED
- *            (or at any point) → REJECTED
- *
- * This is a disposable draft document. Nothing in this model writes to the live
- * Stop / StopPoint / RouteVariant / RouteStop collections until a separate "publish"
- * action is executed. The publishedVariant sub-document records what was actually
- * written to the live registry when that publish action runs.
- *
- * Schema contract: the sub-schemas below define the exact shape the Mapbox/Google
- * API clients must produce. Build the clients to fit this schema, not the other way.
- */
+/** Disposable map-assisted draft; live registry records are written only on publish. */
 
 // ── Sub-Schema: Route Option (one candidate road route from the mapping provider) ──
 const routeOptionSchema = new mongoose.Schema(
@@ -126,6 +113,10 @@ const routeStopSequenceSchema = new mongoose.Schema(
 // ── Main Schema ────────────────────────────────────────────────────────────────
 const routeDiscoverySchema = new mongoose.Schema(
     {
+        // Preferred entry point; legacy origin/destination drafts remain supported.
+        corridorId: { type: mongoose.Schema.Types.ObjectId, ref: "RouteCorridor", default: null, index: true },
+        // A return path is a separate draft, not an automatic rewrite.
+        direction: { type: String, enum: ["FORWARD", "RETURN"], default: "FORWARD" },
         originStopId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Stop",
