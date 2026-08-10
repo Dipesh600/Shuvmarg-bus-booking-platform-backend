@@ -25,10 +25,19 @@ function isAllowlistedLegacyUrl(url) {
 function createFleetDocumentReadService(deps = {}) {
   const repository = deps.repository;
   const getPresignedUrl = deps.getPresignedUrl;
+  const fetchDocument = deps.fetchDocument;
   const resolveActor = deps.resolveActor;
   const ttlSeconds = deps.ttlSeconds || 60;
 
-  async function getDocumentReadUrl({ fleetId, slot, imageId, actorContext }) {
+  function parseImageIndex(value) {
+    if (value === undefined || value === null || value === "") return 0;
+    if (!/^\d+$/.test(String(value))) {
+      throw errors.invalidMetadata("imageIndex must be a non-negative integer.");
+    }
+    return Number(value);
+  }
+
+  async function resolveDocumentReference({ fleetId, slot, imageId, imageIndex, actorContext }) {
     requestPolicy.validateFleetId(fleetId);
     requestPolicy.validateSlot(slot);
 
@@ -53,7 +62,9 @@ function createFleetDocumentReadService(deps = {}) {
         const found = images.find((img) => img.imageId === imageId || img === imageId);
         targetKey = found?.objectKey || (typeof found === "string" ? found : null);
       } else {
-        targetKey = images[0]?.objectKey || (typeof images[0] === "string" ? images[0] : null);
+        const index = parseImageIndex(imageIndex);
+        const image = images[index];
+        targetKey = image?.objectKey || (typeof image === "string" ? image : null);
       }
     } else {
       const doc = fleet.fleetDocuments?.[slot];
@@ -70,8 +81,14 @@ function createFleetDocumentReadService(deps = {}) {
       }
     }
 
+    return { fleetId, slot, targetKey };
+  }
+
+  async function getDocumentReadUrl({ fleetId, slot, imageId, imageIndex, actorContext }) {
+    const resolved = await resolveDocumentReference({ fleetId, slot, imageId, imageIndex, actorContext });
+
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
-    const readUrl = await getPresignedUrl(targetKey, ttlSeconds);
+    const readUrl = await getPresignedUrl(resolved.targetKey, ttlSeconds);
 
     return dto.buildReadResponse({
       fleetId,
@@ -81,7 +98,19 @@ function createFleetDocumentReadService(deps = {}) {
     });
   }
 
-  return { getDocumentReadUrl };
+  async function getDocumentObject({ fleetId, slot, imageId, imageIndex, actorContext }) {
+    if (typeof fetchDocument !== "function") {
+      throw errors.storageFailure("Fleet document streaming is unavailable.");
+    }
+    const resolved = await resolveDocumentReference({ fleetId, slot, imageId, imageIndex, actorContext });
+    if (/^https?:\/\//i.test(resolved.targetKey)) throw errors.legacyReference();
+    return {
+      ...resolved,
+      object: await fetchDocument(resolved.targetKey),
+    };
+  }
+
+  return { getDocumentReadUrl, getDocumentObject };
 }
 
 module.exports = createFleetDocumentReadService;

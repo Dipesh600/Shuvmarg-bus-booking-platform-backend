@@ -2,35 +2,60 @@
 
 const variants = require("./route-variant-registry.service.js");
 const sequences = require("./route-stop-sequence.service.js");
+const {
+  VARIANT_WRITE_CONTEXT,
+} = require("./variant-lifecycle.policy.js");
+
+function sendError(res, error, fallbackStatus = 400) {
+  if (!error?.code || !Number.isInteger(error.statusCode)) {
+    console.error("[route-variant-registry] unexpected error", error);
+    return res.status(500).json({
+      success: false,
+      code: "ROUTE_VARIANT_INTERNAL_ERROR",
+      message: "The route variant could not be updated. Try again shortly.",
+    });
+  }
+  const status = error.statusCode ||
+    (String(error.message || "").includes("not found") ? 404 : fallbackStatus);
+  return res.status(status).json({
+    success: false,
+    ...(error.code && { code: error.code }),
+    message: error.message || "The route variant could not be updated.",
+    ...(error.details !== undefined && { details: error.details }),
+  });
+}
 
 async function createVariant(req, res) {
   try {
-    const data = await variants.createVariant(req.body, req.user?.id);
+    const data = await variants.createVariant(req.body, req.adminInfo?.id);
     res.status(201).json({
       success: true, message: "Route variant created.", data,
     });
   } catch (error) {
-    const status = error.message.includes("not found") ? 404 : 400;
-    res.status(status).json({ success: false, message: error.message });
+    sendError(res, error);
   }
 }
 
 async function getVariantsByCorridor(req, res) {
   try {
-    const data = await variants.getVariantsByCorridor(req.params.corridorId);
+    const data = await variants.getVariantsByCorridor(
+      req.params.corridorId, req.query
+    );
     res.status(200).json({ success: true, results: data.length, data });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    sendError(res, error);
   }
 }
 
 async function updateVariant(req, res) {
   try {
-    const data = await variants.updateVariant(req.params.id, req.body);
+    const data = await variants.updateVariant(
+      req.params.id, req.body, req.adminInfo?.id,
+      { writeContext: VARIANT_WRITE_CONTEXT.LEGACY_ADMIN_ENDPOINT }
+    );
     res.status(200).json({ success: true, message: "Variant updated.", data });
   } catch (error) {
-    const status = error.message.includes("not found") ? 404 : 400;
-    res.status(status).json({ success: false, message: error.message });
+    sendError(res, error);
   }
 }
 
@@ -39,14 +64,7 @@ async function deleteVariant(req, res) {
     await variants.deleteVariant(req.params.id);
     res.status(200).json({ success: true, message: "Variant deleted." });
   } catch (error) {
-    if (error.message.startsWith("REFERENCED:")) {
-      const [, count, message] = error.message.split(":");
-      return res.status(409).json({
-        success: false, message, refCount: Number(count),
-      });
-    }
-    const status = error.message.includes("not found") ? 404 : 400;
-    res.status(status).json({ success: false, message: error.message });
+    sendError(res, error);
   }
 }
 
@@ -58,13 +76,14 @@ async function setVariantStops(req, res) {
         success: false, message: "stops array is required.",
       });
     }
-    const data = await sequences.setVariantStops(req.params.variantId, stops);
+    const data = await sequences.setVariantStops(req.params.variantId, stops, {
+      writeContext: VARIANT_WRITE_CONTEXT.LEGACY_ADMIN_ENDPOINT,
+    });
     res.status(200).json({
       success: true, message: "Stop sequence saved.", data,
     });
   } catch (error) {
-    const status = error.message.includes("not found") ? 404 : 400;
-    res.status(status).json({ success: false, message: error.message });
+    sendError(res, error);
   }
 }
 
@@ -73,7 +92,7 @@ async function getStopsForVariant(req, res) {
     const data = await sequences.getStopsForVariant(req.params.variantId);
     res.status(200).json({ success: true, results: data.length, data });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    sendError(res, error);
   }
 }
 

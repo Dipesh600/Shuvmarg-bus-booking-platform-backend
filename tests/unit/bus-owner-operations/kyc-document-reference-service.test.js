@@ -12,7 +12,7 @@ test("kyc-document-reference-service unit tests", async (t) => {
     _id: "owner-1",
     user: "user-1",
     companyRegistration: { documentUrls: ["owners/owner-1/kyc/reg.pdf"] },
-    insuranceCertificates: [{ documentUrls: ["owners/owner-1/kyc/ins.pdf"] }],
+    ownerIdentity: { documentUrls: ["owners/owner-1/kyc/identity.pdf"] },
     taxRegistration: { documentUrls: ["http://legacy-cdn.com/tax.pdf"] },
   };
 
@@ -23,10 +23,10 @@ test("kyc-document-reference-service unit tests", async (t) => {
     );
   });
 
-  await t.test("Invalid insurance index is rejected with HTTP 404", () => {
+  await t.test("Former fleet document types are rejected with HTTP 400", () => {
     assert.throws(
       () => resolveAuthorizedKycDocumentReference({ actor: actorOwner, busOwner: mockOwner, documentType: "insuranceCertificates", certificateIndex: 99 }),
-      (err) => err.code === "KYC_DOCUMENT_READ_NOT_FOUND" && err.statusCode === 404
+      (err) => err.code === "KYC_DOCUMENT_READ_INVALID_REQUEST" && err.statusCode === 400
     );
   });
 

@@ -23,7 +23,6 @@ test("admin-owner-creation-security unit tests", async (t) => {
     companyRegistrationCert: makeFile("comp", "pdf", "application/pdf", pdfHeader),
     panCardImage: makeFile("tax", "pdf", "application/pdf", pdfHeader),
     ownerCitizenship: makeFile("id", "pdf", "application/pdf", pdfHeader),
-    bankAuthorizationLetter: makeFile("bank", "pdf", "application/pdf", pdfHeader),
   };
 
   const validBody = {
@@ -68,6 +67,7 @@ test("admin-owner-creation-security unit tests", async (t) => {
         this.ownerIdentity = data.ownerIdentity;
         this.taxRegistration = data.taxRegistration;
         this.bankDetails = data.bankDetails;
+        this.kycSecurity = data.kycSecurity;
         this.kycAuditHistory = data.kycAuditHistory;
         this.save = async () => { savedOwner = this; return this; };
       },
@@ -108,6 +108,8 @@ test("admin-owner-creation-security unit tests", async (t) => {
     const owner = getSavedOwner();
     assert.equal(owner.verificationStatus, "pending");
     assert.equal(owner.bankDetails.verified, undefined);
+    assert.equal(owner.kycSecurity.malwareScanStatus, "skipped_non_production");
+    assert.equal(owner.kycSecurity.fileCount, 3);
     assert.equal(owner.kycAuditHistory.length, 1);
 
     const notified = getNotifiedUser();
@@ -125,7 +127,24 @@ test("admin-owner-creation-security unit tests", async (t) => {
     const result = await service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
     assert.equal(result.busOwnerId, "BOWN-001");
     assert.notEqual(getSavedOwner(), null, "BusOwner must remain saved");
-    assert.equal(uploadedKeys.length, 4, "Uploaded documents must remain");
+    assert.equal(uploadedKeys.length, 3, "Uploaded documents must remain");
     assert.equal(warningLogged, true, "Notification error must be logged as warning");
+  });
+
+  await t.test("malware scan failure prevents identity creation and storage uploads", async () => {
+    let identityCalls = 0;
+    const scanError = Object.assign(new Error("infected"), { code: "KYC_MALWARE_DETECTED", statusCode: 422 });
+    const { deps, uploadedKeys } = makeDeps({
+      malwareScanner: { scanValidatedFiles: async () => { throw scanError; } },
+      prepareOwnerIdentity: async () => { identityCalls += 1; return {}; },
+    });
+    const service = createAdminOwnerCreationService(deps);
+
+    await assert.rejects(
+      () => service.createAdminBusOwner({ body: validBody, files: validFiles, actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
+      (error) => error === scanError
+    );
+    assert.equal(identityCalls, 0);
+    assert.equal(uploadedKeys.length, 0);
   });
 });

@@ -110,13 +110,7 @@ test("KYC upload middleware parses the complete operator form and maximum docume
   submission = submission
     .attach("companyRegistration", pdf, { filename: "company.pdf", contentType: "application/pdf" })
     .attach("taxRegistration", pdf, { filename: "tax.pdf", contentType: "application/pdf" })
-    .attach("transportLicense", pdf, { filename: "license.pdf", contentType: "application/pdf" });
-  for (let index = 1; index <= 5; index += 1) {
-    submission = submission.attach("insuranceCertificates", pdf, {
-      filename: `insurance-${index}.pdf`,
-      contentType: "application/pdf",
-    });
-  }
+    .attach("ownerIdentity", pdf, { filename: "citizenship.pdf", contentType: "application/pdf" });
 
   const response = await submission.expect(200);
   assert.deepEqual(response.body.fieldNames, Object.keys(completeForm).sort());

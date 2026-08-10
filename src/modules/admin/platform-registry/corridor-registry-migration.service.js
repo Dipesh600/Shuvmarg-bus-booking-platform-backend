@@ -33,13 +33,19 @@ async function inspectIndexes() {
   return { indexes, oldUnique, pair, pairValid };
 }
 
+function buildBackfillWrites(plannedUpdates) {
+  return plannedUpdates.map((update) => ({
+    updateOne: {
+      filter: { _id: update.corridorId }, update: { $set: update.changes },
+    },
+  }));
+}
+
 async function applyBackfill(plannedUpdates) {
   if (!plannedUpdates.length) return { matched: 0, modified: 0 };
-  const result = await RouteCorridor.bulkWrite(plannedUpdates.map((update) => ({
-    updateOne: {
-      filter: { _id: update.corridorId }, $set: update.changes,
-    },
-  })), { ordered: true });
+  const result = await RouteCorridor.bulkWrite(
+    buildBackfillWrites(plannedUpdates), { ordered: true }
+  );
   return {
     matched: result.matchedCount || 0, modified: result.modifiedCount || 0,
   };
@@ -109,5 +115,6 @@ async function runCorridorRegistryMigration({ dryRun = false } = {}) {
 }
 
 module.exports = {
-  inspectIndexes, runCorridorRegistryMigration, verifyMigration,
+  buildBackfillWrites, inspectIndexes, runCorridorRegistryMigration,
+  verifyMigration,
 };

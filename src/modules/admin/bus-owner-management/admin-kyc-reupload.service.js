@@ -4,6 +4,7 @@ const BusOwner = require("../../../../models/busOwnerModel");
 const { uploadFileToS3, deleteObjectFromS3, buildS3Path } = require("../../../../services/s3Service");
 const { createKycDocumentStorageService } = require("../../bus-owner/kyc-submission/kyc-document-storage.service");
 const { validateSingleFile } = require("../../bus-owner/kyc-submission/kyc-document.validator");
+const { createKycMalwareScanner } = require("../../bus-owner/kyc-submission/kyc-malware-scanner.service");
 const { buildKycAuditEvent } = require("../../bus-owner/kyc-audit");
 const { resolveAuthorizedAdminActor } = require("./admin-actor.resolver");
 const { ADMIN_REUPLOAD_ALLOWED_TYPES } = require("./admin-kyc-document.policy");
@@ -13,6 +14,7 @@ function createAdminKycReuploadService(deps = {}) {
   const storageService = deps.storageService || createKycDocumentStorageService({ uploadFileToS3, deleteObjectFromS3, buildS3Path });
   const clock = deps.clock || (() => new Date());
   const resolveActor = deps.resolveAuthorizedAdminActor || resolveAuthorizedAdminActor;
+  const malwareScanner = deps.malwareScanner || createKycMalwareScanner({ clock, logger: deps.logger || console });
 
   async function reuploadRejectedKycDocument({ ownerId, documentType, file, actor }) {
     if (!ownerId || !documentType) {
@@ -54,6 +56,8 @@ function createAdminKycReuploadService(deps = {}) {
       throw err;
     }
 
+    const malwareScan = await malwareScanner.scanValidatedFiles({ [documentType]: [validatedFile] });
+
     const oldObjectKey = owner[documentType] && Array.isArray(owner[documentType].documentUrls) ? owner[documentType].documentUrls[0] : null;
     const now = clock();
     let newObjectKey = null;
@@ -87,6 +91,11 @@ function createAdminKycReuploadService(deps = {}) {
             [`${documentType}.documentUrls`]: [newObjectKey],
             [`${documentType}.verified`]: false,
             [`${documentType}.rejectionReason`]: null,
+            "kycSecurity.malwareScanStatus": malwareScan.status,
+            "kycSecurity.engine": malwareScan.engine,
+            "kycSecurity.scannedAt": malwareScan.scannedAt,
+            "kycSecurity.fileCount": malwareScan.fileCount,
+            "kycSecurity.contentHashes": malwareScan.contentHashes,
           },
           $push: { kycAuditHistory: auditEvent },
         },

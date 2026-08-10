@@ -44,7 +44,7 @@ test("admin kyc list returns canonical envelope and document summary", async () 
         userId: String(mockKyc.user._id),
         companyName: mockKyc.companyName,
         verificationStatus: mockKyc.verificationStatus,
-        documentSummary: { totalSlots: 6, present: 3, missing: 3, verified: 0, unverified: 3, rejected: 0 },
+        documentSummary: { totalSlots: 3, present: 3, missing: 0, verified: 0, unverified: 3, rejected: 0 },
         createdAt: mockKyc.createdAt.toISOString(),
         updatedAt: mockKyc.updatedAt.toISOString(),
       }],
@@ -63,7 +63,7 @@ test("admin kyc list returns canonical envelope and document summary", async () 
   assert.equal(res.success, true);
   assert.equal(res.data.items.length, 1);
   assert.equal(res.data.items[0].ownerId, "507f1f77bcf86cd799439011");
-  assert.equal(res.data.items[0].documentSummary.totalSlots, 6);
+  assert.equal(res.data.items[0].documentSummary.totalSlots, 3);
 });
 
 test("admin kyc detail validates invalid object id format", async () => {

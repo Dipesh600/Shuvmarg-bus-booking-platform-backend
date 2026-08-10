@@ -33,12 +33,11 @@ test("admin bus-owner onboarding required-field policy", () => {
   }
 });
 
-test("KYC re-upload accepts only the legacy document types", () => {
+test("KYC re-upload accepts only the supported owner KYC document types", () => {
   assert.deepEqual(VALID_KYC_DOCUMENT_TYPES, [
     "companyRegistration",
     "ownerIdentity",
     "taxRegistration",
-    "bankDetails",
   ]);
 });
 
@@ -46,19 +45,17 @@ test("document verdicts preserve verification and rejection semantics", () => {
   const owner = {
     companyRegistration: { verified: false },
     taxRegistration: { verified: true },
-    insuranceCertificates: [{ verified: false }],
+    ownerIdentity: { verified: true },
   };
   applyDocumentVerdicts(owner, {
     companyRegistration: { verified: true, rejectionReason: "" },
     taxRegistration: { verified: false, rejectionReason: "Unreadable PAN" },
-    insuranceCertificates: [
-      { verified: false, rejectionReason: "Expired" },
-    ],
+    ownerIdentity: { verified: false, rejectionReason: "Unreadable citizenship" },
   });
   assert.equal(owner.companyRegistration.verified, true);
   assert.equal(owner.taxRegistration.verified, false);
   assert.deepEqual(invalidDocuments(owner), [
     { label: "Tax Registration (PAN/VAT)", reason: "Unreadable PAN" },
-    { label: "Insurance Certificate 1", reason: "Expired" },
+    { label: "Owner Citizenship", reason: "Unreadable citizenship" },
   ]);
 });

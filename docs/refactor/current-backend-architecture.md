@@ -333,18 +333,15 @@ models/seatTemplateModel.js (110 lines)
 - `controllers/adminController/busOwnerController/busRouteController.js` (196 lines)
 - `controllers/adminController/platformRegistryController.js` (276 lines)
 - `controllers/adminController/routeRequestController.js` (277 lines)
-- `src/modules/admin/route-discovery/session.controller.js`
-- `src/modules/admin/route-discovery/review.controller.js`
-- `src/modules/admin/route-discovery/refinement.controller.js`
 
 **Services:**
 - `services/platformRegistryService.js` (624 lines) — canonical stop registry management
 - `services/busRouteService.js` (140 lines)
 - `services/operatorRouteConfigService.js` (409 lines)
-- `src/modules/admin/route-discovery/` — modular AI-assisted route discovery, stop review, matching, refinement, and publishing
-- `services/googlePlacesClient.js` (278 lines), `services/mapboxClient.js` (187 lines), `services/minimaxClient.js` (201 lines)
+- `src/modules/admin/platform-registry/variant-draft-workflow/` — map-assisted road-route review and canonical route-stop review
+- `services/googlePlacesClient.js` (278 lines)
 
-**Models:** `stopModel`, `stopPointModel`, `routeStopModel`, `busRouteModel`, `routeCorridorModel`, `routeVariantModel`, `routeRequestModel`, `routeDiscoveryModel`, `operatorRouteConfigModel`
+**Models:** `stopModel`, `stopPointModel`, `routeStopModel`, `busRouteModel`, `routeCorridorModel`, `routeVariantModel`, `routeRequestModel`, `operatorRouteConfigModel`
 
 Stop management (admin):
 ```
@@ -355,9 +352,9 @@ Platform Registry (admin):
   DELETE /api/admin/registry/stops/:id
   + similar for boarding-points and corridors
 
-Route Discovery (AI-assisted, admin):
-  POST /api/admin/route-discovery/session/create
-  (SSE streaming of LLM-refined stop candidates)
+Route Variant draft workflow (map-assisted, admin):
+  POST /api/admin/registry/corridors/:corridorId/variant-drafts
+  (temporary Google road-route and place suggestions; admin-reviewed canonical stops)
 ```
 
 Bus Owner routes:

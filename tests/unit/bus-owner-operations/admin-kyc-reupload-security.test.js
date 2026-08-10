@@ -13,10 +13,10 @@ test("admin-kyc-reupload-security unit tests", async (t) => {
   const rejectedOwner = {
     _id: validOwnerId,
     verificationStatus: "rejected",
-    rejectionReason: "Tax and license invalid",
+    rejectionReason: "Tax and citizenship invalid",
     companyRegistration: { documentUrls: ["old-company.pdf"], verified: true, rejectionReason: null },
     taxRegistration: { documentUrls: ["old-tax.pdf"], verified: false, rejectionReason: "Invalid TAX" },
-    transportLicense: { documentUrls: ["old-license.pdf"], verified: false, rejectionReason: "Expired License" },
+    ownerIdentity: { documentUrls: ["old-identity.pdf"], verified: false, rejectionReason: "Unreadable citizenship" },
   };
 
   function makeDeps(overrides = {}) {
@@ -64,8 +64,9 @@ test("admin-kyc-reupload-security unit tests", async (t) => {
     assert.equal(payload.$set["taxRegistration.verified"], false);
     assert.equal(payload.$set["taxRegistration.rejectionReason"], null);
 
-    assert.equal(payload.$set["transportLicense.verified"], undefined, "Must NOT alter non-targeted document verdict");
-    assert.equal(payload.$set["transportLicense.rejectionReason"], undefined);
+    assert.equal(payload.$set["ownerIdentity.verified"], undefined, "Must NOT alter non-targeted document verdict");
+    assert.equal(payload.$set["ownerIdentity.rejectionReason"], undefined);
+    assert.equal(payload.$set["kycSecurity.malwareScanStatus"], "skipped_non_production");
 
     const audit = payload.$push.kycAuditHistory;
     assert.equal(audit.eventType, "KYC_RESUBMITTED");
@@ -89,11 +90,11 @@ test("admin-kyc-reupload-security unit tests", async (t) => {
     }
   });
 
-  await t.test("rejects bankDetails and insuranceCertificates as reupload document types with 400 Bad Request", async () => {
+  await t.test("rejects bank and fleet document types with 400 Bad Request", async () => {
     const { deps } = makeDeps();
     const service = createAdminKycReuploadService(deps);
 
-    for (const documentType of ["bankDetails", "insuranceCertificates", "invalidType"]) {
+    for (const documentType of ["bankDetails", "transportLicense", "insuranceCertificates", "invalidType"]) {
       await assert.rejects(
         async () => service.reuploadRejectedKycDocument({ ownerId: validOwnerId, documentType, file: makeFile("new-doc"), actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
         (err) => err.statusCode === 400 && err.code === "KYC_REUPLOAD_INVALID_DOCUMENT_TYPE"

@@ -67,7 +67,9 @@ const routeStopSchema = new mongoose.Schema(
 
 // Ensure a stop doesn't appear twice in the same variant
 routeStopSchema.index({ variantId: 1, stopId: 1 }, { unique: true });
-// For fast ordered retrieval of stops for a variant
-routeStopSchema.index({ variantId: 1, sequence: 1 });
+// A sequence position is also unique within one variant. Application-level
+// validation keeps the sequence contiguous; this index prevents concurrent
+// writers from persisting two stops at the same position.
+routeStopSchema.index({ variantId: 1, sequence: 1 }, { unique: true });
 
 module.exports = mongoose.model("RouteStop", routeStopSchema);

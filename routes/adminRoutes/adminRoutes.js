@@ -45,8 +45,8 @@ const fleetWorkstation     = require("../../src/modules/admin/fleet-workstation"
 const tripOverviewCtrl     = require("../../src/modules/admin/trip-overview");
 const adminWalletCtrl      = require("../../src/modules/admin/wallet-management");
 const transactionCtrl      = require("../../controllers/adminController/transactionController/transactionController.js");
-const routeDiscoveryCtrl   = require("../../src/modules/admin/route-discovery");
 const registryBoardingRoutes = require("./registryBoardingRoutes.js");
+const { rejectOversizedKycRequest, parseKycSubmissionUpload } = require("../../middleware/kycSubmissionUpload.js");
 // Auth Routes
 router.post("/auth/login",   authController.login);
 router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);
@@ -87,18 +87,6 @@ router.get("/getAllAgents", adminMiddleware, agentDirectory.getAllAgents);
 router.get("/agentDashboard", adminMiddleware, agentDashboard.getAgentDashboard);
 router.post("/makeUserAgent", adminMiddleware, agentConversion.makeUserAgent);
 
-// Route Discovery Routes
-router.post("/registry/discovery", adminMiddleware, routeDiscoveryCtrl.createSession);
-router.get("/registry/discovery", adminMiddleware, routeDiscoveryCtrl.listSessions);
-router.get("/registry/discovery/:id", adminMiddleware, routeDiscoveryCtrl.getSession);
-router.patch("/registry/discovery/:id/select-route", adminMiddleware, routeDiscoveryCtrl.selectRoute);
-router.patch("/registry/discovery/:id/stops/:stopId", adminMiddleware, routeDiscoveryCtrl.patchStop);
-router.patch("/registry/discovery/:id/approve", adminMiddleware, routeDiscoveryCtrl.approveSession);
-router.patch("/registry/discovery/:id/reject", adminMiddleware, routeDiscoveryCtrl.rejectSession);
-router.post("/registry/discovery/:id/publish", adminMiddleware, routeDiscoveryCtrl.publishSession);
-router.patch("/registry/discovery/:id/route-options", adminMiddleware, routeDiscoveryCtrl.setRouteOptions);
-router.patch("/registry/discovery/:id/discovered-stops", adminMiddleware, routeDiscoveryCtrl.setDiscoveredStops);
-router.patch("/registry/discovery/:id/refine-stops", adminMiddleware, routeDiscoveryCtrl.refineStopsWithLLM);
 router.patch("/finalizeAgentSetup", adminMiddleware, agentSetup.finalizeAgentSetup);
 router.patch("/agentKycStatus", adminMiddleware, agentKycReview.updateAgentKyc);
 
@@ -107,8 +95,8 @@ const { registerAdminFrontendReadRoutes } = require("./frontendReadRoutes.js");
 registerAdminFrontendReadRoutes(router);
 
 // Bus Owner Write / Admin Operations
-router.post("/busOwner/create", adminMiddleware, busOwnerController.createBusOwnerFull);
-router.post("/busOwner/reuploadKycDocument", adminMiddleware, busOwnerController.reuploadKycDocument);
+router.post("/busOwner/create", adminMiddleware, rejectOversizedKycRequest, parseKycSubmissionUpload, busOwnerController.createBusOwnerFull);
+router.post("/busOwner/reuploadKycDocument", adminMiddleware, rejectOversizedKycRequest, parseKycSubmissionUpload, busOwnerController.reuploadKycDocument);
 // router.post("/makeUserBusOwner", adminMiddleware, busOwnerController.makeUserBusOwner);
 router.patch("/busOwnerKycStatus", adminMiddleware, busOwnerController.updateBusOwnerKyc);
 router.patch("/busOwner/update", adminMiddleware, busOwnerController.updateBusOwnerProfile);
@@ -117,6 +105,7 @@ router.get("/busOwnerDashboard", adminMiddleware, busOwnerController.getBusOwner
 // Admin actor is derived from req.adminInfo set by adminMiddleware.
 const kycDocumentRead = require("../../src/modules/bus-owner/kyc-document-read");
 router.get("/busOwner/kycDocumentReadUrl", adminMiddleware, kycDocumentRead.getKycDocumentReadUrl);
+router.get("/busOwner/kycDocumentView", adminMiddleware, kycDocumentRead.viewKycDocument);
 
 // Push Notification (Admin)
 router.post(
@@ -243,6 +232,7 @@ router.patch("/fleet/resubmit/:id", adminMiddleware, adminFleetController.resubm
 router.patch("/fleet/reupload-doc/:id", adminMiddleware, adminFleetController.reuploadFleetDocument);
 router.put("/fleet/:fleetId/documents/:slot", adminMiddleware, adminFleetDocumentController.uploadDocument);
 router.get("/fleet/:fleetId/documents/:slot/read-url", adminMiddleware, adminFleetDocumentController.getDocumentReadUrl);
+router.get("/fleet/:fleetId/documents/:slot/view", adminMiddleware, adminFleetDocumentController.viewDocument);
 
 // ─── TRIP CONTROL CENTER (Platform-wide oversight — read-only) ────────────────
 // Exception triage dashboard with per-trip booking aggregation
@@ -318,6 +308,20 @@ router.post("/registry/variants",                          adminMiddleware, plat
 router.get("/registry/corridors/:corridorId/variants",    adminMiddleware, platformRegistry.getVariantsByCorridor);
 router.patch("/registry/variants/:id",                    adminMiddleware, platformRegistry.updateVariant);
 router.delete("/registry/variants/:id",                   adminMiddleware, platformRegistry.deleteVariant);
+
+// Draft-first route variant workflow. Google output is temporary review data;
+// only approved platform Stops and the final sequence become canonical.
+router.post("/registry/corridors/:corridorId/variant-drafts", adminMiddleware, platformRegistry.createVariantDraft);
+router.get("/registry/variant-drafts/:variantId", adminMiddleware, platformRegistry.getVariantDraft);
+router.post("/registry/variant-drafts/:variantId/route-options", adminMiddleware, platformRegistry.refreshVariantDraftRouteOptions);
+router.get("/registry/variant-drafts/:variantId/guidance-places", adminMiddleware, platformRegistry.searchVariantDraftGuidancePlaces);
+router.patch("/registry/variant-drafts/:variantId/select-route", adminMiddleware, platformRegistry.selectVariantDraftRouteOption);
+router.patch("/registry/variant-drafts/:variantId/details", adminMiddleware, platformRegistry.updateVariantDraftDetails);
+router.post("/registry/variant-drafts/:variantId/stop-candidates", adminMiddleware, platformRegistry.prepareVariantDraftStopCandidates);
+router.patch("/registry/variant-drafts/:variantId/stop-candidates/use-existing", adminMiddleware, platformRegistry.useAllMatchedVariantDraftCandidates);
+router.patch("/registry/variant-drafts/:variantId/stop-candidates/:candidateId", adminMiddleware, platformRegistry.updateVariantDraftCandidate);
+router.post("/registry/variant-drafts/:variantId/commit", adminMiddleware, platformRegistry.commitVariantDraft);
+router.post("/registry/variant-drafts/:variantId/activate", adminMiddleware, platformRegistry.activateVariantDraft);
 
 // Layer 4: Route Stop Mapping (Ordered stops per variant)
 router.put("/registry/variants/:variantId/stops",  adminMiddleware, platformRegistry.setVariantStops);

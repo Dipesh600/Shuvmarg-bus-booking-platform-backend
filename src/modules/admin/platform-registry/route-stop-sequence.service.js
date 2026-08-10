@@ -2,76 +2,95 @@
 
 const Stop = require("../../../../models/stopModel.js");
 const RouteStop = require("../../../../models/routeStopModel.js");
-const RouteVariant = require("../../../../models/routeVariantModel.js");
 const { getVariantById } = require("./route-variant-registry.service.js");
+const { normalizeSequenceInput } = require("./route-stop-sequence.policy.js");
 const {
-  activateCorridorIfReady,
-} = require("./corridor-registry.service.js");
+  replaceVariantStopSequence,
+} = require("./route-stop-sequence.persistence.js");
+const {
+  assertVariantTerminalScope,
+} = require("./variant-terminal-scope.policy.js");
+const {
+  assertSelectedTerminalsMatchSequence,
+} = require("./variant-terminal-selection.policy.js");
+const { routeVariantError } = require("./route-variant-errors.js");
+const {
+  VARIANT_WRITE_CONTEXT,
+  assertVariantSequenceMutable,
+} = require("./variant-lifecycle.policy.js");
 
 function mappedStops(variantId, stops, stopMap) {
   return stops.map((stop) => ({
     variantId,
     stopId: stopMap[stop.stopCode.toUpperCase()],
     sequence: stop.sequence,
-    isMajor: stop.isMajor !== undefined ? stop.isMajor : true,
-    estimatedMinutesFromOrigin: stop.estimatedMinutesFromOrigin || 0,
+    isMajor: stop.isMajor,
+    distanceFromOriginKm: stop.distanceFromOriginKm,
+    durationFromOriginMins: stop.durationFromOriginMins,
+    estimatedMinutesFromOrigin: stop.durationFromOriginMins,
   }));
 }
 
-function reversedStops(variantId, stops, stopMap) {
-  const total = Math.max(
-    ...stops.map((stop) => stop.estimatedMinutesFromOrigin || 0)
-  );
-  return [...stops].reverse().map((stop, index) => ({
-    variantId,
-    stopId: stopMap[stop.stopCode.toUpperCase()],
-    sequence: index + 1,
-    isMajor: stop.isMajor !== undefined ? stop.isMajor : true,
-    estimatedMinutesFromOrigin: Math.max(
-      0, total - (stop.estimatedMinutesFromOrigin || 0)
-    ),
-  }));
-}
-
-async function replaceLinkedSequence(variant, stops, stopMap) {
-  if (variant.returnVariantId) {
-    const linked = await RouteVariant.findById(variant.returnVariantId);
-    if (!linked) return;
-    await RouteStop.deleteMany({ variantId: linked._id });
-    await RouteStop.insertMany(reversedStops(linked._id, stops, stopMap));
-    return;
-  }
-  const forward = await RouteVariant.findOne({ returnVariantId: variant._id });
-  if (!forward) return;
-  await RouteStop.deleteMany({ variantId: forward._id });
-  await RouteStop.insertMany(reversedStops(forward._id, stops, stopMap));
-}
-
-async function setVariantStops(variantId, stops) {
-  const variant = await getVariantById(variantId);
-  const codes = stops.map((stop) => stop.stopCode.toUpperCase());
-  const stopDocs = await Stop.find({ code: { $in: codes }, status: "ACTIVE" });
-  if (stopDocs.length !== codes.length) {
-    const found = stopDocs.map((stop) => stop.code);
-    const missing = codes.filter((code) => !found.includes(code));
-    throw new Error(`Stops not found in registry: ${missing.join(", ")}`);
-  }
+async function resolveOperationalStops(stops, session = null) {
+  const codes = stops.map((stop) => stop.stopCode);
+  let query = Stop.find({ code: { $in: codes } });
+  if (session && typeof query.session === "function") query = query.session(session);
+  const registryStops = await query;
   const stopMap = Object.fromEntries(
-    stopDocs.map((stop) => [stop.code, stop._id])
+    registryStops.map((stop) => [String(stop.code).toUpperCase(), stop])
   );
-  await RouteStop.deleteMany({ variantId });
-  const result = await RouteStop.insertMany(
-    mappedStops(variantId, stops, stopMap)
+  const missing = codes.filter((code) => !stopMap[code]);
+  if (missing.length > 0) {
+    throw routeVariantError(
+      "ROUTE_STOP_NOT_FOUND",
+      `Stops not found in registry: ${missing.join(", ")}`,
+      404,
+      { stopCodes: missing }
+    );
+  }
+  const ineligible = codes.filter((code) => {
+    const stop = stopMap[code];
+    return stop.status !== "ACTIVE" ||
+      stop.verificationStatus !== "VERIFIED" || stop.isRouteStop !== true;
+  });
+  if (ineligible.length > 0) {
+    throw routeVariantError(
+      "INVALID_ROUTE_STOP",
+      `Every route stop must be active, verified and operational: ${ineligible.join(", ")}.`,
+      400,
+      { stopCodes: ineligible }
+    );
+  }
+  return Object.fromEntries(
+    Object.entries(stopMap).map(([code, stop]) => [code, stop._id])
   );
-  await replaceLinkedSequence(variant, stops, stopMap);
-  const corridorId = variant.corridorId?._id || variant.corridorId;
-  if (corridorId) await activateCorridorIfReady(corridorId);
-  return result;
+}
+
+async function setVariantStops(
+  variantId, stops,
+  { writeContext = VARIANT_WRITE_CONTEXT.INTERNAL_WORKFLOW, session = null } = {}
+) {
+  const variant = await getVariantById(variantId, { session });
+  assertVariantSequenceMutable(variant, writeContext);
+  const normalizedStops = normalizeSequenceInput(stops);
+  const stopMap = await resolveOperationalStops(normalizedStops, session);
+  const rows = mappedStops(variantId, normalizedStops, stopMap);
+  assertSelectedTerminalsMatchSequence(
+    variant, rows[0].stopId, rows.at(-1).stopId
+  );
+  await assertVariantTerminalScope({
+    corridor: variant.corridorId,
+    direction: variant.direction,
+    originTerminalStopId: rows[0].stopId,
+    destinationTerminalStopId: rows.at(-1).stopId,
+    session,
+  });
+  return replaceVariantStopSequence(variantId, rows, { session });
 }
 
 function getStopsForVariant(variantId) {
   return RouteStop.find({ variantId })
-    .populate("stopId", "name code type state")
+    .populate("stopId", "name code type province district municipality")
     .sort({ sequence: 1 })
     .lean();
 }

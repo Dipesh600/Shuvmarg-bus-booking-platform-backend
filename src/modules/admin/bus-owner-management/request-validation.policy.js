@@ -22,7 +22,6 @@ const VALID_KYC_DOCUMENT_TYPES = [
   "companyRegistration",
   "ownerIdentity",
   "taxRegistration",
-  "bankDetails",
 ];
 
 module.exports = {

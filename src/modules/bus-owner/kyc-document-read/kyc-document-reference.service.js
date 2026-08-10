@@ -6,8 +6,6 @@ const { assertCanReadBusOwnerKycDocument } = require("./kyc-document-read.policy
 const ALLOWED_DOCUMENT_TYPES = Object.freeze([
   "companyRegistration",
   "taxRegistration",
-  "transportLicense",
-  "insuranceCertificates",
   "ownerIdentity",
 ]);
 
@@ -65,23 +63,8 @@ function resolveAuthorizedKycDocumentReference({
 
   const cIdx = parseNonNegativeIndex(certificateIndex, "certificateIndex");
   const fIdx = parseNonNegativeIndex(fileIndex, "fileIndex");
-
-  let urls = [];
-
-  if (documentType === "insuranceCertificates") {
-    if (!Array.isArray(busOwner.insuranceCertificates) || cIdx >= busOwner.insuranceCertificates.length) {
-      throw new KycDocumentReadError(
-        "KYC_DOCUMENT_READ_NOT_FOUND",
-        "Requested insurance certificate index does not exist.",
-        404
-      );
-    }
-    const cert = busOwner.insuranceCertificates[cIdx];
-    urls = Array.isArray(cert?.documentUrls) ? cert.documentUrls : [];
-  } else {
-    const section = busOwner[documentType];
-    urls = Array.isArray(section?.documentUrls) ? section.documentUrls : [];
-  }
+  const section = busOwner[documentType];
+  const urls = Array.isArray(section?.documentUrls) ? section.documentUrls : [];
 
   if (fIdx >= urls.length) {
     throw new KycDocumentReadError(

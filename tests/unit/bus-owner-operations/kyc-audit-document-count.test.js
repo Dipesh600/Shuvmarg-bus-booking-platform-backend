@@ -9,10 +9,9 @@ test("kyc-audit-document-count unit tests", async (t) => {
     const files = {
       companyRegistration: [{ path: "a" }],
       taxRegistration: [{ path: "b" }],
-      transportLicense: [{ path: "c" }],
-      insuranceCertificates: [{ path: "d" }, { path: "e" }],
+      ownerIdentity: [{ path: "c" }],
     };
-    assert.equal(countValidatedKycFiles(files), 5);
+    assert.equal(countValidatedKycFiles(files), 3);
   });
 
   await t.test("unknown properties are not counted", async () => {

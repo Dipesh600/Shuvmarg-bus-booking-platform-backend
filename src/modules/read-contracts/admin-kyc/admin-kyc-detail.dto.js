@@ -51,6 +51,13 @@ function mapAdminKycDetail(owner) {
           }
         : null,
     },
+    bank: {
+      bankName: owner.bankDetails?.bankName || null,
+      accountNumber: owner.bankDetails?.accountNumber || null,
+      accountHolderName: owner.bankDetails?.accountHolderName || null,
+      branchName: owner.bankDetails?.branchName || null,
+      swiftCode: owner.bankDetails?.swiftCode || null,
+    },
     verificationStatus: owner.verificationStatus || "pending",
     documentSecurity: {
       status: owner.kycSecurity?.malwareScanStatus || "quarantined",

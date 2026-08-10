@@ -80,4 +80,55 @@ test("fleet-document-read unit tests", async (t) => {
       (err) => err.statusCode === 404 && err.code === "FLEET_DOCUMENT_NOT_FOUND"
     );
   });
+
+  await t.test("secure stream resolves the requested legacy fleet image index without exposing its key", async () => {
+    const expectedObject = { Body: { pipe: () => {} }, ContentType: "image/png" };
+    let fetchedKey = null;
+    const service = createReadService({
+      repository: {
+        findFleetForRead: async () => ({
+          _id: fleetId,
+          ownerId: ownerUserId,
+          fleetImages: ["fleet/one.png", "fleet/two.png", "fleet/three.png"],
+        }),
+      },
+      fetchDocument: async (key) => { fetchedKey = key; return expectedObject; },
+      resolveActor: async () => ({ actorType: "ADMIN", actorId: "admin-1" }),
+    });
+
+    const result = await service.getDocumentObject({
+      fleetId,
+      slot: "fleetImages",
+      imageIndex: "2",
+      actorContext: { adminInfo: { id: "admin-1", role: "ADMIN" } },
+    });
+
+    assert.equal(fetchedKey, "fleet/three.png");
+    assert.equal(result.object, expectedObject);
+    assert.equal(result.targetKey, "fleet/three.png");
+  });
+
+  await t.test("secure stream rejects invalid image indexes and legacy HTTP references", async () => {
+    const service = createReadService({
+      repository: {
+        findFleetForRead: async () => ({
+          _id: fleetId,
+          ownerId: ownerUserId,
+          fleetImages: ["fleet/one.png"],
+          fleetDocuments: { insurance: { url: "https://bucket.example/legacy.pdf" } },
+        }),
+      },
+      fetchDocument: async () => ({ Body: {} }),
+      resolveActor: async () => ({ actorType: "ADMIN", actorId: "admin-1" }),
+    });
+
+    await assert.rejects(
+      () => service.getDocumentObject({ fleetId, slot: "fleetImages", imageIndex: "-1", actorContext: {} }),
+      (error) => error.code === "FLEET_DOCUMENT_INVALID_METADATA" && error.statusCode === 400
+    );
+    await assert.rejects(
+      () => service.getDocumentObject({ fleetId, slot: "insurance", actorContext: {} }),
+      (error) => error.code === "FLEET_DOCUMENT_LEGACY_REFERENCE" && error.statusCode === 422
+    );
+  });
 });

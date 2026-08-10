@@ -1,5 +1,4 @@
 "use strict";
-
 const Stop = require("../../../../models/stopModel.js");
 const {
   getStopReferenceCounts, hasStopReferences,
@@ -7,8 +6,7 @@ const {
 const {
   assertInteractiveMapSelection, coordinateWriteFields,
 } = require("../../../domain/stop/stop-map-selection.js");
-
-async function createStop(data, adminId = null) {
+async function createStop(data, adminId = null, options = {}) {
   const {
     code, name, type, province, district, municipality,
     aliases, status, isSearchable, isRouteStop, parentStopId,
@@ -32,24 +30,28 @@ async function createStop(data, adminId = null) {
     ...(source !== undefined && { source }),
     ...(adminId && { createdBy: adminId }),
   };
-  if (!code) return Stop.createWithUniqueCode(stop);
+  if (!code) return Stop.createWithUniqueCode(stop, options);
   const normalizedCode = code.toUpperCase();
-  if (await Stop.findOne({ code: normalizedCode })) {
+  let existingCode = Stop.findOne({ code: normalizedCode });
+  if (options.session && typeof existingCode.session === "function") {
+    existingCode = existingCode.session(options.session);
+  }
+  if (await existingCode) {
     const err = new Error(`Stop with code "${normalizedCode}" already exists.`);
     err.code = "STOP_CODE_CONFLICT";
     err.statusCode = 409;
     throw err;
   }
-  return Stop.create({ code, ...stop });
+  if (!options.session) return Stop.create({ code, ...stop });
+  const created = await Stop.create([{ code, ...stop }], { session: options.session });
+  return Array.isArray(created) ? created[0] : created;
 }
-
 function getAllStops(filter = {}) {
   return Stop.find(filter)
     .populate("parentStopId", "id code name")
     .sort({ province: 1, district: 1, name: 1 })
     .lean();
 }
-
 function searchStops(query) {
   return Stop.find({
     status: "ACTIVE",
@@ -130,7 +132,7 @@ async function deleteStop(id) {
     err.statusCode = 404;
     throw err;
   }
-  
+
   const counts = await getStopReferenceCounts(id);
   if (hasStopReferences(counts)) {
     const err = new Error("Stop is actively used and cannot be deleted.");
@@ -139,7 +141,7 @@ async function deleteStop(id) {
     err.details = counts;
     throw err;
   }
-  
+
   await Stop.findByIdAndDelete(id);
 }
 

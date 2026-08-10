@@ -20,7 +20,7 @@ test("rejected owner replaces only rejected documents and retains approved files
     verificationStatus: "rejected",
     companyRegistration: { documentUrls: ["company-approved.pdf"], verified: true, rejectionReason: null },
     taxRegistration: { documentUrls: ["tax-rejected.pdf"], verified: false, rejectionReason: "PAN is unreadable" },
-    transportLicense: { documentUrls: ["license-approved.pdf"], verified: true, rejectionReason: null },
+    ownerIdentity: { documentUrls: ["identity-approved.pdf"], verified: true, rejectionReason: null },
     bankDetails: {}, kycAuditHistory: [],
   };
   function MockBusOwner(value) {
@@ -43,7 +43,7 @@ test("rejected owner replaces only rejected documents and retains approved files
   };
   await service.submitKyc({ userId: "u", onboardingData: VALID_BODY, files: { taxRegistration: [file] } });
   assert.deepEqual(savedOwner.companyRegistration.documentUrls, ["company-approved.pdf"]);
-  assert.deepEqual(savedOwner.transportLicense.documentUrls, ["license-approved.pdf"]);
+  assert.deepEqual(savedOwner.ownerIdentity.documentUrls, ["identity-approved.pdf"]);
   assert.deepEqual(savedOwner.taxRegistration.documentUrls, ["new-key/taxRegistration.pdf"]);
   assert.deepEqual(deletedKeys, ["tax-rejected.pdf"]);
   assert.equal(savedOwner.verificationStatus, "pending");

@@ -129,7 +129,11 @@ const defaultUploadParser = fileUpload({
 app.use((req, res, next) => {
   // KYC is parsed inside the authenticated bus-owner router with stricter
   // per-file, file-count, field-count, request-size and rate limits.
-  if (req.path === "/api/busowner/submitBusOwnerKyc") return next();
+  if ([
+    "/api/busowner/submitBusOwnerKyc",
+    "/api/admin/busOwner/create",
+    "/api/admin/busOwner/reuploadKycDocument",
+  ].includes(req.path)) return next();
   return defaultUploadParser(req, res, next);
 });
 // ── Structured HTTP Logging ───────────────────────────────────────────────────

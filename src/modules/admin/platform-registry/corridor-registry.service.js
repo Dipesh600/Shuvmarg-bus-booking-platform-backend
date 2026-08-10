@@ -1,30 +1,25 @@
 "use strict";
 const mongoose = require("mongoose");
 const RouteCorridor = require("../../../../models/routeCorridorModel.js");
-const {
-  buildCorridorPairKey,
-} = require("../../../domain/corridor/corridor-identity.js");
+const { buildCorridorPairKey } = require("../../../domain/corridor/corridor-identity.js");
 const { corridorError } = require("../../../domain/corridor/corridor-errors.js");
-const {
-  resolveCorridorEndpoint,
-} = require("./corridor/corridor-endpoint.policy.js");
-const {
-  assertCorridorCanActivate, hasUsableVariant,
-} = require("./corridor/corridor-activation.policy.js");
-const {
-  assertCorridorCanDelete,
-} = require("./corridor/corridor-reference.policy.js");
+const { resolveCorridorEndpoint } = require("./corridor/corridor-endpoint.policy.js");
+const { assertCorridorCanActivate, hasUsableVariant } = require("./corridor/corridor-activation.policy.js");
+const { assertCorridorCanDelete } = require("./corridor/corridor-reference.policy.js");
 const { buildCorridorQuery } = require("./corridor/corridor-query.service.js");
 const { mapCorridor } = require("./corridor/corridor.mapper.js");
+const {
+  resolveWritableCorridorSource,
+} = require("./corridor/corridor-source.policy.js");
 
-const ENDPOINT_FIELDS = "name code municipality district province status verificationStatus isSearchable";
-
-function mapWriteError(error) {
+const ENDPOINT_FIELDS = "name code municipality district province status verificationStatus isSearchable isRouteStop coordinates";
+function mapWriteError(error, existingCorridorId = null) {
   if (error?.code !== 11000) throw error;
   throw corridorError(
     error.keyPattern?._endpointPairKey
       ? "CORRIDOR_PAIR_CONFLICT" : "CORRIDOR_CODE_CONFLICT",
-    "A corridor between these endpoints already exists.", 409
+    "A corridor between these endpoints already exists.", 409,
+    existingCorridorId ? { corridorId: String(existingCorridorId) } : undefined
   );
 }
 
@@ -64,6 +59,7 @@ async function loadCorridor(id) {
 
 async function registerCorridor(data, adminId, returnExisting = false) {
   const endpoints = await resolveEndpoints(data);
+  const source = resolveWritableCorridorSource(data.source);
   const existing = await findExistingPair(endpoints);
   if (existing) {
     if (returnExisting) return loadCorridor(existing._id);
@@ -80,7 +76,7 @@ async function registerCorridor(data, adminId, returnExisting = false) {
       destinationId: endpoints.destination._id,
       _endpointPairKey: endpoints.pairKey,
       status: "PENDING", isSymmetric: true,
-      source: data.source || "ADMIN",
+      source,
       sourceReferenceId: data.sourceReferenceId || null,
       notes: data.notes, createdBy: adminId || null,
     });
@@ -89,6 +85,10 @@ async function registerCorridor(data, adminId, returnExisting = false) {
     if (error?.code === 11000 && returnExisting) {
       const raced = await findExistingPair(endpoints);
       if (raced) return loadCorridor(raced._id);
+    }
+    if (error?.code === 11000 && error.keyPattern?._endpointPairKey) {
+      const raced = await findExistingPair(endpoints);
+      return mapWriteError(error, raced?._id);
     }
     return mapWriteError(error);
   }

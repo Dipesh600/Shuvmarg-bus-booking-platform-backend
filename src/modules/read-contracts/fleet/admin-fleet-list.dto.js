@@ -5,8 +5,8 @@ const { mapFleetDocumentDescriptors, calculateFleetDocumentSummary } = require("
 
 function mapAdminFleetListItem(fleet) {
   if (!fleet) return null;
-  const owner = fleet.busOwnerId || {};
-  const ownerUser = owner.user || {};
+  const ownerUser = fleet.ownerId || {};
+  const brand = fleet.brandId || {};
   const docDescriptors = mapFleetDocumentDescriptors(fleet);
   const docSummary = calculateFleetDocumentSummary(docDescriptors);
 
@@ -14,10 +14,15 @@ function mapAdminFleetListItem(fleet) {
     fleetId: String(fleet._id || fleet.id),
     fleetCode: fleet.fleetId || null,
     owner: {
-      ownerId: String(owner._id || owner.id || owner),
-      ownerCode: owner.busOwnerId || null,
-      companyName: owner.companyName || owner.companyRegistration?.companyName || ownerUser.name || "N/A",
+      ownerId: String(ownerUser._id || ownerUser.id || ownerUser),
+      ownerCode: null,
+      companyName: brand.brandName || ownerUser.name || "N/A",
     },
+    brand: brand?._id ? {
+      brandId: String(brand._id),
+      brandCode: brand.brandCode || null,
+      brandName: brand.brandName || "N/A",
+    } : null,
     busName: fleet.busName || "N/A",
     busNumber: fleet.busNumber || "N/A",
     busType: fleet.busType || "N/A",

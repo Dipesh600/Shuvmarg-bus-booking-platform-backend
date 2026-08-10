@@ -3,8 +3,7 @@
 const ALLOWED_SUBMISSION_FIELDS = Object.freeze([
   "companyRegistration",
   "taxRegistration",
-  "transportLicense",
-  "insuranceCertificates",
+  "ownerIdentity",
 ]);
 
 function countValidatedKycFiles(normalizedFiles) {

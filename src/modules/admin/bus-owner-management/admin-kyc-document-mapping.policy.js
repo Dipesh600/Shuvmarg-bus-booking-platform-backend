@@ -6,7 +6,6 @@ const ADMIN_KYC_FILE_MAPPING = Object.freeze({
   companyRegistrationCert: "companyRegistration",
   panCardImage: "taxRegistration",
   ownerCitizenship: "ownerIdentity",
-  bankAuthorizationLetter: "bankDetails",
 });
 
 function normalizeAdminKycFiles(files) {

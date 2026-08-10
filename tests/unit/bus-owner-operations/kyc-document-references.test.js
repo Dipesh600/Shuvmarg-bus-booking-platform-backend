@@ -13,7 +13,7 @@ test("kyc-document-references unit tests", async (t) => {
     assert.deepEqual(collectBusOwnerKycStorageReferences({}), []);
   });
 
-  await t.test("collects active sections, flattens insurance, excludes invalid, removes duplicates, preserves legacy URLs", () => {
+  await t.test("collects the three business sections, excludes fleet/bank fields, removes duplicates, preserves legacy URLs", () => {
     const owner = {
       companyRegistration: { documentUrls: ["owners/1/c.pdf", "https://cloudinary.com/old.pdf", "owners/1/c.pdf", "  ", null] },
       taxRegistration: { documentUrls: ["owners/1/t.pdf"] },
@@ -22,7 +22,7 @@ test("kyc-document-references unit tests", async (t) => {
         { documentUrls: ["owners/1/i1.pdf", "owners/1/t.pdf"] },
         { documentUrls: ["owners/1/i2.pdf", 123, ""] },
       ],
-      ownerIdentity: { documentUrls: ["owners/1/must-not-collect-identity.pdf"] },
+      ownerIdentity: { documentUrls: ["owners/1/identity.pdf"] },
       bankDetails: { documentUrls: ["owners/1/must-not-collect-bank.pdf"] },
     };
 
@@ -33,9 +33,7 @@ test("kyc-document-references unit tests", async (t) => {
       "owners/1/c.pdf",
       "https://cloudinary.com/old.pdf",
       "owners/1/t.pdf",
-      "owners/1/l.pdf",
-      "owners/1/i1.pdf",
-      "owners/1/i2.pdf",
+      "owners/1/identity.pdf",
     ]);
 
     assert.equal(JSON.stringify(owner), originalJson, "Must not mutate input");
