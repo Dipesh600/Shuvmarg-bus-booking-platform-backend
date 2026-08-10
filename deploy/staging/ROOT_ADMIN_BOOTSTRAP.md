@@ -14,7 +14,7 @@ The bootstrap command creates the database's only immutable root administrator. 
 Run `npm run bootstrap:root-admin` as a controlled one-off process with:
 
 - `SUPER_ADMIN_EMAIL`
-- `SUPER_ADMIN_ID=SUMA-ADM-001`
+- `SUPER_ADMIN_ID=SM-ADM-DIPESH`
 - `SUPER_ADMIN_PASSWORD`
 - `ADMIN_BOOTSTRAP_ENVIRONMENT=staging`
 - `ADMIN_BOOTSTRAP_CONFIRM=CREATE_INITIAL_ROOT:staging`

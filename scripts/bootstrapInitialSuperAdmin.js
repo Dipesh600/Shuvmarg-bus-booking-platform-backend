@@ -9,6 +9,7 @@ const BootstrapState = require("../models/adminBootstrapStateModel");
 const { assertStrongPassword } = require("../src/modules/admin/auth-security/admin-password.policy");
 const { generateOneTimeToken, hashToken } = require("../src/modules/admin/auth-security/admin-auth.crypto");
 const { recordSecurityEvent } = require("../src/modules/admin/auth-security/admin-security-audit.service");
+const { isValidAdminId, normalizeAdminId } = require("../src/modules/admin/auth-security/admin-identity.policy");
 
 const BOOTSTRAP_KEY = "INITIAL_ROOT_ADMIN";
 
@@ -24,10 +25,14 @@ function requiredConfig() {
     throw new Error("ADMIN_BOOTSTRAP_CONFIRM does not match the target environment");
   }
   assertStrongPassword(process.env.SUPER_ADMIN_PASSWORD);
+  const adminId = normalizeAdminId(process.env.SUPER_ADMIN_ID);
+  if (!isValidAdminId(adminId)) {
+    throw new Error("SUPER_ADMIN_ID must use SM-ADM-<NAME> or the legacy SUMA-ADM-001 format");
+  }
   return {
     environment,
     email: process.env.SUPER_ADMIN_EMAIL.trim().toLowerCase(),
-    adminId: process.env.SUPER_ADMIN_ID.trim().toUpperCase(),
+    adminId,
     password: process.env.SUPER_ADMIN_PASSWORD,
   };
 }

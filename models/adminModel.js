@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { ADMIN_ID_PATTERN } = require("../src/modules/admin/auth-security/admin-identity.policy");
 
 const superAdminSchema = new mongoose.Schema(
   {
@@ -7,7 +8,7 @@ const superAdminSchema = new mongoose.Schema(
       required: true,
       unique: true,
       uppercase: true,
-      match: /^SUMA-ADM-\d{3}$/,
+      match: ADMIN_ID_PATTERN,
     },
     email: {
       type: String,

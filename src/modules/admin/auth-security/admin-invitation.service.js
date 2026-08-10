@@ -9,13 +9,14 @@ const { assertStrongPassword } = require("./admin-password.policy");
 const { createEnrollment, matchedCounter, recoveryCodes, secretForAdmin } = require("./admin-mfa.service");
 const { authError } = require("./admin-auth.errors");
 const { recordSecurityEvent } = require("./admin-security-audit.service");
+const { isValidAdminId, normalizeAdminId } = require("./admin-identity.policy");
 
 const ROLES = new Set(["SUPER_ADMIN", "ADMIN", "SUB_ADMIN"]);
 
 async function createInvitation(input, rootAdminId, requestContext = {}) {
   const email = String(input.email || "").trim().toLowerCase();
-  const adminId = String(input.adminId || "").trim().toUpperCase();
-  if (!/^\S+@\S+\.\S+$/.test(email) || !/^SUMA-ADM-\d{3}$/.test(adminId) || !ROLES.has(input.role)) {
+  const adminId = normalizeAdminId(input.adminId);
+  if (!/^\S+@\S+\.\S+$/.test(email) || !isValidAdminId(adminId) || !ROLES.has(input.role)) {
     throw authError("INVALID_ADMIN_INVITATION", "Valid email, admin ID and role are required", 400);
   }
   if (await SuperAdmin.exists({ $or: [{ email }, { adminId }] })) {

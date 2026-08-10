@@ -22,7 +22,7 @@ describe("one-time root bootstrap", () => {
   beforeEach(() => {
     env = { ...process.env };
     process.env.SUPER_ADMIN_EMAIL = "root@example.com";
-    process.env.SUPER_ADMIN_ID = "SUMA-ADM-001";
+    process.env.SUPER_ADMIN_ID = "SM-ADM-DIPESH";
     process.env.SUPER_ADMIN_PASSWORD = "StrongPassword#2026!";
     process.env.ADMIN_BOOTSTRAP_ENVIRONMENT = "staging";
     process.env.ADMIN_BOOTSTRAP_CONFIRM = "CREATE_INITIAL_ROOT:staging";
@@ -45,6 +45,10 @@ describe("one-time root bootstrap", () => {
   test("rejects a weak password before database access", () => {
     process.env.SUPER_ADMIN_PASSWORD = "short";
     assert.throws(() => requiredConfig(), /at least 12/);
+  });
+
+  test("accepts the canonical named administrator ID", () => {
+    assert.equal(requiredConfig().adminId, "SM-ADM-DIPESH");
   });
 
   test("permanent bootstrap record blocks another root", async () => {

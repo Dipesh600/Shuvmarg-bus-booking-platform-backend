@@ -6,6 +6,7 @@ const speakeasy = require("speakeasy");
 const { decryptSecret, encryptSecret, generateOneTimeToken, hashToken } = require("../../src/modules/admin/auth-security/admin-auth.crypto");
 const { createEnrollment, matchedCounter } = require("../../src/modules/admin/auth-security/admin-mfa.service");
 const { assertStrongPassword } = require("../../src/modules/admin/auth-security/admin-password.policy");
+const { isValidAdminId } = require("../../src/modules/admin/auth-security/admin-identity.policy");
 
 describe("admin authentication security primitives", () => {
   let originalKey;
@@ -48,5 +49,11 @@ describe("admin authentication security primitives", () => {
   test("enforces the privileged account password policy", () => {
     assert.throws(() => assertStrongPassword("Weakpass1!"), /at least 12/);
     assert.doesNotThrow(() => assertStrongPassword("LongEnough#Password2026"));
+  });
+
+  test("accepts named admin IDs without breaking legacy IDs", () => {
+    assert.equal(isValidAdminId("SM-ADM-DIPESH"), true);
+    assert.equal(isValidAdminId("SUMA-ADM-001"), true);
+    assert.equal(isValidAdminId("SM-ADMIN-DIPESH"), false);
   });
 });
