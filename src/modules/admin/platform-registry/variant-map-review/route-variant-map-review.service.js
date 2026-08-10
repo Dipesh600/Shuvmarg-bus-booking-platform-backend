@@ -16,7 +16,7 @@ const { replaceReview, replaceReviewCandidates, selectReviewRoute } =
 const DEFAULT_REVIEW_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_REVIEW_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const ROUTE_DATA_VERSION = 2;
-const CANDIDATE_ENGINE_VERSION = 8;
+const CANDIDATE_ENGINE_VERSION = 9;
 function mapRouteOptionSummary(option) {
   return {
     optionKey: option.optionKey,

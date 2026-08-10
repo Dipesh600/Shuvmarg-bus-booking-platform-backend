@@ -5,6 +5,20 @@ const assert = require("node:assert/strict");
 const {
   FIELD_MASK, TRANSIT_QUERIES, searchTransitPlacesAlongRoute,
 } = require("../../services/googlePlacesSearchAlongRoute.js");
+const { sampleZoneAware } = require("../../services/googlePlacesRouteSampling.js");
+
+test("sample cap preserves dense first and last 40 km coverage", () => {
+  const coordinates = Array.from({ length: 201 }, (_, index) => [85 + index * 0.01, 27]);
+  const samples = sampleZoneAware(coordinates, 200, 48);
+  const originCount = samples.filter((sample) => sample.km <= 40).length;
+  const destinationCount = samples.filter((sample) => sample.km >= 160).length;
+  const middleCount = samples.length - originCount - destinationCount;
+
+  assert.ok(originCount >= 17);
+  assert.ok(destinationCount >= 17);
+  assert.ok(middleCount <= 12);
+  assert.ok(samples.length <= 48);
+});
 
 test("Google place search follows the reviewed polyline and deduplicates Place IDs", async () => {
   const calls = [];
