@@ -38,7 +38,7 @@ test("kyc-onboarding-persistence: pending owner cannot resubmit", async () => {
     verificationStatus: "pending",
     companyRegistration: { documentUrls: ["company.pdf"] },
     taxRegistration: { documentUrls: ["tax.pdf"] },
-    transportLicense: { documentUrls: ["license.pdf"] },
+    ownerIdentity: { documentUrls: ["identity.pdf"] },
   });
 
   const service = createKycSubmissionService({

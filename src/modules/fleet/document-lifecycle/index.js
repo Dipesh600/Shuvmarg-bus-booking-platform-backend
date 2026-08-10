@@ -45,6 +45,7 @@ const adminUploadService = createFleetDocumentUploadService({
 const adminReadService = createFleetDocumentReadService({
   repository,
   getPresignedUrl: s3Service.getPresignedUrl,
+  fetchDocument: s3Service.getObjectFromS3,
   resolveActor: adminActorResolver,
 });
 

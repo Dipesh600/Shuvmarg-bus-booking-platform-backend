@@ -38,7 +38,7 @@ test("kyc-file-signature-validation unit tests", async (t) => {
 
   await t.test("rejects malformed file endings and active PDF content", () => {
     const incomplete = makeValidFiles();
-    incomplete.transportLicense = makeFile(
+    incomplete.ownerIdentity = makeFile(
       "broken.png",
       "image/png",
       Buffer.concat([PNG_BUFFER.subarray(0, 8), Buffer.alloc(12)])

@@ -5,6 +5,9 @@ const OperatorConfig = require(
   "../../../../models/operatorRouteConfigModel.js"
 );
 const { recomputeTimingArray } = require("./timing.policy.js");
+const {
+  assertVariantReadyForOperatorConfig,
+} = require("./variant-readiness.policy.js");
 
 function failure(statusCode, message) {
   const error = new Error(message);
@@ -73,6 +76,7 @@ async function toggleConfigStatus(configId) {
     }
     config.status = "INACTIVE";
   } else {
+    await assertVariantReadyForOperatorConfig(config.variantId);
     config.status = "ACTIVE";
   }
   await config.save();

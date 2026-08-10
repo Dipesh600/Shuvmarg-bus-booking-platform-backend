@@ -315,22 +315,19 @@ controllers/adminController/documentProxyController.js  (141 lines)
 **Owns:**
 - Canonical stop registry (create, update, search, popularity tracking)
 - Public stop autocomplete API
-- AI-assisted stop discovery pipeline (Google Places + Mapbox + Minimax)
+- Map-assisted candidate suggestions now belong to the Corridor Variant draft workflow
 
 **Collections owned:** `stops`, `stoppoints`
 
 **Existing files:**
 ```
 controllers/adminController/platformRegistryController.js   (276 lines) — stop portion
-src/modules/admin/route-discovery/                           (modularized)
 controllers/public/stopSearchController.js                  (138 lines)
 services/platformRegistryService.js    (624 lines) — stop portion
 services/googlePlacesClient.js         (278 lines)
-services/mapboxClient.js               (187 lines)
-services/minimaxClient.js              (201 lines)
 models/stopModel.js
 models/stopPointModel.js
-models/routeDiscoveryModel.js
+models/legacyRouteDiscoveryModel.js    (read-only rollout compatibility)
 ```
 
 **Public operations:** `searchStops`, `getStopById`, `recordStopSelection`

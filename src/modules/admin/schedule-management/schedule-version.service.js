@@ -6,6 +6,9 @@ const {
 } = require("../../../../services/tripGeneratorCron.js");
 const logger = require("../../../../utils/logger.js");
 const { isValidTime } = require("./schedule-validation.policy.js");
+const {
+  assertScheduleRouteChainReady,
+} = require("./schedule-route-chain.policy.js");
 
 const validateVersion = (changes) => {
   if (!changes.departureTime) throw new Error("New departureTime is required.");
@@ -85,6 +88,7 @@ const createScheduleVersion = async (scheduleId, changes, adminId) => {
   const newVersion = new Schedule(
     versionDocument(current, changes, start, adminId, sealDate)
   );
+  await assertScheduleRouteChainReady(newVersion);
   await newVersion.save();
   current.pendingVersionId = newVersion._id;
   await current.save();

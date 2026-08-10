@@ -114,7 +114,7 @@ test("kyc-submission.service upload rollback tests", async (t) => {
     assert.deepEqual(deletedObjectKeys, [
       "owners/1/kyc/companyRegistration/new-1.pdf",
       "owners/1/kyc/taxRegistration/new-2.pdf",
-      "owners/1/kyc/transportLicense/new-3.pdf",
+      "owners/1/kyc/ownerIdentity/new-3.pdf",
     ]);
   });
 });

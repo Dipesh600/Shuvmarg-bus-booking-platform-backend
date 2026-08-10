@@ -18,7 +18,7 @@ function createFleetReadService({
   async function listFleetsForAdmin(req) {
     await authorizeAdmin(req, resolveAdminActor);
     const { page, limit, skip } = parsePagination(req.query);
-    const { search, status, approvalStatus, ownerId } = req.query || {};
+    const { search, status, approvalStatus, ownerId, brandId, operational } = req.query || {};
 
     const { items, totalItems } = await repository.findAdminPaginatedFleets({
       page,
@@ -28,6 +28,8 @@ function createFleetReadService({
       status,
       approvalStatus,
       ownerId,
+      brandId,
+      operational,
     });
 
     return {

@@ -18,7 +18,7 @@ test("stored required documents preserve the review status", () => {
     verificationStatus: "pending",
     companyRegistration: { documentUrls: ["company.pdf"] },
     taxRegistration: { documentUrls: ["tax.pdf"] },
-    transportLicense: { documentUrls: ["license.pdf"] },
+    ownerIdentity: { documentUrls: ["identity.pdf"] },
   };
   assert.equal(hasKycSubmissionEvidence(owner), true);
   assert.equal(getEffectiveKycStatus(owner), "pending");

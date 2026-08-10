@@ -29,6 +29,13 @@ test("admin document-read route registration and middleware", async (t) => {
     );
   });
 
+  await t.test("secure streaming route is registered behind adminMiddleware", () => {
+    assert.match(
+      src,
+      /router\.get\(["']\/busOwner\/kycDocumentView["'],\s*adminMiddleware,\s*kycDocumentRead\.viewKycDocument\s*\)/
+    );
+  });
+
   await t.test("handler is required from src/modules/bus-owner/kyc-document-read", () => {
     assert.match(src, /src\/modules\/bus-owner\/kyc-document-read/);
   });

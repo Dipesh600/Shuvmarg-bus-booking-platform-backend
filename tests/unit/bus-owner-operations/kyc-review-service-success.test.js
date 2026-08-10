@@ -18,8 +18,9 @@ test("kyc-review-service success tests", async (t) => {
       _id: "64f000000000000000000001",
       user: "64f000000000000000000002",
       verificationStatus: "pending",
-      companyRegistration: { verified: false },
-      ownerIdentity: { verified: false, rejectionReason: null },
+      companyRegistration: { documentUrls: ["company.pdf"], verified: false },
+      taxRegistration: { documentUrls: ["tax.pdf"], verified: false },
+      ownerIdentity: { documentUrls: ["citizenship.pdf"], verified: false, rejectionReason: null },
     };
 
     const mockBusOwnerModel = {

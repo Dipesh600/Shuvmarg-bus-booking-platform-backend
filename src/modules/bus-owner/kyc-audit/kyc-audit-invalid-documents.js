@@ -30,21 +30,11 @@ function collectInvalidKycDocumentTypes(owner) {
     "companyRegistration",
     "ownerIdentity",
     "taxRegistration",
-    "transportLicense",
   ];
   for (const field of singleFields) {
     const section = owner[field];
     if (hasStoredDocument(section) && section.verified === false) {
       invalidList.push(field);
-    }
-  }
-
-  if (Array.isArray(owner.insuranceCertificates)) {
-    const hasRejectedInsurance = owner.insuranceCertificates.some(
-      (cert) => hasStoredDocument(cert) && cert.verified === false
-    );
-    if (hasRejectedInsurance) {
-      invalidList.push("insuranceCertificates");
     }
   }
 

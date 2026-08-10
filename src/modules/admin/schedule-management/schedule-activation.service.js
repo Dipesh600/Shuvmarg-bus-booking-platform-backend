@@ -5,6 +5,9 @@ const Fleet = require("../../../../models/fleetModel.js");
 const {
   generateTripsForDateRange,
 } = require("../../../../services/tripGeneratorCron.js");
+const {
+  assertScheduleRouteChainReady,
+} = require("./schedule-route-chain.policy.js");
 const logger = require("../../../../utils/logger.js");
 
 const activateSchedule = async (scheduleId, adminId) => {
@@ -28,6 +31,7 @@ const activateSchedule = async (scheduleId, adminId) => {
       `Fleet "${fleet.busNumber}" is not ACTIVE. Cannot activate schedule.`
     );
   }
+  await assertScheduleRouteChainReady(schedule);
   await Fleet.findByIdAndUpdate(schedule.busId, { setupComplete: true });
   schedule.status = "ACTIVE";
   schedule.activatedBy = adminId;
@@ -36,6 +40,7 @@ const activateSchedule = async (scheduleId, adminId) => {
   if (schedule.returnScheduleId) {
     const linked = await Schedule.findById(schedule.returnScheduleId);
     if (linked && ["DRAFT", "SUSPENDED"].includes(linked.status)) {
+      await assertScheduleRouteChainReady(linked);
       linked.status = "ACTIVE";
       linked.activatedBy = adminId;
       linked.activatedAt = new Date();
@@ -87,6 +92,7 @@ const goLiveSchedule = async (scheduleId, adminId) => {
       `Cannot go live on a schedule with status "${schedule.status}". Activate first.`
     );
   }
+  await assertScheduleRouteChainReady(schedule);
   logger.info("scheduleService: go-live triggered — starting burst generation", {
     scheduleId,
     adminId,

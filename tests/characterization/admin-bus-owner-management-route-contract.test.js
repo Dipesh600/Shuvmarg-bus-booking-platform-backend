@@ -4,6 +4,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const routes = require("../../routes/adminRoutes/adminRoutes.js");
 const adminMiddleware = require("../../middleware/adminMiddleware.js");
+const {
+  rejectOversizedKycRequest,
+  parseKycSubmissionUpload,
+} = require("../../middleware/kycSubmissionUpload.js");
 const busOwners = require("../../src/modules/admin/bus-owner-management");
 
 test("admin bus-owner management Express route contract", () => {
@@ -32,9 +36,17 @@ test("admin bus-owner management Express route contract", () => {
       1,
       `${method.toUpperCase()} ${path} must exist exactly once`
     );
-    const expectedStack = (path === "/getBusOwnerDetails" || path === "/getBusOwnerKycDetails")
-      ? [adminMiddleware, matches[0].route.stack[1].handle, handler]
-      : [adminMiddleware, handler];
+    const expectedStack =
+      path === "/busOwner/create" || path === "/busOwner/reuploadKycDocument"
+        ? [
+            adminMiddleware,
+            rejectOversizedKycRequest,
+            parseKycSubmissionUpload,
+            handler,
+          ]
+        : path === "/getBusOwnerDetails" || path === "/getBusOwnerKycDetails"
+          ? [adminMiddleware, matches[0].route.stack[1].handle, handler]
+          : [adminMiddleware, handler];
     assert.deepEqual(
       matches[0].route.stack.map((layer) => layer.handle),
       expectedStack

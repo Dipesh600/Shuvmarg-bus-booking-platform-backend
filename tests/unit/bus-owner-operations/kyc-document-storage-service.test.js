@@ -39,6 +39,25 @@ test("kyc-document-storage.service unit tests", async (t) => {
     });
   });
 
+  await t.test("uploadDocument rejects former fleet and bank KYC document types", async () => {
+    const service = createKycDocumentStorageService({
+      uploadFileToS3: async () => "unused",
+      deleteObjectFromS3: async () => {},
+      buildS3Path: () => "unused",
+    });
+    const validatedFile = {
+      file: { name: "document.pdf" },
+      safeExtension: "pdf",
+    };
+
+    for (const documentType of ["transportLicense", "insuranceCertificates", "bankDetails"]) {
+      await assert.rejects(
+        () => service.uploadDocument({ validatedFile, ownerId: "owner-1", documentType }),
+        /Unknown document type/
+      );
+    }
+  });
+
   await t.test("deleteMany deletes valid S3 object keys and returns structured status without throwing on deletion error", async () => {
     const deletedKeys = [];
     const deleteObjectFromS3 = async (key) => {

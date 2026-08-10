@@ -2,34 +2,79 @@
 
 const RouteVariant = require("../../../../models/routeVariantModel.js");
 const RouteStop = require("../../../../models/routeStopModel.js");
-const { getCorridorById } = require("./corridor-registry.service.js");
+const { getCorridorById, activateCorridorIfReady } = require("./corridor-registry.service.js");
+const { assertVariantCanActivate } = require("./variant-activation.policy.js");
+const { assertVariantCanDelete } = require("./variant-reference.policy.js");
+const { routeVariantError } = require("./route-variant-errors.js");
+const { allocateVariantCode } = require("./variant-code-allocation.service.js");
+const { assertVariantTerminalScope } = require("./variant-terminal-scope.policy.js");
+const { deleteVariantDraftArtifacts } = require("./variant-draft-cleanup.service.js");
+const { VARIANT_WRITE_CONTEXT, assertLegacyVariantCreateAllowed, assertMapReviewEndpointAccess, assertVariantConfigurationMutable, assertVariantStatusTransition } = require("./variant-lifecycle.policy.js");
+
+const ADMIN_VISIBLE_STATUSES = ["DRAFT", "ACTIVE", "INACTIVE"];
 
 async function createVariant(data, adminId) {
+  assertLegacyVariantCreateAllowed(data);
   const {
-    corridorId, name, type, distanceKm, durationMinutes,
+    corridorId, name, type, distanceKm, durationMinutes, direction = "FORWARD",
+    originTerminalStopId, destinationTerminalStopId,
     autoGenerateReturn = false,
   } = data;
   const corridor = await getCorridorById(corridorId);
-  const count = await RouteVariant.countDocuments({ corridorId });
-  const index = String(count + 1).padStart(2, "0");
-  const forward = await RouteVariant.create({
-    code: `${corridor.code}-V${index}`,
-    corridorId, name, type, distanceKm, durationMinutes,
-    direction: "FORWARD", createdBy: adminId,
+  if (autoGenerateReturn) {
+    throw routeVariantError(
+      "RETURN_VARIANT_REQUIRES_SEPARATE_DRAFT",
+      "Create the reverse-direction variant separately so its physical terminals and timing can be reviewed."
+    );
+  }
+  const hasOriginTerminal = Boolean(originTerminalStopId);
+  const hasDestinationTerminal = Boolean(destinationTerminalStopId);
+  if (hasOriginTerminal !== hasDestinationTerminal) {
+    throw routeVariantError(
+      "INCOMPLETE_VARIANT_TERMINALS",
+      "A variant must define both physical terminals or neither."
+    );
+  }
+  if (hasOriginTerminal) {
+    await assertVariantTerminalScope({
+      corridor,
+      direction,
+      originTerminalStopId,
+      destinationTerminalStopId,
+    });
+  }
+  const code = await allocateVariantCode(corridor._id, direction);
+  return RouteVariant.create({
+    code, corridorId: corridor._id, name, type, distanceKm, durationMinutes,
+    direction, originTerminalStopId: originTerminalStopId || null,
+    destinationTerminalStopId: destinationTerminalStopId || null,
+    definitionSource: "ADMIN",
+    createdBy: adminId || null,
   });
-  if (!autoGenerateReturn) return forward;
-  const returnVariant = await RouteVariant.create({
-    code: `${corridor.code}-V${index}R`,
-    corridorId, name: `${name} (Return)`, type, distanceKm, durationMinutes,
-    direction: "RETURN", returnVariantId: forward._id, createdBy: adminId,
-  });
-  forward.returnVariantId = returnVariant._id;
-  await forward.save();
-  return { forward, return: returnVariant };
 }
 
-function getVariantsByCorridor(corridorId) {
-  return RouteVariant.find({ corridorId, status: "ACTIVE" })
+function parseAdminVariantStatuses({ status, includeArchived } = {}) {
+  const requested = Array.isArray(status)
+    ? status : String(status || "").split(",");
+  const statuses = requested.map((value) => String(value).trim().toUpperCase())
+    .filter(Boolean);
+  const allowed = includeArchived === "true" || includeArchived === true
+    ? [...ADMIN_VISIBLE_STATUSES, "ARCHIVED"] : ADMIN_VISIBLE_STATUSES;
+  if (statuses.length === 0) return allowed;
+  const invalid = statuses.filter((value) => !allowed.includes(value));
+  if (invalid.length > 0) {
+    throw routeVariantError(
+      "INVALID_VARIANT_STATUS_FILTER",
+      `Unsupported variant status filter: ${invalid.join(", ")}.`
+    );
+  }
+  return [...new Set(statuses)];
+}
+
+function getVariantsByCorridor(corridorId, filters = {}) {
+  return RouteVariant.find({
+    corridorId, status: { $in: parseAdminVariantStatuses(filters) },
+  })
     .populate({
       path: "corridorId",
       populate: [{ path: "originId" }, { path: "destinationId" }],
@@ -38,40 +83,68 @@ function getVariantsByCorridor(corridorId) {
     .lean();
 }
 
-async function getVariantById(id) {
-  const variant = await RouteVariant.findById(id).populate({
+async function getVariantById(id, { session = null } = {}) {
+  let query = RouteVariant.findById(id).populate({
     path: "corridorId",
     populate: [{ path: "originId" }, { path: "destinationId" }],
   });
-  if (!variant) throw new Error("Route variant not found.");
+  if (session && typeof query.session === "function") query = query.session(session);
+  const variant = await query;
+  if (!variant) {
+    throw routeVariantError("VARIANT_NOT_FOUND", "Route variant not found.", 404);
+  }
   return variant;
 }
 
-async function updateVariant(id, data) {
+async function updateVariant(
+  id, data, adminId = null,
+  { writeContext = VARIANT_WRITE_CONTEXT.INTERNAL_WORKFLOW } = {}
+) {
   const { name, type, distanceKm, durationMinutes, status } = data;
+  const current = await getVariantById(id);
+  assertMapReviewEndpointAccess(current, writeContext);
+  assertVariantConfigurationMutable(current, data);
+  await assertVariantStatusTransition(current, status);
+  const candidate = {
+    ...(typeof current.toObject === "function" ? current.toObject() : current),
+    ...(name !== undefined && { name }),
+    ...(type !== undefined && { type }),
+    ...(distanceKm !== undefined && { distanceKm }),
+    ...(durationMinutes !== undefined && { durationMinutes }),
+    ...(status !== undefined && { status }),
+  };
+  if (status === "ACTIVE") await assertVariantCanActivate(candidate);
   const variant = await RouteVariant.findByIdAndUpdate(
     id,
     {
-      ...(name && { name }), ...(type && { type }),
+      ...(name !== undefined && { name }), ...(type !== undefined && { type }),
       ...(distanceKm !== undefined && { distanceKm }),
       ...(durationMinutes !== undefined && { durationMinutes }),
-      ...(status && { status }),
+      ...(status !== undefined && { status }),
+      ...(adminId && { updatedBy: adminId }),
     },
     { new: true, runValidators: true }
   );
-  if (!variant) throw new Error("Variant not found.");
+  if (!variant) {
+    throw routeVariantError("VARIANT_NOT_FOUND", "Route variant not found.", 404);
+  }
+  if (status === "ACTIVE") {
+    await activateCorridorIfReady(variant.corridorId, adminId);
+  }
   return variant;
 }
-
 async function deleteVariant(id) {
   const variant = await RouteVariant.findById(id);
-  if (!variant) throw new Error("Variant not found.");
-  await RouteStop.countDocuments({ variantId: id });
+  if (!variant) {
+    throw routeVariantError("VARIANT_NOT_FOUND", "Route variant not found.", 404);
+  }
+  await assertVariantCanDelete(variant);
   await RouteStop.deleteMany({ variantId: id });
+  await deleteVariantDraftArtifacts(variant._id);
   await RouteVariant.findByIdAndDelete(id);
 }
 
 module.exports = {
   createVariant, getVariantsByCorridor, getVariantById,
-  updateVariant, deleteVariant,
+  updateVariant, deleteVariant, parseAdminVariantStatuses,
 };

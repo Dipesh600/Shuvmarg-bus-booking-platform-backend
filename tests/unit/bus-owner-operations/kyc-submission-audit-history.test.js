@@ -13,7 +13,7 @@ test("kyc-submission-audit-history unit tests", async (t) => {
   const validFiles = {
     companyRegistration: [makeFile("companyRegistration")],
     taxRegistration: [makeFile("taxRegistration")],
-    transportLicense: [makeFile("transportLicense")],
+    ownerIdentity: [makeFile("ownerIdentity")],
   };
 
   const validBody = {

@@ -56,17 +56,22 @@ test("platform registry module owns the retired legacy subsystem", () => {
 test("platform registry exports only its declared route handlers", () => {
   const registry = require("../../src/modules/admin/platform-registry");
   assert.deepEqual(Object.keys(registry).sort(), [
-    "bulkImportStops", "createBoardingLocation", "createBoardingPoint",
+    "activateVariantDraft", "bulkImportStops", "commitVariantDraft",
+    "createBoardingLocation", "createBoardingPoint",
     "createCorridor", "createStop", "createVariant",
+    "createVariantDraft",
     "deactivateBoardingLocation", "deleteCorridor", "deleteRegistryBoardingPoint",
     "deleteStop", "deleteVariant", "enableBoardingLocationOperatorAccess",
     "getAllCorridors", "getAllStops",
     "getBoardingLocation", "getBoardingPointsByStop",
-    "getNearbyBoardingLocations", "getStopsForVariant", "getVariantsByCorridor",
+    "getNearbyBoardingLocations", "getStopsForVariant", "getVariantDraft", "getVariantsByCorridor",
     "listBoardingAssignmentReviews", "listBoardingLocationOperatorAccess", "listBoardingLocations",
-    "previewBulkImportStops", "reviewBoardingAssignment", "searchStops", "setVariantStops",
+    "prepareVariantDraftStopCandidates", "previewBulkImportStops", "refreshVariantDraftRouteOptions",
+    "reviewBoardingAssignment", "searchStops", "searchVariantDraftGuidancePlaces",
+    "selectVariantDraftRouteOption", "setVariantStops",
     "updateBoardingLocation", "updateBoardingPoint", "updateCorridor",
-    "updateStop", "updateVariant",
+    "updateStop", "updateVariant", "updateVariantDraftCandidate", "updateVariantDraftDetails",
+    "useAllMatchedVariantDraftCandidates",
   ]);
 });
 

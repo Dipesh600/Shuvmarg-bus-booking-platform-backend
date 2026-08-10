@@ -96,16 +96,21 @@ stopSchema.pre("save", function (next) {
 });
 
 // Static: createWithUniqueCode
-stopSchema.statics.createWithUniqueCode = async function (stopData) {
+stopSchema.statics.createWithUniqueCode = async function (stopData, options = {}) {
+  const createOne = async (data) => {
+    if (!options.session) return this.create(data);
+    const created = await this.create([data], { session: options.session });
+    return Array.isArray(created) ? created[0] : created;
+  };
   if (stopData.code) {
-    return await this.create({ ...stopData });
+    return createOne({ ...stopData });
   }
 
   const candidates = buildCodeCandidates(stopData.name, stopData.district);
 
   for (const candidate of candidates) {
     try {
-      return await this.create({ ...stopData, code: candidate });
+      return await createOne({ ...stopData, code: candidate });
     } catch (err) {
       const isDupCode =
         err.code === 11000 &&

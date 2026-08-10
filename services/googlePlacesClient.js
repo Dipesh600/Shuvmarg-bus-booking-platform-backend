@@ -1,44 +1,23 @@
 /**
  * services/googlePlacesClient.js
  *
- * Discovers towns, villages and cities along a bus route using
- * DENSE REVERSE GEOCODING — not keyword/bus-station searches.
- *
- * How it works:
- *   1. Receive the route polyline (GeoJSON LineString, decoded from Google's
- *      encoded polyline that the admin selected on the frontend map).
- *   2. Sample every SAMPLE_INTERVAL_KM km along the polyline.
- *   3. Reverse-geocode each point → Google returns the administrative locality
- *      the point is in (city, town, village, ward name, etc).
- *   4. Track when the locality name changes between consecutive samples.
- *      Only emit a new stop when the name changes.
- *   5. Deduplicate any name that appears twice (some localities are long).
- *   6. Return an ordered list matching the bus travel direction.
- *
- * This approach is correct because:
- *   - Google knows every named settlement in Nepal.
- *   - Reverse geocoding a point on the Malangwa–Kathmandu highway that is
- *     physically inside Gamhariya returns "Gamhariya" — exactly right.
- *   - No need to search for "bus park" or "yatayat" — those are wrong targets.
- *
- * API cost: ~$1.25 per 250km route (250 geocode calls × $0.005).
+ * Produces review-only place observations along a selected Google road route.
+ * Search Along Route transit POIs are primary. Sampled reverse-geocoded
+ * localities are low-confidence gap-fillers only when no transit POI exists.
+ * Neither signal is automatically treated as a verified bus-served stop.
  *
  * Required ENV:
  *   GOOGLE_MAPS_API_KEY  — key with Geocoding API enabled
  */
 
 const axios = require("axios");
+const {
+    ZONE_MID_INTERVAL, ZONE_NEAR_INTERVAL, ZONE_NEAR_KM, sampleZoneAware,
+} = require("./googlePlacesRouteSampling.js");
+const { searchTransitPlacesAlongRoute } = require("./googlePlacesSearchAlongRoute.js");
+const { googleAdministrativeContext } = require("./googlePlaceAdministrativeContext.js");
 
 const GEOCODE_BASE = "https://maps.googleapis.com/maps/api/geocode/json";
-
-// ── Tuning ────────────────────────────────────────────────────────────────────
-
-// Zone-aware sampling intervals (km).
-// Buses pick up passengers densely near origin and destination.
-// The middle stretch is mostly highway — 2km gaps are sufficient.
-const ZONE_NEAR_KM       = 40;    // first / last N km → dense sampling
-const ZONE_NEAR_INTERVAL = 0.3;   // 300 m — catches small villages
-const ZONE_MID_INTERVAL  = 2.0;   // 2 km  — highway / main road
 
 // Pause between reverse-geocode calls (ms).
 // Geocoding API allows 50 QPS; 25ms gives safe 40 QPS.
@@ -54,70 +33,6 @@ const LOCALITY_TYPES_PRIORITY = [
     "administrative_area_level_4", // smaller unit
     "neighborhood",                // neighbourhood
 ];
-
-// ── Geometry helpers ──────────────────────────────────────────────────────────
-
-const _haversineKm = ([lng1, lat1], [lng2, lat2]) => {
-    const R = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
-/**
- * Zone-aware sampler — uses different intervals for origin-zone, middle, and
- * destination-zone so that dense village coverage is applied where buses
- * actually pick up / drop off passengers.
- *
- * Zones (based on cumulative distance from origin):
- *   [0, ZONE_NEAR_KM]                → ZONE_NEAR_INTERVAL (dense)
- *   [ZONE_NEAR_KM, total-ZONE_NEAR_KM] → ZONE_MID_INTERVAL  (sparse)
- *   [total-ZONE_NEAR_KM, total]       → ZONE_NEAR_INTERVAL (dense)
- *
- * For short routes (≤ 2×ZONE_NEAR_KM) the dense interval is used throughout.
- *
- * Returns [{ point: [lng, lat], km: <cumulative km from start> }, ...]
- */
-const _sampleZoneAware = (coords, totalRouteKm) => {
-    if (!coords || coords.length === 0) return [];
-    if (coords.length === 1)           return [{ point: coords[0], km: 0 }];
-
-    // For very short routes just use dense sampling end-to-end
-    const useZones = totalRouteKm > ZONE_NEAR_KM * 2;
-    const destZoneStart = totalRouteKm - ZONE_NEAR_KM;
-
-    const _intervalAt = (km) => {
-        if (!useZones) return ZONE_NEAR_INTERVAL;
-        if (km <= ZONE_NEAR_KM)    return ZONE_NEAR_INTERVAL; // origin zone
-        if (km >= destZoneStart)   return ZONE_NEAR_INTERVAL; // destination zone
-        return ZONE_MID_INTERVAL;                             // middle highway
-    };
-
-    const samples = [{ point: coords[0], km: 0 }];
-    let cumulativeKm = 0;
-    let lastSampleKm = 0;
-
-    for (let i = 1; i < coords.length; i++) {
-        cumulativeKm += _haversineKm(coords[i - 1], coords[i]);
-        const interval = _intervalAt(cumulativeKm);
-        if (cumulativeKm - lastSampleKm >= interval) {
-            samples.push({ point: coords[i], km: cumulativeKm });
-            lastSampleKm = cumulativeKm;
-        }
-    }
-
-    const last = coords[coords.length - 1];
-    if (samples[samples.length - 1].point !== last) {
-        samples.push({ point: last, km: cumulativeKm });
-    }
-
-    return samples;
-};
 
 // ── Reverse geocode ───────────────────────────────────────────────────────────
 
@@ -157,6 +72,9 @@ const _reverseGeocode = async (lat, lng, token) => {
                 return {
                     name: comp.long_name,
                     type,
+                    formattedAddress: result.formatted_address || null,
+                    googlePlaceId: result.place_id || null,
+                    administrativeContext: googleAdministrativeContext(components),
                 };
             }
         }
@@ -168,15 +86,17 @@ const _reverseGeocode = async (lat, lng, token) => {
 // ── Main export ───────────────────────────────────────────────────────────────
 
 /**
- * Discover all towns / villages / cities along a route polyline using
- * dense reverse geocoding.
+ * Produce locality/place suggestions along a route polyline. A human must
+ * review every suggestion before it becomes a canonical platform Stop.
  *
  * @param {Object} geometry          GeoJSON LineString
  * @param {number} totalDistanceKm
  * @param {number} totalDurationMins
  * @param {string} originName        For logging only
  * @param {string} destinationName   For logging only
- * @returns {Array} Ordered discoveredStop candidates
+ * @param {Object} options
+ * @param {number} options.maxSamples Maximum provider calls for one review.
+ * @returns {Array} Ordered locality candidates
  */
 const discoverStopsAlongRoute = async (
     geometry,
@@ -184,6 +104,7 @@ const discoverStopsAlongRoute = async (
     totalDurationMins = 0,
     originName = "",
     destinationName = "",
+    options = {},
 ) => {
     const token = process.env.GOOGLE_MAPS_API_KEY;
 
@@ -194,8 +115,18 @@ const discoverStopsAlongRoute = async (
         throw new Error("geometry must be a valid GeoJSON LineString.");
     }
 
+    // Actual transit POIs are the primary signal. Administrative locality
+    // transitions below are only gap-fillers when this search returns nothing.
+    if (options.encodedPolyline) {
+        return searchTransitPlacesAlongRoute(options.encodedPolyline);
+    }
+
     const coords  = geometry.coordinates; // [[lng, lat], ...]
-    const samples = _sampleZoneAware(coords, totalDistanceKm || 0);
+    const samples = sampleZoneAware(
+        coords,
+        totalDistanceKm || 0,
+        options.maxSamples || null,
+    );
 
     // Describe the zone config for the log
     const useZones = (totalDistanceKm || 0) > ZONE_NEAR_KM * 2;
@@ -224,7 +155,7 @@ const discoverStopsAlongRoute = async (
 
             // Only emit a new stop when the locality name changes
             if (result.name !== lastLocalityName) {
-                localities.push({ name: result.name, km, lat, lng });
+                localities.push({ ...result, km, lat, lng });
                 lastLocalityName = result.name;
             }
 
@@ -262,7 +193,9 @@ const discoverStopsAlongRoute = async (
     return unique.map((loc, i) => ({
         candidateName:         loc.name,
         candidateCoordinates:  { lat: loc.lat, lng: loc.lng },
-        googlePlaceId:         null,
+        googlePlaceId:         loc.googlePlaceId || null,
+        formattedAddress:      loc.formattedAddress || null,
+        administrativeContext: loc.administrativeContext || null,
         distanceFromOriginKm:  Math.round(loc.km * 10) / 10,
         durationFromOriginMins: totalDistanceKm > 0
             ? Math.round((loc.km / totalDistanceKm) * totalDurationMins)
