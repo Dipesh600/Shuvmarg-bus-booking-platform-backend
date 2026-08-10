@@ -5,7 +5,10 @@ const bookings = require("../../controllers/adminController/booking/bookingContr
 const couponAdminRoutes = require("../../src/modules/coupon/admin");
 const autoSeat = require("../../controllers/adminController/seat-controller/adminAutoSeatController.js");
 const authController = require("../../controllers/adminController/authController/auth-controller.js");
+const { adminEnrollmentLimiter, adminLoginLimiter } = require("../../middleware/adminAuthRateLimit.js");
 const adminMiddleware = require("../../middleware/adminMiddleware.js");
+const rootAdminMiddleware = require("../../middleware/rootAdminMiddleware.js");
+const adminAdministration = require("../../src/modules/admin/auth-security/admin-administration.controller.js");
 const dashboard = require("../../controllers/adminController/dashboardController/dashboardController.js");
 const userDashboard = require("../../controllers/adminController/dashboardController/userDashboardController.js");
 const agentConversion = require("../../src/modules/agent/admin/conversion");
@@ -48,8 +51,15 @@ const transactionCtrl      = require("../../controllers/adminController/transact
 const registryBoardingRoutes = require("./registryBoardingRoutes.js");
 const { rejectOversizedKycRequest, parseKycSubmissionUpload } = require("../../middleware/kycSubmissionUpload.js");
 // Auth Routes
-router.post("/auth/login",   authController.login);
+router.post("/auth/login", adminLoginLimiter, authController.login);
+router.post("/auth/bootstrap/mfa/begin", adminEnrollmentLimiter, authController.beginBootstrapMfa);
+router.post("/auth/bootstrap/mfa/confirm", adminEnrollmentLimiter, authController.confirmBootstrapMfa);
+router.post("/auth/invitations/mfa/begin", adminEnrollmentLimiter, adminAdministration.begin);
+router.post("/auth/invitations/mfa/confirm", adminEnrollmentLimiter, adminAdministration.confirm);
 router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);
+router.get("/administrators", adminMiddleware, rootAdminMiddleware, adminAdministration.list);
+router.post("/administrators/invitations", adminMiddleware, rootAdminMiddleware, adminAdministration.invite);
+router.patch("/administrators/:adminId/status", adminMiddleware, rootAdminMiddleware, adminAdministration.updateStatus);
 // NOTE: No /auth/refresh route.
 // Super Admin sessions are explicit by design — when a token expires, the admin
 // must re-authenticate with their credentials. Silent token refresh is a consumer
@@ -79,8 +89,6 @@ router.get("/dashboard", adminMiddleware, dashboard.getDashboardStats);
 // User Dashboard
 router.get("/userdashboard", adminMiddleware, userDashboard.getUserDashboardStats);
 
-// 2 Step Verification
-router.post("/two-factor/setup", adminMiddleware, authController.setupTwoFactor);
 // Agent 
 router.post("/getAgentDetails", adminMiddleware, agentDirectory.getAgentsById);
 router.get("/getAllAgents", adminMiddleware, agentDirectory.getAllAgents);

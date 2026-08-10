@@ -26,7 +26,11 @@ const superAdminAuthMiddleware = async (req, res, next) => {
             });
         }
 
-        const decoded = jwt.verify(token, process.env.SECRET_KEY);
+        const decoded = jwt.verify(token, process.env.SECRET_KEY, {
+            algorithms: ["HS256"],
+            issuer: "shuvmarg-admin",
+            audience: "shuvmarg-super-admin",
+        });
         
         // SECURITY: Enforce strict token purpose.
         if (decoded.purpose !== "access") {
@@ -69,6 +73,14 @@ const superAdminAuthMiddleware = async (req, res, next) => {
             });
         }
 
+        if (admin.lifecycleStatus !== "ACTIVE") {
+            return res.status(403).json({
+                success: false,
+                message: "Administrator activation is incomplete.",
+                errorCode: "ADMIN_NOT_ACTIVE",
+            });
+        }
+
         if (admin.accountLocked) {
             return res.status(403).json({
                 success: false,
@@ -86,11 +98,21 @@ const superAdminAuthMiddleware = async (req, res, next) => {
             });
         }
 
+        if (decoded.sessionVersion !== admin.sessionVersion) {
+            return res.status(403).json({
+                success: false,
+                message: "Admin session has been revoked. Please login again.",
+                errorCode: "ADMIN_SESSION_REVOKED",
+            });
+        }
+
         // Attach fresh DB admin (without password) to request
         req.adminInfo = {
             ...decoded,
             isActive: admin.isActive,
             twoFactorEnabled: admin.twoFactorEnabled,
+            isRootAdmin: admin.isRootAdmin === true,
+            sessionVersion: admin.sessionVersion,
         };
 
         next();

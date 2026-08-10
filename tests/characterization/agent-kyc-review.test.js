@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const request = require('supertest');
+const { createAdminToken } = require('../helpers/admin-token');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const axios = require('axios');
@@ -12,7 +13,6 @@ const db = require('../helpers/db');
 const app = require('../helpers/app');
 const User = require('../../models/userModel');
 const Agent = require('../../models/agentModel');
-const SuperAdmin = require('../../models/adminModel');
 const LocalNotification = require('../../models/localNotificationModel');
 
 let seq = 0;
@@ -21,13 +21,12 @@ const id = () => String(++seq).padStart(3, '0');
 
 const adminAccess = async () => {
   const n = id();
-  const admin = await SuperAdmin.create({
+  return createAdminToken({
     adminId: `SUMA-ADM-${n}`,
     email: `admin${n}@example.test`,
     password: credential(),
     role: 'SUPER_ADMIN',
   });
-  return jwt.sign({ id: admin._id, role: 'SUPER_ADMIN', purpose: 'access' }, process.env.SECRET_KEY);
 };
 
 const seedAgent = async (extra = {}) => {

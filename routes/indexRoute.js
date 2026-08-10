@@ -3,7 +3,6 @@ const router = express.Router();
 const userRoute = require("./userRoutes/userRoutes.js");
 const ticketRoute = require("./ticketRoutes/ticketRoutes.js");
 const adminRoutes = require("./adminRoutes/adminRoutes.js");
-const seedRoute = require("./seed/seedRoute.js");
 const pushRoute = require("./pushNotification/pushNotification.js");
 const referralRoutes = require("./referralRoutes/referralRoutes.js");
 const reviewRoutes = require("./reviewRoutes/reviewRoutes.js");
@@ -29,7 +28,6 @@ router.use("/api/admin", adminRoutes);
 router.use("/api/contracts", contractRoutes);
 router.use("/api/referral", referralRoutes);
 router.use("/api/reviews", reviewRoutes);
-router.use("/seed", seedRoute);
 router.use("/api/pushnoti", pushRoute);
 router.use("/api/googlemap", googleMapRoutes)
 router.use("/api/agent", agentRoute)
