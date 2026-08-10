@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { ADMIN_ID_PATTERN } = require("../src/modules/admin/auth-security/admin-identity.policy");
 
 const superAdminSchema = new mongoose.Schema(
   {
@@ -7,7 +8,7 @@ const superAdminSchema = new mongoose.Schema(
       required: true,
       unique: true,
       uppercase: true,
-      match: /^SUMA-ADM-\d{3}$/,
+      match: ADMIN_ID_PATTERN,
     },
     email: {
       type: String,
@@ -27,13 +28,25 @@ const superAdminSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: ["SUPER_ADMIN",'ADMIN','SUB_ADMIN'],
-      default: "SUPER_ADMIN",
+      required: true,
+    },
+
+    isRootAdmin: {
+      type: Boolean,
+      default: false,
+      immutable: true,
+    },
+
+    lifecycleStatus: {
+      type: String,
+      enum: ["INVITED", "MFA_PENDING", "ACTIVE", "SUSPENDED"],
+      default: "MFA_PENDING",
     },
 
     // ====== 2FA SETTINGS ======
     twoFactorEnabled: {
       type: Boolean,
-      default: true,
+      default: false,
     },
 
     twoFactorType: {
@@ -46,6 +59,19 @@ const superAdminSchema = new mongoose.Schema(
       type: String, 
       select: false,
     },
+
+    encryptedTwoFactorSecret: {
+      type: String,
+      select: false,
+    },
+
+    pendingEncryptedTwoFactorSecret: {
+      type: String,
+      select: false,
+    },
+
+    mfaConfirmedAt: Date,
+    recoveryCodeHashes: { type: [String], select: false, default: [] },
 
     phoneNumber: {
       type: String, 
@@ -73,6 +99,10 @@ const superAdminSchema = new mongoose.Schema(
       default: 0,
     },
 
+    sessionVersion: { type: Number, default: 1 },
+    failedMfaAttempts: { type: Number, default: 0 },
+    lockedUntil: Date,
+
     loginAttempts: {
       type: Number,
       default: 0,
@@ -85,12 +115,17 @@ const superAdminSchema = new mongoose.Schema(
 
     isActive: {
       type: Boolean,
-      default: true,
+      default: false,
     },
   },
   {
     timestamps: true,
   }
+);
+
+superAdminSchema.index(
+  { isRootAdmin: 1 },
+  { unique: true, partialFilterExpression: { isRootAdmin: true }, name: "one_root_admin" }
 );
 
 // ── DUAL REGISTRATION (intentional) ──────────────────────────────────────────

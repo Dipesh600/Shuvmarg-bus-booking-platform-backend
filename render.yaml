@@ -53,13 +53,7 @@ services:
       - key: USER_PASSWORD
         sync: false
 
-      - key: SUPER_ADMIN_EMAIL
-        sync: false
-
-      - key: SUPER_ADMIN_ID
-        sync: false
-
-      - key: SUPER_ADMIN_PASSWORD
+      - key: ADMIN_MFA_ENCRYPTION_KEY
         sync: false
 
       - key: AWS_REGION

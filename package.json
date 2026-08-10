@@ -4,6 +4,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
+    "preflight:admin-bootstrap": "node tools/preflight-admin-bootstrap.js",
+    "bootstrap:root-admin:renew": "node scripts/renewInitialRootEnrollment.js",
     "migrate:boarding-locations": "node tools/migrate-boarding-locations.js",
     "preflight:route-variant-code-allocation": "node tools/preflight-route-variant-code-allocation.js",
     "migrate:route-variant-code-sequences": "node tools/migrate-route-variant-code-sequences.js",
@@ -18,7 +20,7 @@
     "test:ci-filesize": "node --test tests/unit/tools/check-file-size-diff.test.js",
     "start": "node --no-deprecation index.js",
     "dev": "nodemon index.js",
-    "bootstrap:initial-super-admin": "node scripts/bootstrapInitialSuperAdmin.js",
+    "bootstrap:root-admin": "node scripts/bootstrapInitialSuperAdmin.js",
     "test:profile": "node --test tests/characterization/auth-profile-picture.test.js tests/characterization/auth-profile-update-errors.test.js tests/characterization/auth-profile-update-success.test.js tests/characterization/auth-user-detail-profile.test.js tests/unit/auth/profile-controller.test.js tests/unit/auth/profile-policy.test.js tests/unit/auth/profile-service.test.js tests/unit/auth/profile-repository.test.js",
     "test:agent-session": "node --test tests/characterization/agent-session-refresh.test.js tests/characterization/agent-session-logout.test.js tests/unit/agent/agent-session-controller.test.js tests/unit/agent/agent-session-controller-logout.test.js tests/unit/agent/agent-session-service.test.js tests/unit/agent/agent-session-repository.test.js tests/unit/agent/agent-session-errors.test.js",
     "test:agent-login": "node --test tests/characterization/agent-login-validation.test.js tests/characterization/agent-login-account-state.test.js tests/characterization/agent-login-attempts.test.js tests/characterization/agent-login-success.test.js tests/unit/agent/agent-login-controller.test.js tests/unit/agent/agent-login-service.test.js tests/unit/agent/agent-login-repository.test.js tests/unit/agent/agent-login-policy.test.js tests/unit/agent/agent-login-errors.test.js",
@@ -111,6 +113,7 @@
     "node-cron": "^4.6.0",
     "nodemailer": "^9.0.5",
     "qs": "^6.14.0",
+    "qrcode": "^1.5.4",
     "sharp": "^0.35.3",
     "speakeasy": "^2.0.0",
     "uuid": "^11.1.0",
@@ -119,7 +122,6 @@
   "devDependencies": {
     "mongodb-memory-server": "^11.2.0",
     "nodemon": "^3.1.9",
-    "qrcode": "^1.5.4",
     "supertest": "^7.2.2"
   }
 }
