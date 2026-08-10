@@ -75,6 +75,7 @@ for required_key in \
   MONGODB_URL \
   SECRET_KEY \
   VERIFICATION_TOKEN_SECRET \
+  ADMIN_MFA_ENCRYPTION_KEY \
   FRONTEND_URL; do
   if [[ -z "$(read_env_value "${required_key}")" ]]; then
     log_error "${required_key} must be set in ${ENV_FILE}."

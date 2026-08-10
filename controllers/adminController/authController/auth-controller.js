@@ -1,255 +1,74 @@
-const SuperAdmin = require("../../../models/adminModel.js");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const speakeasy = require("speakeasy");
+"use strict";
 
+const SuperAdmin = require("../../../models/adminModel");
+const { loginAdmin } = require("../../../src/modules/admin/auth-security/admin-login.service");
+const {
+  beginRootEnrollment, confirmRootEnrollment,
+} = require("../../../src/modules/admin/auth-security/admin-bootstrap-enrollment.service");
 
-const setupTwoFactor = async (req, res) => {
-    try {
-        const { adminId, email, password } = req.body;
+const context = (req) => ({
+  ipAddress: req.ip,
+  userAgent: req.get("user-agent") || null,
+});
 
-        if ((!adminId && !email) || !password) {
-            return res.status(400).json({
-                success: false,
-                message: !password
-                    ? "Password is required!"
-                    : "Either adminId or email is required!",
-            });
-        }
+function sendError(res, error) {
+  return res.status(error.statusCode || 500).json({
+    success: false,
+    message: error.statusCode ? error.message : "Internal Server Error",
+    errorCode: error.code || "ADMIN_AUTH_FAILED",
+  });
+}
 
-        const query = {};
-        if (adminId) query.adminId = adminId;
-        if (email) query.email = email.toLowerCase();
-
-        const admin = await SuperAdmin.findOne(query).select("+password +twoFactorSecret");
-
-        if (!admin) {
-            return res.status(404).json({
-                success: false,
-                message: "Admin not found!",
-            });
-        }
-
-        const isMatch = await bcrypt.compare(password, admin.password);
-
-        if (!isMatch) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid credentials!",
-            });
-        }
-
-        const secret = speakeasy.generateSecret({
-            name: "BusBooking Admin",
-            length: 20,
-        });
-
-        admin.twoFactorSecret = secret.base32;
-        admin.twoFactorEnabled = true;
-        admin.twoFactorType = "GOOGLE_AUTH";
-        await admin.save();
-
-        return res.status(200).json({
-            success: true,
-            message: "Two-factor authentication enabled. Scan this in Google Authenticator.",
-            otpauthUrl: secret.otpauth_url,
-            secret: secret.base32,
-        });
-    } catch (error) {
-        console.error("Admin 2FA setup error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error",
-        });
+async function login(req, res) {
+  try {
+    if ((!req.body.adminId && !req.body.email) || !req.body.password) {
+      return res.status(400).json({ success: false, message: "Credentials are required" });
     }
-};
+    const result = await loginAdmin(req.body, context(req));
+    return res.status(200).json({ success: true, message: "Admin login successful", ...result });
+  } catch (error) {
+    return sendError(res, error);
+  }
+}
 
+async function beginBootstrapMfa(req, res) {
+  try {
+    const result = await beginRootEnrollment({
+      token: req.body.token, password: req.body.password, requestContext: context(req),
+    });
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    return sendError(res, error);
+  }
+}
 
-const login = async (req, res) => {
-    try {
-        const { adminId, email, password, otp } = req.body;
+async function confirmBootstrapMfa(req, res) {
+  try {
+    const result = await confirmRootEnrollment({
+      token: req.body.token, otp: req.body.otp, requestContext: context(req),
+    });
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json({
+      success: true,
+      message: "Root administrator activated. Store the recovery codes securely.",
+      data: result,
+    });
+  } catch (error) {
+    return sendError(res, error);
+  }
+}
 
+async function getAdminProfile(req, res) {
+  try {
+    const admin = await SuperAdmin.findById(req.adminInfo.id).select(
+      "-password -twoFactorSecret -encryptedTwoFactorSecret -recoveryCodeHashes"
+    );
+    if (!admin) return res.status(404).json({ success: false, message: "Admin not found" });
+    return res.status(200).json({ success: true, data: admin });
+  } catch (error) {
+    return sendError(res, error);
+  }
+}
 
-        if ((!adminId && !email) || !password) {
-            return res.status(400).json({
-                success: false,
-                message: !password
-                    ? "Password is required!"
-                    : "Either adminId or email is required!",
-            });
-        }
-
-
-        const query = {};
-        if (adminId) query.adminId = adminId;
-        if (email) query.email = email.toLowerCase();
-
-
-        const admin = await SuperAdmin.findOne(query).select("+password +twoFactorSecret");
-
-
-        if (!admin) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid credentials!",
-            });
-        }
-
-
-        if (admin.accountLocked) {
-            return res.status(403).json({
-                success: false,
-                message: "Account is locked. Please contact support.",
-            });
-        }
-
-
-        if (admin.isActive === false) {
-            return res.status(403).json({
-                success: false,
-                message: "Account is inactive.",
-            });
-        }
-
-
-        const isMatch = await bcrypt.compare(password, admin.password);
-
-
-        if (!isMatch) {
-            admin.loginAttempts = (admin.loginAttempts || 0) + 1;
-            if (admin.loginAttempts >= 5) {
-                admin.accountLocked = true;
-            }
-            await admin.save();
-
-
-            return res.status(401).json({
-                success: false,
-                message: "Invalid credentials!",
-            });
-        }
-        // ── 2FA Enforcement — always required, no bypass ──────────────────────
-        if (!admin.twoFactorEnabled) {
-            return res.status(403).json({
-                success: false,
-                message: "Two-factor authentication must be enabled before logging in. Please contact your system administrator.",
-            });
-        }
-
-        if (!admin.twoFactorSecret) {
-            return res.status(403).json({
-                success: false,
-                message: "Google Authenticator is not set up for this account. Please run the 2FA setup before logging in.",
-            });
-        }
-
-        if (!otp) {
-            return res.status(400).json({
-                success: false,
-                message: "Google Authenticator OTP is required.",
-            });
-        }
-
-        const isOtpValid = speakeasy.totp.verify({
-            secret: admin.twoFactorSecret,
-            encoding: "base32",
-            token: otp,
-            window: 1,  // allow 30s drift (±1 window = 90s total)
-        });
-
-        if (!isOtpValid) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid or expired OTP. Please check Google Authenticator and try again.",
-            });
-        }
-
-        // NEW-FINDING-04: Replay protection — reject a TOTP code that was already used within this 90s window.
-        // TOTP window counter = floor(epoch_seconds / 30). We record the last accepted window so the same
-        // 6-digit code cannot be submitted twice before it expires.
-        const currentWindow = Math.floor(Date.now() / 1000 / 30);
-        if (admin.lastOtpWindowUsed && admin.lastOtpWindowUsed >= currentWindow) {
-            return res.status(401).json({
-                success: false,
-                message: "OTP already used. Please wait for the next code.",
-            });
-        }
-
-        admin.loginAttempts = 0;
-        admin.accountLocked = false;
-        admin.lastLoginAt = new Date();
-        admin.lastOtpWindowUsed = currentWindow;  // Record window to block replay
-        await admin.save();
-
-
-        const adminWithoutPassword = admin.toObject();
-        delete adminWithoutPassword.password;
-        delete adminWithoutPassword.twoFactorSecret;
-
-
-        const accessToken = jwt.sign(
-            {
-                id: admin._id,
-                adminId: admin.adminId,
-                email: admin.email,
-                role: admin.role,
-                purpose: "access",
-            },
-            process.env.SECRET_KEY,
-            { expiresIn: "30m" }  // Short-lived: admin sessions expire in 30 minutes
-        );
-
-
-        return res.status(200).json({
-            success: true,
-            message: "Admin login successful",
-            admin: adminWithoutPassword,
-            accessToken,
-        });
-    } catch (error) {
-        console.error("Admin login error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error",
-        });
-    }
-};
-
-const getAdminProfile = async (req, res) => {
-    try {
-        const adminInfo = req.adminInfo;
-
-        if (!adminInfo || !adminInfo.id) {
-            return res.status(401).json({
-                success: false,
-                message: "Unauthorized: admin info not found in request",
-            });
-        }
-
-        const admin = await SuperAdmin.findById(adminInfo.id).select(
-            "-password -twoFactorSecret"
-        );
-
-        if (!admin) {
-            return res.status(404).json({
-                success: false,
-                message: "Admin not found",
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "Admin profile fetched successfully",
-            data: admin,
-        });
-    } catch (error) {
-        console.error("getAdminProfile error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error",
-        });
-    }
-};
-
-
-module.exports = { login, setupTwoFactor, getAdminProfile };
+module.exports = { beginBootstrapMfa, confirmBootstrapMfa, getAdminProfile, login };
