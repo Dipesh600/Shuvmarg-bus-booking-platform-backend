@@ -1,0 +1,51 @@
+"use strict";
+
+const { decodePolyline } = require("../route-geometry/polyline.js");
+const {
+  getSelectedProviderRouteOption, replaceMapReviewCandidates,
+} = require("../variant-map-review/route-variant-map-review.service.js");
+const { buildRouteStopCandidates } = require("../variant-map-review/route-stop-candidate.service.js");
+const { getCorridorById } = require("../corridor-registry.service.js");
+const {
+  resolveDirectionalEndpoints,
+} = require("../variant-terminal-scope.policy.js");
+const { getVariantDraft, loadDraftVariant, loadMapReview } = require("./context.service.js");
+const { routeVariantError } = require("../route-variant-errors.js");
+
+async function resolveCandidateAnchors(variant) {
+  if (variant.originTerminalStopId && variant.destinationTerminalStopId) {
+    return {
+      originTerminal: variant.originTerminalStopId,
+      destinationTerminal: variant.destinationTerminalStopId,
+      originAnchor: variant.originTerminalStopId,
+      destinationAnchor: variant.destinationTerminalStopId,
+    };
+  }
+  const corridor = await getCorridorById(variant.corridorId);
+  const { originEndpointId, destinationEndpointId } = resolveDirectionalEndpoints(
+    corridor, variant.direction
+  );
+  return {
+    originTerminal: null,
+    destinationTerminal: null,
+    originAnchor: originEndpointId,
+    destinationAnchor: destinationEndpointId,
+  };
+}
+
+async function prepareVariantDraftStopCandidates(variantId) {
+  const variant = await loadDraftVariant(variantId);
+  const review = await loadMapReview(variant._id, true);
+  if (!review) throw routeVariantError("MAP_REVIEW_NOT_READY", "Load and select a road-route suggestion first.", 409);
+  const selected = await getSelectedProviderRouteOption(review._id);
+  const anchors = await resolveCandidateAnchors(variant);
+  const result = await buildRouteStopCandidates({
+    ...anchors,
+    selectedRouteOption: selected,
+    polyline: decodePolyline(selected.encodedPolyline),
+  });
+  await replaceMapReviewCandidates(review._id, result.candidates);
+  return getVariantDraft(variant._id, { includeRouteGeometry: true, warnings: result.warnings });
+}
+
+module.exports = { prepareVariantDraftStopCandidates };

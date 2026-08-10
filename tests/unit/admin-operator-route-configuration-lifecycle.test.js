@@ -4,6 +4,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Schedule = require("../../models/scheduleModel.js");
 const Config = require("../../models/operatorRouteConfigModel.js");
+const Variant = require("../../models/routeVariantModel.js");
+const RouteStop = require("../../models/routeStopModel.js");
 const service = require(
   "../../src/modules/admin/operator-route-configuration/config-lifecycle.service.js"
 );
@@ -70,12 +72,37 @@ test("inactive configuration becomes active without a schedule query", async (t)
   let queried = false;
   let saved = false;
   const config = {
-    status: "INACTIVE", async save() { saved = true; },
+    status: "INACTIVE", variantId: "v1", async save() { saved = true; },
   };
   patch(t, Config, "findById", async () => config);
   patch(t, Schedule, "countDocuments", async () => { queried = true; });
+  patch(t, Variant, "findById", () => ({
+    select() { return this; },
+    lean: async () => ({
+      _id: "v1", direction: "FORWARD", status: "ACTIVE",
+      originTerminalStopId: "s1", destinationTerminalStopId: "s2",
+    }),
+  }));
+  patch(t, RouteStop, "countDocuments", async () => 2);
   await service.toggleConfigStatus("c1");
   assert.equal(config.status, "ACTIVE");
   assert.equal(saved, true);
   assert.equal(queried, false);
+});
+
+test("inactive configuration cannot reactivate on an inactive variant", async (t) => {
+  const config = { status: "INACTIVE", variantId: "v1" };
+  patch(t, Config, "findById", async () => config);
+  patch(t, Variant, "findById", () => ({
+    select() { return this; },
+    lean: async () => ({
+      _id: "v1", direction: "FORWARD", status: "INACTIVE",
+      originTerminalStopId: "s1", destinationTerminalStopId: "s2",
+    }),
+  }));
+  await assert.rejects(
+    service.toggleConfigStatus("c1"),
+    (error) => error.code === "ROUTE_VARIANT_NOT_ACTIVE"
+  );
+  assert.equal(config.status, "INACTIVE");
 });

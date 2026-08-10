@@ -14,6 +14,7 @@ async function processStopCandidates(originIds, destIds, repository) {
 
   const { fwdVariants, revVariants } = await repository.findVariants(fwdCorridorIds, revCorridorIds);
   variantIds = [...fwdVariants, ...revVariants].map(v => v._id);
+  const activeVariantIds = new Set(variantIds.map((variantId) => variantId.toString()));
 
   const { originRouteStops, destRouteStops } = await repository.findRouteStops(originIds, destIds);
 
@@ -29,6 +30,9 @@ async function processStopCandidates(originIds, destIds, repository) {
 
   for (const os of originRouteStops) {
     const vid = os.variantId.toString();
+    // RouteStop rows can exist while a Variant is still a draft or has been
+    // deactivated. Passenger matching must never resurrect those variants.
+    if (!activeVariantIds.has(vid)) continue;
     const dst = destByVariant[vid];
     if (!dst || dst.sequence <= os.sequence) continue;
 
@@ -47,7 +51,6 @@ async function processStopCandidates(originIds, destIds, repository) {
       originMins: os.estimatedMinutesFromOrigin || 0,
       destMins: dst.estimatedMinutesFromOrigin || 0,
     };
-    if (variantIds.length === 0) variantIds.push(os.variantId);
   }
 
   variantIds = variantIds.filter(vid => !rejectedVariants.has(vid.toString()));

@@ -6,6 +6,9 @@ const OperatorConfig = require(
 const RouteVariant = require("../../../../models/routeVariantModel.js");
 const RouteStop = require("../../../../models/routeStopModel.js");
 const { recomputeTimingArray } = require("./timing.policy.js");
+const {
+  assertVariantReadyForOperatorConfig,
+} = require("./variant-readiness.policy.js");
 
 function deriveReturn(data) {
   const {
@@ -63,16 +66,10 @@ async function upsertOperatorConfig(brandId, data) {
   if (!patternName || patternName.trim() === "") {
     throw new Error("patternName is required.");
   }
-  const variant = await RouteVariant.findById(variantId)
-    .select("direction returnVariantId").lean();
-  if (!variant) throw new Error("Route variant not found.");
-  if (variant.direction === "RETURN") {
-    throw new Error(
-      "Cannot create a route config for a RETURN variant directly. " +
-      "Configure the forward (A→B) variant — the return direction is stored " +
-      "inline on the same config."
-    );
-  }
+  const { variant } = await assertVariantReadyForOperatorConfig(variantId, {
+    RouteVariantModel: RouteVariant,
+    RouteStopModel: RouteStop,
+  });
   await validateVariantStops(variantId, activeStops);
   const returnConfig = deriveReturn(data);
   const count = await OperatorConfig.countDocuments({ brandId, variantId });
