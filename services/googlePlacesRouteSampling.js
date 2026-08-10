@@ -38,9 +38,31 @@ function sampleZoneAware(coords, totalRouteKm, maxSamples = null) {
   if (samples.at(-1).point !== last) samples.push({ point: last, km: cumulativeKm });
   if (!Number.isSafeInteger(maxSamples) || maxSamples <= 0 || samples.length <= maxSamples) return samples;
   if (maxSamples === 1) return [samples[0]];
-  return Array.from({ length: maxSamples }, (_, index) => (
-    samples[Math.round(index * (samples.length - 1) / (maxSamples - 1))]
-  )).filter((sample, index, values) => index === 0 || sample !== values[index - 1]);
+
+  // A uniform cap erased the dense endpoint coverage promised above: on a
+  // 200 km route, 48 uniformly retained samples are roughly four kilometres
+  // apart everywhere. Reserve most of the provider-call budget for the first
+  // and last 40 km, where passenger pickup/drop markets are most important.
+  const evenlySelect = (values, count) => {
+    if (values.length <= count) return values;
+    if (count <= 1) return [values[0]];
+    return Array.from({ length: count }, (_, index) => (
+      values[Math.round(index * (values.length - 1) / (count - 1))]
+    ));
+  };
+  if (!useZones) return evenlySelect(samples, maxSamples);
+
+  const origin = samples.filter((sample) => sample.km <= ZONE_NEAR_KM);
+  const destination = samples.filter((sample) => sample.km >= destinationZoneStart);
+  const middle = samples.filter((sample) => sample.km > ZONE_NEAR_KM && sample.km < destinationZoneStart);
+  const originBudget = Math.max(1, Math.floor(maxSamples * 0.375));
+  const destinationBudget = Math.max(1, Math.floor(maxSamples * 0.375));
+  const middleBudget = Math.max(0, maxSamples - originBudget - destinationBudget);
+  return [
+    ...evenlySelect(origin, originBudget),
+    ...evenlySelect(middle, middleBudget),
+    ...evenlySelect(destination, destinationBudget),
+  ].filter((sample, index, values) => index === 0 || sample !== values[index - 1]);
 }
 
 module.exports = {
