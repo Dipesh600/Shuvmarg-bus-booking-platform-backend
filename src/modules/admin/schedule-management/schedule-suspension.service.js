@@ -5,6 +5,9 @@ const Fleet = require("../../../../models/fleetModel.js");
 const {
   generateWindow,
 } = require("./schedule-activation.service.js");
+const {
+  assertScheduleRouteChainReady,
+} = require("./schedule-route-chain.policy.js");
 const logger = require("../../../../utils/logger.js");
 
 const setSuspended = async (schedule, adminId, reason, until) => {
@@ -75,10 +78,14 @@ const resumeSchedule = async (scheduleId, adminId) => {
       `Cannot resume a schedule with status "${schedule.status}". Only SUSPENDED schedules can be resumed.`
     );
   }
+  await assertScheduleRouteChainReady(schedule);
   await resumeDocument(schedule, adminId);
   if (schedule.returnScheduleId) {
     const linked = await Schedule.findById(schedule.returnScheduleId);
-    if (linked?.status === "SUSPENDED") await resumeDocument(linked, adminId);
+    if (linked?.status === "SUSPENDED") {
+      await assertScheduleRouteChainReady(linked);
+      await resumeDocument(linked, adminId);
+    }
   }
   await Fleet.findByIdAndUpdate(schedule.busId, { setupComplete: true });
   try {

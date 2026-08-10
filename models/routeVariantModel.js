@@ -32,8 +32,11 @@ const routeVariantSchema = new mongoose.Schema(
         },
         name: {
             type: String,
-            required: true,
             trim: true,
+            default: null,
+            required: function () {
+                return this.status !== "DRAFT";
+            },
             // e.g., "Via BP Highway", "Via Hetauda - Mahendra Highway"
         },
         type: {
@@ -61,6 +64,24 @@ const routeVariantSchema = new mongoose.Schema(
             type: Number,
             default: null,
         },
+        // Physical terminals are persistent platform-owned selections. They can
+        // be the corridor endpoint itself or a verified route-stop descendant.
+        // Google route and Places data intentionally does not live on this model.
+        originTerminalStopId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Stop",
+            default: null,
+        },
+        destinationTerminalStopId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Stop",
+            default: null,
+        },
+        definitionSource: {
+            type: String,
+            enum: ["ADMIN", "GOOGLE_ROUTE_REVIEW"],
+            default: "ADMIN",
+        },
         status: {
             type: String,
             enum: ["DRAFT", "ACTIVE", "INACTIVE", "ARCHIVED"],
@@ -70,11 +91,17 @@ const routeVariantSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Admin",
         },
+        updatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Admin",
+            default: null,
+        },
     },
     { timestamps: true }
 );
 
 routeVariantSchema.index({ corridorId: 1, status: 1 });
+routeVariantSchema.index({ corridorId: 1, direction: 1, status: 1 });
 routeVariantSchema.index({ direction: 1 });
 
 module.exports = mongoose.model("RouteVariant", routeVariantSchema);

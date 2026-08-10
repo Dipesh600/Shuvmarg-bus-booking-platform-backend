@@ -69,12 +69,28 @@ const routeCorridorSchema = new mongoose.Schema(
             type: String,
             trim: true,
         },
+        // Monotonic per-corridor counter used only to allocate collision-safe
+        // variant codes. Gaps are harmless and preferable to count-based races.
+        variantSequence: {
+            type: Number,
+            default: 0,
+            min: 0,
+            select: false,
+        },
     },
     { timestamps: true }
 );
 
 routeCorridorSchema.pre("validate", function (next) {
     try {
+        // Keep legacy DISCOVERY documents readable, but do not let any new
+        // write path recreate the retired Route Discovery workflow.
+        if (this.isNew && this.source === "DISCOVERY") {
+            return next(new mongoose.Error.ValidatorError({
+                path: "source",
+                message: "DISCOVERY is retired and cannot be used for new corridors.",
+            }));
+        }
         this._endpointPairKey = buildCorridorPairKey(
             this.originId, this.destinationId
         );

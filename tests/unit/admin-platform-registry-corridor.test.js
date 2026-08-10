@@ -16,6 +16,11 @@ const {
 const {
   mapCorridor,
 } = require("../../src/modules/admin/platform-registry/corridor/corridor.mapper.js");
+const {
+  buildBackfillWrites,
+} = require(
+  "../../src/modules/admin/platform-registry/corridor-registry-migration.service.js"
+);
 
 const id = () => new mongoose.Types.ObjectId();
 const stop = (_id, overrides = {}) => ({
@@ -59,6 +64,18 @@ test("migration rejects an unusable corridor endpoint", () => {
   assert.match(plan.invalidRecords[0].problems[0], /not active, verified/);
 });
 
+test("corridor backfill emits a valid MongoDB bulk update shape", () => {
+  const corridorId = id();
+  assert.deepEqual(buildBackfillWrites([{
+    corridorId, changes: { isSymmetric: true },
+  }]), [{
+    updateOne: {
+      filter: { _id: corridorId },
+      update: { $set: { isSymmetric: true } },
+    },
+  }]);
+});
+
 test("corridor mapper exposes province and compatibility endpoint fields", () => {
   const originId = id(); const destinationId = id();
   const result = mapCorridor({
@@ -71,17 +88,11 @@ test("corridor mapper exposes province and compatibility endpoint fields", () =>
   assert.deepEqual(result.originId, result.origin);
 });
 
-test("route requests and discovery cannot create corridors directly", () => {
+test("route requests cannot bypass the corridor registry", () => {
   const root = path.resolve(__dirname, "../..");
   const routeRequest = fs.readFileSync(path.join(
     root, "controllers/adminController/routeRequestController.js"
   ), "utf8");
-  const discovery = fs.readFileSync(path.join(
-    root,
-    "src/modules/admin/route-discovery/route-publication-records.service.js"
-  ), "utf8");
   assert.doesNotMatch(routeRequest, /RouteCorridor\.create|Stop\.create/);
-  assert.doesNotMatch(discovery, /RouteCorridor\.create/);
   assert.match(routeRequest, /corridorRegistry\.findOrCreateCorridor/);
-  assert.match(discovery, /findOrCreateRegistryCorridor/);
 });

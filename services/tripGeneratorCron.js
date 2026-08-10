@@ -23,6 +23,9 @@ const Seat         = require("../models/seatsModel.js");
 const SeatTemplate = require("../models/seatTemplateModel.js");
 const Bus          = require("../models/fleetModel.js");
 const logger       = require("../utils/logger.js");
+const {
+    assertScheduleRouteChainReady,
+} = require("../src/modules/admin/schedule-management/schedule-route-chain.policy.js");
 
 // ─── HELPER: Initialize seat document for a newly generated trip ──────────────
 
@@ -151,13 +154,22 @@ const setupTripGeneratorCron = () => {
             });
             if (toAutoResume.length > 0) {
                 for (const s of toAutoResume) {
-                    s.status      = "ACTIVE";
-                    s.suspendUntil = null;
-                    await s.save();
-                    logger.info("TripCRON: auto-resumed schedule (suspendUntil passed)", {
-                        scheduleId: s._id,
-                        direction:  s.operationalModel,
-                    });
+                    try {
+                        await assertScheduleRouteChainReady(s);
+                        s.status      = "ACTIVE";
+                        s.suspendUntil = null;
+                        await s.save();
+                        logger.info("TripCRON: auto-resumed schedule (suspendUntil passed)", {
+                            scheduleId: s._id,
+                            direction:  s.operationalModel,
+                        });
+                    } catch (error) {
+                        logger.error("TripCRON: auto-resume blocked by invalid route chain", {
+                            scheduleId: s._id,
+                            error: error.message,
+                            code: error.code,
+                        });
+                    }
                 }
             }
 
@@ -270,6 +282,7 @@ const setupTripGeneratorCron = () => {
 // Used by both the CRON and the burst generator (on activation).
 
 const createTripFromSchedule = async (schedule, tripDateStart, dateStr) => {
+    await assertScheduleRouteChainReady(schedule);
     const newTripId = `TRIP-${dateStr}-${schedule._id.toString().slice(-6)}-${Math.floor(Math.random() * 100)}`;
 
     const [hours, minutes] = schedule.departureTime.split(":").map(Number);
@@ -283,42 +296,31 @@ const createTripFromSchedule = async (schedule, tripDateStart, dateStr) => {
     let fromStopName = null;
     let toStopName = null;
 
-    if (schedule.variantId) {
-        try {
-            const RouteVariant = require("../models/routeVariantModel");
-            const RouteCorridor = require("../models/routeCorridorModel");
-            const Stop = require("../models/stopModel");
-            const variant = await RouteVariant.findById(schedule.variantId)
-                .populate({
-                    path: "corridorId",
-                    select: "originId destinationId",
-                    populate: [
-                        { path: "originId", select: "name" },
-                        { path: "destinationId", select: "name" },
-                    ],
-                })
-                .select("direction corridorId")
-                .lean();
+    const RouteVariant = require("../models/routeVariantModel");
+    const variant = await RouteVariant.findById(schedule.variantId)
+        .populate({
+            path: "corridorId",
+            select: "originId destinationId",
+            populate: [
+                { path: "originId", select: "name" },
+                { path: "destinationId", select: "name" },
+            ],
+        })
+        .select("direction corridorId")
+        .lean();
 
-            if (variant?.corridorId) {
-                const originName = variant.corridorId.originId?.name || "?";
-                const destName = variant.corridorId.destinationId?.name || "?";
+    if (variant?.corridorId) {
+        const originName = variant.corridorId.originId?.name || "?";
+        const destName = variant.corridorId.destinationId?.name || "?";
 
-                if (variant.direction === "RETURN") {
-                    fromStopName = destName;
-                    toStopName = originName;
-                } else {
-                    fromStopName = originName;
-                    toStopName = destName;
-                }
-                directionLabel = `${fromStopName} → ${toStopName}`;
-            }
-        } catch (err) {
-            logger.warn("TripCRON: failed to compute directionLabel, skipping", {
-                scheduleId: schedule._id,
-                error: err.message,
-            });
+        if (variant.direction === "RETURN") {
+            fromStopName = destName;
+            toStopName = originName;
+        } else {
+            fromStopName = originName;
+            toStopName = destName;
         }
+        directionLabel = `${fromStopName} → ${toStopName}`;
     }
 
     const newTrip = await Trip.create({
@@ -460,36 +462,7 @@ const generateTripsForDate = async (targetDate) => {
                 continue;
             }
 
-            const newTripId = `TRIP-${dateStr}-${schedule._id.toString().slice(-6)}-${Math.floor(Math.random() * 100)}`;
-
-            const [hours, minutes] = schedule.departureTime.split(":").map(Number);
-            const departureDate = new Date(start);
-            departureDate.setUTCHours(hours, minutes, 0, 0);
-            const cutoffHours = schedule.bookingCutoffHours ?? 2;
-            const bookingClosesAt = new Date(departureDate.getTime() - (cutoffHours * 60 * 60 * 1000));
-
-            const newTrip = await Trip.create({
-                tripId:          newTripId,
-                scheduleId:      schedule._id,
-                brandId:         schedule.brandId,
-                ownerId:         schedule.ownerId,
-                busId:           schedule.busId,
-                variantId:       schedule.variantId || null,
-                driverId:        schedule.driverId  || null,
-                seatTemplateId:  schedule.seatTemplateId,
-                tripDate:        start,
-                departureTime:   schedule.departureTime,
-                arrivalTime:     schedule.arrivalTime,
-                shift:           schedule.shift,
-                tripFare:        schedule.fareOverride || null,
-                isAutoGenerated: true,
-                status:          "scheduled",
-                recurrence:      "none",
-                isActive:        true,
-                bookingClosesAt: bookingClosesAt,
-            });
-
-            await initializeSeats(newTrip._id, schedule.busId, schedule.seatTemplateId);
+            await createTripFromSchedule(schedule, start, dateStr);
             generated++;
 
         } catch (e) {

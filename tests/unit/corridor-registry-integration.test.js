@@ -89,9 +89,38 @@ test("corridor registry enforces neutral identity, readiness and migration", asy
     assert.equal((await corridorService.getAllCorridors({
       status: "ACTIVE", search: "Kathmandu",
     })).length, 1);
+    await RouteStop.deleteMany({ variantId: variant._id });
+    await Variant.findByIdAndDelete(variant._id);
     await assert.rejects(
       corridorService.deleteCorridor(created.id),
       (error) => error.code === "CORRIDOR_DELETE_REQUIRES_PENDING"
+    );
+    await corridorService.updateCorridor(created.id, { status: "PENDING" });
+    await corridorService.deleteCorridor(created.id);
+    assert.equal(await Corridor.countDocuments({ _id: created.id }), 0);
+
+    const sourcedDestination = await createStop("BRJ", "Birgunj");
+    const sourcedCorridor = await corridorService.createCorridor({
+      originStopId: origin._id,
+      destinationStopId: sourcedDestination._id,
+      source: "ROUTE_REQUEST",
+      sourceReferenceId: String(new mongoose.Types.ObjectId()),
+    });
+    await assert.rejects(
+      corridorService.deleteCorridor(sourcedCorridor.id),
+      (error) => error.code === "CORRIDOR_HAS_SOURCE_HISTORY"
+    );
+
+    const corridorWithDraft = await corridorService.createCorridor({
+      originStopId: origin._id, destinationStopId: destination._id,
+    });
+    await Variant.create({
+      code: "KTM-MLW-V02", corridorId: corridorWithDraft.id,
+      name: "Unfinished draft", direction: "FORWARD", status: "DRAFT",
+    });
+    await assert.rejects(
+      corridorService.deleteCorridor(corridorWithDraft.id),
+      (error) => error.code === "CORRIDOR_HAS_DRAFT_VARIANTS"
     );
 
     const first = await runCorridorRegistryMigration();
