@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "preflight:admin-bootstrap": "node tools/preflight-admin-bootstrap.js",
+    "preflight:admin-bootstrap": "node scripts/preflightAdminBootstrap.js",
     "bootstrap:root-admin:renew": "node scripts/renewInitialRootEnrollment.js",
     "migrate:boarding-locations": "node tools/migrate-boarding-locations.js",
     "preflight:route-variant-code-allocation": "node tools/preflight-route-variant-code-allocation.js",

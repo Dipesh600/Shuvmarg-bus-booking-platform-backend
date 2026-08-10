@@ -9,8 +9,10 @@ const BootstrapState = require("../models/adminBootstrapStateModel");
 async function inspectAdminBootstrap() {
   const [adminCount, roots, state, incomplete] = await Promise.all([
     SuperAdmin.countDocuments({}),
-    SuperAdmin.find({ isRootAdmin: true }).select("adminId lifecycleStatus isActive twoFactorEnabled").lean(),
-    BootstrapState.findOne({ key: "INITIAL_ROOT_ADMIN" }).select("status environment completedAt").lean(),
+    SuperAdmin.find({ isRootAdmin: true })
+      .select("adminId lifecycleStatus isActive twoFactorEnabled").lean(),
+    BootstrapState.findOne({ key: "INITIAL_ROOT_ADMIN" })
+      .select("status environment completedAt").lean(),
     SuperAdmin.countDocuments({ $or: [
       { role: { $exists: false } }, { lifecycleStatus: { $exists: false } },
       { sessionVersion: { $exists: false } },
@@ -19,8 +21,10 @@ async function inspectAdminBootstrap() {
   const safeForInitialBootstrap = adminCount === 0 && !state && roots.length === 0;
   const validSecuredDatabase = adminCount > 0 && roots.length === 1 &&
     state?.status === "COMPLETED" && incomplete === 0;
-  return { adminCount, roots, bootstrapState: state, incomplete, safeForInitialBootstrap,
-    validSecuredDatabase };
+  return {
+    adminCount, roots, bootstrapState: state, incomplete,
+    safeForInitialBootstrap, validSecuredDatabase,
+  };
 }
 
 async function run() {
