@@ -1,150 +1,106 @@
-'use strict';
+"use strict";
 
-const { test, describe, beforeEach, afterEach } = require('node:test');
-const assert = require('node:assert/strict');
-const mongoose = require('mongoose');
-const SuperAdmin = require('../../../models/adminModel.js');
-const { bootstrapInitialSuperAdmin } = require('../../../scripts/bootstrapInitialSuperAdmin.js');
+const { test, describe, beforeEach, afterEach } = require("node:test");
+const assert = require("node:assert/strict");
+const mongoose = require("mongoose");
+const SuperAdmin = require("../../../models/adminModel");
+const BootstrapState = require("../../../models/adminBootstrapStateModel");
+const {
+  createRootAtomically, requiredConfig,
+} = require("../../../scripts/bootstrapInitialSuperAdmin");
 
-describe('Initial Super-Admin Bootstrap Unit Tests', () => {
-  let envBackup;
-  let exitCodeBackup;
-  let connectCalled;
-  let disconnectCalled;
-  let countDocumentsResult;
-  let createCalledWith;
-
-  const originalConnect = mongoose.connect;
-  const originalClose = mongoose.connection.close;
-  const originalCountDocuments = SuperAdmin.countDocuments;
-  const originalCreate = SuperAdmin.create;
+describe("one-time root bootstrap", () => {
+  const originals = {
+    startSession: mongoose.startSession,
+    adminExists: SuperAdmin.exists,
+    adminCreate: SuperAdmin.create,
+    stateExists: BootstrapState.exists,
+    stateCreate: BootstrapState.create,
+  };
+  let env;
 
   beforeEach(() => {
-    envBackup = { ...process.env };
-    exitCodeBackup = process.exitCode;
-    process.exitCode = undefined;
-
-    connectCalled = false;
-    disconnectCalled = false;
-    countDocumentsResult = 0;
-    createCalledWith = null;
-
-    // Reset required env vars for tests
-    delete process.env.SUPER_ADMIN_EMAIL;
-    delete process.env.SUPER_ADMIN_ID;
-    delete process.env.SUPER_ADMIN_PASSWORD;
-    delete process.env.MONGODB_URL;
+    env = { ...process.env };
+    process.env.SUPER_ADMIN_EMAIL = "root@example.com";
+    process.env.SUPER_ADMIN_ID = "SM-ADM-DIPESH";
+    process.env.SUPER_ADMIN_PASSWORD = "StrongPassword#2026!";
+    process.env.ADMIN_BOOTSTRAP_ENVIRONMENT = "staging";
+    process.env.ADMIN_BOOTSTRAP_CONFIRM = "CREATE_INITIAL_ROOT:staging";
   });
 
   afterEach(() => {
-    process.env = envBackup;
-    process.exitCode = exitCodeBackup;
-
-    // Restore original methods
-    mongoose.connect = originalConnect;
-    mongoose.connection.close = originalClose;
-    SuperAdmin.countDocuments = originalCountDocuments;
-    SuperAdmin.create = originalCreate;
+    process.env = env;
+    mongoose.startSession = originals.startSession;
+    SuperAdmin.exists = originals.adminExists;
+    SuperAdmin.create = originals.adminCreate;
+    BootstrapState.exists = originals.stateExists;
+    BootstrapState.create = originals.stateCreate;
   });
 
-  test('Missing environment variables: DB and creation are not called, exitCode set to 1', async () => {
-    process.env.SUPER_ADMIN_EMAIL = 'admin@example.com';
-    // SUPER_ADMIN_ID and SUPER_ADMIN_PASSWORD missing
-
-    mongoose.connect = async () => {
-      connectCalled = true;
-    };
-    SuperAdmin.countDocuments = async () => {
-      return 0;
-    };
-    SuperAdmin.create = async (data) => {
-      createCalledWith = data;
-    };
-
-    await bootstrapInitialSuperAdmin();
-
-    assert.equal(connectCalled, false, 'DB connect should not be called when env vars are missing');
-    assert.equal(createCalledWith, null, 'SuperAdmin.create should not be called when env vars are missing');
-    assert.equal(process.exitCode, 1, 'process.exitCode should be set to 1 on missing env vars');
+  test("requires explicit environment confirmation", () => {
+    process.env.ADMIN_BOOTSTRAP_CONFIRM = "wrong";
+    assert.throws(() => requiredConfig(), /does not match/);
   });
 
-  test('Weak password: DB and creation are not called, exitCode set to 1', async () => {
-    process.env.SUPER_ADMIN_EMAIL = 'admin@example.com';
-    process.env.SUPER_ADMIN_ID = 'SUMA-ADM-001';
-    process.env.SUPER_ADMIN_PASSWORD = 'short'; // Fails length >= 12
-
-    mongoose.connect = async () => {
-      connectCalled = true;
-    };
-    SuperAdmin.countDocuments = async () => {
-      return 0;
-    };
-    SuperAdmin.create = async (data) => {
-      createCalledWith = data;
-    };
-
-    await bootstrapInitialSuperAdmin();
-
-    assert.equal(connectCalled, false, 'DB connect should not be called on weak password');
-    assert.equal(createCalledWith, null, 'SuperAdmin.create should not be called on weak password');
-    assert.equal(process.exitCode, 1, 'process.exitCode should be set to 1 on weak password');
+  test("rejects a weak password before database access", () => {
+    process.env.SUPER_ADMIN_PASSWORD = "short";
+    assert.throws(() => requiredConfig(), /at least 12/);
   });
 
-  test('Existing super admin: SuperAdmin.create is not called, exitCode set to 1, DB cleanup called', async () => {
-    process.env.MONGODB_URL = 'mongodb://localhost:27017/test-db';
-    process.env.SUPER_ADMIN_EMAIL = 'admin@example.com';
-    process.env.SUPER_ADMIN_ID = 'SUMA-ADM-001';
-    process.env.SUPER_ADMIN_PASSWORD = 'StrongPassword#2026!';
-
-    mongoose.connect = async () => {
-      connectCalled = true;
-    };
-    mongoose.connection.close = async () => {
-      disconnectCalled = true;
-    };
-    SuperAdmin.countDocuments = async () => {
-      return 1; // Existing super admin found
-    };
-    SuperAdmin.create = async (data) => {
-      createCalledWith = data;
-    };
-
-    await bootstrapInitialSuperAdmin();
-
-    assert.equal(connectCalled, true, 'DB connect should be called');
-    assert.equal(createCalledWith, null, 'SuperAdmin.create must not be called when super admin exists');
-    assert.equal(process.exitCode, 1, 'process.exitCode should be set to 1 when super admin exists');
-    assert.equal(disconnectCalled, true, 'Mongoose connection close must be called in finally block');
+  test("accepts the canonical named administrator ID", () => {
+    assert.equal(requiredConfig().adminId, "SM-ADM-DIPESH");
   });
 
-  test('No existing super admin: password is hashed, exactly one account created, DB cleanup called', async () => {
-    process.env.MONGODB_URL = 'mongodb://localhost:27017/test-db';
-    process.env.SUPER_ADMIN_EMAIL = 'admin@example.com';
-    process.env.SUPER_ADMIN_ID = 'SUMA-ADM-001';
-    process.env.SUPER_ADMIN_PASSWORD = 'StrongPassword#2026!';
+  test("permanent bootstrap record blocks another root", async () => {
+    fakeSession();
+    BootstrapState.exists = queryResult(true);
+    await assert.rejects(
+      createRootAtomically(requiredConfig()),
+      (error) => error.code === "ROOT_BOOTSTRAP_ALREADY_CONSUMED"
+    );
+  });
 
-    mongoose.connect = async () => {
-      connectCalled = true;
-    };
-    mongoose.connection.close = async () => {
-      disconnectCalled = true;
-    };
-    SuperAdmin.countDocuments = async () => {
-      return 0; // No existing super admin
-    };
-    SuperAdmin.create = async (data) => {
-      createCalledWith = data;
-      return { _id: 'mock-id', ...data };
-    };
+  test("existing admin data blocks bootstrap", async () => {
+    fakeSession();
+    BootstrapState.exists = queryResult(false);
+    SuperAdmin.exists = queryResult(true);
+    await assert.rejects(
+      createRootAtomically(requiredConfig()),
+      (error) => error.code === "ADMIN_DATA_ALREADY_EXISTS"
+    );
+  });
 
-    await bootstrapInitialSuperAdmin();
-
-    assert.equal(connectCalled, true, 'DB connect should be called');
-    assert.notEqual(createCalledWith, null, 'SuperAdmin.create should be called');
-    assert.equal(createCalledWith.email, 'admin@example.com');
-    assert.equal(createCalledWith.adminId, 'SUMA-ADM-001');
-    assert.notEqual(createCalledWith.password, 'StrongPassword#2026!', 'Password must be hashed before save');
-    assert.equal(process.exitCode, undefined, 'process.exitCode should not be set to 1 on success');
-    assert.equal(disconnectCalled, true, 'Mongoose connection close must be called in finally block');
+  test("creates one inactive immutable root and permanent provisioning state", async () => {
+    fakeSession();
+    BootstrapState.exists = queryResult(false);
+    SuperAdmin.exists = queryResult(false);
+    let rootInput;
+    let stateInput;
+    SuperAdmin.create = async ([input]) => {
+      rootInput = input;
+      return [{ _id: "root-id", ...input }];
+    };
+    BootstrapState.create = async ([input]) => { stateInput = input; };
+    const result = await createRootAtomically(requiredConfig());
+    assert.equal(rootInput.role, "SUPER_ADMIN");
+    assert.equal(rootInput.isRootAdmin, true);
+    assert.equal(rootInput.isActive, false);
+    assert.equal(rootInput.lifecycleStatus, "MFA_PENDING");
+    assert.notEqual(rootInput.password, process.env.SUPER_ADMIN_PASSWORD);
+    assert.equal(stateInput.key, "INITIAL_ROOT_ADMIN");
+    assert.equal(stateInput.rootAdminId, "root-id");
+    assert.ok(stateInput.enrollmentTokenHash);
+    assert.ok(result.rawToken);
   });
 });
+
+function queryResult(value) {
+  return () => ({ session: async () => value });
+}
+
+function fakeSession() {
+  mongoose.startSession = async () => ({
+    withTransaction: async (callback) => callback(),
+    endSession: async () => {},
+  });
+}
