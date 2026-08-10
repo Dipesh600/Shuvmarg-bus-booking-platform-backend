@@ -19,9 +19,8 @@ const { googleAdministrativeContext } = require("./googlePlaceAdministrativeCont
 
 const GEOCODE_BASE = "https://maps.googleapis.com/maps/api/geocode/json";
 
-// Pause between reverse-geocode calls (ms).
-// Geocoding API allows 50 QPS; 25ms gives safe 40 QPS.
-const CALL_DELAY_MS = 25;
+const GEOCODE_CONCURRENCY = 6;
+const GEOCODE_WORKER_DELAY_MS = 150;
 
 // Administrative types to look for, in priority order.
 // Google returns the smallest known unit first in result_type results.
@@ -48,7 +47,7 @@ const _reverseGeocode = async (lat, lng, token) => {
             result_type: LOCALITY_TYPES_PRIORITY.join("|"),
             language: "en",
         },
-        timeout: 8_000,
+        timeout: 2_500,
     });
 
     if (data.status === "REQUEST_DENIED") {
@@ -83,6 +82,21 @@ const _reverseGeocode = async (lat, lng, token) => {
     return null;
 };
 
+async function mapWithConcurrency(values, concurrency, worker) {
+    const results = new Array(values.length);
+    let cursor = 0;
+    async function run() {
+        while (cursor < values.length) {
+            const index = cursor;
+            cursor += 1;
+            results[index] = await worker(values[index], index);
+            await new Promise(resolve => setTimeout(resolve, GEOCODE_WORKER_DELAY_MS));
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, run));
+    return results;
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 /**
@@ -115,12 +129,6 @@ const discoverStopsAlongRoute = async (
         throw new Error("geometry must be a valid GeoJSON LineString.");
     }
 
-    // Actual transit POIs are the primary signal. Administrative locality
-    // transitions below are only gap-fillers when this search returns nothing.
-    if (options.encodedPolyline) {
-        return searchTransitPlacesAlongRoute(options.encodedPolyline);
-    }
-
     const coords  = geometry.coordinates; // [[lng, lat], ...]
     const samples = sampleZoneAware(
         coords,
@@ -144,37 +152,27 @@ const discoverStopsAlongRoute = async (
     const localities = []; // { name, km, lat, lng }
     let lastLocalityName = null;
 
-    for (const { point: [lng, lat], km } of samples) {
+    const observations = await mapWithConcurrency(samples, GEOCODE_CONCURRENCY, async ({ point: [lng, lat], km }) => {
         try {
             const result = await _reverseGeocode(lat, lng, token);
-
-            if (!result) {
-                // No named place at this point (e.g. open highway) — skip
-                continue;
-            }
-
-            // Only emit a new stop when the locality name changes
-            if (result.name !== lastLocalityName) {
-                localities.push({ ...result, km, lat, lng });
-                lastLocalityName = result.name;
-            }
-
+            return result ? { ...result, km, lat, lng } : null;
         } catch (err) {
             // Rethrow fatal errors
             if (err.message.includes("denied") || err.message.includes("quota")) throw err;
             // Transient errors — skip this point silently
+            return null;
         }
-
-        // Throttle to avoid bursting the QPS limit
-        await new Promise(r => setTimeout(r, CALL_DELAY_MS));
+    });
+    for (const observation of observations) {
+        if (!observation || observation.name === lastLocalityName) continue;
+        localities.push(observation);
+        lastLocalityName = observation.name;
     }
 
     console.log(
         `[Geocode] Found ${localities.length} distinct localities ` +
         `(${samples.length} points sampled).`
     );
-
-    if (localities.length === 0) return [];
 
     // ── Final dedup: remove same name if it reappears later (loop roads) ──
     const seen  = new Map(); // name → index in unique
@@ -190,7 +188,7 @@ const discoverStopsAlongRoute = async (
     }
 
     // ── Normalise to discoveredStop schema ─────────────────────────────────
-    return unique.map((loc, i) => ({
+    const localitySuggestions = unique.map((loc, i) => ({
         candidateName:         loc.name,
         candidateCoordinates:  { lat: loc.lat, lng: loc.lng },
         googlePlaceId:         loc.googlePlaceId || null,
@@ -206,6 +204,19 @@ const discoverStopsAlongRoute = async (
         mergedIntoRouteStopId:  null,
         source:                 "REVERSE_GEOCODE",
     }));
+
+    // Transit POIs answer a different question from localities. They are
+    // boarding-location evidence, never substitutes for passenger-recognized
+    // route stops. Keep both signals so a sparse Search Along Route response
+    // cannot suppress the path-locality coverage.
+    if (!options.encodedPolyline) return localitySuggestions;
+    let transitSuggestions = [];
+    try {
+        transitSuggestions = await searchTransitPlacesAlongRoute(options.encodedPolyline);
+    } catch (error) {
+        console.warn(`[Places] Transit evidence unavailable: ${error.message}`);
+    }
+    return [...localitySuggestions, ...transitSuggestions];
 };
 
 module.exports = { discoverStopsAlongRoute };

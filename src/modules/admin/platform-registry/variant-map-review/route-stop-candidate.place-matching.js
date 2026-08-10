@@ -74,7 +74,7 @@ function reconcileTransitPlaces(places, canonicalStops, maxDistanceMeters = 5_00
       }
       return best;
     }, null);
-    if (!match) {
+    if (!match && place.providerSnapshot?.discoveryMethod === "REVERSE_GEOCODE") {
       const displayName = serviceAreaDisplayName(place.providerSnapshot?.displayName);
       if (displayName) {
         serviceAreaSuggestions.push({
@@ -93,6 +93,17 @@ function reconcileTransitPlaces(places, canonicalStops, maxDistanceMeters = 5_00
         });
       }
       return place;
+    }
+    if (!match) {
+      return {
+        ...place,
+        classification: {
+          entityType: "BOARDING_LOCATION", confidence: "LOW",
+          reasonCodes: ["GOOGLE_TRANSIT_PLACE", "NO_CANONICAL_ROUTE_STOP_NEARBY"],
+          suggestedParentStopId: null,
+        },
+        reviewStatus: "EXCLUDE",
+      };
     }
     matchedEntries.set(String(match.entry.stop._id), match.entry);
     return {
