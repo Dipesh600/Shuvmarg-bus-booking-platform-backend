@@ -10,14 +10,14 @@ const { reconcileTransitPlaces } = require("./route-stop-candidate.place-matchin
 
 const DEFAULT_MATCH_RADIUS_METERS = 500;
 const DEFAULT_ROUTE_PROXIMITY_METERS = 500;
-const DEFAULT_SERVICE_AREA_MATCH_METERS = 8_000;
+const DEFAULT_SERVICE_AREA_MATCH_METERS = 2_000;
 const ENDPOINT_DENSE_COVERAGE_METERS = 40_000;
 
 async function loadGooglePlaceSuggestions({ polyline, option, metric, originName, destinationName }, discoverPlaces) {
   const suggestions = await discoverPlaces(
     { type: "LineString", coordinates: polyline }, option.distanceMeters / 1000,
     option.durationSeconds / 60, originName, destinationName, {
-      maxSamples: 48, encodedPolyline: option.encodedPolyline,
+      maxSamples: 80, encodedPolyline: option.encodedPolyline,
     }
   );
   return suggestions.map((suggestion) => {
@@ -61,44 +61,44 @@ async function buildRouteStopCandidates({
   const endpointChildren = await loadEndpointChildren(
     metric, [origin?._id, destination?._id], dependencies.StopModel
   );
-  const nearbyStops = canonicalStops.filter(({ location }) => {
-    const remainingMeters = Math.max(0, metric.lengthMeters - location.distanceFromOriginMeters);
-    const endpointZone = location.distanceFromOriginMeters <= ENDPOINT_DENSE_COVERAGE_METERS ||
-      remainingMeters <= ENDPOINT_DENSE_COVERAGE_METERS;
-    return location.distanceToRouteMeters <= (endpointZone ? serviceAreaMatchMeters : proximityMeters);
-  });
+  const nearbyStops = canonicalStops.filter(({ location }) =>
+    location.distanceToRouteMeters <= proximityMeters
+  );
   const suggestions = await loadGooglePlaceSuggestions({
     polyline, option: selectedRouteOption, metric, originName: origin?.name,
     destinationName: destination?.name,
   }, dependencies.discoverPlaces || discoverStopsAlongRoute).catch((error) => ({ error }));
-  const placeSuggestions = Array.isArray(suggestions) ? suggestions : [];
+  const placeSuggestions = Array.isArray(suggestions) ? suggestions.filter((candidate) =>
+    locateOnRoute(candidate.coordinates, metric).distanceToRouteMeters <= proximityMeters
+  ) : [];
   const reconciled = reconcileTransitPlaces(placeSuggestions, canonicalStops, serviceAreaMatchMeters);
   const resolvedOriginTerminal = originTerminal || (isEligibleRouteStopAnchor(originAnchor) ? originAnchor : null);
   const resolvedDestinationTerminal = destinationTerminal ||
     (isEligibleRouteStopAnchor(destinationAnchor) ? destinationAnchor : null);
   const terminalIds = [resolvedOriginTerminal?._id, resolvedDestinationTerminal?._id].filter(Boolean);
   const endpointScopedChildren = endpointChildren.filter(({ location }) =>
-    location.distanceFromOriginMeters <= ENDPOINT_DENSE_COVERAGE_METERS ||
-    metric.lengthMeters - location.distanceFromOriginMeters <= ENDPOINT_DENSE_COVERAGE_METERS
+    location.distanceToRouteMeters <= proximityMeters && (
+      location.distanceFromOriginMeters <= ENDPOINT_DENSE_COVERAGE_METERS ||
+      metric.lengthMeters - location.distanceFromOriginMeters <= ENDPOINT_DENSE_COVERAGE_METERS
+    )
   );
   const registryEvidence = [...new Map([
     ...nearbyStops, ...endpointScopedChildren, ...reconciled.matchedEntries,
   ]
     .map((entry) => [String(entry.stop._id), entry])).values()];
-  const endpointServiceAreas = reconciled.serviceAreaSuggestions.filter((candidate) => {
+  const routeServiceAreas = reconciled.serviceAreaSuggestions.filter((candidate) => {
     const remainingMeters = Math.max(0, metric.lengthMeters - candidate.distanceFromOriginMeters);
     const inOrigin = candidate.distanceFromOriginMeters <= ENDPOINT_DENSE_COVERAGE_METERS;
     const inDestination = remainingMeters <= ENDPOINT_DENSE_COVERAGE_METERS;
-    if (!inOrigin && !inDestination) return false;
-    candidate.classification.coverageZone = inOrigin ? "ORIGIN_40KM" : "DESTINATION_40KM";
-    candidate.classification.distanceToRouteMeters = Math.round(
-      locateOnRoute(candidate.coordinates, metric).distanceToRouteMeters
-    );
-    return true;
+    candidate.classification.coverageZone = inOrigin ? "ORIGIN_40KM" :
+      inDestination ? "DESTINATION_40KM" : "MIDDLE";
+    const routeLocation = locateOnRoute(candidate.coordinates, metric);
+    candidate.classification.distanceToRouteMeters = Math.round(routeLocation.distanceToRouteMeters);
+    return routeLocation.distanceToRouteMeters <= proximityMeters;
   });
   const interior = deduplicateCandidates([
     ...buildRegistryCandidates(registryEvidence, selectedRouteOption, metric, terminalIds),
-    ...endpointServiceAreas,
+    ...routeServiceAreas,
     ...reconciled.annotatedPlaces,
   ], dependencies.matchRadiusMeters || DEFAULT_MATCH_RADIUS_METERS, {
     ids: [origin?._id, destination?._id],
@@ -110,9 +110,17 @@ async function buildRouteStopCandidates({
     ...interior,
     ...(resolvedDestinationTerminal ? [buildTerminalCandidate(resolvedDestinationTerminal, true, selectedRouteOption, metric)] : []),
   ];
+  const reviewableInterior = interior.filter((candidate) =>
+    candidate.classification?.entityType === "ROUTE_STOP" ||
+    candidate.classification?.entityType === "SERVICE_AREA"
+  );
+  const coverageWarning = metric.lengthMeters >= 80_000 && reviewableInterior.length < 4
+    ? `Route-stop discovery found only ${reviewableInterior.length} reviewable places across ` +
+      `${Math.round(metric.lengthMeters / 1000)} km. Treat this as incomplete coverage and retry or review the path manually.`
+    : null;
   return {
     candidates: candidates.map((candidate, index) => ({ ...candidate, sequence: index + 1 })),
-    warnings: suggestions?.error ? [suggestions.error.message] : [],
+    warnings: [suggestions?.error?.message, coverageWarning].filter(Boolean),
   };
 }
 

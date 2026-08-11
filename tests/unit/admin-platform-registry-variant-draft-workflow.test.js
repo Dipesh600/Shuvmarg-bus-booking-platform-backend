@@ -135,7 +135,7 @@ test("candidate engine suppresses repeated corridor endpoint observations", asyn
     discoverPlaces: async () => [{
       candidateName: "Kathmandu", candidateCoordinates: { lat: 27.69, lng: 85.29 },
     }, {
-      candidateName: "Hetauda", candidateCoordinates: { lat: 27.42, lng: 85.03 },
+      candidateName: "Hetauda", candidateCoordinates: { lat: 27.42, lng: 85.14 },
     }, {
       candidateName: "Birgunj", candidateCoordinates: { lat: 27.01, lng: 84.9 },
     }],
@@ -178,11 +178,11 @@ test("a Google bus stand recovers its canonical locality without becoming a seco
   }, {
     StopModel: stopModel([{
       _id: "koteshwar", code: "KTW", name: "Koteshwar", aliases: ["Koteshwor"],
-      coordinates: { lat: 27.678, lng: 85.349 },
+      coordinates: { lat: 27.709, lng: 85.349 },
     }]),
     discoverPlaces: async () => [{
       candidateName: "Koteshwore Bus Stand",
-      candidateCoordinates: { lat: 27.68, lng: 85.35 },
+      candidateCoordinates: { lat: 27.709, lng: 85.35 },
       formattedAddress: "Ring Road, Kathmandu",
       googleTypes: ["bus_station"],
       source: "SEARCH_ALONG_ROUTE",
@@ -208,11 +208,11 @@ test("endpoint coverage is dense for the first and last 40 km but the middle sta
     polyline: [[85, 27], [86, 27]],
   }, {
     StopModel: stopModel([{
-      _id: "origin-zone", name: "Origin Child", coordinates: { lat: 27.04, lng: 85.1 },
+      _id: "origin-zone", name: "Origin Child", coordinates: { lat: 27.002, lng: 85.1 },
     }, {
       _id: "middle-off-road", name: "Middle Detour", coordinates: { lat: 27.04, lng: 85.5 },
     }, {
-      _id: "destination-zone", name: "Destination Child", coordinates: { lat: 27.04, lng: 85.9 },
+      _id: "destination-zone", name: "Destination Child", coordinates: { lat: 27.002, lng: 85.9 },
     }]),
     discoverPlaces: async () => [],
   });
@@ -272,7 +272,7 @@ test("missing-stop proposals are prefilled from temporary Google place details",
     variant: { _id: "variant", corridorId: "corridor", status: "DRAFT", direction: "FORWARD" },
     review: {
       selectedRouteOptionKey: "route", reviewStatus: "STOP_CANDIDATES_READY",
-      routeDataVersion: 2, candidateEngineVersion: 8, routeOptions: [],
+      routeDataVersion: 2, candidateEngineVersion: 9, routeOptions: [],
     },
     candidates: [{
       _id: "candidate", sequence: 1, reviewStatus: "UNREVIEWED",
@@ -301,7 +301,7 @@ test("draft next action is explicit and follows review decisions instead of cand
     variant: { _id: "variant", corridorId: "corridor", status: "DRAFT", direction: "FORWARD" },
     review: {
       selectedRouteOptionKey: "route", reviewStatus: "STOP_CANDIDATES_READY",
-      routeDataVersion: 2, candidateEngineVersion: 8, routeOptions: [],
+      routeDataVersion: 2, candidateEngineVersion: 9, routeOptions: [],
     },
   };
   assert.equal(mapVariantDraft({
@@ -324,7 +324,7 @@ test("boarding-location evidence never blocks the route path naming step", () =>
     variant: { _id: "variant", corridorId: "corridor", status: "DRAFT", direction: "FORWARD" },
     review: {
       selectedRouteOptionKey: "route", reviewStatus: "STOP_CANDIDATES_READY",
-      routeDataVersion: 2, candidateEngineVersion: 8, routeOptions: [],
+      routeDataVersion: 2, candidateEngineVersion: 9, routeOptions: [],
     },
     candidates: [{
       _id: "boarding", reviewStatus: "UNREVIEWED",

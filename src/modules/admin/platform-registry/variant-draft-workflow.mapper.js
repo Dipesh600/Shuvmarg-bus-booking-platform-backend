@@ -1,7 +1,7 @@
 "use strict";
 
 const ROUTE_DATA_VERSION = 2;
-const CANDIDATE_ENGINE_VERSION = 8;
+const CANDIDATE_ENGINE_VERSION = 9;
 
 function idOf(value) {
   return value ? String(value._id || value) : null;
