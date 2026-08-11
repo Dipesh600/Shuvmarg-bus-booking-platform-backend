@@ -2,7 +2,6 @@
 
 const ROUTE_DATA_VERSION = 2;
 const CANDIDATE_ENGINE_VERSION = 9;
-
 function idOf(value) {
   return value ? String(value._id || value) : null;
 }
@@ -121,6 +120,10 @@ function mapVariantDraft({ variant, review, candidates = [], warnings = [] }) {
     corridorId: idOf(variant.corridorId),
     code: variant.code,
     direction: variant.direction,
+    routeFamilyId: idOf(variant.routeFamilyId),
+    companionVariantId: idOf(variant.returnVariantId),
+    revisionOfVariantId: idOf(variant.revisionOfVariantId),
+    revisionNumber: variant.revisionNumber || 1,
     status: variant.status,
     workflowStatus: effectiveReview?.reviewStatus === "STOP_CANDIDATES_READY" && !candidateEngineCurrent
       ? "ROUTE_SELECTED" : effectiveReview?.reviewStatus || "DRAFT_CREATED",

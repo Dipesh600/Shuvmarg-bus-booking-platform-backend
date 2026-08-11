@@ -56,15 +56,15 @@ test("platform registry module owns the retired legacy subsystem", () => {
 test("platform registry exports only its declared route handlers", () => {
   const registry = require("../../src/modules/admin/platform-registry");
   assert.deepEqual(Object.keys(registry).sort(), [
-    "activateVariantDraft", "bulkImportStops", "commitVariantDraft",
+    "activateVariantDraft", "addExistingVariantDraftStop", "bulkImportStops", "commitVariantDraft",
     "createBoardingLocation", "createBoardingPoint",
     "createCorridor", "createStop", "createVariant",
-    "createVariantDraft",
+    "createVariantDraft", "createVariantRevision",
     "deactivateBoardingLocation", "deleteCorridor", "deleteRegistryBoardingPoint",
     "deleteStop", "deleteVariant", "enableBoardingLocationOperatorAccess",
     "getAllCorridors", "getAllStops",
     "getBoardingLocation", "getBoardingPointsByStop",
-    "getNearbyBoardingLocations", "getStopsForVariant", "getVariantDraft", "getVariantsByCorridor",
+    "getNearbyBoardingLocations", "getStopsForVariant", "getVariantDetails", "getVariantDraft", "getVariantsByCorridor",
     "listBoardingAssignmentReviews", "listBoardingLocationOperatorAccess", "listBoardingLocations",
     "prepareVariantDraftStopCandidates", "previewBulkImportStops", "refreshVariantDraftRouteOptions",
     "reviewBoardingAssignment", "searchStops", "searchVariantDraftGuidancePlaces",

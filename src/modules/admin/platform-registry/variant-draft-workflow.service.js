@@ -8,4 +8,5 @@ module.exports = {
   ...require("./variant-draft-workflow/commit.service.js"),
   ...require("./variant-draft-workflow/context.service.js"),
   ...require("./variant-draft-workflow/guidance-search.service.js"),
+  ...require("./variant-draft-workflow/manual-candidate.service.js"),
 };

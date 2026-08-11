@@ -11,7 +11,7 @@ const Agent = require("../../../../models/agentModel.js");
 const LegacyRouteDiscovery = require("../../../../models/legacyRouteDiscoveryModel.js");
 const { routeVariantError } = require("./route-variant-errors.js");
 
-async function getVariantReferenceCounts(variantId) {
+async function getVariantReferenceCounts(variantId, { allowedLinkedVariantId = null } = {}) {
   const [
     routeStopCount,
     operatorRouteConfigCount,
@@ -26,7 +26,10 @@ async function getVariantReferenceCounts(variantId) {
     Schedule.countDocuments({ variantId }),
     Trip.countDocuments({ variantId }),
     Agent.countDocuments({ allowedRouteIds: variantId }),
-    RouteVariant.countDocuments({ returnVariantId: variantId }),
+    RouteVariant.countDocuments({
+      returnVariantId: variantId,
+      ...(allowedLinkedVariantId && { _id: { $ne: allowedLinkedVariantId } }),
+    }),
     LegacyRouteDiscovery.countDocuments({ "publishedVariant.variantId": variantId }),
   ]);
 
@@ -95,7 +98,7 @@ function hasOperationalReferences(counts) {
   ].some((count) => count > 0);
 }
 
-async function assertVariantCanDelete(variant) {
+async function assertVariantCanDelete(variant, options = {}) {
   if (variant.status !== "DRAFT") {
     throw routeVariantError(
       "VARIANT_DELETE_REQUIRES_DRAFT",
@@ -103,7 +106,7 @@ async function assertVariantCanDelete(variant) {
       409
     );
   }
-  const details = await getVariantReferenceCounts(variant._id);
+  const details = await getVariantReferenceCounts(variant._id, options);
   if (hasExternalReferences(details)) {
     throw routeVariantError(
       "VARIANT_IN_USE",

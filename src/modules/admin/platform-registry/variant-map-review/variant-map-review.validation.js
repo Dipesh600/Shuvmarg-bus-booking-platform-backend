@@ -91,7 +91,7 @@ function buildCandidateWrites(candidates, { mapReviewId, variantId, expiresAt })
         confidence: candidate.classification?.confidence ||
           (candidate.providerSnapshot?.provider === "PLATFORM_STOP" ? "HIGH" : "LOW"),
         reasonCodes: (candidate.classification?.reasonCodes || []).slice(0, 4),
-        suggestedParentStopId: candidate.classification?.suggestedParentStopId || null,
+        suggestedParentStopId: candidate.classification?.suggestedParentStopId?._id || candidate.classification?.suggestedParentStopId || null,
         coverageZone: candidate.classification?.coverageZone || "MIDDLE",
         distanceToRouteMeters: candidate.classification?.distanceToRouteMeters ?? null,
       },
@@ -101,6 +101,8 @@ function buildCandidateWrites(candidates, { mapReviewId, variantId, expiresAt })
       reviewStatus,
       matchedStopId: candidate.matchedStopId || null,
       resolvedStopId: candidate.resolvedStopId || null,
+      ...(candidate.proposedStop && { proposedStop: candidate.proposedStop }),
+      ...(candidate.reviewNotes && { reviewNotes: candidate.reviewNotes }),
       expiresAt,
     };
   });
