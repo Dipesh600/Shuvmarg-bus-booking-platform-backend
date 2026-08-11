@@ -20,6 +20,7 @@ test("a retry reuses a CREATE_NEW candidate resolved before a failed sequence wr
   let createCalls = 0;
   let resolvedCalls = 0;
   const dependencies = {
+    findStopByIdentity: async () => null,
     createStop: async () => { createCalls += 1; return created; },
     resolveEligibleStop: async (stopId) => {
       resolvedCalls += 1;
@@ -37,6 +38,27 @@ test("a retry reuses a CREATE_NEW candidate resolved before a failed sequence wr
   await resolveCommittedStops([candidate], "admin-1", dependencies);
   assert.equal(createCalls, 1);
   assert.equal(resolvedCalls, 1);
+});
+
+test("commit reuses an exact canonical Stop identity instead of inserting a duplicate", async () => {
+  const candidate = {
+    reviewStatus: "CREATE_NEW", resolvedStopId: null,
+    coordinates: { lat: 27.17, lng: 85.13 },
+    proposedStop: { name: "Nijgadh", district: "Bara", municipality: "Nijgadh" },
+    async save() {},
+  };
+  const existing = { _id: "existing-stop", code: "NJG" };
+  let createCalls = 0;
+  const result = await resolveCommittedStops([candidate], "admin-1", {
+    findStopByIdentity: async () => existing,
+    createStop: async () => { createCalls += 1; return null; },
+  });
+  assert.deepEqual(result, [existing]);
+  assert.equal(createCalls, 0);
+  assert.equal(candidate.reviewStatus, "USE_EXISTING");
+  assert.equal(candidate.matchedStopId, existing._id);
+  assert.equal(candidate.resolvedStopId, existing._id);
+  assert.equal(candidate.proposedStop, undefined);
 });
 
 test("variant writes use a transaction when supported and a fallback on standalone MongoDB", async () => {
