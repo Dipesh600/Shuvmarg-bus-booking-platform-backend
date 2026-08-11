@@ -4,6 +4,7 @@ const { createStop } = require("../stop-registry.service.js");
 const { routeVariantError } = require("../route-variant-errors.js");
 const { sameId } = require("./shared.js");
 const { resolveEligibleStops } = require("./candidate-policy.service.js");
+const { findReusableStopByIdentity } = require("./stop-identity-reuse.service.js");
 
 function assertCandidatesReady(candidates, variant) {
   // Bus stands/parks are boarding-location evidence, never route sequence
@@ -36,6 +37,7 @@ function assertCandidatesReady(candidates, variant) {
 
 async function resolveCommittedStops(candidates, adminId, options = {}) {
   const createCanonicalStop = options.createStop || createStop;
+  const findIdentityStop = options.findStopByIdentity || findReusableStopByIdentity;
   const resolveStops = options.resolveEligibleStops || (options.resolveEligibleStop
     ? (requests) => Promise.all(requests.map(({ stopId, coordinates }) =>
         options.resolveEligibleStop(stopId, coordinates, options)))
@@ -55,10 +57,26 @@ async function resolveCommittedStops(candidates, adminId, options = {}) {
       continue;
     }
     const proposed = candidate.proposedStop?.toObject ? candidate.proposedStop.toObject() : candidate.proposedStop;
-    const created = await createCanonicalStop({
+    const input = {
       ...proposed, coordinates: candidate.coordinates, isSearchable: proposed.isSearchable !== false,
       isRouteStop: true, verificationStatus: "VERIFIED", source: "MANUAL", status: "ACTIVE",
-    }, adminId, options);
+    };
+    let created = await findIdentityStop(input, options);
+    if (!created) {
+      try {
+        created = await createCanonicalStop(input, adminId, options);
+      } catch (error) {
+        if (error.code !== "STOP_IDENTITY_CONFLICT") throw error;
+        // A concurrent commit may have inserted the same canonical Stop after
+        // our preflight. The database unique index remains the final guard.
+        created = await findIdentityStop(input, options);
+        if (!created) throw error;
+      }
+    } else {
+      candidate.reviewStatus = "USE_EXISTING";
+      candidate.matchedStopId = created._id;
+      candidate.proposedStop = undefined;
+    }
     candidate.resolvedStopId = created._id;
     await candidate.save(options.session ? { session: options.session } : undefined);
     stops.push(created);
