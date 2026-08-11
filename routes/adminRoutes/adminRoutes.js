@@ -314,6 +314,8 @@ router.delete("/registry/corridors/:id",  adminMiddleware, platformRegistry.dele
 // Layer 2: Route Variants (Specific paths per corridor)
 router.post("/registry/variants",                          adminMiddleware, platformRegistry.createVariant);
 router.get("/registry/corridors/:corridorId/variants",    adminMiddleware, platformRegistry.getVariantsByCorridor);
+router.get("/registry/variants/:id",                     adminMiddleware, platformRegistry.getVariantDetails);
+router.post("/registry/variants/:id/revisions",          adminMiddleware, platformRegistry.createVariantRevision);
 router.patch("/registry/variants/:id",                    adminMiddleware, platformRegistry.updateVariant);
 router.delete("/registry/variants/:id",                   adminMiddleware, platformRegistry.deleteVariant);
 
@@ -326,6 +328,7 @@ router.get("/registry/variant-drafts/:variantId/guidance-places", adminMiddlewar
 router.patch("/registry/variant-drafts/:variantId/select-route", adminMiddleware, platformRegistry.selectVariantDraftRouteOption);
 router.patch("/registry/variant-drafts/:variantId/details", adminMiddleware, platformRegistry.updateVariantDraftDetails);
 router.post("/registry/variant-drafts/:variantId/stop-candidates", adminMiddleware, platformRegistry.prepareVariantDraftStopCandidates);
+router.post("/registry/variant-drafts/:variantId/stop-candidates/manual", adminMiddleware, platformRegistry.addExistingVariantDraftStop);
 router.patch("/registry/variant-drafts/:variantId/stop-candidates/use-existing", adminMiddleware, platformRegistry.useAllMatchedVariantDraftCandidates);
 router.patch("/registry/variant-drafts/:variantId/stop-candidates/:candidateId", adminMiddleware, platformRegistry.updateVariantDraftCandidate);
 router.post("/registry/variant-drafts/:variantId/commit", adminMiddleware, platformRegistry.commitVariantDraft);
