@@ -22,15 +22,20 @@ const GEOCODE_BASE = "https://maps.googleapis.com/maps/api/geocode/json";
 const GEOCODE_CONCURRENCY = 6;
 const GEOCODE_WORKER_DELAY_MS = 150;
 
-// Administrative types to look for, in priority order.
-// Google returns the smallest known unit first in result_type results.
+// Administrative types to look for, in route-stop usefulness order. For a
+// point inside Kathmandu, Google often returns both "Kathmandu" and a smaller
+// sublocality such as Koteshwor; route-stop discovery needs the smaller
+// passenger-recognized locality, not the broad corridor endpoint repeated.
 const LOCALITY_TYPES_PRIORITY = [
-    "locality",                    // city / town / large village
+    "neighborhood",                // neighbourhood / named local area
+    "sublocality_level_4",         // smallest known sublocality levels first
+    "sublocality_level_3",
+    "sublocality_level_2",
     "sublocality_level_1",         // ward / district within a city
-    "administrative_area_level_3", // municipality / rural municipality (Nepal)
     "sublocality",                 // generic sublocality
     "administrative_area_level_4", // smaller unit
-    "neighborhood",                // neighbourhood
+    "administrative_area_level_3", // municipality / rural municipality (Nepal)
+    "locality",                    // city / town / large village fallback
 ];
 
 // ── Reverse geocode ───────────────────────────────────────────────────────────
