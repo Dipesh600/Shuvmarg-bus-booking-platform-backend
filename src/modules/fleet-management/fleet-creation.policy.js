@@ -1,6 +1,11 @@
 "use strict";
 
 const { ApiError } = require("../../contracts");
+const {
+  validateSeatLayout,
+  seatLayoutFingerprint,
+} = require("../../domain/seat-layout/seat-layout.validation");
+const { SeatLayoutError } = require("../../domain/seat-layout/seat-layout.error");
 
 function parseJson(value, fallback) {
   if (!value) return fallback;
@@ -33,10 +38,34 @@ function parseCreationInput(data) {
       throw new ApiError("FLEET_VALIDATION_FAILED", "Invalid seatConfig JSON.");
     }
   }
+  const receivedSeats = Number(data.totalSeats);
+  if (!Number.isInteger(receivedSeats) || receivedSeats < 1) {
+    throw new ApiError("FLEET_VALIDATION_FAILED");
+  }
+  if (seatConfig) {
+    try {
+      const layout = validateSeatLayout(seatConfig);
+      if (layout.totalSeats !== receivedSeats) {
+        throw new ApiError("FLEET_LAYOUT_INVALID", {
+          details: { expectedSeats: layout.totalSeats, receivedSeats },
+        });
+      }
+      seatConfig = layout.seatConfig;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      if (error instanceof SeatLayoutError) {
+        throw new ApiError("FLEET_LAYOUT_INVALID", {
+          cause: error,
+          details: { reason: error.message, path: error.details?.path },
+        });
+      }
+      throw error;
+    }
+  }
   return {
     ...data,
     busNumber: String(data.busNumber).trim().toUpperCase(),
-    totalSeats: Number(data.totalSeats),
+    totalSeats: receivedSeats,
     registrationYear: data.registrationYear
       ? Number(data.registrationYear) : null,
     seatConfig,
@@ -50,8 +79,10 @@ function createFleetCreationPolicy({
   BusAmenities,
   BoardingPoints,
   OperatorBrand,
+  SeatLayoutVersion,
+  SeatTemplate,
 }) {
-  async function validateReferences(input) {
+  async function validateReferences(input, ownerId = null) {
     if (await Bus.findOne({ busNumber: input.busNumber })) {
       throw new ApiError("FLEET_ALREADY_EXISTS", "Bus number already exists!");
     }
@@ -71,6 +102,28 @@ function createFleetCreationPolicy({
       !await BoardingPoints.findById(input.boardingPointId)
     ) {
       throw new ApiError("FLEET_VALIDATION_FAILED", "Invalid boardingPointId provided.");
+    }
+    if (input.seatLayoutVersionId) {
+      const version = await SeatLayoutVersion.findById(input.seatLayoutVersionId).lean();
+      if (!version) throw new ApiError("FLEET_LAYOUT_INVALID");
+      const template = await SeatTemplate.findOne({
+        _id: version.templateId,
+        isActive: true,
+      }).select("scope userId").lean();
+      if (!template || (
+        ownerId && template.scope !== "GLOBAL" &&
+        template.userId?.toString() !== ownerId.toString()
+      )) throw new ApiError("FLEET_LAYOUT_INVALID", {
+        details: { reason: "Seat layout version is not assignable to this operator." },
+      });
+      if (
+        input.seatConfig &&
+        seatLayoutFingerprint(input.seatConfig) !== seatLayoutFingerprint(version.seatConfig)
+      ) throw new ApiError("FLEET_LAYOUT_INVALID", {
+        details: { reason: "Fleet layout does not match the selected immutable version." },
+      });
+      input.seatConfig = version.seatConfig;
+      input.totalSeats = version.totalSeats;
     }
   }
 

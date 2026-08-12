@@ -1,6 +1,26 @@
 "use strict";
 
+const crypto = require("node:crypto");
+
 const IMAGE_FIELDS = ["imageFront", "imageBack", "imageSide", "imageInside"];
+
+function buildFleetImageAsset(file, objectKey, uploadedAt = new Date()) {
+  return {
+    imageId: crypto.randomUUID(),
+    objectKey,
+    mimeType: file?.mimetype || "application/octet-stream",
+    size: file?.size || 0,
+    uploadedAt,
+  };
+}
+
+function assignFleetDocumentAsset(target, file, objectKey, uploadedAt = new Date()) {
+  target.url = objectKey;
+  target.objectKey = objectKey;
+  target.mimeType = file?.mimetype || "application/octet-stream";
+  target.size = file?.size || 0;
+  target.uploadedAt = uploadedAt;
+}
 
 function createFleetDocuments(input) {
   return {
@@ -44,17 +64,18 @@ function createFleetStorageService({
   async function uploadCreationAssets(fleet, input, files, uploadedKeys) {
     const storagePaths = paths(fleet);
     const fleetImages = [];
+    const uploadedAt = new Date();
     for (const field of IMAGE_FIELDS) {
       if (!files?.[field]) continue;
       const key = await uploadFileToS3(files[field], storagePaths.images);
-      fleetImages.push(key);
+      fleetImages.push(buildFleetImageAsset(files[field], key, uploadedAt));
       uploadedKeys.push(key);
     }
     if (fleetImages.length === 0 && (files?.fleetImages || files?.busImage)) {
       const raw = files.fleetImages || files.busImage;
       for (const file of Array.isArray(raw) ? raw : [raw]) {
         const key = await uploadFileToS3(file, storagePaths.images);
-        fleetImages.push(key);
+        fleetImages.push(buildFleetImageAsset(file, key, uploadedAt));
         uploadedKeys.push(key);
       }
     }
@@ -71,7 +92,7 @@ function createFleetStorageService({
         files[slot], storagePaths.document(type)
       );
       uploadedKeys.push(key);
-      fleetDocuments[slot].url = key;
+      assignFleetDocumentAsset(fleetDocuments[slot], files[slot], key, uploadedAt);
     }
     return { fleetImages, fleetDocuments };
   }
@@ -80,22 +101,28 @@ function createFleetStorageService({
     const raw = files?.fleetImages || files?.busImage;
     if (!raw) return null;
     const storagePaths = paths(fleet);
-    const newKeys = [];
+    const newAssets = [];
+    const uploadedKeys = [];
     try {
       for (const file of Array.isArray(raw) ? raw : [raw]) {
-        newKeys.push(await uploadFileToS3(file, storagePaths.images));
+        const key = await uploadFileToS3(file, storagePaths.images);
+        uploadedKeys.push(key);
+        newAssets.push(buildFleetImageAsset(file, key));
       }
       if (fleet.fleetImages?.length > 0) {
-        deleteFromS3(fleet.fleetImages).catch((error) =>
+        const oldKeys = fleet.fleetImages
+          .map((image) => typeof image === "string" ? image : image?.objectKey || image?.url)
+          .filter(Boolean);
+        deleteFromS3(oldKeys).catch((error) =>
           logger.error(
             `[S3 Orphan Cleanup Failed] Fleet ${storagePaths.fleetId}:`,
             error
           )
         );
       }
-      return newKeys;
+      return newAssets;
     } catch (error) {
-      if (newKeys.length > 0) await deleteFromS3(newKeys);
+      if (uploadedKeys.length > 0) await deleteFromS3(uploadedKeys);
       throw error;
     }
   }
@@ -104,7 +131,7 @@ function createFleetStorageService({
     const storagePaths = paths(fleet);
     if (docSlot === "fleetImages") {
       const key = await uploadFileToS3(file, storagePaths.images);
-      fleet.fleetImages = [key];
+      fleet.fleetImages = [buildFleetImageAsset(file, key)];
       return key;
     }
     const type = {
@@ -114,7 +141,7 @@ function createFleetStorageService({
       routePermit: "routePermit",
     }[docSlot];
     const key = await uploadFileToS3(file, storagePaths.document(type));
-    fleet.fleetDocuments[docSlot].url = key;
+    assignFleetDocumentAsset(fleet.fleetDocuments[docSlot], file, key);
     return key;
   }
 

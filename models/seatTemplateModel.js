@@ -1,6 +1,25 @@
 const mongoose = require("mongoose");
+const {
+    validateSeatLayout,
+} = require("../src/domain/seat-layout/seat-layout.validation");
 
 const seatTemplateSchema = new mongoose.Schema({
+    scope: {
+        type: String,
+        enum: ["GLOBAL", "OPERATOR"],
+        default: "OPERATOR",
+        index: true,
+    },
+    baseTemplateId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "SeatTemplate",
+        default: null,
+    },
+    currentVersionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "SeatLayoutVersion",
+        default: null,
+    },
     templateName: {
         type: String,
         required: true
@@ -67,6 +86,8 @@ const seatTemplateSchema = new mongoose.Schema({
                                                 default: "STANDARD"
                                             },
                                             isActive: { type: Boolean, default: true },
+                                            rowSpan: { type: Number, min: 1, max: 2, default: 1 },
+                                            colSpan: { type: Number, min: 1, max: 2, default: 1 },
                                             zone: {
                                                 type: String,
                                                 enum: ["LEFT", "RIGHT", "BACK", "DOOR_ADJACENT", null],
@@ -106,5 +127,12 @@ const seatTemplateSchema = new mongoose.Schema({
     }
 
 }, { timestamps: true });
+
+seatTemplateSchema.pre("validate", function validateCanonicalSeatLayout() {
+    if (!this.isNew && !this.isModified("seatConfig")) return;
+    const layout = validateSeatLayout(this.seatConfig);
+    this.seatConfig = layout.seatConfig;
+    this.totalSeats = layout.totalSeats;
+});
 
 module.exports = mongoose.model("SeatTemplate", seatTemplateSchema);

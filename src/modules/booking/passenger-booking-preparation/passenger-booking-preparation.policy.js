@@ -16,7 +16,7 @@ function validatePreparationInput({ scheduleId, seatNumbers }) {
   return { isValid: true };
 }
 
-function calculateAuthoritativeOriginalAmount(trip, seatCount) {
+function calculateAuthoritativeOriginalAmount(trip, seatLabelsOrCount) {
   const fare = trip?.tripFare ?? trip?.routeId?.basePrice;
   if (!Number.isFinite(fare) || fare <= 0) {
     return {
@@ -29,7 +29,11 @@ function calculateAuthoritativeOriginalAmount(trip, seatCount) {
       },
     };
   }
-  return { isValid: true, originalAmount: fare * seatCount };
+  const seatLabels = Array.isArray(seatLabelsOrCount) ? seatLabelsOrCount : null;
+  const originalAmount = seatLabels
+    ? require("../../../domain/fare/seat-fare.policy").calculateSeatTotal(fare, trip?.seatFareOverrides, seatLabels)
+    : fare * seatLabelsOrCount;
+  return { isValid: true, originalAmount };
 }
 
 function validateTripForOnlineBooking(trip, now) {

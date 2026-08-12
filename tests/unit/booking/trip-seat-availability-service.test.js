@@ -38,7 +38,8 @@ test("Trip seat availability service", async (t) => {
       seata: [],
       seatb: [],
       seatc: [],
-      seatConfig: null
+      seatConfig: null,
+      baseFare: null
     });
   });
 

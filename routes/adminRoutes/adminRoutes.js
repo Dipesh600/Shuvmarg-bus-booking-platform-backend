@@ -19,6 +19,7 @@ const agentKycReview = require("../../src/modules/kyc/agent-review");
 const busOwnerController = require("../../src/modules/admin/bus-owner-management");
 const adminPushnotification = require("../../controllers/adminController/adminPushnotification.js/adminPushnotification.js");
 const busOwnerFleetController = require("../../src/modules/admin/fleet-management");
+const { registerFleetSeatLayoutRevisionRoutes } = require("./fleetSeatLayoutRevisionRoutes");
 const refundController = require("../../controllers/adminController/refundController/adminRefundController.js");
 const refundPolicyController = require("../../controllers/adminController/refundPolicyController/refundPolicycontroller.js");
 const kycVerificationController = require("../../controllers/adminController/kycVerificationController/kycVerificationcontroller.js");
@@ -60,11 +61,6 @@ router.get("/auth/profile",  adminMiddleware, authController.getAdminProfile);
 router.get("/administrators", adminMiddleware, rootAdminMiddleware, adminAdministration.list);
 router.post("/administrators/invitations", adminMiddleware, rootAdminMiddleware, adminAdministration.invite);
 router.patch("/administrators/:adminId/status", adminMiddleware, rootAdminMiddleware, adminAdministration.updateStatus);
-// NOTE: No /auth/refresh route.
-// Super Admin sessions are explicit by design — when a token expires, the admin
-// must re-authenticate with their credentials. Silent token refresh is a consumer
-// app pattern; for a privileged admin panel it is a security liability.
-
 // User Management Routes
 router.delete("/deleteAccount", adminMiddleware, admin.deleteAccount);
 router.get("/getAllUsers", adminMiddleware, admin.getAllUsers);
@@ -128,6 +124,7 @@ router.post(
 );
 // Bus Owner Fleet Operations
 router.patch("/fleet/update-status",    adminMiddleware, busOwnerFleetController.updateFleetStatus);
+registerFleetSeatLayoutRevisionRoutes(router, adminMiddleware);
 router.get('/fleet/fleetDashboard',     adminMiddleware, busOwnerFleetController.getFleetDashboard);
 
 // Fleet Profile Workstation — full operational dashboard for a single bus

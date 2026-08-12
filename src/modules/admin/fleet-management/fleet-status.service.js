@@ -18,7 +18,7 @@ function createFleetApprovalService(deps = {}) {
   async function decideFleetApproval(input = {}) {
     const { actor, ...body } = input;
     const validated = validateRequest(body);
-    const { fleetId, decision, rejectionReason } = validated;
+    const { fleetId, decision, rejectionReason, documentReviews } = validated;
 
     const admin = await resolveActor(actor, deps);
     const decidedAt = clock();
@@ -31,6 +31,18 @@ function createFleetApprovalService(deps = {}) {
     });
 
     const isApprove = decision === "APPROVED";
+    const documentReviewSet = {};
+    if (documentReviews) {
+      for (const [slot, review] of Object.entries(documentReviews)) {
+        documentReviewSet[`documentReviews.${slot}`] = {
+          status: review.status,
+          reason: review.reason,
+          reviewedBy: admin._id,
+          reviewedAt: decidedAt,
+        };
+      }
+    }
+
     const update = {
       $set: {
         approvalStatus: decision,
@@ -40,6 +52,7 @@ function createFleetApprovalService(deps = {}) {
         rejectedBy: isApprove ? null : admin._id,
         rejectedAt: isApprove ? null : decidedAt,
         rejectionReason: isApprove ? null : rejectionReason,
+        ...documentReviewSet,
       },
       $push: {
         approvalAuditHistory: auditEvent,

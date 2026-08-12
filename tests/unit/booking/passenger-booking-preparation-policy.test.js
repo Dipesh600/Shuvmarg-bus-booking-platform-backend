@@ -27,6 +27,14 @@ test('passenger-booking-preparation policy tests', async (t) => {
     assert.equal(missing.responseBody.errorCode, 'TRIP_FARE_UNAVAILABLE');
   });
 
+  await t.test('seat fare overrides are summed by selected canonical labels', () => {
+    const result = policy.calculateAuthoritativeOriginalAmount({
+      tripFare: 800,
+      seatFareOverrides: [{ seatLabel: 'A1', fare: 1200 }, { seatLabel: 'B2', fare: 950 }],
+    }, ['a1', 'A2', 'b2']);
+    assert.deepEqual(result, { isValid: true, originalAmount: 2950 });
+  });
+
   await t.test('2. validateTripForOnlineBooking handles missing trip', () => {
     const now = new Date('2026-07-25T12:00:00.000Z');
     assert.equal(policy.validateTripForOnlineBooking(null, now).statusCode, 404);

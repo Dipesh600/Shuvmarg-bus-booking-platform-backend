@@ -84,6 +84,17 @@ const scheduleSchema = new mongoose.Schema(
             ref: "SeatTemplate",
             default: null,
         },
+        seatLayoutVersionId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "SeatLayoutVersion",
+            default: null,
+        },
+        nextSeatLayoutVersionId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "SeatLayoutVersion",
+            default: null,
+        },
+        seatLayoutEffectiveAt: { type: Date, default: null },
 
         // ─── TIMING ───────────────────────────────────────────────────────────
         // 24-hour "HH:MM" format — unambiguous, timezone-independent
@@ -148,6 +159,14 @@ const scheduleSchema = new mongoose.Schema(
             type: Number,
             default: null,
             min: 0,
+        },
+        seatFareOverrides: {
+            type: [{
+                _id: false,
+                seatLabel: { type: String, required: true, trim: true, uppercase: true },
+                fare: { type: Number, required: true, min: 0 },
+            }],
+            default: [],
         },
 
         // ─── STATUS ───────────────────────────────────────────────────────────

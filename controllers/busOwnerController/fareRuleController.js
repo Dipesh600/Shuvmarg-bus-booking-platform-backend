@@ -7,12 +7,14 @@ const FareRule = require("../../models/fareRuleModel");
 const upsertFareRule = async (req, res) => {
     try {
         const ownerId = req.userInfo?.id;
-        const { fleetId, routeId, baseFare, seatClassPremium, advanceDiscount, peakPricing } = req.body;
+        const { fleetId, routeId, baseFare, seatClassPremium, seatFareOverrides, advanceDiscount, peakPricing } = req.body;
 
         if (!baseFare || baseFare < 0) {
             return res.status(400).json({ success: false, message: "baseFare is required and must be >= 0" });
         }
 
+        const normalizedOverrides = require("../../src/domain/fare/seat-fare.policy")
+            .normalizeSeatFareOverrides(seatFareOverrides);
         // Upsert: find existing rule for this fleet+route combo or create new
         const fareRule = await FareRule.findOneAndUpdate(
             { ownerId, fleetId: fleetId || null, routeId: routeId || null },
@@ -23,6 +25,7 @@ const upsertFareRule = async (req, res) => {
                     routeId: routeId || null,
                     baseFare,
                     ...(seatClassPremium && { seatClassPremium }),
+                    seatFareOverrides: normalizedOverrides,
                     ...(advanceDiscount && { advanceDiscount }),
                     ...(peakPricing && { peakPricing }),
                     isActive: true,
@@ -94,7 +97,7 @@ const deleteFareRule = async (req, res) => {
  */
 const computeEffectiveFare = async (req, res) => {
     try {
-        const { fleetId, routeId, travelDate } = req.body;
+        const { fleetId, routeId, travelDate, seatLabels } = req.body;
 
         if (!fleetId || !routeId || !travelDate) {
             return res.status(400).json({ success: false, message: "fleetId, routeId, and travelDate are required" });
@@ -138,6 +141,10 @@ const computeEffectiveFare = async (req, res) => {
                 baseFare: rule.baseFare,
                 finalFare: Math.round(finalFare),
                 seatClassPremium: rule.seatClassPremium,
+                seatFareOverrides: rule.seatFareOverrides,
+                selectedSeatsTotal: Array.isArray(seatLabels)
+                    ? require("../../src/domain/fare/seat-fare.policy").calculateSeatTotal(finalFare, rule.seatFareOverrides, seatLabels)
+                    : null,
                 appliedModifiers,
             }
         });

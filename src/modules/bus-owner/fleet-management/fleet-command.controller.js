@@ -46,11 +46,31 @@ function createBusOwnerFleetCommandController({ commandService, fleetService, su
     }
   }
 
+  async function requestSeatLayoutRevision(req, res) {
+    try {
+      return res.status(200).json(await service.requestSeatLayoutRevision(req));
+    } catch (error) {
+      const { statusCode, payload } = mapFleetCommandError(error, { operation: "update", logger });
+      return res.status(statusCode).json(payload);
+    }
+  }
+
+  async function listSeatLayoutRevisions(req, res) {
+    try {
+      return res.status(200).json(await service.listSeatLayoutRevisions(req));
+    } catch (error) {
+      const { statusCode, payload } = mapFleetCommandError(error, { operation: "update", logger });
+      return res.status(statusCode).json(payload);
+    }
+  }
+
   return {
     createFleet,
     updateFleet,
     deleteFleet,
     submitFleetForVerification,
+    requestSeatLayoutRevision,
+    listSeatLayoutRevisions,
   };
 }
 

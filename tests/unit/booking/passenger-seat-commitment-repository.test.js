@@ -84,7 +84,10 @@ test('passengerSeatCommitmentRepository unit tests', async (t) => {
 
     assert.deepEqual(capturedFilter, {
       tripId: 'trip_100',
-      seata: { $elemMatch: { seatNo: 'A1', booked: false } },
+      seata: { $elemMatch: {
+        seatNo: 'A1', booked: false,
+        $or: [{ blockedFor: 'none' }, { blockedFor: { $exists: false } }],
+      } },
     });
     assert.deepEqual(capturedUpdate, {
       $set: {
@@ -94,7 +97,13 @@ test('passengerSeatCommitmentRepository unit tests', async (t) => {
       },
     });
     assert.deepEqual(capturedOptions, {
-      arrayFilters: [{ 'elem.seatNo': 'A1', 'elem.booked': false }],
+      arrayFilters: [{
+        'elem.seatNo': 'A1', 'elem.booked': false,
+        $or: [
+          { 'elem.blockedFor': 'none' },
+          { 'elem.blockedFor': { $exists: false } },
+        ],
+      }],
       new: true,
     });
     assert.deepEqual(res, updatedDoc);

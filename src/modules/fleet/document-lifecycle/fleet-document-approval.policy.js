@@ -56,6 +56,7 @@ function buildUpdateQuery({ fleet, slot, actor, metadata, newAssets, auditEvent 
     };
   } else {
     const slotPath = `fleetDocuments.${slot}`;
+    setFields[`${slotPath}.url`] = newAssets[0].objectKey;
     setFields[`${slotPath}.objectKey`] = newAssets[0].objectKey;
     setFields[`${slotPath}.mimeType`] = newAssets[0].mimeType;
     setFields[`${slotPath}.size`] = newAssets[0].size;

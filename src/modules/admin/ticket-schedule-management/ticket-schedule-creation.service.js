@@ -38,9 +38,14 @@ async function createSchedule(input, adminId) {
       statusCode: 404,
     };
   }
-  const template = await templates.getTemplateById(seatTemplateId);
-  if (!template) {
-    return { error: "Seat template not found!", statusCode: 404 };
+  let template;
+  try {
+    template = await templates.getActiveTemplateById(seatTemplateId);
+  } catch (error) {
+    return {
+      error: error.message || "Seat template is missing or inactive.",
+      statusCode: error.statusCode || 422,
+    };
   }
   const seats = new Seats({
     seata: mapSeats(template.seata),

@@ -69,12 +69,28 @@ const BusSchema = new mongoose.Schema(
             min: 1
         },
 
+        seatLayoutVersionId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "SeatLayoutVersion",
+            default: null,
+            index: true,
+        },
+        nextSeatLayoutVersionId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "SeatLayoutVersion",
+            default: null,
+        },
+        seatLayoutEffectiveAt: { type: Date, default: null },
+
         seatConfig: {
             busShape: {
                 type: String,
                 enum: ["SINGLE_DECKER", "DOUBLE_DECKER", "SLEEPER_COACH", "MINI"],
                 default: "SINGLE_DECKER"
             },
+            layoutVariant: { type: String, default: "CUSTOM" },
+            hasKaKha: { type: Boolean, default: false },
+            totalColumns: { type: Number, min: 1, max: 12, default: 5 },
             // Each floor is an array of rows. Double Deckers have 2 floors.
             floors: {
                 type: [
@@ -110,6 +126,8 @@ const BusSchema = new mongoose.Schema(
                                                 },
                                                 // Booking engine state — not set at registration time
                                                 isActive: { type: Boolean, default: true },
+                                                rowSpan: { type: Number, min: 1, max: 2, default: 1 },
+                                                colSpan: { type: Number, min: 1, max: 2, default: 1 },
                                             }
                                         ],
                                         default: []

@@ -4,6 +4,14 @@ const { resolveSeatConfig, maskActiveHeldSeats, buildAvailabilityData } = requir
 
 test("Trip seat availability mapper", async (t) => {
   await t.test("resolveSeatConfig", async (st) => {
+    await st.test("trip snapshot has highest priority", () => {
+      const trip = {
+        seatLayoutSnapshot: { seatConfig: "snapshot" },
+        seatTemplateId: { seatConfig: "temp" },
+        busId: { seatConfig: "bus" },
+      };
+      assert.strictEqual(resolveSeatConfig(trip), "snapshot");
+    });
     await st.test("template priority", () => {
       const trip = { seatTemplateId: { seatConfig: "temp" }, busId: { seatConfig: "bus" } };
       assert.strictEqual(resolveSeatConfig(trip), "temp");
@@ -107,17 +115,22 @@ test("Trip seat availability mapper", async (t) => {
         }],
       };
       const config = { floors: [] };
-      const result = buildAvailabilityData(seats, config);
+      const result = buildAvailabilityData(seats, config, {
+        tripFare: 800,
+        seatFareOverrides: [{ seatLabel: "A1", fare: 1100 }],
+      });
       assert.deepStrictEqual(result, {
         seata: [{
           seatNo: "a1",
           booked: true,
           seatClass: "window",
           blockedFor: "none",
+          fare: 1100,
         }],
         seatb: [],
         seatc: [],
         seatConfig: config,
+        baseFare: 800,
       });
       assert.equal(JSON.stringify(result).includes("private-user-id"), false);
       assert.equal("_id" in result, false);

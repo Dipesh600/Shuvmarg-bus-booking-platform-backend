@@ -104,7 +104,8 @@ test("Trip seat availability responses characterization", async (t) => {
         seata: [],
         seatb: [],
         seatc: [],
-        seatConfig: { rows: 5 }
+        seatConfig: { rows: 5 },
+        baseFare: null
       }
     });
   });
@@ -126,7 +127,8 @@ test("Trip seat availability responses characterization", async (t) => {
         seata: [],
         seatb: [],
         seatc: [],
-        seatConfig: null
+        seatConfig: null,
+        baseFare: null
       }
     });
   });

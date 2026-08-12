@@ -39,7 +39,7 @@ function createPassengerBookingPreparationService({
 
       const amountResult = policy.calculateAuthoritativeOriginalAmount(
         trip,
-        normalizedSeats.length
+        normalizedSeats
       );
       if (!amountResult.isValid) {
         return {

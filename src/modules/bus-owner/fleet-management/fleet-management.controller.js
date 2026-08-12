@@ -15,6 +15,7 @@ function createFleetManagementController({
   readService = defaultReadService,
   submissionService = defaultSubmissionService,
   commandService,
+  layoutRevisions,
   logger = console,
 } = {}) {
   const readCtrl = (readService === defaultReadService && logger === console)
@@ -25,6 +26,7 @@ function createFleetManagementController({
     commandService,
     fleetService,
     submissionService,
+    layoutRevisions,
     logger,
   });
 
@@ -37,6 +39,8 @@ function createFleetManagementController({
     deleteFleet: cmdCtrl.deleteFleet,
 
     submitFleetForVerification: cmdCtrl.submitFleetForVerification,
+    requestSeatLayoutRevision: cmdCtrl.requestSeatLayoutRevision,
+    listSeatLayoutRevisions: cmdCtrl.listSeatLayoutRevisions,
   };
 }
 

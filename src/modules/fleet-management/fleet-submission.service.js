@@ -31,7 +31,11 @@ function createFleetSubmissionService(deps = {}) {
       );
     }
 
-    const fleet = await Bus.findOne({ _id: fleetId, ownerId }).lean();
+    const fleetQuery = Bus.findOne({ _id: fleetId, ownerId });
+    if (fleetQuery && typeof fleetQuery.schemaLevelProjections === "function") {
+      fleetQuery.schemaLevelProjections(false);
+    }
+    const fleet = await fleetQuery.lean();
     if (!fleet) {
       throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.", 404);
     }

@@ -17,6 +17,22 @@ test("fleet-approval-request-policy unit tests", async (t) => {
     assert.deepEqual(result, { fleetId: validObjectId, decision: "REJECTED", rejectionReason: "Document signature missing" });
   });
 
+  await t.test("accepts validated document review decisions", () => {
+    const result = validateFleetStatusRequest({
+      fleetId: validObjectId,
+      status: "REJECTED",
+      rejectionReason: "Document issues found",
+      documentReviews: {
+        fleetImages: { status: "approved" },
+        insurance: { status: "rejected", reason: "Policy number does not match." },
+      },
+    });
+    assert.deepEqual(result.documentReviews, {
+      fleetImages: { status: "approved", reason: null },
+      insurance: { status: "rejected", reason: "Policy number does not match." },
+    });
+  });
+
   await t.test("rejects missing or invalid fleetId", () => {
     assert.throws(() => validateFleetStatusRequest({ status: "APPROVED" }), (err) => err.code === "FLEET_STATUS_FLEET_ID_REQUIRED");
     assert.throws(() => validateFleetStatusRequest({ fleetId: "SUV-MARG-FLEET-ABC-001", status: "APPROVED" }), (err) => err.code === "FLEET_STATUS_INVALID_ID");
@@ -29,9 +45,24 @@ test("fleet-approval-request-policy unit tests", async (t) => {
   });
 
   await t.test("rejects unknown request body fields", () => {
-    for (const field of ["approvedBy", "approvedAt", "rejectedBy", "rejectedAt", "statusOperational", "approvalAuditHistory", "ownerId", "documentReviews"]) {
+    for (const field of ["approvedBy", "approvedAt", "rejectedBy", "rejectedAt", "statusOperational", "approvalAuditHistory", "ownerId"]) {
       assert.throws(() => validateFleetStatusRequest({ fleetId: validObjectId, status: "APPROVED", [field]: "hack" }), (err) => err.code === "FLEET_STATUS_UNKNOWN_FIELD" && err.field === field);
     }
+  });
+
+  await t.test("rejects invalid document review decisions", () => {
+    assert.throws(
+      () => validateFleetStatusRequest({ fleetId: validObjectId, status: "APPROVED", documentReviews: "hack" }),
+      (err) => err.code === "FLEET_STATUS_INVALID_DOCUMENT_REVIEWS"
+    );
+    assert.throws(
+      () => validateFleetStatusRequest({ fleetId: validObjectId, status: "APPROVED", documentReviews: { fakeSlot: { status: "approved" } } }),
+      (err) => err.code === "FLEET_STATUS_INVALID_DOCUMENT_REVIEWS"
+    );
+    assert.throws(
+      () => validateFleetStatusRequest({ fleetId: validObjectId, status: "APPROVED", documentReviews: { insurance: { status: "rejected" } } }),
+      (err) => err.code === "FLEET_STATUS_INVALID_DOCUMENT_REVIEWS"
+    );
   });
 
   await t.test("rejects rejectionReason provided for APPROVED status", () => {

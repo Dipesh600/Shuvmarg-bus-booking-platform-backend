@@ -6,6 +6,10 @@ const {
   isValidTime,
   validateRecurrence,
 } = require("./schedule-validation.policy.js");
+const {
+  validateSeatTemplate,
+  validateSeatLayoutVersion,
+} = require("./schedule-creation-gates.service.js");
 
 const EDITABLE = [
   "driverId",
@@ -18,6 +22,7 @@ const EDITABLE = [
   "effectiveFrom",
   "effectiveUntil",
   "fareOverride",
+  "seatFareOverrides",
   "notes",
   "advanceBookingDays",
   "bookingCutoffHours",
@@ -38,8 +43,22 @@ const updateSchedule = async (scheduleId, data) => {
   if (schedule.status === "INACTIVE") {
     throw new Error("Cannot edit an INACTIVE schedule.");
   }
+  if (data.seatTemplateId !== undefined) {
+    if (schedule.seatLayoutVersionId) {
+      throw new Error("A versioned schedule cannot switch seat templates directly. Revise the fleet layout instead.");
+    }
+    await validateSeatTemplate(data.seatTemplateId, schedule.ownerId);
+  }
+  if (data.seatLayoutVersionId !== undefined) {
+    if (data.seatLayoutVersionId?.toString() !== schedule.seatLayoutVersionId?.toString()) {
+      throw new Error("A schedule's pinned seat layout version cannot be replaced directly.");
+    }
+    await validateSeatLayoutVersion(data.seatLayoutVersionId, schedule.ownerId);
+  }
   for (const field of EDITABLE) {
-    if (data[field] !== undefined) schedule[field] = data[field];
+    if (data[field] !== undefined) schedule[field] = field === "seatFareOverrides"
+      ? require("../../../domain/fare/seat-fare.policy").normalizeSeatFareOverrides(data[field])
+      : data[field];
   }
   if (data.departureTime && !isValidTime(data.departureTime)) {
     throw new Error("departureTime must be in HH:MM format.");

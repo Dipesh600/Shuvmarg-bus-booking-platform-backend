@@ -2,6 +2,8 @@ const User = require("../../../models/userModel.js");
 const BusOwner = require("../../../models/busOwnerModel.js");
 const OperatorBrand = require("../../../models/operatorBrandModel.js");
 const fleetService = require("../../../src/modules/fleet-management");
+const { createFleetSubmissionService } = require("../../../src/modules/fleet-management/fleet-submission.service.js");
+const fleetSubmissionService = createFleetSubmissionService();
 
 // Create Fleet for Owner by Admin
 const createFleetForOwner = async (req, res) => {
@@ -41,11 +43,15 @@ const createFleetForOwner = async (req, res) => {
         }
 
         const fleetDoc = await fleetService.createFleet(ownerId, req.body, req.files, "ADMIN");
+        const submittedFleet = await fleetSubmissionService.submitFleetForVerification({
+            fleetId: fleetDoc._id.toString(),
+            ownerId,
+        });
 
         return res.status(201).json({
             success: true,
-            message: "Fleet created successfully by admin!",
-            data: fleetDoc,
+            message: "Fleet created and submitted for review successfully by admin!",
+            data: submittedFleet,
         });
     } catch (error) {
         console.error("createFleetForOwner error:", error);
@@ -125,7 +131,9 @@ const updateFleetByAdmin = async (req, res) => {
         });
     } catch (error) {
         console.error("updateFleetByAdmin error:", error);
-        const status = error.message.includes("found") ? 404 : (error.message.includes("exists") ? 409 : 400);
+        const status = error.statusCode ||
+            (error.message.includes("found") ? 404 :
+                (error.message.includes("exists") ? 409 : 400));
         return res.status(status).json({
             success: false,
             message: error.message || "Internal Server Error",

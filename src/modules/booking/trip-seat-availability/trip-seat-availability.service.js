@@ -11,7 +11,7 @@ const createTripSeatAvailabilityService = ({ repository, mapper }) => {
     const activeHolds = await repository.findActiveSeatHolds(tripId, currentUserId);
     const maskedSeats = mapper.maskActiveHeldSeats(seats, activeHolds);
 
-    return mapper.buildAvailabilityData(maskedSeats, seatConfig);
+    return mapper.buildAvailabilityData(maskedSeats, seatConfig, trip);
   };
 };
 

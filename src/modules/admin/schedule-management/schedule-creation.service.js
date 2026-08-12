@@ -7,17 +7,20 @@ const {
   validateBrand,
   validateFleet,
   validateSeatTemplate,
+  validateSeatLayoutVersion,
 } = require("./schedule-creation-gates.service.js");
 const { resolveRoutePattern } = require("./schedule-route-pattern.service.js");
 
-const scheduleDocument = (data, ownerId, patternId, createdBy) => ({
+const scheduleDocument = (data, fleet, patternId, createdBy) => ({
   brandId: data.brandId,
-  ownerId,
+  ownerId: fleet.ownerId,
   busId: data.busId,
   variantId: data.variantId || null,
   operatorRouteConfigId: patternId,
   driverId: data.driverId || null,
   seatTemplateId: data.seatTemplateId,
+  seatLayoutVersionId:
+    data.seatLayoutVersionId || fleet.seatLayoutVersionId || null,
   departureTime: data.departureTime,
   arrivalTime: data.arrivalTime,
   shift: data.shift,
@@ -26,6 +29,7 @@ const scheduleDocument = (data, ownerId, patternId, createdBy) => ({
   effectiveFrom: new Date(data.effectiveFrom),
   effectiveUntil: data.effectiveUntil ? new Date(data.effectiveUntil) : null,
   fareOverride: data.fareOverride || null,
+  seatFareOverrides: require("../../../domain/fare/seat-fare.policy").normalizeSeatFareOverrides(data.seatFareOverrides),
   notes: data.notes || null,
   status: "DRAFT",
   createdBy,
@@ -41,7 +45,16 @@ const createSchedule = async (data, createdBy = "ADMIN") => {
   validateCreation(data);
   const brand = await validateBrand(data.brandId);
   const fleet = await validateFleet(data.busId, data.brandId, brand);
-  await validateSeatTemplate(data.seatTemplateId);
+  await validateSeatTemplate(data.seatTemplateId, fleet.ownerId);
+  const requestedVersion = await validateSeatLayoutVersion(
+    data.seatLayoutVersionId, fleet.ownerId, data.seatTemplateId
+  );
+  if (
+    requestedVersion &&
+    requestedVersion._id.toString() !== fleet.seatLayoutVersionId?.toString()
+  ) {
+    throw new Error("Schedule seat layout must match the assigned fleet layout version.");
+  }
   const patternId = await resolveRoutePattern(data);
   const conflict = await Schedule.findOne({
     busId: data.busId,
@@ -55,7 +68,7 @@ const createSchedule = async (data, createdBy = "ADMIN") => {
     );
   }
   const schedule = await Schedule.create(
-    scheduleDocument(data, fleet.ownerId, patternId, createdBy)
+    scheduleDocument(data, fleet, patternId, createdBy)
   );
   logger.info("scheduleService: schedule created", {
     scheduleId: schedule._id,

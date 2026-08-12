@@ -67,6 +67,34 @@ test("fleet-approval-atomicity unit tests", async (t) => {
     assert.equal(audit.metadata.rejectionReason, "Invalid fitness certificate");
   });
 
+  await t.test("atomic decision persists section-level document reviews when provided", async () => {
+    const { service, getUpdate } = makeService();
+    await service.decideFleetApproval({
+      fleetId: validFleetId,
+      status: "REJECTED",
+      rejectionReason: "Document issues found",
+      documentReviews: {
+        fleetImages: { status: "approved", reason: null },
+        insurance: { status: "rejected", reason: "Policy number does not match." },
+      },
+      actor: { adminId: validAdminId, tokenRole: "ADMIN" },
+    });
+
+    const update = getUpdate();
+    assert.deepEqual(update.$set["documentReviews.fleetImages"], {
+      status: "approved",
+      reason: null,
+      reviewedBy: validAdminId,
+      reviewedAt: fixedDate,
+    });
+    assert.deepEqual(update.$set["documentReviews.insurance"], {
+      status: "rejected",
+      reason: "Policy number does not match.",
+      reviewedBy: validAdminId,
+      reviewedAt: fixedDate,
+    });
+  });
+
   await t.test("missing fleet returns 404 when atomic update returns null and lookup returns null", async () => {
     const { service } = makeService({
       repository: {

@@ -10,97 +10,14 @@
  *   GOOGLE_MAPS_API_KEY  — key with Geocoding API enabled
  */
 
-const axios = require("axios");
 const {
     ZONE_MID_INTERVAL, ZONE_NEAR_INTERVAL, ZONE_NEAR_KM, sampleZoneAware,
 } = require("./googlePlacesRouteSampling.js");
 const { searchTransitPlacesAlongRoute } = require("./googlePlacesSearchAlongRoute.js");
-const { googleAdministrativeContext } = require("./googlePlaceAdministrativeContext.js");
-
-const GEOCODE_BASE = "https://maps.googleapis.com/maps/api/geocode/json";
+const { reverseGeocode, mapWithConcurrency } = require("./googlePlacesGeocoding.js");
 
 const GEOCODE_CONCURRENCY = 6;
 const GEOCODE_WORKER_DELAY_MS = 150;
-
-// Administrative types to look for, in route-stop usefulness order. For a
-// point inside Kathmandu, Google often returns both "Kathmandu" and a smaller
-// sublocality such as Koteshwor; route-stop discovery needs the smaller
-// passenger-recognized locality, not the broad corridor endpoint repeated.
-const LOCALITY_TYPES_PRIORITY = [
-    "neighborhood",                // neighbourhood / named local area
-    "sublocality_level_4",         // smallest known sublocality levels first
-    "sublocality_level_3",
-    "sublocality_level_2",
-    "sublocality_level_1",         // ward / district within a city
-    "sublocality",                 // generic sublocality
-    "administrative_area_level_4", // smaller unit
-    "administrative_area_level_3", // municipality / rural municipality (Nepal)
-    "locality",                    // city / town / large village fallback
-];
-
-// ── Reverse geocode ───────────────────────────────────────────────────────────
-
-/**
- * Reverse geocode one point. Returns the most specific named locality or null.
- */
-const _reverseGeocode = async (lat, lng, token) => {
-    const { data } = await axios.get(GEOCODE_BASE, {
-        params: {
-            latlng: `${lat},${lng}`,
-            key:    token,
-            // Ask for only administrative / locality results to reduce noise
-            result_type: LOCALITY_TYPES_PRIORITY.join("|"),
-            language: "en",
-        },
-        timeout: 2_500,
-    });
-
-    if (data.status === "REQUEST_DENIED") {
-        throw new Error(
-            `Google Geocoding API denied: ${data.error_message || "Unknown error"}. ` +
-            "Enable the Geocoding API in your Google Cloud project."
-        );
-    }
-    if (data.status === "OVER_QUERY_LIMIT") {
-        throw new Error("Google Geocoding API quota exceeded. Check billing.");
-    }
-
-    if (!data.results || data.results.length === 0) return null;
-
-    // Parse address_components to find the most specific locality name
-    for (const result of data.results) {
-        const components = result.address_components || [];
-        for (const type of LOCALITY_TYPES_PRIORITY) {
-            const comp = components.find(c => c.types.includes(type));
-            if (comp) {
-                return {
-                    name: comp.long_name,
-                    type,
-                    formattedAddress: result.formatted_address || null,
-                    googlePlaceId: result.place_id || null,
-                    administrativeContext: googleAdministrativeContext(components),
-                };
-            }
-        }
-    }
-
-    return null;
-};
-
-async function mapWithConcurrency(values, concurrency, worker) {
-    const results = new Array(values.length);
-    let cursor = 0;
-    async function run() {
-        while (cursor < values.length) {
-            const index = cursor;
-            cursor += 1;
-            results[index] = await worker(values[index], index);
-            await new Promise(resolve => setTimeout(resolve, GEOCODE_WORKER_DELAY_MS));
-        }
-    }
-    await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, run));
-    return results;
-}
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
@@ -143,8 +60,15 @@ const discoverStopsAlongRoute = async (
 
     // Describe the zone config for the log
     const useZones = (totalDistanceKm || 0) > ZONE_NEAR_KM * 2;
+    const maxGap = (values) => values.slice(1).reduce((largest, sample, index) =>
+        Math.max(largest, sample.km - values[index].km), 0);
+    const originSpacing = maxGap(samples.filter(sample => sample.km <= ZONE_NEAR_KM));
+    const destinationSpacing = maxGap(samples.filter(sample =>
+        sample.km >= Math.max(0, totalDistanceKm - ZONE_NEAR_KM)
+    ));
     const zoneDesc = useZones
-        ? `dense ${ZONE_NEAR_INTERVAL * 1000}m for first/last ${ZONE_NEAR_KM}km, ${ZONE_MID_INTERVAL}km in middle`
+        ? `first/last ${ZONE_NEAR_KM}km sampled at up to ` +
+          `${Math.max(originSpacing, destinationSpacing).toFixed(1)}km gaps after request-budget limits`
         : `dense ${ZONE_NEAR_INTERVAL * 1000}m throughout (short route)`;
 
     console.log(
@@ -157,9 +81,11 @@ const discoverStopsAlongRoute = async (
     const localities = []; // { name, km, lat, lng }
     let lastLocalityName = null;
 
-    const observations = await mapWithConcurrency(samples, GEOCODE_CONCURRENCY, async ({ point: [lng, lat], km }) => {
+    const observations = await mapWithConcurrency(
+      samples, GEOCODE_CONCURRENCY, GEOCODE_WORKER_DELAY_MS,
+      async ({ point: [lng, lat], km }) => {
         try {
-            const result = await _reverseGeocode(lat, lng, token);
+            const result = await reverseGeocode(lat, lng, token);
             return result ? { ...result, km, lat, lng } : null;
         } catch (err) {
             // Rethrow fatal errors
@@ -167,7 +93,8 @@ const discoverStopsAlongRoute = async (
             // Transient errors — skip this point silently
             return null;
         }
-    });
+      }
+    );
     for (const observation of observations) {
         if (!observation || observation.name === lastLocalityName) continue;
         localities.push(observation);
@@ -180,15 +107,30 @@ const discoverStopsAlongRoute = async (
     );
 
     // ── Final dedup: remove same name if it reappears later (loop roads) ──
-    const seen  = new Map(); // name → index in unique
+    const seen  = new Map(); // geographic locality identity → index in unique
     const unique = [];
     for (const loc of localities) {
-        if (seen.has(loc.name)) {
-            // Update km to the latest occurrence (keeps ordering accurate)
-            unique[seen.get(loc.name)].km = loc.km;
+        const context = loc.administrativeContext || {};
+        const identity = [loc.name, context.district, context.municipality]
+            .map(value => String(value || "").normalize("NFKC").toLocaleLowerCase().trim())
+            .join(":");
+        if (seen.has(identity)) {
+            const existing = unique[seen.get(identity)];
+            existing.observationCount += 1;
+            existing.lastObservedKm = loc.km;
+            // Keep a representative point near the centre of the observed
+            // locality rather than whichever sampled road point happened last.
+            if (existing.observationCount % 2 === 0) {
+                existing.km = loc.km;
+                existing.lat = loc.lat;
+                existing.lng = loc.lng;
+            }
         } else {
-            seen.set(loc.name, unique.length);
-            unique.push({ ...loc });
+            seen.set(identity, unique.length);
+            unique.push({
+                ...loc, observationCount: 1,
+                firstObservedKm: loc.km, lastObservedKm: loc.km,
+            });
         }
     }
 
@@ -199,6 +141,9 @@ const discoverStopsAlongRoute = async (
         googlePlaceId:         loc.googlePlaceId || null,
         formattedAddress:      loc.formattedAddress || null,
         administrativeContext: loc.administrativeContext || null,
+        observationCount:      loc.observationCount,
+        observedSpanKm:        Math.max(0, loc.lastObservedKm - loc.firstObservedKm),
+        googleTypes:           [loc.type].filter(Boolean),
         distanceFromOriginKm:  Math.round(loc.km * 10) / 10,
         durationFromOriginMins: totalDistanceKm > 0
             ? Math.round((loc.km / totalDistanceKm) * totalDurationMins)

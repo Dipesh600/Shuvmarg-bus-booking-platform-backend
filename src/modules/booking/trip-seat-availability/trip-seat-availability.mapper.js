@@ -1,5 +1,8 @@
 const resolveSeatConfig = (trip) => {
   if (!trip) return null;
+  if (trip.seatLayoutSnapshot?.seatConfig) {
+    return trip.seatLayoutSnapshot.seatConfig;
+  }
   if (trip.seatTemplateId && trip.seatTemplateId.seatConfig) {
     return trip.seatTemplateId.seatConfig;
   }
@@ -40,12 +43,17 @@ const maskActiveHeldSeats = (seats, activeHolds) => {
 
   return seats;
 };
-const buildAvailabilityData = (seats, seatConfig) => {
+const buildAvailabilityData = (seats, seatConfig, trip = null) => {
+  const baseFare = trip?.tripFare ?? trip?.routeId?.basePrice ?? null;
+  const overrides = new Map((trip?.seatFareOverrides || []).map((item) => [
+    String(item.seatLabel).trim().toUpperCase(), item.fare,
+  ]));
   const mapPublicSeat = (seat) => ({
     seatNo: seat.seatNo,
     booked: Boolean(seat.booked),
     seatClass: seat.seatClass,
     blockedFor: seat.blockedFor,
+    fare: baseFare == null ? null : (overrides.get(String(seat.seatNo).toUpperCase()) || baseFare),
   });
 
   return {
@@ -53,6 +61,7 @@ const buildAvailabilityData = (seats, seatConfig) => {
     seatb: (seats.seatb || []).map(mapPublicSeat),
     seatc: (seats.seatc || []).map(mapPublicSeat),
     seatConfig,
+    baseFare,
   };
 };
 

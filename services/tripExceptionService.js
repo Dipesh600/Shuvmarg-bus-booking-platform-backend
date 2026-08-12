@@ -17,7 +17,12 @@
 const Trip     = require("../models/tripModel");
 const Booking  = require("../models/bookTicketModel");
 const Schedule = require("../models/scheduleModel");
+const Seat     = require("../models/seatsModel");
 const logger   = require("../utils/logger");
+const { resolveForSchedule } = require("./seatLayoutSnapshotService");
+const { projectLegacySeatArrays } = require(
+    "../src/domain/seat-layout/seat-layout.legacy-projection"
+);
 
 // ─── 1. CANCEL SINGLE TRIP ────────────────────────────────────────────────────
 /**
@@ -258,6 +263,7 @@ const createExtraRun = async (scheduleId, { tripDate, departureTime, arrivalTime
     const bookingClosesAt = new Date(depDateTime.getTime() - cutoffHours * 3600000);
 
     const tripIdStr = `EXTRA-${schedule.busId?.toString().slice(-4).toUpperCase()}-${new Date(tripDate).toISOString().split("T")[0].replace(/-/g, "")}`;
+    const layout = await resolveForSchedule(schedule, tripDate);
 
     const trip = new Trip({
         tripId:        tripIdStr,
@@ -267,11 +273,14 @@ const createExtraRun = async (scheduleId, { tripDate, departureTime, arrivalTime
         brandId:       schedule.brandId,
         driverId:      schedule.driverId,
         seatTemplateId: schedule.seatTemplateId,
+        seatLayoutVersionId: layout.seatLayoutVersionId,
+        seatLayoutSnapshot: layout.seatLayoutSnapshot,
         scheduleId:    schedule._id,
         tripDate:      new Date(tripDate),
         departureTime: depTime,
         arrivalTime:   arrTime,
         tripFare:      schedule.fareOverride || null,
+        seatFareOverrides: schedule.seatFareOverrides || [],
         bookingClosesAt,
         shift:         h < 12 ? "day" : "night",
         exceptionType: "EXTRA_RUN",
@@ -281,6 +290,13 @@ const createExtraRun = async (scheduleId, { tripDate, departureTime, arrivalTime
     });
 
     await trip.save();
+    try {
+        const seats = projectLegacySeatArrays(layout.seatLayoutSnapshot.seatConfig);
+        await Seat.create({ tripId: trip._id, ...seats });
+    } catch (error) {
+        await Trip.deleteOne({ _id: trip._id }).catch(() => {});
+        throw error;
+    }
 
     logger.info("tripExceptionService: extra run created", {
         scheduleId,

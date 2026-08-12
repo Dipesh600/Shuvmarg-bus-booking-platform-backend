@@ -4,16 +4,23 @@ const seatTemplateService = require("../../../services/seatTemplateService.js");
 const createTemplateForOwner = async (req, res) => {
     try {
         const adminInfo = req.adminInfo;
-        const { userId } = req.body; // Pattern: userId (ownerId)
+        const { userId, scope } = req.body; // Pattern: userId (ownerId)
 
-        if (!userId) {
+        if (scope !== "GLOBAL" && !userId) {
             return res.status(400).json({
                 status: false,
                 message: "Owner ID is required!",
             });
         }
 
-        const newTemplate = await seatTemplateService.createTemplate(req.body, adminInfo.id);
+        const newTemplate = req.body.baseTemplateId
+            ? await seatTemplateService.deriveTemplate(
+                req.body.baseTemplateId,
+                req.body,
+                userId,
+                adminInfo.id
+            )
+            : await seatTemplateService.createTemplate(req.body, adminInfo.id);
 
         return res.status(201).json({
             status: true,
@@ -22,7 +29,7 @@ const createTemplateForOwner = async (req, res) => {
         });
     } catch (error) {
         console.error("createTemplateForOwner error:", error);
-        return res.status(error.message.includes("required") ? 400 : 500).json({
+        return res.status(error.statusCode || 500).json({
             status: false,
             message: error.message || "Internal Server Error!",
         });
@@ -62,7 +69,7 @@ const getTemplatesByUser = async (req, res) => {
         });
     } catch (error) {
         console.error("getTemplatesByUser error:", error);
-        return res.status(error.message.includes("required") ? 400 : 500).json({
+        return res.status(error.statusCode || 500).json({
             status: false,
             message: error.message || "Internal Server Error!",
         });
@@ -82,7 +89,7 @@ const getSeatTemplateById = async (req, res) => {
         });
     } catch (error) {
         console.error("getSeatTemplateById error:", error);
-        const status = error.message.includes("found") ? 404 : 500;
+        const status = error.statusCode || 500;
         return res.status(status).json({
             status: false,
             message: error.message || "Internal Server Error!",
@@ -94,7 +101,10 @@ const getSeatTemplateById = async (req, res) => {
 const updateSeatTemplate = async (req, res) => {
     try {
         const { id } = req.params;
-        const updatedTemplate = await seatTemplateService.updateTemplate(id, req.body);
+        const updatedTemplate = await seatTemplateService.updateTemplate(id, {
+            ...req.body,
+            updatedById: req.adminInfo.id,
+        });
 
         return res.status(200).json({
             status: true,
@@ -103,7 +113,7 @@ const updateSeatTemplate = async (req, res) => {
         });
     } catch (error) {
         console.error("updateSeatTemplate error:", error);
-        const status = error.message.includes("found") ? 404 : 400;
+        const status = error.statusCode || 400;
         return res.status(status).json({
             status: false,
             message: error.message || "Internal Server Error!",
@@ -123,7 +133,7 @@ const deleteSeatTemplate = async (req, res) => {
         });
     } catch (error) {
         console.error("deleteSeatTemplate error:", error);
-        const status = error.message.includes("found") ? 404 : 500;
+        const status = error.statusCode || 500;
         return res.status(status).json({
             status: false,
             message: error.message || "Internal Server Error!",
@@ -144,7 +154,7 @@ const toggleSeatTemplateStatus = async (req, res) => {
         });
     } catch (error) {
         console.error("toggleSeatTemplateStatus error:", error);
-        const status = error.message.includes("found") ? 404 : 500;
+        const status = error.statusCode || 500;
         return res.status(status).json({
             status: false,
             message: error.message || "Internal Server Error!",

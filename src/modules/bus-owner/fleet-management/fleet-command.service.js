@@ -2,7 +2,7 @@
 
 const { ApiError } = require("../../../contracts");
 
-function createBusOwnerFleetCommandService({ fleetService, submissionService }) {
+function createBusOwnerFleetCommandService({ fleetService, submissionService, layoutRevisions }) {
   async function createFleetForOwner(req) {
     const ownerId = req.userInfo?.id;
     if (!ownerId) {
@@ -131,11 +131,39 @@ function createBusOwnerFleetCommandService({ fleetService, submissionService }) 
     };
   }
 
+  async function requestSeatLayoutRevision(req) {
+    const ownerId = req.userInfo?.id;
+    if (!ownerId) throw new ApiError("AUTHENTICATION_REQUIRED");
+    const revision = await layoutRevisions.requestRevision({
+      fleetId: req.params?.fleetId,
+      ownerId,
+      proposedSeatConfig: req.body?.seatConfig,
+      effectiveAt: req.body?.effectiveAt,
+      reason: req.body?.reason,
+    });
+    return {
+      success: true,
+      message: revision.status === "APPLIED"
+        ? "Seat additions applied successfully."
+        : "Seat withdrawal submitted for admin review.",
+      data: { revision },
+    };
+  }
+
+  async function listSeatLayoutRevisions(req) {
+    const ownerId = req.userInfo?.id;
+    if (!ownerId) throw new ApiError("AUTHENTICATION_REQUIRED");
+    const revisions = await layoutRevisions.listForFleet(req.params?.fleetId, ownerId);
+    return { success: true, data: { revisions } };
+  }
+
   return {
     createFleetForOwner,
     updateFleetForOwner,
     deleteFleetForOwner,
     submitFleetForOwner,
+    requestSeatLayoutRevision,
+    listSeatLayoutRevisions,
   };
 }
 

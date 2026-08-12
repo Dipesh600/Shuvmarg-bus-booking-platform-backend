@@ -25,6 +25,24 @@ const FLEET_ERRORS = Object.freeze({
     domain: "fleet",
     retryable: false,
   }),
+  FLEET_LAYOUT_INVALID: Object.freeze({
+    statusCode: 422,
+    message: "Seat layout is invalid.",
+    domain: "fleet",
+    retryable: false,
+  }),
+  FLEET_LAYOUT_CHANGE_BLOCKED: Object.freeze({
+    statusCode: 409,
+    message: "Seat layout cannot be changed while active trips use this fleet.",
+    domain: "fleet",
+    retryable: false,
+  }),
+  FLEET_LAYOUT_CHECK_FAILED: Object.freeze({
+    statusCode: 503,
+    message: "Seat layout safety check could not be completed.",
+    domain: "fleet",
+    retryable: true,
+  }),
   FLEET_CREATE_FAILED: Object.freeze({
     statusCode: 500,
     message: "Failed to create fleet record.",

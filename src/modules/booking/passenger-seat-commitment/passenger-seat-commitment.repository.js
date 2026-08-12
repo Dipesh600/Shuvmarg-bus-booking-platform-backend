@@ -24,7 +24,13 @@ function createPassengerSeatCommitmentRepository({ Seat }) {
     return Seat.findOneAndUpdate(
       {
         tripId: scheduleId,
-        [arrayField]: { $elemMatch: { seatNo, booked: false } },
+        [arrayField]: {
+          $elemMatch: {
+            seatNo,
+            booked: false,
+            $or: [{ blockedFor: "none" }, { blockedFor: { $exists: false } }],
+          },
+        },
       },
       {
         $set: {
@@ -34,7 +40,11 @@ function createPassengerSeatCommitmentRepository({ Seat }) {
         },
       },
       {
-        arrayFilters: [{ 'elem.seatNo': seatNo, 'elem.booked': false }],
+        arrayFilters: [{
+          'elem.seatNo': seatNo,
+          'elem.booked': false,
+          $or: [{ 'elem.blockedFor': 'none' }, { 'elem.blockedFor': { $exists: false } }],
+        }],
         new: true,
       }
     );

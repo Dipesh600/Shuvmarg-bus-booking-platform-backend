@@ -17,7 +17,7 @@ const REQUIRED_DOCUMENTS = [
 
 function hasValidDocumentEvidence(docObj) {
   if (!docObj || typeof docObj !== "object") return false;
-  const key = docObj.objectKey || docObj.storageKey;
+  const key = docObj.objectKey || docObj.storageKey || docObj.url;
   if (!key || typeof key !== "string" || key.trim() === "") return false;
   return Boolean(docObj.uploadedAt);
 }
@@ -50,7 +50,11 @@ function evaluateFleetSubmissionReadiness(fleet) {
 
   const missingAssets = [];
   const images = Array.isArray(fleet.fleetImages) ? fleet.fleetImages : [];
-  const validImages = images.filter((img) => img && (img.objectKey || img.storageKey) && img.uploadedAt);
+  const validImages = images.filter((img) => {
+    if (typeof img === "string") return img.trim() !== "";
+    if (!img || typeof img !== "object") return false;
+    return Boolean(img.uploadedAt && (img.objectKey || img.storageKey || img.url || img.imageId));
+  });
   if (validImages.length === 0) {
     missingAssets.push("fleetImages");
   }

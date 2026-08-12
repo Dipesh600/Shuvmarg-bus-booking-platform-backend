@@ -29,6 +29,7 @@ function createFleetUpdateService({
     const images = await storage.replaceFleetImages(fleet, files);
     if (images) updateData.fleetImages = images;
     await policy.normalizeBusNumber(fleet, updateData);
+    await policy.resolveSeatLayoutVersion(fleet, updateData);
     await policy.verifySeatLayout(fleet, updateData);
     policy.parseCatalogAndReviews(updateData);
     const updatedFleet = await Bus.findByIdAndUpdate(

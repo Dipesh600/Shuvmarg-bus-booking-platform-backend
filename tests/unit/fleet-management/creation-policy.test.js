@@ -13,6 +13,14 @@ const valid = () => ({
   busType: "AC", totalSeats: "40", vehicleType: "BUS",
 });
 
+const seatConfig = () => ({
+  busShape: "SINGLE_DECKER",
+  floors: [{ floorIndex: 0, rows: [{ rowIndex: 0, cells: [{
+    colIndex: 0, cellType: "SEAT", seatId: "S1",
+    seatLabel: "1", seatType: "STANDARD",
+  }] }] }],
+});
+
 test("fleet creation input preserves legacy parsing contracts", () => {
   assert.throws(
     () => parseCreationInput({}),
@@ -23,15 +31,27 @@ test("fleet creation input preserves legacy parsing contracts", () => {
     (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
   );
   const input = parseCreationInput({
-    ...valid(), registrationYear: "2024", seatConfig: '{"deck":1}',
+    ...valid(), totalSeats: "1", registrationYear: "2024",
+    seatConfig: JSON.stringify(seatConfig()),
     amenityIds: "invalid", requestViaStops: '["Pokhara"]',
   });
   assert.equal(input.busNumber, "BA 1 KHA 22");
-  assert.equal(input.totalSeats, 40);
+  assert.equal(input.totalSeats, 1);
   assert.equal(input.registrationYear, 2024);
-  assert.deepEqual(input.seatConfig, { deck: 1 });
+  assert.equal(input.seatConfig.busShape, "SINGLE_DECKER");
   assert.deepEqual(input.amenityIds, []);
   assert.deepEqual(input.requestViaStops, ["Pokhara"]);
+});
+
+test("fleet creation rejects invalid geometry and capacity mismatch", () => {
+  assert.throws(
+    () => parseCreationInput({ ...valid(), seatConfig: '{"deck":1}' }),
+    (error) => error instanceof ApiError && error.code === "FLEET_LAYOUT_INVALID"
+  );
+  assert.throws(
+    () => parseCreationInput({ ...valid(), seatConfig: seatConfig() }),
+    (error) => error instanceof ApiError && error.code === "FLEET_LAYOUT_INVALID"
+  );
 });
 
 test("fleet creation validates references with exact legacy errors", async (t) => {

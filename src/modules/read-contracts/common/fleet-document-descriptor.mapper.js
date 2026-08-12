@@ -24,7 +24,7 @@ function extractFleetSlotEvidence(fleet, slot) {
     return { present: false };
   }
 
-  const hasUrl = Boolean(doc.url);
+  const hasUrl = Boolean(doc.url || doc.objectKey || doc.storageKey);
   return {
     present: hasUrl,
     validTill: toIsoDate(doc.validTill),

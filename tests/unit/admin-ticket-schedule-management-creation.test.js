@@ -57,7 +57,7 @@ test("schedule creation maps seats and preserves current persisted fields",
   }));
   patch(t, GoogleRoute, "findById", async (id) => { googleLookup = id; });
   patch(t, BusRoute, "findById", async () => ({ basePrice: 500 }));
-  patch(t, templates, "getTemplateById", async () => ({
+  patch(t, templates, "getActiveTemplateById", async () => ({
     seata: [{ seatNo: "A1" }],
     seatb: [],
   }));

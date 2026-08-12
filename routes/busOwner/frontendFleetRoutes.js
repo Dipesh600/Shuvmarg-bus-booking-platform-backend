@@ -21,6 +21,8 @@ function registerBusOwnerApprovedFleetRoutes(router, options = {}) {
   router.post("/fleets", fleetCtrl.createFleet);
   router.get("/fleets/:fleetId", fleetCtrl.getFleetById);
   router.patch("/fleets/:fleetId", fleetCtrl.updateFleet);
+  router.post("/fleets/:fleetId/seat-layout-revisions", fleetCtrl.requestSeatLayoutRevision);
+  router.get("/fleets/:fleetId/seat-layout-revisions", fleetCtrl.listSeatLayoutRevisions);
   router.delete("/fleets/:fleetId", fleetCtrl.deleteFleet);
 
   router.get("/myFleets", fleetCtrl.getMyFleets);

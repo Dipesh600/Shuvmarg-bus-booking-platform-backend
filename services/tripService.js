@@ -9,6 +9,10 @@ const Seat             = require("../models/seatsModel.js");
 const User             = require("../models/userModel.js");
 const DriverProfile    = require("../models/driverProfileModel.js");
 const logger           = require("../utils/logger.js");
+const { resolveForSchedule } = require("./seatLayoutSnapshotService");
+const { projectLegacySeatArrays } = require(
+    "../src/domain/seat-layout/seat-layout.legacy-projection"
+);
 
 // ---------------------------------------------------------------------------
 // Trip Status State Machine
@@ -47,7 +51,7 @@ const checkBusOwnerVerification = async (userId) => {
 const createTrip = async (ownerId, tripData, role = "OWNER") => {
     const {
         busId, routeId, variantId, seatTemplateId, tripDate,
-        departureTime, arrivalTime, shift, tripFare,
+        departureTime, arrivalTime, shift, tripFare, seatFareOverrides,
         recurrence, daysOfWeek, autoGenerateUntil, isActive,
     } = tripData;
 
@@ -120,45 +124,24 @@ const createTrip = async (ownerId, tripData, role = "OWNER") => {
         if (!route) throw new Error("Route not found.");
     }
 
-    // ── SEAT GENERATION (V2 COMPATIBILITY) ──────────────────────────────────────
-    let seata = [];
-    let seatb = [];
-    let seatc = [];
-
-    if (seatTemplateId) {
-        const template = await SeatTemplate.findById(seatTemplateId);
-        if (template) {
-            seata = template.seata || [];
-            seatb = template.seatb || [];
-            seatc = template.seatc || [];
-        }
-    } 
-    
-    // Fallback to reading the new V2 seatConfig embedded directly in the bus
-    if (seata.length === 0 && seatb.length === 0 && bus.seatConfig && bus.seatConfig.floors) {
-        bus.seatConfig.floors.forEach(floor => {
-            if (!floor.rows) return;
-            floor.rows.forEach(row => {
-                if (!row.cells) return;
-                row.cells.forEach(cell => {
-                    if (cell.cellType === "SEAT" && cell.seatLabel) {
-                        // Rough heuristic to split V2 cells into V1 columns for the trip viewer
-                        if (cell.colIndex <= 1) {
-                            seata.push({ seatNo: cell.seatLabel, booked: false });
-                        } else if (cell.colIndex >= 3) {
-                            seatb.push({ seatNo: cell.seatLabel, booked: false });
-                        } else {
-                            seatc.push({ seatNo: cell.seatLabel, booked: false });
-                        }
-                    }
-                });
-            });
-        });
+    // Freeze the resolved layout before creating either the Trip or its legacy Seat document.
+    const legacyTemplateId = bus.seatLayoutVersionId ? null : seatTemplateId;
+    if (legacyTemplateId) {
+        const allowedTemplate = await SeatTemplate.findOne({
+            _id: legacyTemplateId,
+            isActive: true,
+            $or: [{ scope: "GLOBAL" }, { userId: ownerId }],
+        }).select("_id").lean();
+        if (!allowedTemplate) throw new Error("Seat template is missing, inactive, or unauthorized.");
     }
-
-    if (seata.length === 0 && seatb.length === 0 && seatc.length === 0) {
-        throw new Error("Could not determine seat layout for this bus. Check fleet configuration.");
-    }
+    const layout = await resolveForSchedule({
+        busId,
+        seatTemplateId: legacyTemplateId,
+        seatLayoutVersionId: bus.seatLayoutVersionId || null,
+    });
+    const { seata, seatb, seatc } = projectLegacySeatArrays(
+        layout.seatLayoutSnapshot.seatConfig
+    );
 
     const tripId = `TRIP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
@@ -167,12 +150,15 @@ const createTrip = async (ownerId, tripData, role = "OWNER") => {
         busId,
         routeId:   resolvedRouteId,
         variantId: resolvedVariantId,
-        seatTemplateId: seatTemplateId || null,
+        seatTemplateId: legacyTemplateId || null,
+        seatLayoutVersionId: layout.seatLayoutVersionId,
+        seatLayoutSnapshot: layout.seatLayoutSnapshot,
         ownerId,
         brandId,          // propagated from the fleet
         tripDate,
         departureTime, arrivalTime, shift,
         tripFare:         tripFare        || null,
+        seatFareOverrides: require("../src/domain/fare/seat-fare.policy").normalizeSeatFareOverrides(seatFareOverrides),
         recurrence:       recurrence      || "none",
         daysOfWeek:       daysOfWeek      || [],
         autoGenerateUntil: autoGenerateUntil || null,
@@ -180,12 +166,13 @@ const createTrip = async (ownerId, tripData, role = "OWNER") => {
         status:           "scheduled",
     });
 
-    const tripSeats = await Seat.create({
-        tripId: newTrip._id,
-        seata:  seata.map(s => ({ seatNo: s.seatNo, booked: false })),
-        seatb:  seatb.map(s => ({ seatNo: s.seatNo, booked: false })),
-        seatc:  seatc.map(s => ({ seatNo: s.seatNo, booked: false })),
-    });
+    let tripSeats;
+    try {
+        tripSeats = await Seat.create({ tripId: newTrip._id, seata, seatb, seatc });
+    } catch (error) {
+        await Trip.deleteOne({ _id: newTrip._id }).catch(() => {});
+        throw error;
+    }
 
     logger.info("tripService: trip created", {
         tripId:    newTrip.tripId,

@@ -5,6 +5,8 @@ const BusAmenities = require("../../../models/busAmenitiesModel");
 const BoardingPoints = require("../../../models/boardingPointsModel");
 const RouteRequest = require("../../../models/routeRequestModel");
 const OperatorBrand = require("../../../models/operatorBrandModel");
+const SeatLayoutVersion = require("../../../models/seatLayoutVersionModel");
+const SeatTemplate = require("../../../models/seatTemplateModel");
 const s3 = require("../../../services/s3Service");
 const {
   createFleetDocumentMapper,
@@ -38,7 +40,7 @@ const mapper = createFleetDocumentMapper(s3);
 const repository = createFleetQueryRepository({ Bus });
 const storage = createFleetStorageService(s3);
 const creationPolicy = createFleetCreationPolicy({
-  Bus, BusAmenities, BoardingPoints, OperatorBrand,
+  Bus, BusAmenities, BoardingPoints, OperatorBrand, SeatLayoutVersion, SeatTemplate,
 });
 const creation = createFleetCreationService({
   Bus, RouteRequest, policy: creationPolicy, storage,
@@ -46,6 +48,8 @@ const creation = createFleetCreationService({
 const updatePolicy = createFleetUpdatePolicy({
   Bus,
   getTripModel: () => require("../../../models/tripModel"),
+  getSeatLayoutVersionModel: () => SeatLayoutVersion,
+  getSeatTemplateModel: () => SeatTemplate,
 });
 const update = createFleetUpdateService({
   Bus, repository, policy: updatePolicy, storage, mapper,

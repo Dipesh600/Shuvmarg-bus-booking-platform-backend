@@ -9,6 +9,9 @@ const { isValidTime } = require("./schedule-validation.policy.js");
 const {
   assertScheduleRouteChainReady,
 } = require("./schedule-route-chain.policy.js");
+const {
+  validateSeatTemplate,
+} = require("./schedule-creation-gates.service.js");
 
 const validateVersion = (changes) => {
   if (!changes.departureTime) throw new Error("New departureTime is required.");
@@ -40,6 +43,7 @@ const versionDocument = (current, changes, start, adminId, sealDate) => ({
   operatorRouteConfigId: current.operatorRouteConfigId,
   driverId: current.driverId,
   seatTemplateId: current.seatTemplateId,
+  seatLayoutVersionId: current.seatLayoutVersionId,
   departureTime: changes.departureTime,
   arrivalTime: changes.arrivalTime,
   shift: parseInt(changes.departureTime.split(":")[0]) < 12 ? "day" : "night",
@@ -51,6 +55,10 @@ const versionDocument = (current, changes, start, adminId, sealDate) => ({
     changes.fareOverride !== undefined
       ? changes.fareOverride
       : current.fareOverride,
+  seatFareOverrides:
+    changes.seatFareOverrides !== undefined
+      ? require("../../../domain/fare/seat-fare.policy").normalizeSeatFareOverrides(changes.seatFareOverrides)
+      : current.seatFareOverrides || [],
   advanceGenerationDays: current.advanceGenerationDays,
   advanceBookingDays: current.advanceBookingDays,
   bookingCutoffHours: current.bookingCutoffHours,
@@ -88,6 +96,7 @@ const createScheduleVersion = async (scheduleId, changes, adminId) => {
   const newVersion = new Schedule(
     versionDocument(current, changes, start, adminId, sealDate)
   );
+  await validateSeatTemplate(newVersion.seatTemplateId);
   await assertScheduleRouteChainReady(newVersion);
   await newVersion.save();
   current.pendingVersionId = newVersion._id;

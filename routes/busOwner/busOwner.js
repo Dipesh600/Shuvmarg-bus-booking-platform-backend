@@ -19,6 +19,7 @@ const busOwnerRouteCon = require("../../controllers/busOwnerController/busOwnerR
 const tripCon = require("../../controllers/busOwnerController/busTripController.js");
 const settlementCon = require("../../controllers/busOwnerController/settlementController.js");
 const fareRuleCon = require("../../controllers/busOwnerController/fareRuleController.js");
+const seatTemplateManagement = require("../../src/modules/bus-owner/seat-template-management");
 
 // ── Pipeline: JWT verify → DB status check → role check ─────────────────────
 // Applied to ALL routes in this router — no individual `auth` needed.
@@ -51,6 +52,10 @@ router.get("/fleets/:fleetId/documents/:slot/read-url", busOwnerFleetDocumentCon
 
 // ── REQUIRE APPROVED KYC FOR OPERATIONAL ROUTES BELOW ─────────────────────────
 router.use(requireApprovedBusOwner);
+
+router.get("/seat-layout-templates", seatTemplateManagement.list);
+router.post("/seat-layout-templates", seatTemplateManagement.create);
+router.post("/seat-layout-templates/derive", seatTemplateManagement.derive);
 
 // Boarding Points
 router.post("/createBoardingPoint", boardingPointManagement.createBoardingPoint);

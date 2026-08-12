@@ -8,6 +8,9 @@ const {
 const {
   assertScheduleRouteChainReady,
 } = require("./schedule-route-chain.policy.js");
+const {
+  validateSeatTemplate,
+} = require("./schedule-creation-gates.service.js");
 const logger = require("../../../../utils/logger.js");
 
 const activateSchedule = async (scheduleId, adminId) => {
@@ -31,6 +34,7 @@ const activateSchedule = async (scheduleId, adminId) => {
       `Fleet "${fleet.busNumber}" is not ACTIVE. Cannot activate schedule.`
     );
   }
+  await validateSeatTemplate(schedule.seatTemplateId);
   await assertScheduleRouteChainReady(schedule);
   await Fleet.findByIdAndUpdate(schedule.busId, { setupComplete: true });
   schedule.status = "ACTIVE";
@@ -40,6 +44,7 @@ const activateSchedule = async (scheduleId, adminId) => {
   if (schedule.returnScheduleId) {
     const linked = await Schedule.findById(schedule.returnScheduleId);
     if (linked && ["DRAFT", "SUSPENDED"].includes(linked.status)) {
+      await validateSeatTemplate(linked.seatTemplateId);
       await assertScheduleRouteChainReady(linked);
       linked.status = "ACTIVE";
       linked.activatedBy = adminId;

@@ -1,6 +1,7 @@
 "use strict";
 
 const { ApiError } = require("../../contracts");
+const { createSeatLayoutVerifier } = require("./fleet-seat-layout.policy");
 
 const OWNER_PERMITTED_FIELDS = new Set([
   "busName",
@@ -10,6 +11,7 @@ const OWNER_PERMITTED_FIELDS = new Set([
   "registrationYear",
   "totalSeats",
   "seatConfig",
+  "seatLayoutVersionId",
   "amenityIds",
   "corridorId",
   "brandId",
@@ -32,6 +34,7 @@ const APPROVED_LOCKED_FIELDS = [
   "vehicleType",
   "registrationYear",
   "seatConfig",
+  "seatLayoutVersionId",
   "totalSeats",
   "busType",
   "corridorId",
@@ -56,7 +59,10 @@ function restrictOwnerUpdate(updateData) {
 function lockApprovedIdentity(fleet, updateData) {
   sanitizeUpdatePayload(updateData);
   if (fleet.approvalStatus !== "APPROVED") return;
-  for (const field of APPROVED_LOCKED_FIELDS) delete updateData[field];
+  const attempted = APPROVED_LOCKED_FIELDS.some((field) =>
+    Object.prototype.hasOwnProperty.call(updateData, field)
+  );
+  if (attempted) throw new ApiError("FLEET_MUTATION_LOCKED");
 }
 
 function parseJsonField(updateData, field) {
@@ -68,7 +74,9 @@ function parseJsonField(updateData, field) {
   }
 }
 
-function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
+function createFleetUpdatePolicy({
+  Bus, getTripModel, getSeatLayoutVersionModel, getSeatTemplateModel, logger = console,
+}) {
   async function normalizeBusNumber(fleet, updateData) {
     if (!updateData.busNumber) return;
     const normalized = String(updateData.busNumber).trim().toUpperCase();
@@ -80,31 +88,31 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
     }
   }
 
-  async function verifySeatLayout(fleet, updateData) {
-    parseJsonField(updateData, "seatConfig");
-    if (!updateData.seatConfig) return;
-    if (
-      JSON.stringify(fleet.seatConfig || {}) ===
-      JSON.stringify(updateData.seatConfig)
-    ) {
-      return;
-    }
-    try {
-      const Trip = getTripModel();
-      const count = await Trip.countDocuments({
-        busId: fleet._id,
-        tripStatus: { $in: ["SCHEDULED", "BOARDING", "DELAYED"] },
+  const verifySeatLayout = createSeatLayoutVerifier({ getTripModel, logger });
+
+  async function resolveSeatLayoutVersion(fleet, updateData) {
+    if (updateData.seatLayoutVersionId === undefined) return;
+    if (!updateData.seatLayoutVersionId) {
+      throw new ApiError("FLEET_LAYOUT_INVALID", {
+        details: { reason: "A layout version assignment cannot be cleared directly." },
       });
-      if (count > 0) {
-        throw new ApiError(
-          "FLEET_VALIDATION_FAILED",
-          `Cannot modify seat layout. This fleet has ${count} active future trip(s) scheduled. Please drain or cancel future trips first.`
-        );
-      }
-    } catch (error) {
-      if (error instanceof ApiError) throw error;
-      logger.error("Trip verification failed during layout update:", error);
     }
+    const Version = getSeatLayoutVersionModel();
+    const version = await Version.findById(updateData.seatLayoutVersionId).lean();
+    if (!version) throw new ApiError("FLEET_LAYOUT_INVALID");
+    const Template = getSeatTemplateModel();
+    const template = await Template.findOne({
+      _id: version.templateId,
+      isActive: true,
+    }).select("scope userId").lean();
+    if (!template || (
+      template.scope !== "GLOBAL" &&
+      template.userId?.toString() !== fleet.ownerId?.toString()
+    )) throw new ApiError("FLEET_LAYOUT_INVALID", {
+      details: { reason: "Seat layout version is not assignable to this operator." },
+    });
+    updateData.seatConfig = version.seatConfig;
+    updateData.totalSeats = version.totalSeats;
   }
 
   function parseCatalogAndReviews(updateData) {
@@ -116,6 +124,7 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
     restrictOwnerUpdate,
     lockApprovedIdentity,
     normalizeBusNumber,
+    resolveSeatLayoutVersion,
     verifySeatLayout,
     parseCatalogAndReviews,
   };

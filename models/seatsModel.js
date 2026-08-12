@@ -12,8 +12,13 @@ const seatUnitSchema = new mongoose.Schema({
     },
     blockedFor: {
         type: String,
-        enum: ["none", "wheelchair", "reserved"],
+        enum: ["none", "wheelchair", "reserved", "layout_change"],
         default: "none",
+    },
+    blockedByLayoutRevisionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "FleetSeatLayoutRevision",
+        default: null,
     },
 }, { _id: false });
 

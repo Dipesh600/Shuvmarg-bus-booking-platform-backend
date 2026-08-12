@@ -35,6 +35,15 @@ const fareRuleSchema = new mongoose.Schema(
             aisle: { type: Number, default: 0, min: 0 },
             sleeper: { type: Number, default: 0, min: 0 },
         },
+        // Absolute per-seat fares. Seats not listed inherit baseFare.
+        seatFareOverrides: {
+            type: [{
+                _id: false,
+                seatLabel: { type: String, required: true, trim: true, uppercase: true },
+                fare: { type: Number, required: true, min: 0 },
+            }],
+            default: [],
+        },
 
         // Advance booking discount
         advanceDiscount: {

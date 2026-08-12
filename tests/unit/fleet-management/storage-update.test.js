@@ -27,8 +27,14 @@ test("creation assets preserve structured paths and exact key tracking", async (
     keys
   );
   assert.deepEqual(keys, ["key:front", "key:policy"]);
-  assert.deepEqual(result.fleetImages, ["key:front"]);
+  assert.equal(result.fleetImages.length, 1);
+  assert.equal(result.fleetImages[0].objectKey, "key:front");
+  assert.equal(result.fleetImages[0].mimeType, "application/octet-stream");
+  assert.ok(result.fleetImages[0].imageId);
+  assert.ok(result.fleetImages[0].uploadedAt instanceof Date);
   assert.equal(result.fleetDocuments.insurance.url, "key:policy");
+  assert.equal(result.fleetDocuments.insurance.objectKey, "key:policy");
+  assert.ok(result.fleetDocuments.insurance.uploadedAt instanceof Date);
   assert.equal(result.fleetDocuments.insurance.policyNumber, "P1");
   assert.deepEqual(JSON.parse(uploads[0].destination), {
     type: "fleet_images", ownerId: "owner", brandId: "brand", fleetId: "F-1",
@@ -50,10 +56,9 @@ test("image replacement uploads new files before deleting old keys", async () =>
   const fleet = {
     _id: "fleet", ownerId: "owner", brandId: null, fleetImages: ["old"],
   };
-  assert.deepEqual(
-    await storage.replaceFleetImages(fleet, { fleetImages: ["a", "b"] }),
-    ["key:a", "key:b"]
-  );
+  const replaced = await storage.replaceFleetImages(fleet, { fleetImages: ["a", "b"] });
+  assert.deepEqual(replaced.map((image) => image.objectKey), ["key:a", "key:b"]);
+  assert.ok(replaced.every((image) => image.imageId && image.uploadedAt instanceof Date));
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(events, ["upload:a", "upload:b", "delete:old"]);
 });
@@ -91,6 +96,7 @@ test("fleet update preserves policy ordering and persistence options", async () 
     restrictOwnerUpdate: () => events.push("restrict"),
     lockApprovedIdentity: () => events.push("lock"),
     normalizeBusNumber: async () => events.push("number"),
+    resolveSeatLayoutVersion: async () => events.push("version"),
     verifySeatLayout: async () => events.push("layout"),
     parseCatalogAndReviews: () => events.push("parse"),
   };
@@ -101,7 +107,7 @@ test("fleet update preserves policy ordering and persistence options", async () 
     mapper: { withPresignedUrls: async (fleet) => fleet },
   });
   const result = await service.updateFleetDetails("f", { busName: "Name" }, {}, "owner");
-  assert.deepEqual(events, ["restrict", "lock", "images", "number", "layout", "parse"]);
+  assert.deepEqual(events, ["restrict", "lock", "images", "number", "version", "layout", "parse"]);
   assert.deepEqual(persisted, {
     id: "f", update: { busName: "Name", fleetImages: ["new"] },
     options: { new: true, runValidators: true },

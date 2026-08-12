@@ -19,6 +19,12 @@ function mapBusOwnerFleetDetail(fleet) {
       totalSeats: fleet.totalSeats || 0,
       features: Array.isArray(fleet.features) ? fleet.features : [],
     },
+    seatLayout: {
+      versionId: fleet.seatLayoutVersionId ? String(fleet.seatLayoutVersionId) : null,
+      nextVersionId: fleet.nextSeatLayoutVersionId ? String(fleet.nextSeatLayoutVersionId) : null,
+      effectiveAt: toIsoDate(fleet.seatLayoutEffectiveAt),
+      seatConfig: fleet.seatConfig || null,
+    },
     assignment: {
       route: fleet.route ? `${fleet.route.from} - ${fleet.route.to}` : "Unassigned",
     },
