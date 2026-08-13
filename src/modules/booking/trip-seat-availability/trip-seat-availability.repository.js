@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Seat = require("../../../../models/seatsModel");
 const Trip = require("../../../../models/tripModel");
 const SeatHold = require("../../../../models/seatHoldModel");
@@ -27,8 +28,10 @@ const findActiveSeatHolds = async (tripId, currentUserId) => {
   return SeatHold.find(query);
 };
 
-const findV3Snapshot = (tripId) => Snapshot.findOne({ tripId }).lean();
-const findV3Control = (tripId) => Control.findOne({ tripId }).lean();
+const findV3Snapshot = (tripId) => mongoose.isValidObjectId(tripId)
+  ? Snapshot.findOne({ tripId }).lean() : null;
+const findV3Control = (tripId) => mongoose.isValidObjectId(tripId)
+  ? Control.findOne({ tripId }).lean() : null;
 const findActiveBookedSeatLabels = async (tripId) => {
   const rows = await Booking.find({ tripId, status: { $in: ["booked", "pending"] } }).select("seats").lean();
   return rows.flatMap((row) => row.seats || []);

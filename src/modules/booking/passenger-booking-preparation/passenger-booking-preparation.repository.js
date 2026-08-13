@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 function createPassengerBookingPreparationRepository({
   Trip,
   Seat,
@@ -17,7 +19,9 @@ function createPassengerBookingPreparationRepository({
     },
 
     async findTripSeatLayoutPricing(scheduleId) {
-      if (!TripSeatLayoutSnapshot || !TripSeatLayoutControl) return null;
+      if (!TripSeatLayoutSnapshot || !TripSeatLayoutControl || !mongoose.isValidObjectId(scheduleId)) {
+        return null;
+      }
       const [snapshot, control] = await Promise.all([
         TripSeatLayoutSnapshot.findOne({ tripId: scheduleId }).lean(),
         TripSeatLayoutControl.findOne({ tripId: scheduleId }).lean(),
