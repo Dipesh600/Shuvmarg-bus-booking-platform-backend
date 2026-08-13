@@ -55,6 +55,16 @@ function createAdminSeatLayoutController(services, logger = console) {
         req.params.fleetId, requiredBodyId(req, "revisionId"), adminActor(req)
       )),
     })),
+    createInitialCustomLayout: attempt(async (req, res) => {
+      const value = await services.fleets.createInitialCustomLayout(
+        req.params.fleetId, req.body, adminActor(req)
+      );
+      return res.status(201).json({ success: true, data: {
+        assignment: assignmentDto(value.assignment),
+        template: templateDto(value.template),
+        revision: revisionDto(value.revision, true),
+      } });
+    }),
     listChangeRequests: attempt(async (req, res) => res.json({
       success: true, data: (await services.query.listChangeRequests(req.query)).map(changeRequestDto),
     })),

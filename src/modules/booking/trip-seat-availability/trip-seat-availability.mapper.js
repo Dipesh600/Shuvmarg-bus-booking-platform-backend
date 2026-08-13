@@ -56,8 +56,31 @@ const buildAvailabilityData = (seats, seatConfig) => {
   };
 };
 
+const buildV3Availability = ({ snapshot, control, activeHolds, bookedSeatLabels }) => {
+  if (!snapshot) return null;
+  const stateOverrides = new Map((control?.stateOverrides || []).map((item) => [item.elementId, item.state]));
+  const fareOverrides = new Map((control?.fareOverrides?.length ? control.fareOverrides : snapshot.pricing?.overrides || []).map((item) => [item.elementId, item.fare]));
+  const held = new Set(activeHolds.flatMap((hold) => hold.seatNumbers || []).map((label) => label.toLowerCase()));
+  const booked = new Set(bookedSeatLabels.map((label) => label.toLowerCase()));
+  const capturedStates = new Map((snapshot.placeStates || []).map((item) => [item.elementId, item.state]));
+  const defaultFare = control?.defaultFareOverride ?? snapshot.pricing?.defaultFare ?? null;
+  const layout = structuredClone(snapshot.layout);
+  layout.sections.forEach((section) => section.elements.forEach((element) => {
+    if (!["SEAT", "BERTH"].includes(element.kind)) return;
+    const label = element.label.toLowerCase();
+    element.runtime = {
+      state: stateOverrides.get(element.elementId) || capturedStates.get(element.elementId) || "OPEN",
+      held: held.has(label), booked: booked.has(label),
+      fare: fareOverrides.get(element.elementId) ?? defaultFare,
+      currency: "NPR",
+    };
+  }));
+  return { schemaVersion: 3, layout, controlVersion: control?.version || 0, defaultFare, currency: "NPR" };
+};
+
 module.exports = {
   resolveSeatConfig,
   maskActiveHeldSeats,
-  buildAvailabilityData
+  buildAvailabilityData,
+  buildV3Availability,
 };

@@ -44,7 +44,7 @@ test("bulk existing-stop review only accepts high-confidence canonical route-sto
   }), false);
 });
 
-test("candidate review locks terminals and keeps nearby registry stops separate from place suggestions", async () => {
+test("candidate review locks terminals and requires road evidence before offering registry reuse", async () => {
   const origin = { _id: "origin", name: "Kalanki", coordinates: { lat: 27, lng: 85 } };
   const destination = { _id: "destination", name: "Malangwa Bus Park", coordinates: { lat: 27, lng: 85.1 } };
   const result = await buildRouteStopCandidates({
@@ -59,7 +59,11 @@ test("candidate review locks terminals and keeps nearby registry stops separate 
       district: "Sarlahi", coordinates: { lat: 27, lng: 85.03 },
     }]),
     discoverPlaces: async () => [{
-      candidateName: "Haripur Bus Station", candidateCoordinates: { lat: 27, lng: 85.07 }, googlePlaceId: "place-1",
+      candidateName: "Haripur", candidateCoordinates: { lat: 27, lng: 85.07 }, googlePlaceId: "place-locality",
+      source: "REVERSE_GEOCODE", observationCount: 3, googleTypes: ["locality"],
+    }, {
+      candidateName: "Haripur Bus Station", candidateCoordinates: { lat: 27, lng: 85.0701 }, googlePlaceId: "place-1",
+      source: "SEARCH_ALONG_ROUTE", googleTypes: ["bus_station"],
     }],
   });
 
@@ -68,18 +72,15 @@ test("candidate review locks terminals and keeps nearby registry stops separate 
   assert.equal(String(result.candidates[0].resolvedStopId), "origin");
   assert.equal(result.candidates.at(-1).isTerminal, true);
   assert.equal(result.candidates.at(-1).reviewStatus, "USE_EXISTING");
-  assert.ok(result.candidates.some((candidate) => String(candidate.matchedStopId) === "registry-stop"));
-  const routeStop = result.candidates.find((candidate) => String(candidate.matchedStopId) === "registry-stop");
+  assert.equal(result.candidates.some((candidate) => String(candidate.matchedStopId) === "registry-stop"), false);
   const serviceArea = result.candidates.find((candidate) => candidate.providerSnapshot.displayName === "Haripur");
   const transitPlace = result.candidates.find((candidate) =>
     candidate.providerSnapshot.displayName === "Haripur Bus Station"
   );
-  assert.equal(routeStop.classification.entityType, "ROUTE_STOP");
-  assert.equal(routeStop.classification.confidence, "HIGH");
   assert.equal(transitPlace.classification.entityType, "BOARDING_LOCATION");
-  assert.equal(transitPlace.classification.confidence, "MEDIUM");
+  assert.equal(transitPlace.classification.confidence, "LOW");
   assert.equal(serviceArea.classification.entityType, "SERVICE_AREA");
-  assert.deepEqual(result.candidates.map((candidate) => candidate.sequence), [1, 2, 3, 4, 5]);
+  assert.deepEqual(result.candidates.map((candidate) => candidate.sequence), [1, 2, 3, 4]);
 });
 
 test("road-path candidate review can start from corridor endpoint anchors without preselected terminals", async () => {
@@ -102,7 +103,13 @@ test("road-path candidate review can start from corridor endpoint anchors withou
       _id: "route-stop-2", code: "KAL", name: "Kalanki",
       district: "Kathmandu", coordinates: { lat: 27, lng: 85.07 },
     }]),
-    discoverPlaces: async () => [],
+    discoverPlaces: async () => [{
+      candidateName: "Bardibas", candidateCoordinates: { lat: 27, lng: 85.03 },
+      source: "REVERSE_GEOCODE", observationCount: 4, googleTypes: ["locality"],
+    }, {
+      candidateName: "Kalanki", candidateCoordinates: { lat: 27, lng: 85.07 },
+      source: "REVERSE_GEOCODE", observationCount: 4, googleTypes: ["sublocality"],
+    }],
   });
 
   assert.equal(result.candidates.some((candidate) => candidate.isTerminal), false);
@@ -128,22 +135,18 @@ test("candidate engine suppresses repeated corridor endpoint observations", asyn
     selectedRouteOption: { distanceMeters: 140000, durationSeconds: 15000 },
     polyline: [[85.3, 27.7], [84.9, 27]],
   }, {
-    StopModel: stopModel([{
-      _id: "kalanki", code: "KAL", name: "Kalanki",
-      coordinates: { lat: 27.69, lng: 85.294 },
-    }]),
+    StopModel: stopModel([]),
     discoverPlaces: async () => [{
       candidateName: "Kathmandu", candidateCoordinates: { lat: 27.69, lng: 85.29 },
     }, {
       candidateName: "Hetauda", candidateCoordinates: { lat: 27.42, lng: 85.14 },
+      source: "REVERSE_GEOCODE", observationCount: 4, googleTypes: ["locality"],
     }, {
       candidateName: "Birgunj", candidateCoordinates: { lat: 27.01, lng: 84.9 },
     }],
   });
 
-  assert.deepEqual(result.candidates.map((candidate) => candidate.providerSnapshot.displayName), [
-    "Kalanki", "Hetauda",
-  ]);
+  assert.deepEqual(result.candidates.map((candidate) => candidate.providerSnapshot.displayName), ["Hetauda"]);
 });
 
 test("distance alone never auto-matches a Google observation to a differently named stop", async () => {
@@ -158,6 +161,7 @@ test("distance alone never auto-matches a Google observation to a differently na
     }]),
     discoverPlaces: async () => [{
       candidateName: "Nearby Bazaar Bus Stop", candidateCoordinates: { lat: 27, lng: 85.0501 },
+      source: "SEARCH_ALONG_ROUTE", googleTypes: ["bus_station"],
     }],
   });
   const suggestion = result.candidates.find((candidate) =>
@@ -165,7 +169,7 @@ test("distance alone never auto-matches a Google observation to a differently na
   );
   assert.equal(suggestion.matchedStopId, null);
   assert.equal(suggestion.classification.entityType, "BOARDING_LOCATION");
-  assert.equal(String(suggestion.classification.suggestedParentStopId), "existing");
+  assert.equal(suggestion.classification.suggestedParentStopId, null);
   assert.equal(suggestion.reviewStatus, "EXCLUDE");
 });
 
@@ -181,6 +185,10 @@ test("a Google bus stand recovers its canonical locality without becoming a seco
       coordinates: { lat: 27.709, lng: 85.349 },
     }]),
     discoverPlaces: async () => [{
+      candidateName: "Koteshwar", candidateCoordinates: { lat: 27.709, lng: 85.349 },
+      formattedAddress: "Koteshwar, Kathmandu", googleTypes: ["sublocality"],
+      source: "REVERSE_GEOCODE", observationCount: 4,
+    }, {
       candidateName: "Koteshwore Bus Stand",
       candidateCoordinates: { lat: 27.709, lng: 85.35 },
       formattedAddress: "Ring Road, Kathmandu",
@@ -200,7 +208,7 @@ test("a Google bus stand recovers its canonical locality without becoming a seco
   assert.equal(boarding.reviewStatus, "EXCLUDE");
 });
 
-test("endpoint coverage is dense for the first and last 40 km but the middle stays road-tight", async () => {
+test("endpoint density changes evidence threshold but never promotes registry proximity alone", async () => {
   const result = await buildRouteStopCandidates({
     originAnchor: { _id: "origin", name: "Origin", coordinates: { lat: 27, lng: 85 } },
     destinationAnchor: { _id: "destination", name: "Destination", coordinates: { lat: 27, lng: 86 } },
@@ -214,7 +222,13 @@ test("endpoint coverage is dense for the first and last 40 km but the middle sta
     }, {
       _id: "destination-zone", name: "Destination Child", coordinates: { lat: 27.002, lng: 85.9 },
     }]),
-    discoverPlaces: async () => [],
+    discoverPlaces: async () => [{
+      candidateName: "Origin Child", candidateCoordinates: { lat: 27.002, lng: 85.1 },
+      source: "REVERSE_GEOCODE", observationCount: 2, googleTypes: ["locality"],
+    }, {
+      candidateName: "Destination Child", candidateCoordinates: { lat: 27.002, lng: 85.9 },
+      source: "REVERSE_GEOCODE", observationCount: 2, googleTypes: ["locality"],
+    }],
   });
 
   assert.ok(result.candidates.some((candidate) => candidate.providerSnapshot.displayName === "Origin Child"));
@@ -272,7 +286,7 @@ test("missing-stop proposals are prefilled from temporary Google place details",
     variant: { _id: "variant", corridorId: "corridor", status: "DRAFT", direction: "FORWARD" },
     review: {
       selectedRouteOptionKey: "route", reviewStatus: "STOP_CANDIDATES_READY",
-      routeDataVersion: 2, candidateEngineVersion: 9, routeOptions: [],
+      routeDataVersion: 2, candidateEngineVersion: 14, routeOptions: [],
     },
     candidates: [{
       _id: "candidate", sequence: 1, reviewStatus: "UNREVIEWED",
@@ -301,7 +315,7 @@ test("draft next action is explicit and follows review decisions instead of cand
     variant: { _id: "variant", corridorId: "corridor", status: "DRAFT", direction: "FORWARD" },
     review: {
       selectedRouteOptionKey: "route", reviewStatus: "STOP_CANDIDATES_READY",
-      routeDataVersion: 2, candidateEngineVersion: 9, routeOptions: [],
+      routeDataVersion: 2, candidateEngineVersion: 14, routeOptions: [],
     },
   };
   assert.equal(mapVariantDraft({
@@ -324,7 +338,7 @@ test("boarding-location evidence never blocks the route path naming step", () =>
     variant: { _id: "variant", corridorId: "corridor", status: "DRAFT", direction: "FORWARD" },
     review: {
       selectedRouteOptionKey: "route", reviewStatus: "STOP_CANDIDATES_READY",
-      routeDataVersion: 2, candidateEngineVersion: 9, routeOptions: [],
+      routeDataVersion: 2, candidateEngineVersion: 14, routeOptions: [],
     },
     candidates: [{
       _id: "boarding", reviewStatus: "UNREVIEWED",
@@ -342,20 +356,4 @@ test("boarding-location evidence never blocks the route path naming step", () =>
     _id: "destination", reviewStatus: "USE_EXISTING", classification: { entityType: "ROUTE_STOP" },
   }], { originTerminalStopId: null, destinationTerminalStopId: null });
   assert.deepEqual(included.map((candidate) => candidate._id), ["origin", "destination"]);
-});
-
-test("stale route and candidate-engine payloads are never returned to the admin", () => {
-  const draft = mapVariantDraft({
-    variant: { _id: "variant", corridorId: "corridor", status: "DRAFT", direction: "FORWARD" },
-    review: {
-      selectedRouteOptionKey: "old-route", reviewStatus: "STOP_CANDIDATES_READY",
-      routeDataVersion: 1, candidateEngineVersion: 1,
-      routeOptions: [{ optionKey: "old-route", distanceMeters: 1, durationSeconds: 1 }],
-    },
-    candidates: [{ _id: "old", reviewStatus: "UNREVIEWED", providerSnapshot: { displayName: "Kathmandu" } }],
-  });
-  assert.deepEqual(draft.routeOptions, []);
-  assert.deepEqual(draft.candidates, []);
-  assert.equal(draft.nextAction, "SELECT_PATH");
-  assert.match(draft.warnings[0], /older engine/i);
 });

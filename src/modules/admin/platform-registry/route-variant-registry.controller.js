@@ -2,6 +2,7 @@
 
 const variants = require("./route-variant-registry.service.js");
 const sequences = require("./route-stop-sequence.service.js");
+const revisions = require("./variant-revision.service.js");
 const {
   VARIANT_WRITE_CONTEXT,
 } = require("./variant-lifecycle.policy.js");
@@ -42,6 +43,27 @@ async function getVariantsByCorridor(req, res) {
       req.params.corridorId, req.query
     );
     res.status(200).json({ success: true, results: data.length, data });
+  } catch (error) {
+    sendError(res, error);
+  }
+}
+
+async function getVariantDetails(req, res) {
+  try {
+    const data = await revisions.getVariantDetails(req.params.id);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    sendError(res, error);
+  }
+}
+
+async function createVariantRevision(req, res) {
+  try {
+    const data = await revisions.createVariantRevision(
+      req.params.id, req.adminInfo?.id,
+      { includeCompanion: req.body?.includeCompanion !== false }
+    );
+    res.status(201).json({ success: true, message: "Variant revision draft created.", data });
   } catch (error) {
     sendError(res, error);
   }
@@ -98,5 +120,5 @@ async function getStopsForVariant(req, res) {
 
 module.exports = {
   createVariant, getVariantsByCorridor, updateVariant, deleteVariant,
-  setVariantStops, getStopsForVariant,
+  getVariantDetails, createVariantRevision, setVariantStops, getStopsForVariant,
 };

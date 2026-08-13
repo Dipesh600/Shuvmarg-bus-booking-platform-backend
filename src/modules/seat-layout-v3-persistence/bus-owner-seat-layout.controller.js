@@ -46,6 +46,16 @@ function createBusOwnerSeatLayoutController(services, logger = console) {
         req.params.fleetId, requiredBodyId(req, "revisionId"), ownerActor(req)
       )),
     })),
+    createInitialCustomLayout: attempt(async (req, res) => {
+      const value = await services.fleets.createInitialCustomLayout(
+        req.params.fleetId, req.body, ownerActor(req)
+      );
+      return res.status(201).json({ success: true, data: {
+        assignment: assignmentDto(value.assignment),
+        template: templateDto(value.template),
+        revision: revisionDto(value.revision, true),
+      } });
+    }),
     requestChange: attempt(async (req, res) => res.status(202).json({
       success: true, data: changeRequestDto(await services.fleets.requestChange(
         req.params.fleetId, requiredBodyId(req, "proposedRevisionId"), ownerActor(req)

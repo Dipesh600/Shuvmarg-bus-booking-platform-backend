@@ -11,12 +11,10 @@ const User             = require("../models/userModel.js");
 const DriverProfile    = require("../models/driverProfileModel.js");
 const logger           = require("../utils/logger.js");
 const { tripSeatLayoutDualWriteService } = require("../src/modules/seat-layout-v3-persistence");
+const { buildCompatibilitySeatsFromV3 } = require("./tripSeatCompatibilityService.js");
 
-// ---------------------------------------------------------------------------
-// Trip Status State Machine
 // Industry-standard lifecycle: scheduled → boarding → in_transit → completed
 // cancelled can only be set from scheduled or boarding (never mid-transit)
-// ---------------------------------------------------------------------------
 const VALID_TRANSITIONS = {
     scheduled:  ["boarding", "cancelled"],
     boarding:   ["in_transit", "cancelled"],
@@ -35,9 +33,7 @@ const validateStatusTransition = (currentStatus, newStatus) => {
     }
 };
 
-// ---------------------------------------------------------------------------
 // Helper: check bus owner KYC approval
-// ---------------------------------------------------------------------------
 const checkBusOwnerVerification = async (userId) => {
     const busOwner = await BusOwner.findOne({ user: userId });
     return busOwner && busOwner.verificationStatus === "approved";
@@ -159,7 +155,12 @@ const createTrip = async (ownerId, tripData, role = "OWNER") => {
     }
 
     if (seata.length === 0 && seatb.length === 0 && seatc.length === 0) {
-        throw new Error("Could not determine seat layout for this bus. Check fleet configuration.");
+        const v3Seats = await buildCompatibilitySeatsFromV3(busId);
+        if (v3Seats) ({ seata, seatb, seatc } = v3Seats);
+    }
+
+    if (seata.length === 0 && seatb.length === 0 && seatc.length === 0) {
+        throw new Error("This fleet has no published V3 seat-layout assignment.");
     }
 
     const tripId = `TRIP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;

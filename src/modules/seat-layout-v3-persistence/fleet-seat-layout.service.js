@@ -2,6 +2,7 @@
 
 const policy = require("./seat-layout-persistence.policy");
 const { SeatLayoutPersistenceError } = require("./seat-layout-persistence.error");
+const { validateSeatLayoutV3, seatLayoutV3Fingerprint } = require("../../domain/seat-layout-v3");
 
 function sameId(first, second) {
   return String(first) === String(second);
@@ -60,6 +61,32 @@ function createFleetSeatLayoutService(repository) {
     return repository.createInitialAssignment({ fleet, template, revision, actor });
   }
 
+  async function createInitialCustomLayout(fleetId, input, actor) {
+    const fleet = await assertFleetAccess(fleetId, actor);
+    if (!["DRAFT", "REJECTED"].includes(fleet.approvalStatus)) {
+      throw new SeatLayoutPersistenceError("FLEET_LAYOUT_INITIAL_LOCKED", "A custom initial layout can only be created while the fleet is a draft.", 409);
+    }
+    if (await repository.findAssignment(fleetId)) {
+      throw new SeatLayoutPersistenceError("FLEET_LAYOUT_ALREADY_ASSIGNED", "This fleet already has a seat layout.", 409);
+    }
+    const name = typeof input?.name === "string" ? input.name.trim() : "";
+    if (name.length < 2 || name.length > 120) {
+      throw new SeatLayoutPersistenceError("SEAT_LAYOUT_INPUT_INVALID", "Layout name must contain 2 to 120 characters.", 422);
+    }
+    const validated = validateSeatLayoutV3(input?.layout);
+    let sourceTemplate = null;
+    if (input?.sourceTemplateId) {
+      sourceTemplate = policy.requireRecord(await repository.findTemplate(input.sourceTemplateId), "SEAT_LAYOUT_TEMPLATE_NOT_FOUND", "Source seat-layout template not found.");
+      const accessiblePlatform = sourceTemplate.scope === "PLATFORM" && sourceTemplate.status === "ACTIVE";
+      const accessibleOwner = sourceTemplate.scope === "OPERATOR" && sameId(sourceTemplate.ownerId, actor.id);
+      if (!accessiblePlatform && !accessibleOwner) throw new SeatLayoutPersistenceError("SEAT_LAYOUT_SOURCE_FORBIDDEN", "The source layout is not available to this operator.", 403);
+    }
+    return repository.createInitialCustomLayout({
+      fleet, sourceTemplate, name, layout: validated.layout, totalPlaces: validated.totalPlaces,
+      physicalFingerprint: seatLayoutV3Fingerprint(validated.layout), actor,
+    });
+  }
+
   async function requestChange(fleetId, proposedRevisionId, actor) {
     const fleet = await assertFleetAccess(fleetId, actor);
     const assignment = policy.requireRecord(
@@ -96,7 +123,7 @@ function createFleetSeatLayoutService(repository) {
     return repository.rejectChangeRequest(requestId, note, actor);
   }
 
-  return { assignInitial, requestChange, approveChange, rejectChange };
+  return { assignInitial, createInitialCustomLayout, requestChange, approveChange, rejectChange };
 }
 
 module.exports = { createFleetSeatLayoutService };

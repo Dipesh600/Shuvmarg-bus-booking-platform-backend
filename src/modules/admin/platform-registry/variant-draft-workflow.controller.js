@@ -1,7 +1,6 @@
 "use strict";
 
 const workflow = require("./variant-draft-workflow.service.js");
-
 function sendError(res, error) {
   if (!error?.code || !Number.isInteger(error.statusCode)) {
     console.error("[variant-draft-workflow] unexpected error", error);
@@ -33,7 +32,6 @@ async function createVariantDraft(req, res) {
     return sendError(res, error);
   }
 }
-
 async function getVariantDraft(req, res) {
   try {
     const data = await workflow.getVariantDraft(req.params.variantId, {
@@ -44,7 +42,6 @@ async function getVariantDraft(req, res) {
     return sendError(res, error);
   }
 }
-
 async function refreshVariantDraftRouteOptions(req, res) {
   try {
     const data = await workflow.refreshVariantDraftRouteOptions(
@@ -55,7 +52,6 @@ async function refreshVariantDraftRouteOptions(req, res) {
     return sendError(res, error);
   }
 }
-
 async function searchVariantDraftGuidancePlaces(req, res) {
   try {
     const data = await workflow.searchVariantDraftGuidancePlaces(
@@ -66,7 +62,6 @@ async function searchVariantDraftGuidancePlaces(req, res) {
     return sendError(res, error);
   }
 }
-
 async function selectVariantDraftRouteOption(req, res) {
   try {
     const data = await workflow.selectVariantDraftRouteOption(
@@ -77,7 +72,6 @@ async function selectVariantDraftRouteOption(req, res) {
     return sendError(res, error);
   }
 }
-
 async function updateVariantDraftDetails(req, res) {
   try {
     const data = await workflow.updateVariantDraftDetails(
@@ -88,7 +82,6 @@ async function updateVariantDraftDetails(req, res) {
     return sendError(res, error);
   }
 }
-
 async function prepareVariantDraftStopCandidates(req, res) {
   try {
     const data = await workflow.prepareVariantDraftStopCandidates(req.params.variantId);
@@ -97,7 +90,6 @@ async function prepareVariantDraftStopCandidates(req, res) {
     return sendError(res, error);
   }
 }
-
 async function updateVariantDraftCandidate(req, res) {
   try {
     const data = await workflow.updateVariantDraftCandidate(
@@ -108,11 +100,18 @@ async function updateVariantDraftCandidate(req, res) {
     return sendError(res, error);
   }
 }
-
 async function useAllMatchedVariantDraftCandidates(req, res) {
   try {
     const data = await workflow.useAllMatchedVariantDraftCandidates(req.params.variantId);
     return res.status(200).json({ success: true, message: "All safe existing Stop matches are selected.", data });
+  } catch (error) {
+    return sendError(res, error);
+  }
+}
+async function addExistingVariantDraftStop(req, res) {
+  try {
+    const data = await workflow.addExistingStopCandidate(req.params.variantId, req.body.stopId);
+    return res.status(200).json({ success: true, message: "Stop added and positioned on the selected road path.", data });
   } catch (error) {
     return sendError(res, error);
   }
@@ -136,6 +135,7 @@ async function activateVariantDraft(req, res) {
 }
 
 module.exports = {
+  addExistingVariantDraftStop,
   activateVariantDraft,
   commitVariantDraft,
   createVariantDraft,

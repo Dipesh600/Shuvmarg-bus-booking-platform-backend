@@ -162,14 +162,11 @@ router.get("/wallet/user-balance/:userId",  adminMiddleware, adminWalletCtrl.get
 router.get("/kyc/unified-list", adminMiddleware, kycVerificationController.getUnifiedKycList);
 router.delete("/ticket/schedule/delete/:id", adminMiddleware, ticketController.deleteTicket);
 
-// Seat Template Management (Admin on behalf of Owner)
+// Legacy V2 seat-template reads remain temporarily for migration/old schedules.
+// All new creation and revision work belongs to Seat Layout V3 below.
 router.get("/templates/all", adminMiddleware, adminTemplateController.getAllSeatsTemplate);
-router.post("/templates/create", adminMiddleware, adminTemplateController.createTemplateForOwner);
 router.get("/templates/user/:userId", adminMiddleware, adminTemplateController.getTemplatesByUser);
 router.get("/templates/:id", adminMiddleware, adminTemplateController.getSeatTemplateById);
-router.patch("/templates/:id", adminMiddleware, adminTemplateController.updateSeatTemplate);
-router.delete("/templates/:id", adminMiddleware, adminTemplateController.deleteSeatTemplate);
-router.patch("/templates/toggleStatus/:id", adminMiddleware, adminTemplateController.toggleSeatTemplateStatus);
 registerAdminSeatLayoutV3Routes(router, adminMiddleware);
 
 // Station/Boarding Point Management
@@ -316,6 +313,8 @@ router.delete("/registry/corridors/:id",  adminMiddleware, platformRegistry.dele
 // Layer 2: Route Variants (Specific paths per corridor)
 router.post("/registry/variants",                          adminMiddleware, platformRegistry.createVariant);
 router.get("/registry/corridors/:corridorId/variants",    adminMiddleware, platformRegistry.getVariantsByCorridor);
+router.get("/registry/variants/:id",                     adminMiddleware, platformRegistry.getVariantDetails);
+router.post("/registry/variants/:id/revisions",          adminMiddleware, platformRegistry.createVariantRevision);
 router.patch("/registry/variants/:id",                    adminMiddleware, platformRegistry.updateVariant);
 router.delete("/registry/variants/:id",                   adminMiddleware, platformRegistry.deleteVariant);
 
@@ -328,6 +327,7 @@ router.get("/registry/variant-drafts/:variantId/guidance-places", adminMiddlewar
 router.patch("/registry/variant-drafts/:variantId/select-route", adminMiddleware, platformRegistry.selectVariantDraftRouteOption);
 router.patch("/registry/variant-drafts/:variantId/details", adminMiddleware, platformRegistry.updateVariantDraftDetails);
 router.post("/registry/variant-drafts/:variantId/stop-candidates", adminMiddleware, platformRegistry.prepareVariantDraftStopCandidates);
+router.post("/registry/variant-drafts/:variantId/stop-candidates/manual", adminMiddleware, platformRegistry.addExistingVariantDraftStop);
 router.patch("/registry/variant-drafts/:variantId/stop-candidates/use-existing", adminMiddleware, platformRegistry.useAllMatchedVariantDraftCandidates);
 router.patch("/registry/variant-drafts/:variantId/stop-candidates/:candidateId", adminMiddleware, platformRegistry.updateVariantDraftCandidate);
 router.post("/registry/variant-drafts/:variantId/commit", adminMiddleware, platformRegistry.commitVariantDraft);

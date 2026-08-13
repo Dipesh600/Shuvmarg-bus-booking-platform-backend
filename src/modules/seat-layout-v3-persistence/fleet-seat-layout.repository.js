@@ -5,9 +5,10 @@ const SeatLayoutTemplate = require("../../../models/seatLayoutTemplateModel");
 const SeatLayoutRevision = require("../../../models/seatLayoutRevisionModel");
 const Assignment = require("../../../models/fleetSeatLayoutAssignmentModel");
 const ChangeRequest = require("../../../models/fleetSeatLayoutChangeRequestModel");
+const SeatLayoutAuditEvent = require("../../../models/seatLayoutAuditEventModel");
 const { SeatLayoutPersistenceError } = require("./seat-layout-persistence.error");
 
-const findFleet = (id) => Fleet.findById(id).select("ownerId").lean();
+const findFleet = (id) => Fleet.findById(id).select("ownerId approvalStatus").lean();
 const findTemplate = (id) => SeatLayoutTemplate.findById(id).lean();
 const findRevision = (id) => SeatLayoutRevision.findById(id).lean();
 const findAssignment = (fleetId) => Assignment.findOne({ fleetId }).lean();
@@ -17,6 +18,42 @@ async function createInitialAssignment({ fleet, template, revision, actor }) {
     fleetId: fleet._id, templateId: template._id, activeRevisionId: revision._id,
     assignedByType: actor.type, assignedById: actor.id,
   });
+}
+
+async function createInitialCustomLayout({ fleet, sourceTemplate, name, layout, totalPlaces, physicalFingerprint, actor }) {
+  const session = await Assignment.startSession();
+  let result;
+  try {
+    await session.withTransaction(async () => {
+      const existing = await Assignment.findOne({ fleetId: fleet._id }).session(session);
+      if (existing) throw new SeatLayoutPersistenceError("FLEET_LAYOUT_ALREADY_ASSIGNED", "This fleet already has a seat layout.", 409);
+      const [template] = await SeatLayoutTemplate.create([{
+        templateCode: `FLT-${String(fleet._id).toUpperCase()}`, name, scope: "OPERATOR",
+        ownerId: fleet.ownerId, sourceTemplateId: sourceTemplate?._id || null,
+        vehicleCategory: layout.vehicleCategory, revisionCounter: 1,
+        createdByType: actor.type, createdById: actor.id,
+      }], { session });
+      const [revision] = await SeatLayoutRevision.create([{
+        templateId: template._id, revisionNumber: 1, status: "PUBLISHED", layout,
+        physicalFingerprint, totalPlaces, changeSummary: "Initial fleet layout",
+        createdByType: actor.type, createdById: actor.id,
+        publishedAt: new Date(), publishedById: actor.id,
+      }], { session });
+      template.currentPublishedRevisionId = revision._id;
+      await template.save({ session });
+      const [assignment] = await Assignment.create([{
+        fleetId: fleet._id, templateId: template._id, activeRevisionId: revision._id,
+        assignedByType: actor.type, assignedById: actor.id,
+      }], { session });
+      await SeatLayoutAuditEvent.create([{
+        action: "INITIAL_FLEET_LAYOUT_CREATED", actorType: actor.type, actorId: actor.id,
+        templateId: template._id, revisionId: revision._id, fleetId: fleet._id,
+        metadata: { totalPlaces },
+      }], { session });
+      result = { template, revision, assignment };
+    });
+    return result;
+  } finally { await session.endSession(); }
 }
 
 async function createChangeRequest({ fleet, assignment, revision, actor }) {
@@ -83,5 +120,5 @@ async function rejectChangeRequest(requestId, note, actor) {
 
 module.exports = {
   findFleet, findTemplate, findRevision, findAssignment,
-  createInitialAssignment, createChangeRequest, approveChangeRequest, rejectChangeRequest,
+  createInitialAssignment, createInitialCustomLayout, createChangeRequest, approveChangeRequest, rejectChangeRequest,
 };

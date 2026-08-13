@@ -18,6 +18,8 @@ const LIMITS = Object.freeze({
   sectionWidth: 10,
   sectionHeight: 40,
   elements: 160,
+  totalElements: 240,
+  passengerPlaces: 100,
   elementSpan: 4,
   labelLength: 20,
   nameLength: 80,

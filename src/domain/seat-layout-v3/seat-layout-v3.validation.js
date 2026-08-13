@@ -62,6 +62,13 @@ function validateSeatLayoutV3(value) {
     sectionIds: new Set(), orders: new Set(), elementIds: new Set(), labels: new Set(), reservable: 0,
   };
   const sections = layout.sections.map((section, index) => validateSection(section, index, state));
+  const totalElements = sections.reduce((total, section) => total + section.elements.length, 0);
+  if (totalElements > LIMITS.totalElements) {
+    fail(`Seat layout may contain at most ${LIMITS.totalElements} total elements.`, "seatLayout.sections");
+  }
+  if (state.reservable > LIMITS.passengerPlaces) {
+    fail(`Seat layout may contain at most ${LIMITS.passengerPlaces} passenger places.`, "seatLayout.sections");
+  }
   if (Array.from({ length: sections.length }, (_, index) => index).some((index) => !state.orders.has(index))) {
     fail("Section order must be contiguous and start at zero.", "seatLayout.sections");
   }

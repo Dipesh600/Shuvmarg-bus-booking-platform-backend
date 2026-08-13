@@ -3,8 +3,7 @@
 const { discoverStopsAlongRoute } = require("../../../../../services/googlePlacesClient.js");
 const { buildRouteMetric, locateOnRoute, routeTiming } = require("./route-stop-candidate.geometry.js");
 const {
-  buildRegistryCandidates, buildTerminalCandidate, deduplicateCandidates,
-  loadEndpointChildren, loadNearbyCanonicalStops,
+  buildTerminalCandidate, deduplicateCandidates, loadNearbyCanonicalStops,
 } = require("./route-stop-candidate.registry.js");
 const { reconcileTransitPlaces } = require("./route-stop-candidate.place-matching.js");
 
@@ -34,6 +33,10 @@ async function loadGooglePlaceSuggestions({ polyline, option, metric, originName
           ...(suggestion.googleTypes || []),
         ].filter(Boolean))],
         administrativeContext: suggestion.administrativeContext || null,
+        evidenceCount: Number.isFinite(suggestion.observationCount)
+          ? suggestion.observationCount : 1,
+        observedSpanKm: Number.isFinite(suggestion.observedSpanKm)
+          ? suggestion.observedSpanKm : 0,
       },
       coordinates,
       ...routeTiming(locateOnRoute(coordinates, metric), option, metric),
@@ -58,12 +61,6 @@ async function buildRouteStopCandidates({
   const proximityMeters = dependencies.proximityMeters || DEFAULT_ROUTE_PROXIMITY_METERS;
   const serviceAreaMatchMeters = dependencies.serviceAreaMatchMeters || DEFAULT_SERVICE_AREA_MATCH_METERS;
   const canonicalStops = await loadNearbyCanonicalStops(metric, serviceAreaMatchMeters, dependencies.StopModel);
-  const endpointChildren = await loadEndpointChildren(
-    metric, [origin?._id, destination?._id], dependencies.StopModel
-  );
-  const nearbyStops = canonicalStops.filter(({ location }) =>
-    location.distanceToRouteMeters <= proximityMeters
-  );
   const suggestions = await loadGooglePlaceSuggestions({
     polyline, option: selectedRouteOption, metric, originName: origin?.name,
     destinationName: destination?.name,
@@ -76,16 +73,6 @@ async function buildRouteStopCandidates({
   const resolvedDestinationTerminal = destinationTerminal ||
     (isEligibleRouteStopAnchor(destinationAnchor) ? destinationAnchor : null);
   const terminalIds = [resolvedOriginTerminal?._id, resolvedDestinationTerminal?._id].filter(Boolean);
-  const endpointScopedChildren = endpointChildren.filter(({ location }) =>
-    location.distanceToRouteMeters <= proximityMeters && (
-      location.distanceFromOriginMeters <= ENDPOINT_DENSE_COVERAGE_METERS ||
-      metric.lengthMeters - location.distanceFromOriginMeters <= ENDPOINT_DENSE_COVERAGE_METERS
-    )
-  );
-  const registryEvidence = [...new Map([
-    ...nearbyStops, ...endpointScopedChildren, ...reconciled.matchedEntries,
-  ]
-    .map((entry) => [String(entry.stop._id), entry])).values()];
   const routeServiceAreas = reconciled.serviceAreaSuggestions.filter((candidate) => {
     const remainingMeters = Math.max(0, metric.lengthMeters - candidate.distanceFromOriginMeters);
     const inOrigin = candidate.distanceFromOriginMeters <= ENDPOINT_DENSE_COVERAGE_METERS;
@@ -94,10 +81,37 @@ async function buildRouteStopCandidates({
       inDestination ? "DESTINATION_40KM" : "MIDDLE";
     const routeLocation = locateOnRoute(candidate.coordinates, metric);
     candidate.classification.distanceToRouteMeters = Math.round(routeLocation.distanceToRouteMeters);
-    return routeLocation.distanceToRouteMeters <= proximityMeters;
+    const observationScore = candidate.providerSnapshot.evidenceCount >= 4 ? 35 :
+      candidate.providerSnapshot.evidenceCount >= 2 ? 25 : 10;
+    const localityTypeScore = candidate.providerSnapshot.types.some((type) =>
+      ["neighborhood", "sublocality", "sublocality_level_1", "sublocality_level_2",
+        "sublocality_level_3", "sublocality_level_4", "locality"].includes(type)
+    ) ? 10 : 5;
+    const routeScore = routeLocation.distanceToRouteMeters <= 100 ? 10 :
+      routeLocation.distanceToRouteMeters <= 300 ? 5 : 0;
+    const endpointScore = inOrigin || inDestination ? 10 : 0;
+    const transitScore = candidate.classification.reasonCodes.some((reason) =>
+      reason === "TRANSIT_EVIDENCE_CORROBORATED" ||
+      reason === "TRANSIT_PLACE_SERVICE_AREA_INFERENCE"
+    ) ? 30 : 0;
+    // Registry identity is useful for reuse, but never proves that this route
+    // serves the Stop. It only strengthens independently observed road evidence.
+    const registryMatchScore = candidate.matchedStopId ? 10 : 0;
+    const evidenceScore = observationScore + localityTypeScore + routeScore + endpointScore +
+      transitScore + registryMatchScore;
+    candidate.classification.evidenceScore = evidenceScore;
+    candidate.classification.confidence = evidenceScore >= 70 ? "HIGH" :
+      evidenceScore >= 50 ? "MEDIUM" : "LOW";
+    // Endpoint coverage is intentionally review-first. A single precise
+    // neighbourhood/locality observation on the selected road is useful
+    // evidence in the first/last 40 km even when Shuvmarg has no matching
+    // Stop yet. Requiring a registry match here made the scanner preserve
+    // known places while silently dropping the exact missing places the
+    // review workflow is meant to discover.
+    const threshold = inOrigin || inDestination ? 40 : 55;
+    return routeLocation.distanceToRouteMeters <= proximityMeters && evidenceScore >= threshold;
   });
   const interior = deduplicateCandidates([
-    ...buildRegistryCandidates(registryEvidence, selectedRouteOption, metric, terminalIds),
     ...routeServiceAreas,
     ...reconciled.annotatedPlaces,
   ], dependencies.matchRadiusMeters || DEFAULT_MATCH_RADIUS_METERS, {
