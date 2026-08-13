@@ -82,3 +82,20 @@ test("missing fleet revision is a stable validation error", async () => {
   assert.equal(res.body.errorCode, "SEAT_LAYOUT_INPUT_INVALID");
   assert.deepEqual(res.body.details, { field: "revisionId" });
 });
+
+test("custom initial layout uses the authenticated fleet owner", async () => {
+  let received;
+  const svc = services({ fleets: { createInitialCustomLayout: async (fleetId, input, actor) => {
+    received = { fleetId, input, actor };
+    return { assignment: {}, template: {}, revision: {} };
+  } } });
+  const controller = createBusOwnerSeatLayoutController(svc, { error() {} });
+  const res = response();
+  await controller.createInitialCustomLayout({
+    params: { fleetId: "fleet-1" }, body: { name: "Custom", layout: {} },
+    userInfo: { id: "owner-1" },
+  }, res);
+  assert.equal(res.statusCode, 201);
+  assert.deepEqual(received.actor, { id: "owner-1", type: "BUS_OWNER" });
+  assert.equal(received.fleetId, "fleet-1");
+});

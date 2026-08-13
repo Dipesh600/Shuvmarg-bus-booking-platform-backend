@@ -19,6 +19,17 @@ function repository() {
   };
 }
 
+const validLayout = {
+  schemaVersion: 3, vehicleCategory: "BUS", sections: [{
+    sectionId: "lower", name: "Passenger cabin", role: "LOWER_CABIN", order: 0,
+    widthUnits: 3, heightUnits: 3, elements: [{
+      elementId: "S-1", kind: "SEAT", label: "S1", position: { x: 0, y: 0 },
+      size: { width: 1, height: 1 },
+      attributes: { comfort: "STANDARD", commercialClass: "STANDARD", accessible: false },
+    }],
+  }],
+};
+
 test("owner cannot assign a layout to another owner's fleet", async () => {
   const repo = repository();
   repo.findFleet = async () => ({ _id: "fleet-1", ownerId: "owner-2" });
@@ -52,6 +63,30 @@ test("draft revisions cannot be assigned", async () => {
   await assert.rejects(
     createFleetSeatLayoutService(repo).assignInitial("fleet-1", "rev-1", owner),
     (error) => error.code === "SEAT_LAYOUT_REVISION_NOT_PUBLISHED"
+  );
+});
+
+test("owner can create a private custom initial layout only for a draft fleet", async () => {
+  const repo = repository();
+  repo.findFleet = async () => ({ _id: "fleet-1", ownerId: "owner-1", approvalStatus: "DRAFT" });
+  repo.findAssignment = async () => null;
+  repo.createInitialCustomLayout = async (input) => input;
+  const result = await createFleetSeatLayoutService(repo).createInitialCustomLayout(
+    "fleet-1", { name: "Himalayan custom layout", layout: validLayout }, owner
+  );
+  assert.equal(result.name, "Himalayan custom layout");
+  assert.equal(result.totalPlaces, 1);
+  assert.equal(result.fleet._id, "fleet-1");
+});
+
+test("custom initial layout cannot bypass a live fleet lifecycle", async () => {
+  const repo = repository();
+  repo.findFleet = async () => ({ _id: "fleet-1", ownerId: "owner-1", approvalStatus: "APPROVED" });
+  await assert.rejects(
+    createFleetSeatLayoutService(repo).createInitialCustomLayout(
+      "fleet-1", { name: "Unsafe replacement", layout: validLayout }, owner
+    ),
+    (error) => error.code === "FLEET_LAYOUT_INITIAL_LOCKED"
   );
 });
 

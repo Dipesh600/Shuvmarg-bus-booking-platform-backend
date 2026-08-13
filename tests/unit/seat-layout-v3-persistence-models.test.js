@@ -7,6 +7,7 @@ const Revision = require("../../models/seatLayoutRevisionModel");
 const Assignment = require("../../models/fleetSeatLayoutAssignmentModel");
 const ChangeRequest = require("../../models/fleetSeatLayoutChangeRequestModel");
 const Snapshot = require("../../models/tripSeatLayoutSnapshotModel");
+const AuditEvent = require("../../models/seatLayoutAuditEventModel");
 const fixtures = require("../fixtures/seat-layout-v3.fixtures");
 
 test("template scope enforces platform/operator ownership", async () => {
@@ -54,5 +55,15 @@ test("append-only records reject destructive model operations before database ac
       { _id: "507f1f77bcf86cd799439011" }, { $set: { layout: fixtures.miniBus() } }
     ),
     (error) => error.code === "APPEND_ONLY_RECORD"
+  );
+  await assert.rejects(
+    AuditEvent.deleteOne({ _id: "507f1f77bcf86cd799439011" }),
+    (error) => error.code === "APPEND_ONLY_RECORD"
+  );
+  await assert.rejects(
+    AuditEvent.updateOne(
+      { _id: "507f1f77bcf86cd799439011" }, { $set: { action: "TEMPLATE_CREATED" } }
+    ),
+    /append-only/
   );
 });

@@ -73,7 +73,7 @@ test("operator draft submission moves only its own revision to review", async ()
   const result = await createSeatLayoutTemplateService(repository)
     .submitRevision("template-1", "rev-2", owner);
   assert.equal(result, "submitted");
-  assert.deepEqual(command, { templateId: "template-1", revisionId: "rev-2" });
+  assert.deepEqual(command, { templateId: "template-1", revisionId: "rev-2", actor: owner });
 });
 
 test("operator can adopt only the published revision of a platform template", async () => {

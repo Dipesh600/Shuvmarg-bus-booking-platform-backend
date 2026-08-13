@@ -2,6 +2,48 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const policy = require('../../../src/modules/booking/passenger-booking-preparation/passenger-booking-preparation.policy.js');
 
+test('seat-layout pricing is authoritative per selected passenger place', () => {
+  const pricing = {
+    snapshot: {
+      layout: {
+        sections: [{ elements: [
+          { elementId: 'seat-a1', kind: 'SEAT', label: 'A1' },
+          { elementId: 'berth-u1', kind: 'BERTH', label: 'U1' },
+        ] }],
+      },
+      placeStates: [
+        { elementId: 'seat-a1', state: 'OPEN' },
+        { elementId: 'berth-u1', state: 'OPEN' },
+      ],
+      pricing: { defaultFare: 900, overrides: [{ elementId: 'berth-u1', fare: 1400 }] },
+    },
+    control: {
+      defaultFareOverride: 1000,
+      fareOverrides: [{ elementId: 'berth-u1', fare: 1500 }],
+      stateOverrides: [],
+    },
+  };
+
+  assert.deepEqual(policy.calculateSeatLayoutOriginalAmount(pricing, ['a1', 'U1']), {
+    isValid: true,
+    originalAmount: 2500,
+  });
+});
+
+test('seat-layout pricing rejects withdrawn passenger places', () => {
+  const pricing = {
+    snapshot: {
+      layout: { sections: [{ elements: [{ elementId: 'a1', kind: 'SEAT', label: 'A1' }] }] },
+      placeStates: [{ elementId: 'a1', state: 'OPEN' }],
+      pricing: { defaultFare: 900, overrides: [] },
+    },
+    control: { stateOverrides: [{ elementId: 'a1', state: 'WITHDRAWN' }] },
+  };
+  const result = policy.calculateSeatLayoutOriginalAmount(pricing, ['A1']);
+  assert.equal(result.isValid, false);
+  assert.equal(result.responseBody.errorCode, 'SEAT_UNAVAILABLE');
+});
+
 test('passenger-booking-preparation policy tests', async (t) => {
   await t.test('1. validatePreparationInput rejects missing fields', () => {
     assert.equal(policy.validatePreparationInput({}).isValid, false);

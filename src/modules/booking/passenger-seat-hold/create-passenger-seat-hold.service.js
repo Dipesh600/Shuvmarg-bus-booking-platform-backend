@@ -48,6 +48,15 @@ const createOrReusePassengerSeatHold = async ({
       'A valid server-calculated booking amount is required.'
     );
   }
+  const v3Places = typeof repository.findTripSeatLayoutAvailability === 'function'
+    ? await repository.findTripSeatLayoutAvailability(tripId) : null;
+  if (v3Places) {
+    const available = new Map(v3Places.map((place) => [place.label.toLowerCase(), place.state]));
+    const invalid = normalizedSeats.filter((label) => available.get(label) !== 'OPEN');
+    if (invalid.length) {
+      throw errors.invalidSeatSelectionError('One or more selected passenger places are withdrawn or unavailable.');
+    }
+  }
   const seatKeys = policy.buildSeatKeys(tripId, normalizedSeats);
   const userTripKey = policy.buildUserTripKey(userId, tripId);
 

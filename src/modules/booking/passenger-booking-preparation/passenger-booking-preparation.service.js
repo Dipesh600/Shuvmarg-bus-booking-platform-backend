@@ -37,10 +37,12 @@ function createPassengerBookingPreparationService({
         };
       }
 
-      const amountResult = policy.calculateAuthoritativeOriginalAmount(
-        trip,
-        normalizedSeats.length
-      );
+      const layoutPricing = typeof repository.findTripSeatLayoutPricing === "function"
+        ? await repository.findTripSeatLayoutPricing(scheduleId)
+        : null;
+      const amountResult = layoutPricing
+        ? policy.calculateSeatLayoutOriginalAmount(layoutPricing, normalizedSeats)
+        : policy.calculateAuthoritativeOriginalAmount(trip, normalizedSeats.length);
       if (!amountResult.isValid) {
         return {
           statusCode: amountResult.statusCode,

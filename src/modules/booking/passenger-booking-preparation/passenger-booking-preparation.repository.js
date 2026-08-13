@@ -1,4 +1,9 @@
-function createPassengerBookingPreparationRepository({ Trip, Seat }) {
+function createPassengerBookingPreparationRepository({
+  Trip,
+  Seat,
+  TripSeatLayoutSnapshot,
+  TripSeatLayoutControl,
+}) {
   return {
     async findBookableTripContext(scheduleId) {
       return Trip.findById(scheduleId)
@@ -9,6 +14,15 @@ function createPassengerBookingPreparationRepository({ Trip, Seat }) {
 
     async findTripSeatDocument(scheduleId) {
       return Seat.findOne({ tripId: scheduleId });
+    },
+
+    async findTripSeatLayoutPricing(scheduleId) {
+      if (!TripSeatLayoutSnapshot || !TripSeatLayoutControl) return null;
+      const [snapshot, control] = await Promise.all([
+        TripSeatLayoutSnapshot.findOne({ tripId: scheduleId }).lean(),
+        TripSeatLayoutControl.findOne({ tripId: scheduleId }).lean(),
+      ]);
+      return snapshot ? { snapshot, control } : null;
     },
   };
 }
