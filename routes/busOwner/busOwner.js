@@ -19,6 +19,7 @@ const busOwnerRouteCon = require("../../controllers/busOwnerController/busOwnerR
 const tripCon = require("../../controllers/busOwnerController/busTripController.js");
 const settlementCon = require("../../controllers/busOwnerController/settlementController.js");
 const fareRuleCon = require("../../controllers/busOwnerController/fareRuleController.js");
+const { registerBusOwnerSeatLayoutV3Routes } = require("./seatLayoutV3Routes.js");
 
 // ── Pipeline: JWT verify → DB status check → role check ─────────────────────
 // Applied to ALL routes in this router — no individual `auth` needed.
@@ -48,6 +49,7 @@ registerBusOwnerApprovedFleetRoutes(router, { fleetManagement });
 // Fleet Document Lifecycle (draft document upload & read-url)
 router.put("/fleets/:fleetId/documents/:slot", busOwnerFleetDocumentController.uploadDocument);
 router.get("/fleets/:fleetId/documents/:slot/read-url", busOwnerFleetDocumentController.getDocumentReadUrl);
+registerBusOwnerSeatLayoutV3Routes(router);
 
 // ── REQUIRE APPROVED KYC FOR OPERATIONAL ROUTES BELOW ─────────────────────────
 router.use(requireApprovedBusOwner);

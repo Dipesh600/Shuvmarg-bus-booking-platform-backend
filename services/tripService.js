@@ -6,9 +6,11 @@ const OperatorRouteConfig = require("../models/operatorRouteConfigModel.js");
 const Trip             = require("../models/tripModel.js");
 const SeatTemplate     = require('../models/seatTemplateModel.js');
 const Seat             = require("../models/seatsModel.js");
+const TripSeatLayoutSnapshot = require("../models/tripSeatLayoutSnapshotModel.js");
 const User             = require("../models/userModel.js");
 const DriverProfile    = require("../models/driverProfileModel.js");
 const logger           = require("../utils/logger.js");
+const { tripSeatLayoutDualWriteService } = require("../src/modules/seat-layout-v3-persistence");
 
 // ---------------------------------------------------------------------------
 // Trip Status State Machine
@@ -162,30 +164,23 @@ const createTrip = async (ownerId, tripData, role = "OWNER") => {
 
     const tripId = `TRIP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    const newTrip = await Trip.create({
-        tripId,
-        busId,
-        routeId:   resolvedRouteId,
-        variantId: resolvedVariantId,
-        seatTemplateId: seatTemplateId || null,
-        ownerId,
-        brandId,          // propagated from the fleet
-        tripDate,
-        departureTime, arrivalTime, shift,
-        tripFare:         tripFare        || null,
-        recurrence:       recurrence      || "none",
-        daysOfWeek:       daysOfWeek      || [],
-        autoGenerateUntil: autoGenerateUntil || null,
-        isActive:         isActive !== undefined ? isActive : true,
-        status:           "scheduled",
+    const creation = await tripSeatLayoutDualWriteService.createTrip({
+        trip: {
+            tripId, busId, routeId: resolvedRouteId, variantId: resolvedVariantId,
+            seatTemplateId: seatTemplateId || null, ownerId, brandId, tripDate,
+            departureTime, arrivalTime, shift, tripFare: tripFare ?? null,
+            recurrence: recurrence || "none", daysOfWeek: daysOfWeek || [],
+            autoGenerateUntil: autoGenerateUntil || null,
+            isActive: isActive !== undefined ? isActive : true, status: "scheduled",
+        },
+        legacySeats: {
+            seata: seata.map((seat) => ({ seatNo: seat.seatNo, booked: false })),
+            seatb: seatb.map((seat) => ({ seatNo: seat.seatNo, booked: false })),
+            seatc: seatc.map((seat) => ({ seatNo: seat.seatNo, booked: false })),
+        },
+        defaultFare: tripFare ?? null,
     });
-
-    const tripSeats = await Seat.create({
-        tripId: newTrip._id,
-        seata:  seata.map(s => ({ seatNo: s.seatNo, booked: false })),
-        seatb:  seatb.map(s => ({ seatNo: s.seatNo, booked: false })),
-        seatc:  seatc.map(s => ({ seatNo: s.seatNo, booked: false })),
-    });
+    const { trip: newTrip, seats: tripSeats } = creation;
 
     logger.info("tripService: trip created", {
         tripId:    newTrip.tripId,
@@ -300,6 +295,10 @@ const removeTrip = async (tripId, ownerId = null) => {
 
     if (["in_transit", "completed"].includes(trip.status)) {
         throw new Error(`Cannot delete a trip with status "${trip.status}". Cancel it first.`);
+    }
+
+    if (await TripSeatLayoutSnapshot.exists({ tripId: trip._id })) {
+        throw new Error("This trip has an immutable seat-layout snapshot and cannot be deleted. Cancel it instead.");
     }
 
     await Trip.findOneAndDelete(query);
