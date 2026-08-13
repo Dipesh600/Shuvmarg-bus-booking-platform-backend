@@ -198,7 +198,6 @@ bookingSchema.index({ brandId: 1, status: 1, createdAt: -1 }); // Brand financia
 bookingSchema.index({ busId: 1, status: 1, createdAt: -1 });   // Fleet financial aggregations
 bookingSchema.index({ couponUsed: 1 });
 bookingSchema.index({ couponCode: 1 });
-bookingSchema.index({ ticketId: 1 });
 bookingSchema.index({ agentId: 1, createdAt: -1 });  // Agent booking history
 
 // Virtual field to check if coupon was used
