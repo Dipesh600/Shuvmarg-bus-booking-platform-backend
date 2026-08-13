@@ -1,6 +1,9 @@
 'use strict';
 
 const SeatHold = require('../../../../models/seatHoldModel');
+const Snapshot = require('../../../../models/tripSeatLayoutSnapshotModel');
+const Control = require('../../../../models/tripSeatLayoutControlModel');
+const mongoose = require('mongoose');
 
 const deleteExpiredConflicts = async (userTripKey, seatKeys, userId, tripId, now = new Date()) => {
   return SeatHold.deleteMany({
@@ -105,6 +108,20 @@ const releaseOwnedHold = async (tempBookingId, userId, now = new Date()) => {
   );
 };
 
+const findTripSeatLayoutAvailability = async (tripId) => {
+  if (!mongoose.isValidObjectId(tripId)) return null;
+  const [snapshot, control] = await Promise.all([
+    Snapshot.findOne({ tripId }).select('layout placeStates').lean(),
+    Control.findOne({ tripId }).select('stateOverrides').lean(),
+  ]);
+  if (!snapshot) return null;
+  const states = new Map((snapshot.placeStates || []).map((item) => [item.elementId, item.state]));
+  (control?.stateOverrides || []).forEach((item) => states.set(item.elementId, item.state));
+  return snapshot.layout.sections.flatMap((section) => section.elements)
+    .filter((element) => ['SEAT', 'BERTH'].includes(element.kind))
+    .map((element) => ({ label: element.label, state: states.get(element.elementId) || 'OPEN' }));
+};
+
 module.exports = {
   deleteExpiredConflicts,
   findActiveHoldForUserTrip,
@@ -114,4 +131,5 @@ module.exports = {
   findOwnedActiveHoldByTempId,
   completeOwnedHold,
   releaseOwnedHold,
+  findTripSeatLayoutAvailability,
 };

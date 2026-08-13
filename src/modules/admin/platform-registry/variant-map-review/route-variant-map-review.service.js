@@ -12,11 +12,11 @@ const {
 } = require("./variant-map-review.validation.js");
 const { replaceReview, replaceReviewCandidates, selectReviewRoute } =
   require("./route-variant-map-review.persistence.js");
+const { CANDIDATE_ENGINE_VERSION, ROUTE_DATA_VERSION } =
+  require("./route-variant-map-review.versions.js");
 
 const DEFAULT_REVIEW_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_REVIEW_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const ROUTE_DATA_VERSION = 2;
-const CANDIDATE_ENGINE_VERSION = 9;
 function mapRouteOptionSummary(option) {
   return {
     optionKey: option.optionKey,

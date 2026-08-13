@@ -18,24 +18,41 @@ function haversineKm([lng1, lat1], [lng2, lat2]) {
 function sampleZoneAware(coords, totalRouteKm, maxSamples = null) {
   if (!coords || coords.length === 0) return [];
   if (coords.length === 1) return [{ point: coords[0], km: 0 }];
-  const useZones = totalRouteKm > ZONE_NEAR_KM * 2;
-  const destinationZoneStart = totalRouteKm - ZONE_NEAR_KM;
+  let routeLengthKm = 0;
+  const segments = coords.slice(1).map((end, index) => {
+    const start = coords[index];
+    const lengthKm = haversineKm(start, end);
+    const segment = { start, end, startKm: routeLengthKm, endKm: routeLengthKm + lengthKm, lengthKm };
+    routeLengthKm += lengthKm;
+    return segment;
+  });
+  const interpolate = (targetKm) => {
+    const km = Math.max(0, Math.min(routeLengthKm, targetKm));
+    const segment = segments.find((entry) => km <= entry.endKm) || segments.at(-1);
+    const ratio = segment.lengthKm === 0 ? 0 : (km - segment.startKm) / segment.lengthKm;
+    return [
+      segment.start[0] + (segment.end[0] - segment.start[0]) * ratio,
+      segment.start[1] + (segment.end[1] - segment.start[1]) * ratio,
+    ];
+  };
+  const useZones = (totalRouteKm || routeLengthKm) > ZONE_NEAR_KM * 2 && routeLengthKm > ZONE_NEAR_KM * 2;
+  const destinationZoneStart = routeLengthKm - ZONE_NEAR_KM;
+  const fromTargets = (targets) => targets.map((km) => ({ point: interpolate(km), km }));
+  const evenlySpaced = (startKm, endKm, count) => {
+    if (count <= 0 || endKm < startKm) return [];
+    if (count === 1) return [startKm];
+    return Array.from({ length: count }, (_, index) =>
+      startKm + (endKm - startKm) * index / (count - 1)
+    );
+  };
   const intervalAt = (km) => {
     if (!useZones || km <= ZONE_NEAR_KM || km >= destinationZoneStart) return ZONE_NEAR_INTERVAL;
     return ZONE_MID_INTERVAL;
   };
-  const samples = [{ point: coords[0], km: 0 }];
-  let cumulativeKm = 0;
-  let lastSampleKm = 0;
-  for (let index = 1; index < coords.length; index += 1) {
-    cumulativeKm += haversineKm(coords[index - 1], coords[index]);
-    if (cumulativeKm - lastSampleKm >= intervalAt(cumulativeKm)) {
-      samples.push({ point: coords[index], km: cumulativeKm });
-      lastSampleKm = cumulativeKm;
-    }
-  }
-  const last = coords.at(-1);
-  if (samples.at(-1).point !== last) samples.push({ point: last, km: cumulativeKm });
+  const targets = [0];
+  for (let km = intervalAt(0); km < routeLengthKm; km += intervalAt(km)) targets.push(km);
+  targets.push(routeLengthKm);
+  const samples = fromTargets(targets);
   if (!Number.isSafeInteger(maxSamples) || maxSamples <= 0 || samples.length <= maxSamples) return samples;
   if (maxSamples === 1) return [samples[0]];
 
@@ -43,26 +60,17 @@ function sampleZoneAware(coords, totalRouteKm, maxSamples = null) {
   // 200 km route, 48 uniformly retained samples are roughly four kilometres
   // apart everywhere. Reserve most of the provider-call budget for the first
   // and last 40 km, where passenger pickup/drop markets are most important.
-  const evenlySelect = (values, count) => {
-    if (values.length <= count) return values;
-    if (count <= 1) return [values[0]];
-    return Array.from({ length: count }, (_, index) => (
-      values[Math.round(index * (values.length - 1) / (count - 1))]
-    ));
-  };
-  if (!useZones) return evenlySelect(samples, maxSamples);
+  if (!useZones) return fromTargets(evenlySpaced(0, routeLengthKm, maxSamples));
 
-  const origin = samples.filter((sample) => sample.km <= ZONE_NEAR_KM);
-  const destination = samples.filter((sample) => sample.km >= destinationZoneStart);
-  const middle = samples.filter((sample) => sample.km > ZONE_NEAR_KM && sample.km < destinationZoneStart);
   const originBudget = Math.max(1, Math.floor(maxSamples * 0.375));
   const destinationBudget = Math.max(1, Math.floor(maxSamples * 0.375));
   const middleBudget = Math.max(0, maxSamples - originBudget - destinationBudget);
-  return [
-    ...evenlySelect(origin, originBudget),
-    ...evenlySelect(middle, middleBudget),
-    ...evenlySelect(destination, destinationBudget),
-  ].filter((sample, index, values) => index === 0 || sample !== values[index - 1]);
+  const selectedTargets = [
+    ...evenlySpaced(0, ZONE_NEAR_KM, originBudget),
+    ...evenlySpaced(ZONE_NEAR_KM, destinationZoneStart, middleBudget),
+    ...evenlySpaced(destinationZoneStart, routeLengthKm, destinationBudget),
+  ].filter((km, index, values) => index === 0 || Math.abs(km - values[index - 1]) > 0.001);
+  return fromTargets(selectedTargets);
 }
 
 module.exports = {

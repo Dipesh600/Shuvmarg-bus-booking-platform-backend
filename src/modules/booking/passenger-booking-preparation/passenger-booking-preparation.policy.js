@@ -32,6 +32,10 @@ function calculateAuthoritativeOriginalAmount(trip, seatCount) {
   return { isValid: true, originalAmount: fare * seatCount };
 }
 
+const {
+  calculateSeatLayoutOriginalAmount,
+} = require("./passenger-booking-seat-layout.policy");
+
 function validateTripForOnlineBooking(trip, now) {
   if (!trip) {
     return {
@@ -124,4 +128,5 @@ module.exports = {
   classifyRequestedSeats,
   calculatePreparationQuote,
   calculateAuthoritativeOriginalAmount,
+  calculateSeatLayoutOriginalAmount,
 };
