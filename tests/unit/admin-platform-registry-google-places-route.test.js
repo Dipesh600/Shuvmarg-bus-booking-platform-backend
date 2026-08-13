@@ -108,3 +108,30 @@ test("reverse geocode prefers passenger locality over broad city endpoint", asyn
     else process.env.GOOGLE_MAPS_API_KEY = originalKey;
   }
 });
+
+test("reverse geocode checks every result before accepting a broad city", async () => {
+  const originalKey = process.env.GOOGLE_MAPS_API_KEY;
+  const originalGet = axios.get;
+  process.env.GOOGLE_MAPS_API_KEY = "test-key";
+  axios.get = async () => ({ data: { status: "OK", results: [{
+    place_id: "city", formatted_address: "Kathmandu, Nepal",
+    address_components: [{ long_name: "Kathmandu", types: ["locality"] }],
+  }, {
+    place_id: "local", formatted_address: "Balkhu, Kathmandu, Nepal",
+    address_components: [
+      { long_name: "Balkhu", types: ["neighborhood"] },
+      { long_name: "Kathmandu", types: ["administrative_area_level_2"] },
+    ],
+  }] } });
+
+  try {
+    const suggestions = await discoverStopsAlongRoute({
+      type: "LineString", coordinates: [[85.3, 27.69], [85.31, 27.69]],
+    }, 1, 3, "Kathmandu", "Birgunj", { maxSamples: 1 });
+    assert.equal(suggestions[0].candidateName, "Balkhu");
+  } finally {
+    axios.get = originalGet;
+    if (originalKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
+    else process.env.GOOGLE_MAPS_API_KEY = originalKey;
+  }
+});

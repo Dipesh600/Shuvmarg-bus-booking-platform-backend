@@ -1,17 +1,13 @@
 "use strict";
-
 const { metersBetween } = require("./route-stop-candidate.geometry.js");
 const { normalizePlaceName } = require("./route-stop-candidate.registry.js");
-
 const TRANSIT_WORDS = new Set([
   "bus", "station", "stand", "stop", "park", "park", "terminal", "bay",
   "gate", "counter", "pickup", "drop", "point", "yatayat",
 ]);
-
 function serviceAreaStem(value) {
   return normalizePlaceName(value).split(" ").filter((word) => !TRANSIT_WORDS.has(word)).join(" ");
 }
-
 function serviceAreaDisplayName(value) {
   const cleaned = String(value || "")
     .replace(/\bbus\s*(station|stand|stop|park)\b/gi, " ")
@@ -23,7 +19,6 @@ function serviceAreaDisplayName(value) {
   if ([...generic].some((word) => normalized === word || normalized.endsWith(` ${word}`))) return null;
   return cleaned;
 }
-
 function editDistance(left, right) {
   const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
   for (let row = 1; row <= left.length; row += 1) {
@@ -41,11 +36,9 @@ function editDistance(left, right) {
   }
   return previous[right.length];
 }
-
 function stopNames(stop) {
   return [stop.name, ...(stop.aliases || [])].map(normalizePlaceName).filter(Boolean);
 }
-
 function matchScore(place, stop) {
   const stem = serviceAreaStem(place.providerSnapshot?.displayName);
   const searchable = normalizePlaceName([
@@ -59,10 +52,11 @@ function matchScore(place, stop) {
     return best;
   }, Number.POSITIVE_INFINITY);
 }
-
 function reconcileTransitPlaces(places, canonicalStops, maxDistanceMeters = 5_000) {
-  const matchedEntries = new Map();
   const serviceAreaSuggestions = [];
+  const transitPlaces = places.filter((place) =>
+    place.providerSnapshot?.discoveryMethod === "SEARCH_ALONG_ROUTE"
+  );
   const annotatedPlaces = places.map((place) => {
     const match = canonicalStops.reduce((best, entry) => {
       const score = matchScore(place, entry.stop);
@@ -74,25 +68,56 @@ function reconcileTransitPlaces(places, canonicalStops, maxDistanceMeters = 5_00
       }
       return best;
     }, null);
-    if (!match && place.providerSnapshot?.discoveryMethod === "REVERSE_GEOCODE") {
+    if (place.providerSnapshot?.discoveryMethod === "REVERSE_GEOCODE") {
       const displayName = serviceAreaDisplayName(place.providerSnapshot?.displayName);
       if (displayName) {
+        const stem = serviceAreaStem(displayName);
+        const corroborated = transitPlaces.some((transit) => {
+          const distanceMeters = metersBetween(place.coordinates, transit.coordinates);
+          if (distanceMeters > 3_000) return false;
+          const transitText = normalizePlaceName([
+            transit.providerSnapshot?.displayName,
+            transit.providerSnapshot?.formattedAddress,
+          ].filter(Boolean).join(" "));
+          return stem.length >= 4 && transitText.includes(stem);
+        });
         serviceAreaSuggestions.push({
           ...place,
-          providerSnapshot: {
-            ...place.providerSnapshot,
-            provider: "GOOGLE_PLACES",
-            displayName,
-          },
+          providerSnapshot: { ...place.providerSnapshot, provider: "GOOGLE_PLACES", displayName },
           classification: {
-            entityType: "SERVICE_AREA", confidence: "LOW",
-            reasonCodes: ["TRANSIT_PLACE_SERVICE_AREA_INFERENCE"],
+            entityType: match ? "ROUTE_STOP" : "SERVICE_AREA",
+            confidence: match ? "MEDIUM" : "LOW",
+            reasonCodes: [
+              "REPEATED_ROUTE_LOCALITY_OBSERVATION",
+              ...(match ? ["CANONICAL_IDENTITY_MATCH"] : []),
+              ...(corroborated ? ["TRANSIT_EVIDENCE_CORROBORATED"] : []),
+            ],
             suggestedParentStopId: null,
           },
+          matchedStopId: match?.entry.stop._id || null,
           reviewStatus: "UNREVIEWED",
         });
       }
-      return place;
+      // Reverse-geocoded observations are evidence, not boarding locations.
+      return null;
+    }
+    const inferredName = serviceAreaDisplayName(place.providerSnapshot?.displayName);
+    if (inferredName) {
+      serviceAreaSuggestions.push({
+        ...place,
+        providerSnapshot: { ...place.providerSnapshot, displayName: match?.entry.stop.name || inferredName },
+        classification: {
+          entityType: match ? "ROUTE_STOP" : "SERVICE_AREA",
+          confidence: match ? "HIGH" : "MEDIUM",
+          reasonCodes: [
+            "TRANSIT_PLACE_SERVICE_AREA_INFERENCE",
+            ...(match ? ["CANONICAL_IDENTITY_MATCH"] : []),
+          ],
+          suggestedParentStopId: null,
+        },
+        matchedStopId: match?.entry.stop._id || null,
+        reviewStatus: "UNREVIEWED",
+      });
     }
     if (!match) {
       return {
@@ -105,7 +130,6 @@ function reconcileTransitPlaces(places, canonicalStops, maxDistanceMeters = 5_00
         reviewStatus: "EXCLUDE",
       };
     }
-    matchedEntries.set(String(match.entry.stop._id), match.entry);
     return {
       ...place,
       classification: {
@@ -116,7 +140,9 @@ function reconcileTransitPlaces(places, canonicalStops, maxDistanceMeters = 5_00
       reviewStatus: "EXCLUDE",
     };
   });
-  return { annotatedPlaces, matchedEntries: [...matchedEntries.values()], serviceAreaSuggestions };
+  return {
+    annotatedPlaces: annotatedPlaces.filter(Boolean),
+    serviceAreaSuggestions,
+  };
 }
-
 module.exports = { editDistance, reconcileTransitPlaces, serviceAreaDisplayName, serviceAreaStem };

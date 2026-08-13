@@ -51,6 +51,8 @@ const routeVariantStopCandidateSchema = new mongoose.Schema({
       district: { type: String, trim: true, default: null },
       municipality: { type: String, trim: true, default: null },
     },
+    evidenceCount: { type: Number, min: 1, default: 1 },
+    observedSpanKm: { type: Number, min: 0, default: 0 },
   },
   classification: {
     entityType: {
@@ -71,6 +73,9 @@ const routeVariantStopCandidateSchema = new mongoose.Schema({
         "NEAR_CANONICAL_ROUTE_STOP",
         "NO_CANONICAL_ROUTE_STOP_NEARBY",
         "TRANSIT_PLACE_SERVICE_AREA_INFERENCE",
+        "REPEATED_ROUTE_LOCALITY_OBSERVATION",
+        "TRANSIT_EVIDENCE_CORROBORATED",
+        "CANONICAL_IDENTITY_MATCH",
       ],
     }],
     suggestedParentStopId: {
@@ -84,6 +89,7 @@ const routeVariantStopCandidateSchema = new mongoose.Schema({
       default: "MIDDLE",
     },
     distanceToRouteMeters: { type: Number, min: 0, default: null },
+    evidenceScore: { type: Number, min: 0, max: 100, default: null },
   },
   coordinates: {
     lat: { type: Number, required: true, min: -90, max: 90 },

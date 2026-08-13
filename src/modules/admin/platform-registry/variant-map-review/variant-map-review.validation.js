@@ -84,6 +84,8 @@ function buildCandidateWrites(candidates, { mapReviewId, variantId, expiresAt })
         types: (candidate.providerSnapshot?.types || [])
           .filter((type) => typeof type === "string").slice(0, 12),
         administrativeContext: candidate.providerSnapshot?.administrativeContext || null,
+        evidenceCount: candidate.providerSnapshot?.evidenceCount || 1,
+        observedSpanKm: candidate.providerSnapshot?.observedSpanKm || 0,
       },
       classification: {
         entityType: candidate.classification?.entityType ||
@@ -94,6 +96,7 @@ function buildCandidateWrites(candidates, { mapReviewId, variantId, expiresAt })
         suggestedParentStopId: candidate.classification?.suggestedParentStopId?._id || candidate.classification?.suggestedParentStopId || null,
         coverageZone: candidate.classification?.coverageZone || "MIDDLE",
         distanceToRouteMeters: candidate.classification?.distanceToRouteMeters ?? null,
+        evidenceScore: candidate.classification?.evidenceScore ?? null,
       },
       coordinates: { lat: coordinates.lat, lng: coordinates.lng },
       distanceFromOriginMeters: candidate.distanceFromOriginMeters ?? null,
