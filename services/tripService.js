@@ -7,6 +7,8 @@ const Trip             = require("../models/tripModel.js");
 const SeatTemplate     = require('../models/seatTemplateModel.js');
 const Seat             = require("../models/seatsModel.js");
 const TripSeatLayoutSnapshot = require("../models/tripSeatLayoutSnapshotModel.js");
+const FleetSeatLayoutAssignment = require("../models/fleetSeatLayoutAssignmentModel.js");
+const SeatLayoutRevision = require("../models/seatLayoutRevisionModel.js");
 const User             = require("../models/userModel.js");
 const DriverProfile    = require("../models/driverProfileModel.js");
 const logger           = require("../utils/logger.js");
@@ -42,6 +44,27 @@ const checkBusOwnerVerification = async (userId) => {
     const busOwner = await BusOwner.findOne({ user: userId });
     return busOwner && busOwner.verificationStatus === "approved";
 };
+
+async function buildCompatibilitySeatsFromV3(fleetId) {
+    const assignment = await FleetSeatLayoutAssignment.findOne({ fleetId })
+        .select("activeRevisionId").lean();
+    if (!assignment?.activeRevisionId) return null;
+    const revision = await SeatLayoutRevision.findById(assignment.activeRevisionId)
+        .select("layout status").lean();
+    if (!revision?.layout?.sections?.length || revision.status !== "PUBLISHED") return null;
+    const result = { seata: [], seatb: [], seatc: [] };
+    for (const section of [...revision.layout.sections].sort((a, b) => a.order - b.order)) {
+        for (const place of [...section.elements]
+            .filter((item) => ["SEAT", "BERTH"].includes(item.kind) && item.label)
+            .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)) {
+            const center = place.position.x + (place.size.width / 2);
+            const bucket = center < section.widthUnits / 2 ? "seata"
+                : center > section.widthUnits / 2 ? "seatb" : "seatc";
+            result[bucket].push({ seatNo: place.label, booked: false });
+        }
+    }
+    return result;
+}
 
 // ---------------------------------------------------------------------------
 // createTrip — supports BOTH legacy routeId and new variantId paths
@@ -159,7 +182,12 @@ const createTrip = async (ownerId, tripData, role = "OWNER") => {
     }
 
     if (seata.length === 0 && seatb.length === 0 && seatc.length === 0) {
-        throw new Error("Could not determine seat layout for this bus. Check fleet configuration.");
+        const v3Seats = await buildCompatibilitySeatsFromV3(busId);
+        if (v3Seats) ({ seata, seatb, seatc } = v3Seats);
+    }
+
+    if (seata.length === 0 && seatb.length === 0 && seatc.length === 0) {
+        throw new Error("This fleet has no published V3 seat-layout assignment.");
     }
 
     const tripId = `TRIP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;

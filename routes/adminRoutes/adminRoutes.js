@@ -162,14 +162,11 @@ router.get("/wallet/user-balance/:userId",  adminMiddleware, adminWalletCtrl.get
 router.get("/kyc/unified-list", adminMiddleware, kycVerificationController.getUnifiedKycList);
 router.delete("/ticket/schedule/delete/:id", adminMiddleware, ticketController.deleteTicket);
 
-// Seat Template Management (Admin on behalf of Owner)
+// Legacy V2 seat-template reads remain temporarily for migration/old schedules.
+// All new creation and revision work belongs to Seat Layout V3 below.
 router.get("/templates/all", adminMiddleware, adminTemplateController.getAllSeatsTemplate);
-router.post("/templates/create", adminMiddleware, adminTemplateController.createTemplateForOwner);
 router.get("/templates/user/:userId", adminMiddleware, adminTemplateController.getTemplatesByUser);
 router.get("/templates/:id", adminMiddleware, adminTemplateController.getSeatTemplateById);
-router.patch("/templates/:id", adminMiddleware, adminTemplateController.updateSeatTemplate);
-router.delete("/templates/:id", adminMiddleware, adminTemplateController.deleteSeatTemplate);
-router.patch("/templates/toggleStatus/:id", adminMiddleware, adminTemplateController.toggleSeatTemplateStatus);
 registerAdminSeatLayoutV3Routes(router, adminMiddleware);
 
 // Station/Boarding Point Management

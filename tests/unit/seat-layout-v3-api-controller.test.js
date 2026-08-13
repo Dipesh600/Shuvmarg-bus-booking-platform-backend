@@ -99,3 +99,20 @@ test("custom initial layout uses the authenticated fleet owner", async () => {
   assert.deepEqual(received.actor, { id: "owner-1", type: "BUS_OWNER" });
   assert.equal(received.fleetId, "fleet-1");
 });
+
+test("admin custom fleet layout records the authenticated super admin", async () => {
+  let received;
+  const svc = services({ fleets: { createInitialCustomLayout: async (fleetId, input, actor) => {
+    received = { fleetId, input, actor };
+    return { assignment: {}, template: {}, revision: {} };
+  } } });
+  const controller = createAdminSeatLayoutController(svc, { error() {} });
+  const res = response();
+  await controller.createInitialCustomLayout({
+    params: { fleetId: "fleet-2" }, body: { name: "Admin layout", layout: {} },
+    adminInfo: { id: "admin-1", role: "SUPER_ADMIN" },
+  }, res);
+  assert.equal(res.statusCode, 201);
+  assert.deepEqual(received.actor, { id: "admin-1", type: "SUPER_ADMIN" });
+  assert.equal(received.fleetId, "fleet-2");
+});

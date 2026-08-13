@@ -23,6 +23,10 @@ function registerAdminSeatLayoutV3Routes(router, adminMiddleware, controller = a
   );
   router.get("/seat-layout-v3/fleets/:fleetId/assignment", adminMiddleware, controller.getFleetAssignment);
   router.post("/seat-layout-v3/fleets/:fleetId/assignment", adminMiddleware, controller.assignInitial);
+  router.post(
+    "/seat-layout-v3/fleets/:fleetId/initial-custom-layout",
+    adminMiddleware, ...creationGuards, controller.createInitialCustomLayout
+  );
   router.get("/seat-layout-v3/change-requests", adminMiddleware, controller.listChangeRequests);
   router.post(
     "/seat-layout-v3/change-requests/:requestId/approve", adminMiddleware, controller.approveChange

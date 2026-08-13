@@ -28,7 +28,7 @@ test("admin V3 routes are authenticated and expose lifecycle actions", () => {
   const methods = [
     "listTemplates", "createPlatformTemplate", "getTemplate", "adoptForOperator",
     "createRevision", "submitRevision", "publishRevision", "getFleetAssignment",
-    "assignInitial", "listChangeRequests", "approveChange", "rejectChange",
+    "assignInitial", "createInitialCustomLayout", "listChangeRequests", "approveChange", "rejectChange",
   ];
   const value = recorder();
   const auth = function auth() {};
@@ -43,6 +43,7 @@ test("admin V3 routes are authenticated and expose lifecycle actions", () => {
     "post /seat-layout-v3/templates/:templateId/revisions/:revisionId/submit",
     "post /seat-layout-v3/templates/:templateId/revisions/:revisionId/publish",
     "get /seat-layout-v3/fleets/:fleetId/assignment", "post /seat-layout-v3/fleets/:fleetId/assignment",
+    "post /seat-layout-v3/fleets/:fleetId/initial-custom-layout",
     "get /seat-layout-v3/change-requests", "post /seat-layout-v3/change-requests/:requestId/approve",
     "post /seat-layout-v3/change-requests/:requestId/reject",
   ]);
