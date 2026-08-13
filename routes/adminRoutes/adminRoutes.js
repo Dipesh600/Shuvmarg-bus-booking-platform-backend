@@ -49,6 +49,7 @@ const tripOverviewCtrl     = require("../../src/modules/admin/trip-overview");
 const adminWalletCtrl      = require("../../src/modules/admin/wallet-management");
 const transactionCtrl      = require("../../controllers/adminController/transactionController/transactionController.js");
 const registryBoardingRoutes = require("./registryBoardingRoutes.js");
+const { registerAdminSeatLayoutV3Routes } = require("./seatLayoutV3Routes.js");
 const { rejectOversizedKycRequest, parseKycSubmissionUpload } = require("../../middleware/kycSubmissionUpload.js");
 // Auth Routes
 router.post("/auth/login", adminLoginLimiter, authController.login);
@@ -169,6 +170,7 @@ router.get("/templates/:id", adminMiddleware, adminTemplateController.getSeatTem
 router.patch("/templates/:id", adminMiddleware, adminTemplateController.updateSeatTemplate);
 router.delete("/templates/:id", adminMiddleware, adminTemplateController.deleteSeatTemplate);
 router.patch("/templates/toggleStatus/:id", adminMiddleware, adminTemplateController.toggleSeatTemplateStatus);
+registerAdminSeatLayoutV3Routes(router, adminMiddleware);
 
 // Station/Boarding Point Management
 router.post("/ticket/create-route", adminMiddleware, ticketController.createRoute);

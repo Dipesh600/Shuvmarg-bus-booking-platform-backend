@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
+    "test:seat-layout-v3": "node --test tests/unit/seat-layout-v3-*.test.js",
     "preflight:admin-bootstrap": "node tools/preflight-admin-bootstrap.js",
     "bootstrap:root-admin:renew": "node scripts/renewInitialRootEnrollment.js",
     "migrate:boarding-locations": "node tools/migrate-boarding-locations.js",
