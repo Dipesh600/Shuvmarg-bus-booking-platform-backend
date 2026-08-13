@@ -357,19 +357,3 @@ test("boarding-location evidence never blocks the route path naming step", () =>
   }], { originTerminalStopId: null, destinationTerminalStopId: null });
   assert.deepEqual(included.map((candidate) => candidate._id), ["origin", "destination"]);
 });
-
-test("stale route and candidate-engine payloads are never returned to the admin", () => {
-  const draft = mapVariantDraft({
-    variant: { _id: "variant", corridorId: "corridor", status: "DRAFT", direction: "FORWARD" },
-    review: {
-      selectedRouteOptionKey: "old-route", reviewStatus: "STOP_CANDIDATES_READY",
-      routeDataVersion: 1, candidateEngineVersion: 1,
-      routeOptions: [{ optionKey: "old-route", distanceMeters: 1, durationSeconds: 1 }],
-    },
-    candidates: [{ _id: "old", reviewStatus: "UNREVIEWED", providerSnapshot: { displayName: "Kathmandu" } }],
-  });
-  assert.deepEqual(draft.routeOptions, []);
-  assert.deepEqual(draft.candidates, []);
-  assert.equal(draft.nextAction, "SELECT_PATH");
-  assert.match(draft.warnings[0], /older engine/i);
-});

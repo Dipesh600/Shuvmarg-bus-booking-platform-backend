@@ -2,7 +2,6 @@
 
 /**
  * src/modules/booking/passenger-seat-hold/create-passenger-seat-hold.service.js
- *
  * Atomic seat-hold acquisition and reuse service for passengers.
  */
 

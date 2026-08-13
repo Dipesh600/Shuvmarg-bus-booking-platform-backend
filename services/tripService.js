@@ -7,18 +7,14 @@ const Trip             = require("../models/tripModel.js");
 const SeatTemplate     = require('../models/seatTemplateModel.js');
 const Seat             = require("../models/seatsModel.js");
 const TripSeatLayoutSnapshot = require("../models/tripSeatLayoutSnapshotModel.js");
-const FleetSeatLayoutAssignment = require("../models/fleetSeatLayoutAssignmentModel.js");
-const SeatLayoutRevision = require("../models/seatLayoutRevisionModel.js");
 const User             = require("../models/userModel.js");
 const DriverProfile    = require("../models/driverProfileModel.js");
 const logger           = require("../utils/logger.js");
 const { tripSeatLayoutDualWriteService } = require("../src/modules/seat-layout-v3-persistence");
+const { buildCompatibilitySeatsFromV3 } = require("./tripSeatCompatibilityService.js");
 
-// ---------------------------------------------------------------------------
-// Trip Status State Machine
 // Industry-standard lifecycle: scheduled → boarding → in_transit → completed
 // cancelled can only be set from scheduled or boarding (never mid-transit)
-// ---------------------------------------------------------------------------
 const VALID_TRANSITIONS = {
     scheduled:  ["boarding", "cancelled"],
     boarding:   ["in_transit", "cancelled"],
@@ -37,34 +33,11 @@ const validateStatusTransition = (currentStatus, newStatus) => {
     }
 };
 
-// ---------------------------------------------------------------------------
 // Helper: check bus owner KYC approval
-// ---------------------------------------------------------------------------
 const checkBusOwnerVerification = async (userId) => {
     const busOwner = await BusOwner.findOne({ user: userId });
     return busOwner && busOwner.verificationStatus === "approved";
 };
-
-async function buildCompatibilitySeatsFromV3(fleetId) {
-    const assignment = await FleetSeatLayoutAssignment.findOne({ fleetId })
-        .select("activeRevisionId").lean();
-    if (!assignment?.activeRevisionId) return null;
-    const revision = await SeatLayoutRevision.findById(assignment.activeRevisionId)
-        .select("layout status").lean();
-    if (!revision?.layout?.sections?.length || revision.status !== "PUBLISHED") return null;
-    const result = { seata: [], seatb: [], seatc: [] };
-    for (const section of [...revision.layout.sections].sort((a, b) => a.order - b.order)) {
-        for (const place of [...section.elements]
-            .filter((item) => ["SEAT", "BERTH"].includes(item.kind) && item.label)
-            .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)) {
-            const center = place.position.x + (place.size.width / 2);
-            const bucket = center < section.widthUnits / 2 ? "seata"
-                : center > section.widthUnits / 2 ? "seatb" : "seatc";
-            result[bucket].push({ seatNo: place.label, booked: false });
-        }
-    }
-    return result;
-}
 
 // ---------------------------------------------------------------------------
 // createTrip — supports BOTH legacy routeId and new variantId paths

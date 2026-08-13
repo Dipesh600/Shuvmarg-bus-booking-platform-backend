@@ -23,13 +23,11 @@ test('seat-layout pricing is authoritative per selected passenger place', () => 
       stateOverrides: [],
     },
   };
-
   assert.deepEqual(policy.calculateSeatLayoutOriginalAmount(pricing, ['a1', 'U1']), {
     isValid: true,
     originalAmount: 2500,
   });
 });
-
 test('seat-layout pricing rejects withdrawn passenger places', () => {
   const pricing = {
     snapshot: {
@@ -43,7 +41,6 @@ test('seat-layout pricing rejects withdrawn passenger places', () => {
   assert.equal(result.isValid, false);
   assert.equal(result.responseBody.errorCode, 'SEAT_UNAVAILABLE');
 });
-
 test('passenger-booking-preparation policy tests', async (t) => {
   await t.test('1. validatePreparationInput rejects missing fields', () => {
     assert.equal(policy.validatePreparationInput({}).isValid, false);
@@ -58,13 +55,11 @@ test('passenger-booking-preparation policy tests', async (t) => {
       2
     );
     assert.deepEqual(tripFare, { isValid: true, originalAmount: 1500 });
-
     const routeFare = policy.calculateAuthoritativeOriginalAmount(
       { tripFare: null, routeId: { basePrice: 500 } },
       3
     );
     assert.equal(routeFare.originalAmount, 1500);
-
     const missing = policy.calculateAuthoritativeOriginalAmount({}, 1);
     assert.equal(missing.responseBody.errorCode, 'TRIP_FARE_UNAVAILABLE');
   });
@@ -134,11 +129,9 @@ test('passenger-booking-preparation policy tests', async (t) => {
   });
 
   await t.test('10. calculatePreparationQuote rules', () => {
-    // Negative requested SM money -> 0
     const q1 = policy.calculatePreparationQuote({ originalAmount: 1000, requestedSmMoney: -50, spendableBalance: 500 });
     assert.equal(q1.smMoneyApplied, 0);
 
-    // Decimal floor
     const q2 = policy.calculatePreparationQuote({ originalAmount: 1000, requestedSmMoney: 49.9, spendableBalance: 500 });
     assert.equal(q2.smMoneyApplied, 49);
 
