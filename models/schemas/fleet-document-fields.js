@@ -6,6 +6,11 @@ const fleetDocumentReviewSchema = require("./fleet-document-review.schema");
 const fleetImageItemSchema = new mongoose.Schema(
   {
     imageId: { type: String, required: true },
+    view: {
+      type: String,
+      enum: ["FRONT", "SIDE", "BACK", "INSIDE"],
+      default: null,
+    },
     objectKey: { type: String, required: true, select: false },
     mimeType: { type: String, required: true, select: false },
     size: { type: Number, required: true, select: false },
@@ -26,6 +31,15 @@ const fleetDocumentFields = {
   fleetImages: {
     type: [fleetImageItemSchema],
     default: [],
+    validate: {
+      validator: (images) => {
+        if (!images || images.length === 0) return true;
+        const views = new Set(images.map((image) => image.view));
+        return images.length === 4 && views.size === 4 &&
+          ["FRONT", "SIDE", "BACK", "INSIDE"].every((view) => views.has(view));
+      },
+      message: "Fleet photos must contain exactly one front, side, back, and inside image.",
+    },
   },
 
   fleetDocuments: {

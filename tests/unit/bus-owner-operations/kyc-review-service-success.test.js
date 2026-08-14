@@ -17,6 +17,7 @@ test("kyc-review-service success tests", async (t) => {
     const mockOwner = {
       _id: "64f000000000000000000001",
       user: "64f000000000000000000002",
+      companyName: "Himalayan Travels Pvt Ltd",
       verificationStatus: "pending",
       companyRegistration: { documentUrls: ["company.pdf"], verified: false },
       taxRegistration: { documentUrls: ["tax.pdf"], verified: false },
@@ -59,6 +60,7 @@ test("kyc-review-service success tests", async (t) => {
         owner.ownerIdentity.rejectionReason = null;
       },
       invalidDocuments: () => [],
+      defaultBrandService: { ensureDefaultBrand: async () => ({ isNew: true, brand: { _id: "64f000000000000000000010", isDefault: true } }) },
       clock: () => fixedDate,
     });
 

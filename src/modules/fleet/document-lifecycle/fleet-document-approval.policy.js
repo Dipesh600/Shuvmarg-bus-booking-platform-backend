@@ -43,6 +43,7 @@ function buildUpdateQuery({ fleet, slot, actor, metadata, newAssets, auditEvent 
   if (slot === "fleetImages") {
     setFields.fleetImages = newAssets.map((asset) => ({
       imageId: asset.imageId,
+      view: asset.view,
       objectKey: asset.objectKey,
       mimeType: asset.mimeType,
       size: asset.size,

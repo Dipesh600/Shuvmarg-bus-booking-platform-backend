@@ -9,6 +9,7 @@ const createFleetDocumentUploadService = require("./fleet-document-upload.servic
 const createFleetDocumentReadService = require("./fleet-document-read.service");
 const createBusOwnerFleetDocumentController = require("./bus-owner-fleet-document.controller");
 const createAdminFleetDocumentController = require("./admin-fleet-document.controller");
+const { processValidatedUpload } = require("../../shared/security/secure-upload-processor");
 
 const repository = createFleetDocumentRepository();
 const storage = createFleetDocumentStorageService({
@@ -28,6 +29,7 @@ const busOwnerUploadService = createFleetDocumentUploadService({
   repository,
   storage,
   resolveActor: busOwnerActorResolver,
+  processUpload: processValidatedUpload,
 });
 
 const busOwnerReadService = createFleetDocumentReadService({
@@ -40,6 +42,7 @@ const adminUploadService = createFleetDocumentUploadService({
   repository,
   storage,
   resolveActor: adminActorResolver,
+  processUpload: processValidatedUpload,
 });
 
 const adminReadService = createFleetDocumentReadService({

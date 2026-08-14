@@ -11,6 +11,7 @@ const { assertReviewerIsIndependent } = require("./kyc-review-separation-of-duty
 const { buildKycAuditEvent, collectInvalidKycDocumentTypes, KYC_AUDIT_EVENT, KYC_AUDIT_ACTOR } = require("../kyc-audit");
 const { isKycMalwareScanReady } = require("../kyc-document-read/kyc-document-reference.service");
 const { REQUIRED_DOCUMENT_FIELDS, hasStoredDocument } = require("../kyc-submission/kyc-submission-state");
+const { createDefaultBrandService } = require("./kyc-default-brand.service");
 
 function normalizeActorInput(actorInput) {
   if (actorInput && typeof actorInput === "object" && typeof actorInput.adminId === "string" && actorInput.adminId.trim() && typeof actorInput.tokenRole === "string" && actorInput.tokenRole.trim()) {
@@ -26,12 +27,18 @@ function createKycReviewService({
   Admin,
   BusOwner,
   User,
+  OperatorBrand,
+  defaultBrandService: customDefaultBrandService,
   applyDocumentVerdicts,
   invalidDocuments,
+  mongoose: customMongoose,
   clock = () => new Date(),
   logger = console,
   environment = process.env.NODE_ENV,
 }) {
+  const mongoose = customMongoose || require("mongoose");
+  const defaultBrandService = customDefaultBrandService || createDefaultBrandService({ OperatorBrand, clock, logger });
+
   async function reviewKyc(body, actorInput) {
     const actor = normalizeActorInput(actorInput);
     const { id, targetStatus, rejectionReason } = validateKycReviewRequest(body);
@@ -61,7 +68,16 @@ function createKycReviewService({
       applyDocumentVerdicts(owner, body);
     }
 
+    let companyName = "";
     if (targetStatus === KYC_REVIEW_STATUS.APPROVED) {
+      companyName = (owner.companyName || "").trim();
+      if (!companyName) {
+        throw new KycReviewError(
+          "KYC_REVIEW_MISSING_COMPANY_NAME",
+          "Company name is required before approving bus owner KYC.",
+          409
+        );
+      }
       const missingDocuments = REQUIRED_DOCUMENT_FIELDS.filter((field) => !hasStoredDocument(owner[field]));
       if (missingDocuments.length > 0) {
         throw new KycReviewError(
@@ -99,22 +115,84 @@ function createKycReviewService({
         updateFields[`${field}.rejectionReason`] = owner[field].rejectionReason || null;
       }
     }
-    const updatedOwner = await BusOwner.findOneAndUpdate(
-      { _id: owner._id, verificationStatus: KYC_REVIEW_STATUS.PENDING },
-      { $set: updateFields, $push: { kycAuditHistory: auditEvent } },
-      { new: true, runValidators: true }
-    );
 
-    if (!updatedOwner) {
-      throw new KycReviewError("KYC_REVIEW_INVALID_TRANSITION", `Cannot transition KYC review status from '${owner.verificationStatus}' to '${targetStatus}'.`, 409);
+    let updatedOwner = null;
+    let syncedUser = null;
+    let defaultBrand = null;
+
+    async function executeTransactionalReview(session) {
+      if (targetStatus === KYC_REVIEW_STATUS.APPROVED) {
+        try {
+          const brandResult = await defaultBrandService.ensureDefaultBrand({
+            ownerId: owner.user,
+            companyName,
+            adminId: reviewer._id,
+            session,
+          });
+          defaultBrand = brandResult?.brand || null;
+          logger.info(
+            `[KycReview] Default brand ensured for owner ${owner.user} (brandId: ${defaultBrand?._id || defaultBrand?.id})`
+          );
+        } catch (brandErr) {
+          if (brandErr && typeof brandErr.hasErrorLabel === "function" && brandErr.hasErrorLabel("TransientTransactionError")) {
+            throw brandErr;
+          }
+          logger.error("KYC review default brand provisioning failed for owner:", owner.user, brandErr);
+          throw new KycReviewError(
+            "KYC_REVIEW_DEFAULT_BRAND_FAILED",
+            "Failed to provision default operator brand upon KYC approval.",
+            500
+          );
+        }
+      }
+
+      const updateOptions = { new: true, runValidators: true };
+      if (session) updateOptions.session = session;
+
+      updatedOwner = await BusOwner.findOneAndUpdate(
+        { _id: owner._id, verificationStatus: KYC_REVIEW_STATUS.PENDING },
+        { $set: updateFields, $push: { kycAuditHistory: auditEvent } },
+        updateOptions
+      );
+
+      if (!updatedOwner) {
+        throw new KycReviewError(
+          "KYC_REVIEW_INVALID_TRANSITION",
+          `Cannot transition KYC review status from '${owner.verificationStatus}' to '${targetStatus}'.`,
+          409
+        );
+      }
+
+      try {
+        syncedUser = await syncReviewedOwnerUser({
+          userId: updatedOwner.user,
+          targetStatus,
+          User,
+          session,
+          logger,
+        });
+      } catch (userSyncErr) {
+        logger.error("KYC review user sync failed for owner:", updatedOwner._id, userSyncErr);
+        throw new KycReviewError("KYC_REVIEW_USER_SYNC_FAILED", "Internal Server Error", 500);
+      }
     }
 
-    let syncedUser = null;
-    try {
-      syncedUser = await syncReviewedOwnerUser({ userId: updatedOwner.user, targetStatus, User, logger });
-    } catch (userSyncErr) {
-      logger.error("KYC review user sync failed for owner:", updatedOwner._id, userSyncErr);
-      throw new KycReviewError("KYC_REVIEW_USER_SYNC_FAILED", "Internal Server Error", 500);
+    const hasSessionSupport = Boolean(
+      (customMongoose && typeof customMongoose.startSession === "function") ||
+      (mongoose && mongoose.connection && mongoose.connection.readyState === 1 && typeof mongoose.startSession === "function")
+    );
+
+    if (hasSessionSupport) {
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          await executeTransactionalReview(session);
+        });
+      } finally {
+        await session.endSession();
+      }
+    } else {
+      await executeTransactionalReview(null);
     }
 
     const invalidDocs = typeof invalidDocuments === "function" ? invalidDocuments(updatedOwner) : [];
@@ -124,11 +202,13 @@ function createKycReviewService({
       user: syncedUser || busOwnerUser || { _id: updatedOwner.user },
       status: targetStatus,
       documents: invalidDocs,
+      defaultBrand,
       data: {
         busOwnerId: updatedOwner.busOwnerId || updatedOwner._id.toString(),
         verificationStatus: updatedOwner.verificationStatus,
         rejectionReason: updatedOwner.rejectionReason,
         kycReview: updatedOwner.kycReview,
+        defaultBrandId: defaultBrand?._id || defaultBrand?.id || null,
       },
     };
   }
