@@ -26,7 +26,7 @@ function issueAccessToken(admin) {
     id: admin._id, adminId: admin.adminId, email: admin.email, role: admin.role,
     purpose: "access", sessionVersion: admin.sessionVersion,
   }, process.env.SECRET_KEY, {
-    algorithm: "HS256", expiresIn: "30m", issuer: "shuvmarg-admin",
+    algorithm: "HS256", expiresIn: "1h", issuer: "shuvmarg-admin",
     audience: "shuvmarg-super-admin",
   });
 }
