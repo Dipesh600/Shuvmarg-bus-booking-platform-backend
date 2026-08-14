@@ -119,7 +119,6 @@ function createFleetDocumentUploadService(deps = {}) {
       throw errors.concurrentModification();
     }
 
-    // Best effort old object cleanup
     const oldKeys = [];
     if (slot === "fleetImages" && Array.isArray(fleet.fleetImages)) {
       for (const img of fleet.fleetImages) {
@@ -135,15 +134,7 @@ function createFleetDocumentUploadService(deps = {}) {
 
     const docStatus = updatedFleet.documentReviews?.[slot]?.status || "pending";
 
-    return dto.buildUploadResponse({
-      fleetId,
-      slot,
-      action,
-      documentStatus: docStatus,
-      fleetApprovalStatus: updatedFleet.approvalStatus,
-      operationalStatus: updatedFleet.status,
-      uploadedAt: now,
-    });
+    return dto.buildUploadResponse({ fleetId, slot, action, documentStatus: docStatus, fleetApprovalStatus: updatedFleet.approvalStatus, operationalStatus: updatedFleet.status, uploadedAt: now });
   }
 
   return { uploadDocument };

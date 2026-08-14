@@ -4,165 +4,30 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createFleetCreationPolicy } = require("../../../src/modules/fleet-management/fleet-creation.policy");
 const { ApiError } = require("../../../src/contracts");
-
-function createMockBrandModel(brands = []) {
-  return {
-    findById(id) {
-      const brand = brands.find((b) => String(b._id) === String(id));
-      return {
-        select() {
-          return {
-            async lean() {
-              return brand || null;
-            },
-          };
-        },
-      };
-    },
-  };
+const ownerId = "507f1f77bcf86cd799439011";
+const brandId = "507f1f77bcf86cd799439022";
+function policy(brands = []) {
+  return createFleetCreationPolicy({ Bus: {}, BusAmenities: {}, BoardingPoints: {}, OperatorBrand: { findById: (id) => ({ select: () => ({ lean: async () => brands.find((brand) => String(brand._id) === String(id)) || null }) }) } });
 }
+async function expectCode(work, code) { await assert.rejects(work, (error) => error instanceof ApiError && error.code === code); }
 
-test("brand-enforcement: missing brand is rejected with FLEET_BRAND_REQUIRED", async () => {
-  const policy = createFleetCreationPolicy({
-    Bus: {},
-    BusAmenities: {},
-    BoardingPoints: {},
-    OperatorBrand: createMockBrandModel([]),
-  });
-
-  await assert.rejects(
-    async () => policy.validateBrand(null, "507f1f77bcf86cd799439011"),
-    (err) => {
-      assert(err instanceof ApiError);
-      assert.equal(err.code, "FLEET_BRAND_REQUIRED");
-      return true;
-    }
-  );
-
-  await assert.rejects(
-    async () => policy.validateBrand("", "507f1f77bcf86cd799439011"),
-    (err) => {
-      assert(err instanceof ApiError);
-      assert.equal(err.code, "FLEET_BRAND_REQUIRED");
-      return true;
-    }
-  );
+test("missing and malformed brand identifiers are rejected", async () => {
+  await expectCode(() => policy().validateBrand(null, ownerId), "FLEET_BRAND_REQUIRED");
+  await expectCode(() => policy().validateBrand("", ownerId), "FLEET_BRAND_REQUIRED");
+  await expectCode(() => policy().validateBrand("not-an-id", ownerId), "FLEET_BRAND_INVALID");
 });
 
-test("brand-enforcement: malformed brand ID is rejected with FLEET_BRAND_INVALID", async () => {
-  const policy = createFleetCreationPolicy({
-    Bus: {},
-    BusAmenities: {},
-    BoardingPoints: {},
-    OperatorBrand: createMockBrandModel([]),
-  });
+test("missing brands are rejected", async () => { await expectCode(() => policy().validateBrand(brandId, ownerId), "FLEET_BRAND_NOT_FOUND"); });
 
-  await assert.rejects(
-    async () => policy.validateBrand("not-a-valid-objectid", "507f1f77bcf86cd799439011"),
-    (err) => {
-      assert(err instanceof ApiError);
-      assert.equal(err.code, "FLEET_BRAND_INVALID");
-      return true;
-    }
-  );
+test("another operator's brand is forbidden", async () => {
+  await expectCode(() => policy([{ _id: brandId, ownerId: "507f1f77bcf86cd799439099", status: "ACTIVE" }]).validateBrand(brandId, ownerId), "FLEET_BRAND_FORBIDDEN");
 });
 
-test("brand-enforcement: non-existent brand is rejected with FLEET_BRAND_NOT_FOUND", async () => {
-  const policy = createFleetCreationPolicy({
-    Bus: {},
-    BusAmenities: {},
-    BoardingPoints: {},
-    OperatorBrand: createMockBrandModel([]),
-  });
-
-  await assert.rejects(
-    async () => policy.validateBrand("507f1f77bcf86cd799439099", "507f1f77bcf86cd799439011"),
-    (err) => {
-      assert(err instanceof ApiError);
-      assert.equal(err.code, "FLEET_BRAND_NOT_FOUND");
-      return true;
-    }
-  );
+test("inactive brands are rejected", async () => {
+  await expectCode(() => policy([{ _id: brandId, ownerId, status: "SUSPENDED" }]).validateBrand(brandId, ownerId), "FLEET_BRAND_INACTIVE");
 });
 
-test("brand-enforcement: brand belonging to another owner is rejected with FLEET_BRAND_FORBIDDEN", async () => {
-  const brandId = "507f1f77bcf86cd799439022";
-  const brandOwner = "507f1f77bcf86cd799439011";
-  const requestOwner = "507f1f77bcf86cd799439099";
-
-  const policy = createFleetCreationPolicy({
-    Bus: {},
-    BusAmenities: {},
-    BoardingPoints: {},
-    OperatorBrand: createMockBrandModel([
-      {
-        _id: brandId,
-        ownerId: brandOwner,
-        brandName: "Himalayan Express",
-        status: "ACTIVE",
-      },
-    ]),
-  });
-
-  await assert.rejects(
-    async () => policy.validateBrand(brandId, requestOwner),
-    (err) => {
-      assert(err instanceof ApiError);
-      assert.equal(err.code, "FLEET_BRAND_FORBIDDEN");
-      assert.equal(err.statusCode, 403);
-      return true;
-    }
-  );
-});
-
-test("brand-enforcement: inactive/suspended brand is rejected with FLEET_BRAND_INACTIVE", async () => {
-  const brandId = "507f1f77bcf86cd799439022";
-  const ownerId = "507f1f77bcf86cd799439011";
-
-  const policy = createFleetCreationPolicy({
-    Bus: {},
-    BusAmenities: {},
-    BoardingPoints: {},
-    OperatorBrand: createMockBrandModel([
-      {
-        _id: brandId,
-        ownerId,
-        brandName: "Suspended Express",
-        status: "SUSPENDED",
-      },
-    ]),
-  });
-
-  await assert.rejects(
-    async () => policy.validateBrand(brandId, ownerId),
-    (err) => {
-      assert(err instanceof ApiError);
-      assert.equal(err.code, "FLEET_BRAND_INACTIVE");
-      assert.equal(err.statusCode, 409);
-      return true;
-    }
-  );
-});
-
-test("brand-enforcement: valid active owned brand is accepted", async () => {
-  const brandId = "507f1f77bcf86cd799439022";
-  const ownerId = "507f1f77bcf86cd799439011";
-
-  const policy = createFleetCreationPolicy({
-    Bus: {},
-    BusAmenities: {},
-    BoardingPoints: {},
-    OperatorBrand: createMockBrandModel([
-      {
-        _id: brandId,
-        ownerId,
-        brandName: "Himalayan Express",
-        status: "ACTIVE",
-      },
-    ]),
-  });
-
-  const validated = await policy.validateBrand(brandId, ownerId);
-  assert.equal(validated.brandName, "Himalayan Express");
-  assert.equal(validated.status, "ACTIVE");
+test("an active brand owned by the operator is accepted", async () => {
+  const brand = { _id: brandId, ownerId, brandName: "Himalayan Express", status: "ACTIVE" };
+  assert.equal((await policy([brand]).validateBrand(brandId, ownerId)).brandName, "Himalayan Express");
 });

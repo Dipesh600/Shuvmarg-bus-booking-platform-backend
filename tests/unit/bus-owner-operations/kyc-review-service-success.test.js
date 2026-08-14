@@ -10,9 +10,7 @@ test("kyc-review-service success tests", async (t) => {
   const mockAdminModel = { findById: () => ({ lean: async () => mockAdmin }) };
 
   await t.test("pending -> approved updates state, user sync, review metadata, and ownerIdentity approval verdict", async () => {
-    let atomicQuery = null;
-    let atomicUpdate = null;
-    let userSyncCall = null;
+    let atomicQuery = null; let atomicUpdate = null; let userSyncCall = null;
 
     const mockOwner = {
       _id: "64f000000000000000000001",
