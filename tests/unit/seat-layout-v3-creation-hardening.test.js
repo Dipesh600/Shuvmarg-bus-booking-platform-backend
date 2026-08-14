@@ -39,14 +39,34 @@ test("accepts the maximum supported passenger-place count", () => {
   assert.equal(validateSeatLayoutV3(largePassengerLayout(100)).totalPlaces, 100);
 });
 
-test("template identity rejects unsafe and ambiguous codes before persistence", async () => {
-  let persisted = false;
-  const service = createSeatLayoutTemplateService({ createTemplate: async () => { persisted = true; } });
+test("platform template codes are allocated by the server and ignore caller input", async () => {
+  let allocationCategory;
+  let persisted;
+  const service = createSeatLayoutTemplateService({
+    allocateTemplateCode: async (category) => {
+      allocationCategory = category;
+      return "BUS-0042";
+    },
+    createTemplate: async (data) => { persisted = data; return data; },
+  });
+  const result = await service.createTemplate({
+    scope: "PLATFORM", templateCode: "../../root", name: "Standard", vehicleCategory: "BUS",
+  }, admin);
+  assert.equal(allocationCategory, "BUS");
+  assert.equal(persisted.templateCode, "BUS-0042");
+  assert.equal(result.templateCode, "BUS-0042");
+});
+
+test("invalid vehicle categories are rejected before registry code allocation", async () => {
+  let allocated = false;
+  const service = createSeatLayoutTemplateService({
+    allocateTemplateCode: async () => { allocated = true; },
+  });
   await assert.rejects(
-    service.createTemplate({ scope: "PLATFORM", templateCode: "../../root", name: "Standard", vehicleCategory: "BUS" }, admin),
-    (error) => error.code === "SEAT_LAYOUT_INPUT_INVALID" && error.details.field === "templateCode"
+    service.createTemplate({ scope: "PLATFORM", name: "Standard", vehicleCategory: "../../BUS" }, admin),
+    (error) => error.code === "SEAT_LAYOUT_INPUT_INVALID" && error.details.field === "vehicleCategory"
   );
-  assert.equal(persisted, false);
+  assert.equal(allocated, false);
 });
 
 test("revision creation delegates one atomic allocation-and-insert operation", async () => {
