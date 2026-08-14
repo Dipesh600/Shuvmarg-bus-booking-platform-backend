@@ -13,6 +13,7 @@ test("kyc-review-reviewer-authorization zero-side-effect tests", async (t) => {
   const pendingOwner = {
     _id: validOwnerId,
     user: validUserId,
+    companyName: "Himalayan Travels Pvt Ltd",
     verificationStatus: "pending",
     companyRegistration: { documentUrls: ["company.pdf"] },
     taxRegistration: { documentUrls: ["tax.pdf"] },
@@ -35,6 +36,7 @@ test("kyc-review-reviewer-authorization zero-side-effect tests", async (t) => {
         findById: () => ({ lean: async () => ownerUser }),
         findByIdAndUpdate: async () => { syncCalled = true; return { ...ownerUser, status: "active", isVerified: true }; },
       },
+      defaultBrandService: { ensureDefaultBrand: async () => ({ isNew: true, brand: { _id: "64f000000000000000000010", isDefault: true } }) },
       applyDocumentVerdicts: () => {},
       invalidDocuments: () => [],
       ...overrides,

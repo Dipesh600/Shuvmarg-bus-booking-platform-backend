@@ -68,6 +68,23 @@ function parseJsonField(updateData, field) {
   }
 }
 
+function validateIdentityUpdate(updateData) {
+  if (updateData.vehicleType !== undefined) {
+    const normalized = String(updateData.vehicleType).trim().toLowerCase();
+    if (!["bus", "minibus", "hiace", "jeep"].includes(normalized)) {
+      throw new ApiError("FLEET_VALIDATION_FAILED", "Invalid vehicle type.");
+    }
+    updateData.vehicleType = normalized;
+  }
+  if (updateData.registrationYear !== undefined) {
+    const year = Number(updateData.registrationYear);
+    if (!Number.isInteger(year) || year < 1980 || year > new Date().getFullYear() + 1) {
+      throw new ApiError("FLEET_VALIDATION_FAILED", "Invalid registration year.");
+    }
+    updateData.registrationYear = year;
+  }
+}
+
 function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
   async function normalizeBusNumber(fleet, updateData) {
     if (!updateData.busNumber) return;
@@ -118,6 +135,7 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
     normalizeBusNumber,
     verifySeatLayout,
     parseCatalogAndReviews,
+    validateIdentityUpdate,
   };
 }
 
@@ -126,4 +144,5 @@ module.exports = {
   restrictOwnerUpdate,
   lockApprovedIdentity,
   OWNER_PERMITTED_FIELDS,
+  validateIdentityUpdate,
 };

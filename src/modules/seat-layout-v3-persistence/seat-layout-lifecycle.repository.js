@@ -41,10 +41,11 @@ async function publishRevision({ template, revision, actor }) {
   let result;
   try {
     await session.withTransaction(async () => {
+      const now = new Date();
       const published = await SeatLayoutRevision.findOneAndUpdate(
         { _id: revision._id, templateId: template._id, status: { $in: ["DRAFT", "IN_REVIEW"] } },
-        { $set: { status: "PUBLISHED", publishedAt: new Date(), publishedById: actor.id } },
-        { new: true, runValidators: true, session }
+        { $set: { status: "PUBLISHED", publishedAt: now, publishedById: actor.id, updatedAt: now } },
+        { new: true, runValidators: true, session, timestamps: false }
       );
       if (!published) {
         throw new SeatLayoutPersistenceError(
@@ -53,7 +54,7 @@ async function publishRevision({ template, revision, actor }) {
       }
       await SeatLayoutRevision.updateMany(
         { templateId: template._id, _id: { $ne: published._id }, status: "PUBLISHED" },
-        { $set: { status: "RETIRED" } }, { session }
+        { $set: { status: "RETIRED", updatedAt: now } }, { session, timestamps: false }
       );
       await SeatLayoutTemplate.updateOne(
         { _id: template._id }, { $set: { currentPublishedRevisionId: published._id } }, { session }

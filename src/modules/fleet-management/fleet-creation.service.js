@@ -35,11 +35,11 @@ function createFleetCreationService({
   ) {
     const input = parseCreationInput(fleetData);
     await policy.validateReferences(input);
+    await policy.validateBrand(input.brandId, ownerId);
     const routeRequest = await createRouteRequest(ownerId, input);
-    await policy.validateBrand(input.brandId);
     const fleetSkeleton = new Bus({
       ownerId,
-      brandId: input.brandId || null,
+      brandId: input.brandId,
       busName: input.busName,
       busNumber: input.busNumber,
       busType: input.busType,

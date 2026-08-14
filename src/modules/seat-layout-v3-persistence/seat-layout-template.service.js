@@ -5,19 +5,25 @@ const {
 } = require("../../domain/seat-layout-v3");
 const policy = require("./seat-layout-persistence.policy");
 const { SeatLayoutPersistenceError } = require("./seat-layout-persistence.error");
-const { validateTemplateIdentity, optionalSummary } = require("./seat-layout-api.validation");
+const {
+  validateTemplateIdentity, validateVehicleCategory, optionalSummary,
+} = require("./seat-layout-api.validation");
 
 function createSeatLayoutTemplateService(repository) {
   async function createTemplate(input, actor) {
     policy.assertCanCreateTemplate(input.scope, input.ownerId, actor);
-    const identity = validateTemplateIdentity(input);
+    const vehicleCategory = validateVehicleCategory(input.vehicleCategory);
+    const templateCode = input.scope === "PLATFORM"
+      ? await repository.allocateTemplateCode(vehicleCategory)
+      : input.templateCode;
+    const identity = validateTemplateIdentity({ ...input, templateCode });
     return repository.createTemplate({
       ...identity,
       scope: input.scope,
       ownerId: input.ownerId || null,
       // Adoption is the only workflow allowed to establish template lineage.
       sourceTemplateId: null,
-      vehicleCategory: input.vehicleCategory,
+      vehicleCategory,
       createdByType: actor.type,
       createdById: actor.id,
     });

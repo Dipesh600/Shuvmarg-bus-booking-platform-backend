@@ -1,8 +1,10 @@
 "use strict";
 
+const mongoose = require("mongoose");
 const Admin = require("../../../../models/adminModel");
 const BusOwner = require("../../../../models/busOwnerModel");
 const User = require("../../../../models/userModel");
+const OperatorBrand = require("../../../../models/operatorBrandModel");
 const {
   applyDocumentVerdicts,
   invalidDocuments,
@@ -20,8 +22,10 @@ const reviewService = createKycReviewService({
   Admin,
   BusOwner,
   User,
+  OperatorBrand,
   applyDocumentVerdicts,
   invalidDocuments,
+  mongoose,
 });
 
 const controller = createKycReviewController({

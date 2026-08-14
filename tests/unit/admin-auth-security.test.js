@@ -2,11 +2,13 @@
 
 const { test, describe, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
+const jwt = require("jsonwebtoken");
 const speakeasy = require("speakeasy");
 const { decryptSecret, encryptSecret, generateOneTimeToken, hashToken } = require("../../src/modules/admin/auth-security/admin-auth.crypto");
 const { createEnrollment, matchedCounter } = require("../../src/modules/admin/auth-security/admin-mfa.service");
 const { assertStrongPassword } = require("../../src/modules/admin/auth-security/admin-password.policy");
 const { isValidAdminId } = require("../../src/modules/admin/auth-security/admin-identity.policy");
+const { issueAccessToken } = require("../../src/modules/admin/auth-security/admin-login.service");
 
 describe("admin authentication security primitives", () => {
   let originalKey;
@@ -55,5 +57,20 @@ describe("admin authentication security primitives", () => {
     assert.equal(isValidAdminId("SM-ADM-DIPESH"), true);
     assert.equal(isValidAdminId("SUMA-ADM-001"), true);
     assert.equal(isValidAdminId("SM-ADMIN-DIPESH"), false);
+  });
+
+  test("issues administrator access tokens for one hour", () => {
+    const originalSecret = process.env.SECRET_KEY;
+    process.env.SECRET_KEY = "admin-session-test-secret";
+    try {
+      const token = issueAccessToken({
+        _id: "507f1f77bcf86cd799439011", adminId: "SM-ADM-TEST",
+        email: "admin@example.com", role: "super_admin", sessionVersion: 1,
+      });
+      const decoded = jwt.decode(token);
+      assert.equal(decoded.exp - decoded.iat, 60 * 60);
+    } finally {
+      process.env.SECRET_KEY = originalSecret;
+    }
   });
 });

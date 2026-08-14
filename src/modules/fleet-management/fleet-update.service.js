@@ -26,6 +26,9 @@ function createFleetUpdateService({
     }
     if (ownerId) policy.restrictOwnerUpdate(updateData);
     policy.lockApprovedIdentity(fleet, updateData);
+    if (typeof policy.validateIdentityUpdate === "function") {
+      policy.validateIdentityUpdate(updateData);
+    }
     const images = await storage.replaceFleetImages(fleet, files);
     if (images) updateData.fleetImages = images;
     await policy.normalizeBusNumber(fleet, updateData);

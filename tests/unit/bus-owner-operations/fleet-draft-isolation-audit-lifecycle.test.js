@@ -60,6 +60,7 @@ test("15. Ownership isolation: Bus owner A cannot read, edit, delete, or submit 
   const submissionService = createFleetSubmissionService({
     BusOwner: mockBusOwnerModel("approved", "owner_B"),
     Bus: mockBusModel,
+    loadSeatLayout: async () => ({ assigned: true, published: true, totalPlaces: 35 }),
   });
 
   await assert.rejects(

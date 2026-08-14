@@ -10,13 +10,12 @@ test("kyc-review-service success tests", async (t) => {
   const mockAdminModel = { findById: () => ({ lean: async () => mockAdmin }) };
 
   await t.test("pending -> approved updates state, user sync, review metadata, and ownerIdentity approval verdict", async () => {
-    let atomicQuery = null;
-    let atomicUpdate = null;
-    let userSyncCall = null;
+    let atomicQuery = null; let atomicUpdate = null; let userSyncCall = null;
 
     const mockOwner = {
       _id: "64f000000000000000000001",
       user: "64f000000000000000000002",
+      companyName: "Himalayan Travels Pvt Ltd",
       verificationStatus: "pending",
       companyRegistration: { documentUrls: ["company.pdf"], verified: false },
       taxRegistration: { documentUrls: ["tax.pdf"], verified: false },
@@ -59,6 +58,7 @@ test("kyc-review-service success tests", async (t) => {
         owner.ownerIdentity.rejectionReason = null;
       },
       invalidDocuments: () => [],
+      defaultBrandService: { ensureDefaultBrand: async () => ({ isNew: true, brand: { _id: "64f000000000000000000010", isDefault: true } }) },
       clock: () => fixedDate,
     });
 

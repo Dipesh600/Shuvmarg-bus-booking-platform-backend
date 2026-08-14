@@ -54,6 +54,10 @@ router.put("/fleets/:fleetId/documents/:slot", busOwnerFleetDocumentController.u
 router.get("/fleets/:fleetId/documents/:slot/read-url", busOwnerFleetDocumentController.getDocumentReadUrl);
 registerBusOwnerSeatLayoutV3Routes(router);
 
+// Owner-scoped operator brands (draft-safe)
+const ownerBrand = require("../../src/modules/bus-owner/brand");
+router.get("/brands", ownerBrand.listBrands);
+
 // ── REQUIRE APPROVED KYC FOR OPERATIONAL ROUTES BELOW ─────────────────────────
 router.use(requireApprovedBusOwner);
 

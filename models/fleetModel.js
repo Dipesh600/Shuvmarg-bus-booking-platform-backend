@@ -171,7 +171,13 @@ const BusSchema = new mongoose.Schema(
         },
 
         registrationYear: {
-            type: Number
+            type: Number,
+            required: true,
+            min: 1980,
+            validate: {
+                validator: (year) => year <= new Date().getFullYear() + 1,
+                message: "Registration year cannot be more than one year in the future",
+            },
         },
 
         ...fleetDocumentFields,

@@ -61,6 +61,36 @@ const FLEET_ERRORS = Object.freeze({
     domain: "fleet",
     retryable: false,
   }),
+  FLEET_BRAND_REQUIRED: Object.freeze({
+    statusCode: 400,
+    message: "Operator brand is required.",
+    domain: "fleet",
+    retryable: false,
+  }),
+  FLEET_BRAND_INVALID: Object.freeze({
+    statusCode: 400,
+    message: "Operator brand ID is invalid.",
+    domain: "fleet",
+    retryable: false,
+  }),
+  FLEET_BRAND_NOT_FOUND: Object.freeze({
+    statusCode: 404,
+    message: "Operator brand not found.",
+    domain: "fleet",
+    retryable: false,
+  }),
+  FLEET_BRAND_INACTIVE: Object.freeze({
+    statusCode: 409,
+    message: "Operator brand is not active.",
+    domain: "fleet",
+    retryable: false,
+  }),
+  FLEET_BRAND_FORBIDDEN: Object.freeze({
+    statusCode: 403,
+    message: "Operator brand does not belong to this owner.",
+    domain: "fleet",
+    retryable: false,
+  }),
 });
 
 module.exports = { FLEET_ERRORS };

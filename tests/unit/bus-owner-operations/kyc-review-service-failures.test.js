@@ -79,6 +79,7 @@ test("kyc-review-service failure tests", async (t) => {
   await t.test("concurrent review where atomic findOneAndUpdate returns null throws HTTP 409", async () => {
     const mockPendingOwner = {
       _id: "64f000000000000000000001",
+      companyName: "Himalayan Travels",
       verificationStatus: "pending",
       companyRegistration: { documentUrls: ["company.pdf"] },
       taxRegistration: { documentUrls: ["tax.pdf"] },
@@ -88,7 +89,15 @@ test("kyc-review-service failure tests", async (t) => {
       findOne: async () => mockPendingOwner,
       findOneAndUpdate: async () => null,
     };
-    const service = createKycReviewService({ Admin: mockAdminModel, BusOwner: mockBusOwnerModel, User: {} });
+    const mockBrandService = {
+      ensureDefaultBrand: async () => ({ _id: "brand1", isDefault: true }),
+    };
+    const service = createKycReviewService({
+      Admin: mockAdminModel,
+      BusOwner: mockBusOwnerModel,
+      User: {},
+      defaultBrandService: mockBrandService,
+    });
 
     await assert.rejects(
       async () => service.reviewKyc({ id: "64f000000000000000000001", verificationStatus: "approved" }, validActor),
@@ -100,6 +109,7 @@ test("kyc-review-service failure tests", async (t) => {
     let writeCalls = 0;
     const mockPendingOwner = {
       _id: "64f000000000000000000001",
+      companyName: "Himalayan Travels",
       verificationStatus: "pending",
       companyRegistration: { documentUrls: ["company.pdf"] },
       taxRegistration: { documentUrls: ["tax.pdf"] },

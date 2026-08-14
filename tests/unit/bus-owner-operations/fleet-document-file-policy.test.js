@@ -26,12 +26,9 @@ test("fleet-document-file-policy unit tests", async (t) => {
     assert.equal(res.extension, "jpeg");
   });
 
-  await t.test("rejects WebP for legal documents", () => {
+  await t.test("accepts processed WebP for legal document images", () => {
     const file = { name: "img.webp", mimetype: "image/webp", data: webpBuffer, size: 100 };
-    assert.throws(
-      () => policy.validateSingleFile(file, "insurance"),
-      (err) => err.code === "FLEET_DOCUMENT_UNSUPPORTED_TYPE"
-    );
+    assert.equal(policy.validateSingleFile(file, "insurance").mimeType, "image/webp");
   });
 
   await t.test("rejects file with signature mismatch", () => {

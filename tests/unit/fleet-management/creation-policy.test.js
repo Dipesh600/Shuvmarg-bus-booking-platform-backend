@@ -29,9 +29,20 @@ test("fleet creation input preserves legacy parsing contracts", () => {
   assert.equal(input.busNumber, "BA 1 KHA 22");
   assert.equal(input.totalSeats, 40);
   assert.equal(input.registrationYear, 2024);
+  assert.equal(input.vehicleType, "bus");
   assert.deepEqual(input.seatConfig, { deck: 1 });
   assert.deepEqual(input.amenityIds, []);
   assert.deepEqual(input.requestViaStops, ["Pokhara"]);
+});
+
+test("fleet creation requires a bounded registration year and normalizes vehicle type", () => {
+  assert.throws(() => parseCreationInput(valid()), { code: "FLEET_VALIDATION_FAILED" });
+  assert.throws(
+    () => parseCreationInput({ ...valid(), registrationYear: "1979" }),
+    { code: "FLEET_VALIDATION_FAILED" }
+  );
+  const input = parseCreationInput({ ...valid(), vehicleType: "MiNiBuS", registrationYear: "2025" });
+  assert.equal(input.vehicleType, "minibus");
 });
 
 test("fleet creation validates references with exact legacy errors", async (t) => {
@@ -75,7 +86,7 @@ test("fleet creation validates references with exact legacy errors", async (t) =
   });
 });
 
-test("fleet creation rejects missing and suspended brands", async () => {
+test("fleet creation rejects missing, invalid, and suspended brands", async () => {
   const brandQuery = (value) => ({
     select() { return this; }, lean: async () => value,
   });
@@ -85,13 +96,16 @@ test("fleet creation rejects missing and suspended brands", async () => {
     OperatorBrand: { findById: () => brandQuery(brand) },
   });
   await assert.rejects(
-    policy.validateBrand("x"),
-    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
+    policy.validateBrand(null, "507f1f77bcf86cd799439011"),
+    (err) => err instanceof ApiError && err.code === "FLEET_BRAND_REQUIRED"
   );
-  brand = { status: "SUSPENDED", brandName: "Shuv" };
   await assert.rejects(
-    policy.validateBrand("x"),
-    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
+    policy.validateBrand("x", "507f1f77bcf86cd799439011"),
+    (err) => err instanceof ApiError && err.code === "FLEET_BRAND_INVALID"
   );
-  await policy.validateBrand(null);
+  brand = { status: "SUSPENDED", brandName: "Shuv", ownerId: "507f1f77bcf86cd799439011" };
+  await assert.rejects(
+    policy.validateBrand("507f1f77bcf86cd799439022", "507f1f77bcf86cd799439011"),
+    (err) => err instanceof ApiError && err.code === "FLEET_BRAND_INACTIVE"
+  );
 });

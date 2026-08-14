@@ -2,7 +2,7 @@
 
 const mongoose = require("mongoose");
 const {
-  TEMPLATE_SCOPES, TEMPLATE_STATUSES, ACTOR_TYPES,
+  TEMPLATE_SCOPES, TEMPLATE_STATUSES, ACTOR_TYPES, VEHICLE_CATEGORIES,
 } = require("../src/modules/seat-layout-v3-persistence/seat-layout-persistence.constants");
 const { preventDeletes } = require("./schemas/append-only.guard");
 
@@ -15,7 +15,7 @@ const seatLayoutTemplateSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, ref: "SeatLayoutTemplate", default: null,
   },
   vehicleCategory: {
-    type: String, enum: ["BUS", "MINIBUS", "HIACE"], required: true,
+    type: String, enum: VEHICLE_CATEGORIES, required: true,
   },
   status: { type: String, enum: TEMPLATE_STATUSES, default: "ACTIVE", index: true },
   currentPublishedRevisionId: {

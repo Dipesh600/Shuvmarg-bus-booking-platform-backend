@@ -2,6 +2,8 @@
 
 const BusModel = require("../../../models/fleetModel");
 const BusOwnerModel = require("../../../models/busOwnerModel");
+const FleetSeatLayoutAssignmentModel = require("../../../models/fleetSeatLayoutAssignmentModel");
+const SeatLayoutRevisionModel = require("../../../models/seatLayoutRevisionModel");
 const { ApiError } = require("../../contracts");
 const { FLEET_APPROVAL_STATUS } = require("../../contracts/status/fleet-approval.status");
 const { evaluateFleetSubmissionReadiness } = require("./fleet-readiness.evaluator");
@@ -9,7 +11,24 @@ const { evaluateFleetSubmissionReadiness } = require("./fleet-readiness.evaluato
 function createFleetSubmissionService(deps = {}) {
   const Bus = deps.Bus || BusModel;
   const BusOwner = deps.BusOwner || BusOwnerModel;
+  const FleetSeatLayoutAssignment = deps.FleetSeatLayoutAssignment || FleetSeatLayoutAssignmentModel;
+  const SeatLayoutRevision = deps.SeatLayoutRevision || SeatLayoutRevisionModel;
   const readinessEvaluator = deps.readinessEvaluator || evaluateFleetSubmissionReadiness;
+  const loadSeatLayout = deps.loadSeatLayout || (async (fleetId) => {
+    const assignment = await FleetSeatLayoutAssignment.findOne({ fleetId })
+      .select("activeRevisionId")
+      .lean();
+    const revision = assignment
+      ? await SeatLayoutRevision.findById(assignment.activeRevisionId)
+        .select("status totalPlaces")
+        .lean()
+      : null;
+    return {
+      assigned: Boolean(assignment),
+      published: revision?.status === "PUBLISHED",
+      totalPlaces: revision?.totalPlaces,
+    };
+  });
 
   async function submitFleetForVerification({ fleetId, ownerId }) {
     if (!fleetId) {
@@ -31,7 +50,11 @@ function createFleetSubmissionService(deps = {}) {
       );
     }
 
-    const fleet = await Bus.findOne({ _id: fleetId, ownerId }).lean();
+    let fleetQuery = Bus.findOne({ _id: fleetId, ownerId });
+    if (typeof fleetQuery.schemaLevelProjections === "function") {
+      fleetQuery = fleetQuery.schemaLevelProjections(false);
+    }
+    const fleet = await fleetQuery.lean();
     if (!fleet) {
       throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.", 404);
     }
@@ -47,7 +70,10 @@ function createFleetSubmissionService(deps = {}) {
       );
     }
 
-    const readiness = readinessEvaluator(fleet);
+    const seatLayout = await loadSeatLayout(fleetId);
+    const readiness = readinessEvaluator(fleet, {
+      seatLayout,
+    });
     if (!readiness.complete) {
       throw new ApiError(
         "FLEET_SUBMISSION_INCOMPLETE",

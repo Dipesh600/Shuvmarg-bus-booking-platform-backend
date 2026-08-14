@@ -10,6 +10,7 @@ const data = {
   busName: "Bus", busNumber: "b1", busType: "AC",
   totalSeats: 40, vehicleType: "BUS", requestOriginCity: "A",
   requestDestinationCity: "B", requestViaStops: '["C"]', brandId: "brand",
+  registrationYear: 2024,
 };
 
 function setup({ failUpload = false } = {}) {
@@ -54,7 +55,7 @@ test("creation preserves route, skeleton, upload, and backlink ordering", async 
   const h = setup();
   const fleet = await h.service.createFleet("owner", data, {}, "ADMIN");
   assert.deepEqual(h.events, [
-    "references", "route.save", "brand", "fleet.save", "upload",
+    "references", "brand", "route.save", "fleet.save", "upload",
     "fleet.save", "route.link:route-1:fleet-1",
   ]);
   assert.equal(fleet.ownerId, "owner");
@@ -75,4 +76,35 @@ test("creation failure deletes uploaded keys and skeleton, then rethrows", async
   ]);
   assert.equal(h.logs.length, 1);
   assert.match(h.logs[0][0], /Cleaning up S3 orphans/);
+});
+
+test("creation: invalid brand throws before creating route request or fleet skeleton (zero DB writes)", async () => {
+  const events = [];
+  class Bus {
+    async save() { events.push("fleet.save"); return this; }
+  }
+  class RouteRequest {
+    async save() { events.push("route.save"); return this; }
+  }
+  const policy = {
+    async validateReferences() { events.push("references"); },
+    async validateBrand() {
+      events.push("brand.reject");
+      const err = new Error("Invalid operator brand");
+      err.code = "FLEET_BRAND_NOT_FOUND";
+      throw err;
+    },
+  };
+  const storage = {
+    async uploadCreationAssets() { events.push("upload"); return {}; },
+    async deleteFromS3() {},
+  };
+  const service = createFleetCreationService({ Bus, RouteRequest, policy, storage });
+
+  await assert.rejects(
+    () => service.createFleet("owner", data, {}),
+    (err) => err.code === "FLEET_BRAND_NOT_FOUND"
+  );
+
+  assert.deepEqual(events, ["references", "brand.reject"]);
 });
