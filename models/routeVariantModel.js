@@ -56,6 +56,28 @@ const routeVariantSchema = new mongoose.Schema(
             ref: "RouteVariant",
             default: null,
         },
+        // Stable business identity shared by the forward and return path and by
+        // later revisions of that path. Directions remain separate variants.
+        routeFamilyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            default: () => new mongoose.Types.ObjectId(),
+            immutable: true,
+        },
+        revisionOfVariantId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "RouteVariant",
+            default: null,
+            immutable: true,
+        },
+        revisionNumber: { type: Number, min: 1, default: 1, immutable: true },
+        supersededByVariantId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "RouteVariant",
+            default: null,
+        },
+        // SHA-256 of the ordered canonical Stop IDs. It contains no Google
+        // Maps content and gives activation a deterministic duplicate guard.
+        pathFingerprint: { type: String, trim: true, default: null },
         distanceKm: {
             type: Number,
             default: null,
@@ -79,7 +101,7 @@ const routeVariantSchema = new mongoose.Schema(
         },
         definitionSource: {
             type: String,
-            enum: ["ADMIN", "GOOGLE_ROUTE_REVIEW"],
+            enum: ["ADMIN", "GOOGLE_ROUTE_REVIEW", "DERIVED_REVERSE", "REVISION"],
             default: "ADMIN",
         },
         status: {
@@ -103,5 +125,14 @@ const routeVariantSchema = new mongoose.Schema(
 routeVariantSchema.index({ corridorId: 1, status: 1 });
 routeVariantSchema.index({ corridorId: 1, direction: 1, status: 1 });
 routeVariantSchema.index({ direction: 1 });
+routeVariantSchema.index({ routeFamilyId: 1, direction: 1, revisionNumber: -1 });
+routeVariantSchema.index(
+    { corridorId: 1, direction: 1, pathFingerprint: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { status: "ACTIVE", pathFingerprint: { $type: "string" } },
+        name: "active_route_variant_path_unique",
+    }
+);
 
 module.exports = mongoose.model("RouteVariant", routeVariantSchema);

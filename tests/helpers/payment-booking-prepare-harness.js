@@ -5,6 +5,8 @@
  */
 const Seat = require('../../models/seatsModel.js');
 const Trip = require('../../models/tripModel.js');
+const TripSeatLayoutSnapshot = require('../../models/tripSeatLayoutSnapshotModel.js');
+const TripSeatLayoutControl = require('../../models/tripSeatLayoutControlModel.js');
 const PlatformConfig = require('../../models/platformConfigModel.js');
 const CouponHelper = require('../../handlers/couponHelper.js');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
@@ -46,6 +48,8 @@ function setupPrepareHarness() {
     return query;
   });
   mockMethod(Seat, 'findOne', () => Promise.resolve(defaults.seatDoc));
+  mockMethod(TripSeatLayoutSnapshot, 'findOne', () => ({ lean: () => Promise.resolve(null) }));
+  mockMethod(TripSeatLayoutControl, 'findOne', () => ({ lean: () => Promise.resolve(null) }));
   mockMethod(CouponHelper, 'validateCoupon', () => Promise.resolve(defaults.couponValidation));
   mockMethod(smLedgerService, 'computeSpendableBalance', () => Promise.resolve(defaults.spendableBalance));
   mockMethod(PlatformConfig, 'getConfig', () => Promise.resolve(defaults.smConfig));

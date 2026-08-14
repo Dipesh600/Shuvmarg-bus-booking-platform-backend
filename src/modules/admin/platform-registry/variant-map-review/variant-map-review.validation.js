@@ -84,6 +84,8 @@ function buildCandidateWrites(candidates, { mapReviewId, variantId, expiresAt })
         types: (candidate.providerSnapshot?.types || [])
           .filter((type) => typeof type === "string").slice(0, 12),
         administrativeContext: candidate.providerSnapshot?.administrativeContext || null,
+        evidenceCount: candidate.providerSnapshot?.evidenceCount || 1,
+        observedSpanKm: candidate.providerSnapshot?.observedSpanKm || 0,
       },
       classification: {
         entityType: candidate.classification?.entityType ||
@@ -91,9 +93,10 @@ function buildCandidateWrites(candidates, { mapReviewId, variantId, expiresAt })
         confidence: candidate.classification?.confidence ||
           (candidate.providerSnapshot?.provider === "PLATFORM_STOP" ? "HIGH" : "LOW"),
         reasonCodes: (candidate.classification?.reasonCodes || []).slice(0, 4),
-        suggestedParentStopId: candidate.classification?.suggestedParentStopId || null,
+        suggestedParentStopId: candidate.classification?.suggestedParentStopId?._id || candidate.classification?.suggestedParentStopId || null,
         coverageZone: candidate.classification?.coverageZone || "MIDDLE",
         distanceToRouteMeters: candidate.classification?.distanceToRouteMeters ?? null,
+        evidenceScore: candidate.classification?.evidenceScore ?? null,
       },
       coordinates: { lat: coordinates.lat, lng: coordinates.lng },
       distanceFromOriginMeters: candidate.distanceFromOriginMeters ?? null,
@@ -101,6 +104,8 @@ function buildCandidateWrites(candidates, { mapReviewId, variantId, expiresAt })
       reviewStatus,
       matchedStopId: candidate.matchedStopId || null,
       resolvedStopId: candidate.resolvedStopId || null,
+      ...(candidate.proposedStop && { proposedStop: candidate.proposedStop }),
+      ...(candidate.reviewNotes && { reviewNotes: candidate.reviewNotes }),
       expiresAt,
     };
   });

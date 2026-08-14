@@ -6,15 +6,15 @@ const OperatorRouteConfig = require("../models/operatorRouteConfigModel.js");
 const Trip             = require("../models/tripModel.js");
 const SeatTemplate     = require('../models/seatTemplateModel.js');
 const Seat             = require("../models/seatsModel.js");
+const TripSeatLayoutSnapshot = require("../models/tripSeatLayoutSnapshotModel.js");
 const User             = require("../models/userModel.js");
 const DriverProfile    = require("../models/driverProfileModel.js");
 const logger           = require("../utils/logger.js");
+const { tripSeatLayoutDualWriteService } = require("../src/modules/seat-layout-v3-persistence");
+const { buildCompatibilitySeatsFromV3 } = require("./tripSeatCompatibilityService.js");
 
-// ---------------------------------------------------------------------------
-// Trip Status State Machine
 // Industry-standard lifecycle: scheduled → boarding → in_transit → completed
 // cancelled can only be set from scheduled or boarding (never mid-transit)
-// ---------------------------------------------------------------------------
 const VALID_TRANSITIONS = {
     scheduled:  ["boarding", "cancelled"],
     boarding:   ["in_transit", "cancelled"],
@@ -33,9 +33,7 @@ const validateStatusTransition = (currentStatus, newStatus) => {
     }
 };
 
-// ---------------------------------------------------------------------------
 // Helper: check bus owner KYC approval
-// ---------------------------------------------------------------------------
 const checkBusOwnerVerification = async (userId) => {
     const busOwner = await BusOwner.findOne({ user: userId });
     return busOwner && busOwner.verificationStatus === "approved";
@@ -157,35 +155,33 @@ const createTrip = async (ownerId, tripData, role = "OWNER") => {
     }
 
     if (seata.length === 0 && seatb.length === 0 && seatc.length === 0) {
-        throw new Error("Could not determine seat layout for this bus. Check fleet configuration.");
+        const v3Seats = await buildCompatibilitySeatsFromV3(busId);
+        if (v3Seats) ({ seata, seatb, seatc } = v3Seats);
+    }
+
+    if (seata.length === 0 && seatb.length === 0 && seatc.length === 0) {
+        throw new Error("This fleet has no published V3 seat-layout assignment.");
     }
 
     const tripId = `TRIP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    const newTrip = await Trip.create({
-        tripId,
-        busId,
-        routeId:   resolvedRouteId,
-        variantId: resolvedVariantId,
-        seatTemplateId: seatTemplateId || null,
-        ownerId,
-        brandId,          // propagated from the fleet
-        tripDate,
-        departureTime, arrivalTime, shift,
-        tripFare:         tripFare        || null,
-        recurrence:       recurrence      || "none",
-        daysOfWeek:       daysOfWeek      || [],
-        autoGenerateUntil: autoGenerateUntil || null,
-        isActive:         isActive !== undefined ? isActive : true,
-        status:           "scheduled",
+    const creation = await tripSeatLayoutDualWriteService.createTrip({
+        trip: {
+            tripId, busId, routeId: resolvedRouteId, variantId: resolvedVariantId,
+            seatTemplateId: seatTemplateId || null, ownerId, brandId, tripDate,
+            departureTime, arrivalTime, shift, tripFare: tripFare ?? null,
+            recurrence: recurrence || "none", daysOfWeek: daysOfWeek || [],
+            autoGenerateUntil: autoGenerateUntil || null,
+            isActive: isActive !== undefined ? isActive : true, status: "scheduled",
+        },
+        legacySeats: {
+            seata: seata.map((seat) => ({ seatNo: seat.seatNo, booked: false })),
+            seatb: seatb.map((seat) => ({ seatNo: seat.seatNo, booked: false })),
+            seatc: seatc.map((seat) => ({ seatNo: seat.seatNo, booked: false })),
+        },
+        defaultFare: tripFare ?? null,
     });
-
-    const tripSeats = await Seat.create({
-        tripId: newTrip._id,
-        seata:  seata.map(s => ({ seatNo: s.seatNo, booked: false })),
-        seatb:  seatb.map(s => ({ seatNo: s.seatNo, booked: false })),
-        seatc:  seatc.map(s => ({ seatNo: s.seatNo, booked: false })),
-    });
+    const { trip: newTrip, seats: tripSeats } = creation;
 
     logger.info("tripService: trip created", {
         tripId:    newTrip.tripId,
@@ -300,6 +296,10 @@ const removeTrip = async (tripId, ownerId = null) => {
 
     if (["in_transit", "completed"].includes(trip.status)) {
         throw new Error(`Cannot delete a trip with status "${trip.status}". Cancel it first.`);
+    }
+
+    if (await TripSeatLayoutSnapshot.exists({ tripId: trip._id })) {
+        throw new Error("This trip has an immutable seat-layout snapshot and cannot be deleted. Cancel it instead.");
     }
 
     await Trip.findOneAndDelete(query);

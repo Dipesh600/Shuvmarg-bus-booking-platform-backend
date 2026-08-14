@@ -4,7 +4,6 @@ const RouteVariant = require("../../../../../models/routeVariantModel.js");
 const { fetchGoogleRouteOptions } = require("../../../../../services/googleRoutesClient.js");
 const { resolveGoogleGuidancePlaces } = require("../../../../../services/googleRouteGuidancePlaces.js");
 const { getCorridorById } = require("../corridor-registry.service.js");
-const { allocateVariantCode } = require("../variant-code-allocation.service.js");
 const {
   assertVariantTerminalScope, resolveDirectionalEndpoints,
 } = require("../variant-terminal-scope.policy.js");
@@ -15,6 +14,7 @@ const {
 const { getVariantDraft, loadDraftVariant, loadMapReview } = require("./context.service.js");
 const { assertObjectId, hasValidCoordinates, mapProviderOptions, validateDirection } = require("./shared.js");
 const { resolveGuidanceStops } = require("./route-guidance.policy.js");
+const { createPairedDrafts } = require("./draft-pair.service.js");
 
 async function createVariantDraft(corridorId, data, adminId) {
   assertObjectId(corridorId, "INVALID_CORRIDOR_ID", "Corridor ID");
@@ -29,14 +29,7 @@ async function createVariantDraft(corridorId, data, adminId) {
     );
   }
   if (hasOriginTerminal) await assertVariantTerminalScope({ corridor, direction, ...data });
-  const code = await allocateVariantCode(corridor._id, direction);
-  const variant = await RouteVariant.create({
-    code, corridorId: corridor._id, direction,
-    originTerminalStopId: data.originTerminalStopId || null,
-    destinationTerminalStopId: data.destinationTerminalStopId || null,
-    definitionSource: "GOOGLE_ROUTE_REVIEW", status: "DRAFT",
-    createdBy: adminId || null, updatedBy: adminId || null,
-  });
+  const variant = await createPairedDrafts({ corridor, direction, data, adminId });
   return getVariantDraft(variant._id);
 }
 

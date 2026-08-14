@@ -1,7 +1,9 @@
 "use strict";
 
 const { runVariantWrite } = require("../variant-write-transaction.service.js");
-const CANDIDATE_ENGINE_VERSION = 9;
+const {
+  CANDIDATE_ENGINE_VERSION,
+} = require("./route-variant-map-review.versions.js");
 const {
   createReview, loadCandidates, loadReview, mapWriteFailure,
   replaceCandidates, restoreSnapshots, updateReview,

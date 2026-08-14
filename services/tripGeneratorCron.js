@@ -19,13 +19,15 @@
 const cron         = require("node-cron");
 const Schedule     = require("../models/scheduleModel.js");
 const Trip         = require("../models/tripModel.js");
-const Seat         = require("../models/seatsModel.js");
 const SeatTemplate = require("../models/seatTemplateModel.js");
 const Bus          = require("../models/fleetModel.js");
 const logger       = require("../utils/logger.js");
 const {
     assertScheduleRouteChainReady,
 } = require("../src/modules/admin/schedule-management/schedule-route-chain.policy.js");
+const {
+    tripSeatLayoutDualWriteService,
+} = require("../src/modules/seat-layout-v3-persistence");
 
 // ─── HELPER: Initialize seat document for a newly generated trip ──────────────
 
@@ -78,15 +80,6 @@ const buildSeatArrays = async (busId, templateId) => {
 
     logger.warn("TripCRON: no seat layout found — creating trip with empty seat map", { busId, templateId });
     return { seata: [], seatb: [], seatc: [] };
-};
-
-const initializeSeats = async (tripId, busId, templateId) => {
-    try {
-        const { seata, seatb, seatc } = await buildSeatArrays(busId, templateId);
-        await Seat.create({ tripId, seata, seatb, seatc });
-    } catch (e) {
-        logger.error("TripCRON: failed to initialise seats", { tripId, error: e.message });
-    }
 };
 
 // ─── HELPER: Get date range for a specific day offset ────────────────────────
@@ -323,7 +316,9 @@ const createTripFromSchedule = async (schedule, tripDateStart, dateStr) => {
         directionLabel = `${fromStopName} → ${toStopName}`;
     }
 
-    const newTrip = await Trip.create({
+    const legacySeats = await buildSeatArrays(schedule.busId, schedule.seatTemplateId);
+    const creation = await tripSeatLayoutDualWriteService.createTrip({
+      trip: {
         tripId:          newTripId,
         scheduleId:      schedule._id,
         brandId:         schedule.brandId,
@@ -345,9 +340,11 @@ const createTripFromSchedule = async (schedule, tripDateStart, dateStr) => {
         directionLabel:  directionLabel,
         fromStopName:    fromStopName,
         toStopName:      toStopName,
+      },
+      legacySeats,
+      defaultFare: schedule.fareOverride ?? null,
     });
-
-    await initializeSeats(newTrip._id, schedule.busId, schedule.seatTemplateId);
+    const newTrip = creation.trip;
 
     logger.info("TripCRON: ✓ generated trip", {
         tripId:    newTrip.tripId,

@@ -1,18 +1,16 @@
 "use strict";
 
 const RouteVariant = require("../../../../models/routeVariantModel.js");
-const RouteStop = require("../../../../models/routeStopModel.js");
 const { getCorridorById, activateCorridorIfReady } = require("./corridor-registry.service.js");
 const { assertVariantCanActivate } = require("./variant-activation.policy.js");
-const { assertVariantCanDelete } = require("./variant-reference.policy.js");
 const { routeVariantError } = require("./route-variant-errors.js");
 const { allocateVariantCode } = require("./variant-code-allocation.service.js");
 const { assertVariantTerminalScope } = require("./variant-terminal-scope.policy.js");
-const { deleteVariantDraftArtifacts } = require("./variant-draft-cleanup.service.js");
+const { deleteVariant } = require("./variant-deletion.service.js");
+const { assertNoLivePathDuplicate } = require("./variant-path-identity.service.js");
 const { VARIANT_WRITE_CONTEXT, assertLegacyVariantCreateAllowed, assertMapReviewEndpointAccess, assertVariantConfigurationMutable, assertVariantStatusTransition } = require("./variant-lifecycle.policy.js");
 
 const ADMIN_VISIBLE_STATUSES = ["DRAFT", "ACTIVE", "INACTIVE"];
-
 async function createVariant(data, adminId) {
   assertLegacyVariantCreateAllowed(data);
   const {
@@ -113,7 +111,8 @@ async function updateVariant(
     ...(durationMinutes !== undefined && { durationMinutes }),
     ...(status !== undefined && { status }),
   };
-  if (status === "ACTIVE") await assertVariantCanActivate(candidate);
+  let activationIdentity = null;
+  if (status === "ACTIVE") { await assertVariantCanActivate(candidate); activationIdentity = await assertNoLivePathDuplicate(candidate); }
   const variant = await RouteVariant.findByIdAndUpdate(
     id,
     {
@@ -121,29 +120,17 @@ async function updateVariant(
       ...(distanceKm !== undefined && { distanceKm }),
       ...(durationMinutes !== undefined && { durationMinutes }),
       ...(status !== undefined && { status }),
+      ...(activationIdentity && { pathFingerprint: activationIdentity.fingerprint }),
       ...(adminId && { updatedBy: adminId }),
     },
     { new: true, runValidators: true }
   );
-  if (!variant) {
-    throw routeVariantError("VARIANT_NOT_FOUND", "Route variant not found.", 404);
-  }
+  if (!variant) throw routeVariantError("VARIANT_NOT_FOUND", "Route variant not found.", 404);
   if (status === "ACTIVE") {
     await activateCorridorIfReady(variant.corridorId, adminId);
   }
   return variant;
 }
-async function deleteVariant(id) {
-  const variant = await RouteVariant.findById(id);
-  if (!variant) {
-    throw routeVariantError("VARIANT_NOT_FOUND", "Route variant not found.", 404);
-  }
-  await assertVariantCanDelete(variant);
-  await RouteStop.deleteMany({ variantId: id });
-  await deleteVariantDraftArtifacts(variant._id);
-  await RouteVariant.findByIdAndDelete(id);
-}
-
 module.exports = {
   createVariant, getVariantsByCorridor, getVariantById,
   updateVariant, deleteVariant, parseAdminVariantStatuses,
