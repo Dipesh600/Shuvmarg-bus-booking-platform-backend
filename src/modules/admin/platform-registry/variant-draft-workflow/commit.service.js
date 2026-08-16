@@ -90,7 +90,7 @@ async function commitVariantDraft(variantId, adminId, dependencies = {}) {
   return getVariantDraft(variantId, { includeRouteGeometry: true });
 }
 
-async function activateVariantDraft(variantId, adminId) {
+async function activateVariantDraft(variantId, adminId, { syncCompanion = true } = {}) {
   const variant = await loadDraftVariant(variantId);
   const { updateVariant } = require("../route-variant-registry.service.js");
   const OperatorRouteConfig = require("../../../../../models/operatorRouteConfigModel.js");
@@ -135,6 +135,14 @@ async function activateVariantDraft(variantId, adminId) {
     source.supersededByVariantId = activated._id;
     source.updatedBy = adminId || null;
     await source.save();
+  }
+
+  // Also activate paired companion draft if present
+  if (syncCompanion && variant.returnVariantId) {
+    const companion = await RouteVariant.findById(variant.returnVariantId);
+    if (companion && companion.status === "DRAFT") {
+      await activateVariantDraft(companion._id, adminId, { syncCompanion: false });
+    }
   }
 
   return activated;
