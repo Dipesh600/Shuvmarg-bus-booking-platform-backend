@@ -67,11 +67,30 @@ async function resolveOperationalStops(stops, session = null) {
 }
 
 async function syncCompanionSequence(variant, normalizedStops, rows, stopMap, session = null) {
-  if (!variant.returnVariantId) return;
   const RouteVariant = require("../../../../models/routeVariantModel.js");
-  let companionQuery = RouteVariant.findById(variant.returnVariantId);
-  if (session && typeof companionQuery.session === "function") companionQuery = companionQuery.session(session);
-  const companion = await companionQuery;
+  let companion = null;
+  if (variant.returnVariantId) {
+    let companionQuery = RouteVariant.findById(variant.returnVariantId);
+    if (session && typeof companionQuery.session === "function") companionQuery = companionQuery.session(session);
+    companion = await companionQuery;
+  }
+  if (!companion) {
+    const oppositeDir = variant.direction === "FORWARD" ? "RETURN" : "FORWARD";
+    let findQuery = RouteVariant.findOne({
+      corridorId: variant.corridorId, direction: oppositeDir,
+      status: { $in: ["DRAFT", "ACTIVE"] },
+    });
+    if (session && typeof findQuery.session === "function") findQuery = findQuery.session(session);
+    companion = await findQuery;
+    if (companion) {
+      variant.returnVariantId = companion._id;
+      companion.returnVariantId = variant._id;
+      await Promise.all([
+        variant.save(session ? { session } : undefined),
+        companion.save(session ? { session } : undefined),
+      ]);
+    }
+  }
   if (!companion || companion.status !== "DRAFT") return;
 
   const totalDistance = normalizedStops.at(-1).distanceFromOriginKm || 0;

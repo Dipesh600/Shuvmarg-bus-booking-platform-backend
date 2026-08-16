@@ -138,8 +138,16 @@ async function activateVariantDraft(variantId, adminId, { syncCompanion = true }
   }
 
   // Also activate paired companion draft if present
-  if (syncCompanion && variant.returnVariantId) {
-    const companion = await RouteVariant.findById(variant.returnVariantId);
+  let companionId = variant.returnVariantId;
+  if (!companionId) {
+    const oppositeDir = variant.direction === "FORWARD" ? "RETURN" : "FORWARD";
+    const comp = await RouteVariant.findOne({
+      corridorId: variant.corridorId, direction: oppositeDir, status: "DRAFT",
+    });
+    if (comp) companionId = comp._id;
+  }
+  if (syncCompanion && companionId) {
+    const companion = await RouteVariant.findById(companionId);
     if (companion && companion.status === "DRAFT") {
       await activateVariantDraft(companion._id, adminId, { syncCompanion: false });
     }

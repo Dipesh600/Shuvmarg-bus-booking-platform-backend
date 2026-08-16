@@ -57,8 +57,20 @@ async function createVariantRevision(id, adminId, { includeCompanion = true } = 
   }
   const routeFamilyId = source.routeFamilyId || new mongoose.Types.ObjectId();
   const revision = await cloneOne(source, routeFamilyId, adminId);
-  if (includeCompanion && source.returnVariantId) {
-    const companionSource = await RouteVariant.findById(source.returnVariantId);
+  if (includeCompanion) {
+    let companionSource = source.returnVariantId ? await RouteVariant.findById(source.returnVariantId) : null;
+    if (!companionSource) {
+      const oppositeDir = source.direction === "FORWARD" ? "RETURN" : "FORWARD";
+      companionSource = await RouteVariant.findOne({
+        corridorId: source.corridorId, direction: oppositeDir,
+        status: { $in: ["ACTIVE", "INACTIVE"] },
+      });
+      if (companionSource) {
+        source.returnVariantId = companionSource._id;
+        companionSource.returnVariantId = source._id;
+        await Promise.all([source.save(), companionSource.save()]);
+      }
+    }
     if (companionSource && ['ACTIVE', 'INACTIVE'].includes(companionSource.status)) {
       const companionRevision = await cloneOne(companionSource, routeFamilyId, adminId);
       revision.returnVariantId = companionRevision._id;
