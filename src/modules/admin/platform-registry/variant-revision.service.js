@@ -22,9 +22,32 @@ async function getVariantDetails(id) {
   if (!variant) throw routeVariantError("VARIANT_NOT_FOUND", "Route variant not found.", 404);
 
   // Scoped history: find other revisions belonging to this variant's route family / direction
-  const familyFilter = variant.routeFamilyId
-    ? { routeFamilyId: variant.routeFamilyId, direction: variant.direction, _id: { $ne: variant._id } }
-    : { corridorId: variant.corridorId, direction: variant.direction, _id: { $ne: variant._id }, status: { $in: ["INACTIVE", "ARCHIVED", "DRAFT"] } };
+  const corridorId = variant.corridorId?._id || variant.corridorId;
+  const historyQueryConditions = [];
+  if (variant.revisionOfVariantId) {
+    const revOfId = variant.revisionOfVariantId._id || variant.revisionOfVariantId;
+    historyQueryConditions.push({ _id: revOfId });
+  }
+  if (variant.supersededByVariantId) {
+    const supById = variant.supersededByVariantId._id || variant.supersededByVariantId;
+    historyQueryConditions.push({ _id: supById });
+  }
+  if (variant.routeFamilyId) {
+    historyQueryConditions.push({ routeFamilyId: variant.routeFamilyId, direction: variant.direction });
+  }
+  if (corridorId) {
+    historyQueryConditions.push({
+      corridorId,
+      direction: variant.direction,
+      status: { $in: ["INACTIVE", "ARCHIVED"] },
+    });
+  }
+
+  const familyFilter = {
+    _id: { $ne: variant._id },
+    status: { $ne: "ACTIVE" },
+    ...(historyQueryConditions.length > 0 ? { $or: historyQueryConditions } : {}),
+  };
 
   const [stops, references, historyVariants, operatorConfigs, fleetSetups, schedules] = await Promise.all([
     RouteStop.find({ variantId: id }).populate("stopId", "name code type province district municipality coordinates").sort({ sequence: 1 }).lean(),
