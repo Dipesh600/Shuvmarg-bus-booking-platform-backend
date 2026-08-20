@@ -271,4 +271,3 @@ module.exports = {
   rollbackVariantRevision,
   deleteHistoricalRevision,
 };
-

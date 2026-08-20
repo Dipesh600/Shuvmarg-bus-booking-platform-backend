@@ -85,4 +85,3 @@ async function deleteVariant(id) {
 }
 
 module.exports = { deleteVariant };
-
