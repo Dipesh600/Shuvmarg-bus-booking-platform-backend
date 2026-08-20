@@ -69,7 +69,8 @@ const setupReconciliationCron = () => {
                                 "DISPUTED_PAYMENT",
                                 "⚠️ CRON: Disputed Payment Detected",
                                 `Payment of Rs.${txn.totalAmount} (Case ID: ${txn._id}) was received but no booking exists. Immediate refund needed.`,
-                                { transactionId: txn._id, esewaPaymentId: txn.transactionId }
+                                { transactionId: txn._id, esewaPaymentId: txn.transactionId },
+                                "admin"
                             );
                         }
 
@@ -79,7 +80,8 @@ const setupReconciliationCron = () => {
                             "PAYMENT_DISPUTE",
                             "Payment Issue Detected",
                             `We noticed your payment of Rs.${txn.totalAmount} was processed but the ticket wasn't generated. Case ID: ${txn._id}. Our team is working on a refund.`,
-                            { transactionId: txn._id, amount: txn.totalAmount }
+                            { transactionId: txn._id, amount: txn.totalAmount },
+                            "passenger"
                         );
                     }
                 } catch (innerErr) {

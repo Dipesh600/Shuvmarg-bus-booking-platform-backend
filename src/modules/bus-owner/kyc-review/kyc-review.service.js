@@ -1,138 +1,57 @@
 "use strict";
 
 const { KycReviewError } = require("./kyc-review.errors");
-const { KYC_REVIEW_STATUS, assertKycReviewTransition } = require("./kyc-review.policy");
+const { assertKycReviewTransition } = require("./kyc-review.policy");
 const { validateKycReviewRequest } = require("./kyc-review-request.policy");
 const { resolveBusOwnerForReviewReference } = require("./kyc-review-reference.resolver");
-const { syncReviewedOwnerUser } = require("./kyc-review-user-sync.service");
 const { getKycReviewerActor, assertCanReviewBusOwnerKyc } = require("./kyc-review-actor.policy");
 const { resolveKycReviewer } = require("./kyc-review-reviewer.resolver");
 const { assertReviewerIsIndependent } = require("./kyc-review-separation-of-duty.policy");
-const { buildKycAuditEvent, collectInvalidKycDocumentTypes, KYC_AUDIT_EVENT, KYC_AUDIT_ACTOR } = require("../kyc-audit");
 const { isKycMalwareScanReady } = require("../kyc-document-read/kyc-document-reference.service");
-const { REQUIRED_DOCUMENT_FIELDS, hasStoredDocument } = require("../kyc-submission/kyc-submission-state");
+const { createDefaultBrandService } = require("./kyc-default-brand.service");
+const { assertApprovalRequirements } = require("./kyc-review-approval.policy");
+const { buildReviewPersistence } = require("./kyc-review-update.builder");
+const { executeKycReview, runKycReviewTransaction } = require("./kyc-review-transaction.service");
 
-function normalizeActorInput(actorInput) {
-  if (actorInput && typeof actorInput === "object" && typeof actorInput.adminId === "string" && actorInput.adminId.trim() && typeof actorInput.tokenRole === "string" && actorInput.tokenRole.trim()) {
-    return { adminId: actorInput.adminId.trim(), tokenRole: actorInput.tokenRole.trim() };
-  }
-  if (actorInput && typeof actorInput === "object" && actorInput.adminInfo) {
-    return getKycReviewerActor(actorInput);
-  }
+function normalizeActorInput(input) {
+  if (input?.adminId?.trim?.() && input?.tokenRole?.trim?.()) return { adminId: input.adminId.trim(), tokenRole: input.tokenRole.trim() };
+  if (input?.adminInfo) return getKycReviewerActor(input);
   throw new KycReviewError("KYC_REVIEW_UNAUTHORIZED", "Authenticated reviewer identity is required.", 401);
 }
 
-function createKycReviewService({
-  Admin,
-  BusOwner,
-  User,
-  applyDocumentVerdicts,
-  invalidDocuments,
-  clock = () => new Date(),
-  logger = console,
-  environment = process.env.NODE_ENV,
-}) {
+async function loadBusOwnerUser({ User, owner }) {
+  if (!User?.findById || !owner.user) return null;
+  const query = User.findById(owner.user);
+  return query?.lean ? query.lean() : query;
+}
+
+function createKycReviewService({ Admin, BusOwner, User, OperatorBrand, defaultBrandService: customDefaultBrandService, applyDocumentVerdicts, invalidDocuments, mongoose: customMongoose, clock = () => new Date(), logger = console, environment = process.env.NODE_ENV }) {
+  const mongoose = customMongoose || require("mongoose");
+  const defaultBrandService = customDefaultBrandService || createDefaultBrandService({ OperatorBrand, clock, logger });
   async function reviewKyc(body, actorInput) {
     const actor = normalizeActorInput(actorInput);
     const { id, targetStatus, rejectionReason } = validateKycReviewRequest(body);
-
     const reviewer = await resolveKycReviewer({ Admin, actor });
     assertCanReviewBusOwnerKyc({ reviewer, tokenRole: actor.tokenRole });
-
     const owner = await resolveBusOwnerForReviewReference({ id, BusOwner });
-    if (!isKycMalwareScanReady(owner, environment)) {
-      throw new KycReviewError(
-        "KYC_REVIEW_SECURITY_SCAN_REQUIRED",
-        "KYC documents are quarantined until their security scan is complete.",
-        423
-      );
-    }
-
-    let busOwnerUser = null;
-    if (User && typeof User.findById === "function" && owner.user) {
-      const q = User.findById(owner.user);
-      busOwnerUser = q && typeof q.lean === "function" ? await q.lean() : await q;
-    }
-
+    if (!isKycMalwareScanReady(owner, environment)) throw new KycReviewError("KYC_REVIEW_SECURITY_SCAN_REQUIRED", "KYC documents are quarantined until their security scan is complete.", 423);
+    const busOwnerUser = await loadBusOwnerUser({ User, owner });
     assertReviewerIsIndependent({ reviewer, busOwner: owner, busOwnerUser });
     assertKycReviewTransition({ currentStatus: owner.verificationStatus, targetStatus });
-
-    if (typeof applyDocumentVerdicts === "function") {
-      applyDocumentVerdicts(owner, body);
-    }
-
-    if (targetStatus === KYC_REVIEW_STATUS.APPROVED) {
-      const missingDocuments = REQUIRED_DOCUMENT_FIELDS.filter((field) => !hasStoredDocument(owner[field]));
-      if (missingDocuments.length > 0) {
-        throw new KycReviewError(
-          "KYC_REVIEW_REQUIRED_DOCUMENTS_MISSING",
-          "Company registration, PAN/VAT registration and owner citizenship are required before approval.",
-          409
-        );
-      }
-    }
-
+    if (typeof applyDocumentVerdicts === "function") applyDocumentVerdicts(owner, body);
+    const companyName = assertApprovalRequirements(owner, targetStatus);
     const reviewedAt = clock();
-    const invalidDocumentTypes = targetStatus === KYC_REVIEW_STATUS.REJECTED ? collectInvalidKycDocumentTypes(owner) : [];
-
-    const auditEvent = buildKycAuditEvent({
-      eventType: targetStatus === KYC_REVIEW_STATUS.APPROVED ? KYC_AUDIT_EVENT.APPROVED : KYC_AUDIT_EVENT.REJECTED,
-      actorType: KYC_AUDIT_ACTOR.ADMIN,
-      actorId: reviewer._id,
-      fromStatus: KYC_REVIEW_STATUS.PENDING,
-      toStatus: targetStatus,
-      occurredAt: reviewedAt,
-      metadata: { invalidDocumentTypes, reasonProvided: targetStatus === KYC_REVIEW_STATUS.REJECTED },
+    const persistence = buildReviewPersistence({ owner, reviewer, targetStatus, rejectionReason, reviewedAt });
+    const result = await runKycReviewTransaction({
+      mongoose, customMongoose,
+      work: (session) => executeKycReview({ owner, reviewer, targetStatus, companyName, persistence, BusOwner, User, defaultBrandService, logger, session }),
     });
-
-    const updateFields = {
-      verificationStatus: targetStatus,
-      rejectionReason: targetStatus === KYC_REVIEW_STATUS.REJECTED ? rejectionReason : null,
-      "kycReview.reviewedBy": reviewer._id,
-      "kycReview.reviewedAt": reviewedAt,
-    };
-
-    const docFields = ["companyRegistration", "ownerIdentity", "taxRegistration"];
-    for (const field of docFields) {
-      if (owner[field]) {
-        updateFields[`${field}.verified`] = owner[field].verified;
-        updateFields[`${field}.rejectionReason`] = owner[field].rejectionReason || null;
-      }
-    }
-    const updatedOwner = await BusOwner.findOneAndUpdate(
-      { _id: owner._id, verificationStatus: KYC_REVIEW_STATUS.PENDING },
-      { $set: updateFields, $push: { kycAuditHistory: auditEvent } },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedOwner) {
-      throw new KycReviewError("KYC_REVIEW_INVALID_TRANSITION", `Cannot transition KYC review status from '${owner.verificationStatus}' to '${targetStatus}'.`, 409);
-    }
-
-    let syncedUser = null;
-    try {
-      syncedUser = await syncReviewedOwnerUser({ userId: updatedOwner.user, targetStatus, User, logger });
-    } catch (userSyncErr) {
-      logger.error("KYC review user sync failed for owner:", updatedOwner._id, userSyncErr);
-      throw new KycReviewError("KYC_REVIEW_USER_SYNC_FAILED", "Internal Server Error", 500);
-    }
-
-    const invalidDocs = typeof invalidDocuments === "function" ? invalidDocuments(updatedOwner) : [];
-
+    const documents = typeof invalidDocuments === "function" ? invalidDocuments(result.updatedOwner) : [];
     return {
-      owner: updatedOwner,
-      user: syncedUser || busOwnerUser || { _id: updatedOwner.user },
-      status: targetStatus,
-      documents: invalidDocs,
-      data: {
-        busOwnerId: updatedOwner.busOwnerId || updatedOwner._id.toString(),
-        verificationStatus: updatedOwner.verificationStatus,
-        rejectionReason: updatedOwner.rejectionReason,
-        kycReview: updatedOwner.kycReview,
-      },
+      owner: result.updatedOwner, user: result.syncedUser || busOwnerUser || { _id: result.updatedOwner.user }, status: targetStatus, documents, defaultBrand: result.defaultBrand,
+      data: { busOwnerId: result.updatedOwner.busOwnerId || result.updatedOwner._id.toString(), verificationStatus: result.updatedOwner.verificationStatus, rejectionReason: result.updatedOwner.rejectionReason, kycReview: result.updatedOwner.kycReview, defaultBrandId: result.defaultBrand?._id || result.defaultBrand?.id || null },
     };
   }
-
   return { reviewKyc };
 }
 

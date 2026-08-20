@@ -1,6 +1,7 @@
 "use strict";
 
 const DOCUMENT_REVIEW_STATUS = Object.freeze({
+  NOT_SUBMITTED: "not_submitted",
   PENDING: "pending",
   APPROVED: "approved",
   REJECTED: "rejected",
@@ -11,6 +12,7 @@ const DOCUMENT_REVIEW_VALUES = Object.freeze(
 );
 
 const DOCUMENT_REVIEW_LABELS = Object.freeze({
+  [DOCUMENT_REVIEW_STATUS.NOT_SUBMITTED]: "Not Submitted",
   [DOCUMENT_REVIEW_STATUS.PENDING]: "Pending Review",
   [DOCUMENT_REVIEW_STATUS.APPROVED]: "Approved",
   [DOCUMENT_REVIEW_STATUS.REJECTED]: "Rejected",

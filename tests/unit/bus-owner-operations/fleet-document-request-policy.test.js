@@ -49,3 +49,15 @@ test("fleet-document-request-policy unit tests", async (t) => {
     assert.equal(policy.validateChangeReason("  Valid reason for change  ", true), "Valid reason for change");
   });
 });
+
+test("fleet photos require and map front, side, back and inside views", () => {
+  const descriptors = policy.validateFilesPayload("fleetImages", {
+    imageFront: { id: "front" }, imageSide: { id: "side" },
+    imageBack: { id: "back" }, imageInside: { id: "inside" },
+  });
+  assert.deepEqual(descriptors.map(({ view }) => view), ["FRONT", "SIDE", "BACK", "INSIDE"]);
+  assert.throws(
+    () => policy.validateFilesPayload("fleetImages", { imageFront: {} }),
+    { code: "FLEET_DOCUMENT_INVALID_METADATA" }
+  );
+});

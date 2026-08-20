@@ -118,7 +118,28 @@ async function getStopsForVariant(req, res) {
   }
 }
 
+async function rollbackVariantRevision(req, res) {
+  try {
+    const data = await revisions.rollbackVariantRevision(
+      req.params.id, req.adminInfo?.id
+    );
+    res.status(200).json({ success: true, message: "Route rollback successful.", data });
+  } catch (error) {
+    sendError(res, error);
+  }
+}
+
+async function deleteHistoricalRevision(req, res) {
+  try {
+    const data = await revisions.deleteHistoricalRevision(req.params.id);
+    res.status(200).json({ success: true, ...data });
+  } catch (error) {
+    sendError(res, error);
+  }
+}
+
 module.exports = {
   createVariant, getVariantsByCorridor, updateVariant, deleteVariant,
-  getVariantDetails, createVariantRevision, setVariantStops, getStopsForVariant,
+  getVariantDetails, createVariantRevision, rollbackVariantRevision,
+  deleteHistoricalRevision, setVariantStops, getStopsForVariant,
 };

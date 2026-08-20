@@ -43,7 +43,13 @@ const uploadFileToS3 = async (file, folderOrOptions) => {
     ServerSideEncryption: "AES256",
   });
 
-  await s3Client.send(command);
+  try {
+    await s3Client.send(command);
+  } catch (err) {
+    console.error(`Upload to S3 failed: ${err.message}`);
+    throw new Error(`Failed to upload file to storage: ${err.message}`);
+  }
+
   return objectKey;
 };
 

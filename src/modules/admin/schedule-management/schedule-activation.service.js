@@ -32,7 +32,6 @@ const activateSchedule = async (scheduleId, adminId) => {
     );
   }
   await assertScheduleRouteChainReady(schedule);
-  await Fleet.findByIdAndUpdate(schedule.busId, { setupComplete: true });
   schedule.status = "ACTIVE";
   schedule.activatedBy = adminId;
   schedule.activatedAt = new Date();
@@ -99,6 +98,7 @@ const goLiveSchedule = async (scheduleId, adminId) => {
   });
   try {
     await generateWindow(schedule);
+    await Fleet.findByIdAndUpdate(schedule.busId, { setupComplete: true });
   } catch (error) {
     logger.error("scheduleService: burst generation failed", {
       scheduleId,

@@ -10,7 +10,6 @@ function mapFleetSetupStatus(canonicalData) {
     { key: "routeConfigured", label: "Route Configuration", complete: Boolean(steps.routeConfigured) },
     { key: "driverAssigned", label: "Driver Assignment", complete: Boolean(steps.driverAssigned) },
     { key: "scheduleCreated", label: "Schedule Creation", complete: Boolean(steps.scheduleCreated) },
-    { key: "returnTripLinked", label: "Return Trip Linkage", complete: Boolean(steps.returnTripLinked) },
     { key: "activated", label: "Fleet Activation", complete: Boolean(steps.activated) },
   ];
 
@@ -51,4 +50,3 @@ function mapFleetSetupStatus(canonicalData) {
 module.exports = {
   mapFleetSetupStatus,
 };
-

@@ -6,6 +6,7 @@ const REQUIRED_IDENTITY_FIELDS = [
   "busType",
   "vehicleType",
   "totalSeats",
+  "registrationYear",
 ];
 
 const REQUIRED_DOCUMENTS = [
@@ -22,13 +23,16 @@ function hasValidDocumentEvidence(docObj) {
   return Boolean(docObj.uploadedAt);
 }
 
-function evaluateFleetSubmissionReadiness(fleet) {
+const REQUIRED_IMAGE_VIEWS = ["FRONT", "SIDE", "BACK", "INSIDE"];
+
+function evaluateFleetSubmissionReadiness(fleet, context = {}) {
   if (!fleet) {
     return {
       complete: false,
       missingFields: [...REQUIRED_IDENTITY_FIELDS],
       missingDocuments: [...REQUIRED_DOCUMENTS],
       missingAssets: ["fleetImages"],
+      missingConfiguration: ["seatLayout"],
     };
   }
 
@@ -51,20 +55,35 @@ function evaluateFleetSubmissionReadiness(fleet) {
   const missingAssets = [];
   const images = Array.isArray(fleet.fleetImages) ? fleet.fleetImages : [];
   const validImages = images.filter((img) => img && (img.objectKey || img.storageKey) && img.uploadedAt);
-  if (validImages.length === 0) {
+  const imageViews = new Set(validImages.map((image) => image.view));
+  if (REQUIRED_IMAGE_VIEWS.some((view) => !imageViews.has(view)) || validImages.length !== 4) {
     missingAssets.push("fleetImages");
+  }
+
+  const missingConfiguration = [];
+  const configurationErrors = [];
+  if (!context.seatLayout?.assigned) {
+    missingConfiguration.push("seatLayout");
+  } else if (!context.seatLayout?.published) {
+    configurationErrors.push("seatLayoutNotPublished");
+  } else if (Number(context.seatLayout.totalPlaces) !== Number(fleet.totalSeats)) {
+    configurationErrors.push("seatCountMismatch");
   }
 
   const complete =
     missingFields.length === 0 &&
     missingDocuments.length === 0 &&
-    missingAssets.length === 0;
+    missingAssets.length === 0 &&
+    missingConfiguration.length === 0 &&
+    configurationErrors.length === 0;
 
   return {
     complete,
     missingFields,
     missingDocuments,
     missingAssets,
+    missingConfiguration,
+    configurationErrors,
   };
 }
 

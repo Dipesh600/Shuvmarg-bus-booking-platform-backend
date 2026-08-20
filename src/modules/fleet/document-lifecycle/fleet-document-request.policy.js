@@ -6,6 +6,7 @@ const {
   PRIVILEGED_BODY_FIELDS,
   SLOT_METADATA_ALLOW_LIST,
   IMAGE_COLLECTION_LIMITS,
+  REQUIRED_FLEET_IMAGE_VIEWS,
 } = require("./fleet-document.constants");
 const errors = require("./fleet-document.errors");
 
@@ -79,6 +80,19 @@ function validateSlotMetadata(slot, body) {
 
 function validateFilesPayload(slot, files) {
   if (slot === "fleetImages") {
+    const named = [
+      ["imageFront", "FRONT"],
+      ["imageSide", "SIDE"],
+      ["imageBack", "BACK"],
+      ["imageInside", "INSIDE"],
+    ];
+    const namedFiles = named.filter(([field]) => files?.[field]);
+    if (namedFiles.length > 0) {
+      if (namedFiles.length !== REQUIRED_FLEET_IMAGE_VIEWS.length) {
+        throw errors.invalidMetadata("Fleet photos require front, side, back, and inside images.");
+      }
+      return namedFiles.map(([field, view]) => ({ file: files[field], view }));
+    }
     const raw = files?.fleetImages || files?.busImage || files?.file;
     if (!raw) throw errors.fileRequired(slot);
     const list = Array.isArray(raw) ? raw : [raw];
@@ -87,14 +101,14 @@ function validateFilesPayload(slot, files) {
         `fleetImages upload requires between ${IMAGE_COLLECTION_LIMITS.MIN_COUNT} and ${IMAGE_COLLECTION_LIMITS.MAX_COUNT} files.`
       );
     }
-    return list;
+    return list.map((file, index) => ({ file, view: REQUIRED_FLEET_IMAGE_VIEWS[index] }));
   }
   const file = files?.[slot] || files?.file;
   if (!file) throw errors.fileRequired(slot);
   if (Array.isArray(file)) {
     throw errors.invalidMetadata(`Slot '${slot}' accepts only one file.`);
   }
-  return [file];
+  return [{ file, view: null }];
 }
 
 module.exports = {

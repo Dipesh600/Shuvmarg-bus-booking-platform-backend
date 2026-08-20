@@ -12,6 +12,7 @@ function createFleetDocumentUploadService(deps = {}) {
   const resolveActor = deps.resolveActor;
   const logger = deps.logger || console;
   const clock = deps.clock || (() => new Date());
+  const processUpload = deps.processUpload || (async (file) => file);
 
   async function uploadDocument({ fleetId, slot, body, files, actorContext }) {
     requestPolicy.validateFleetId(fleetId);
@@ -31,26 +32,34 @@ function createFleetDocumentUploadService(deps = {}) {
     approvalPolicy.enforceUploadPolicy(fleet, slot);
 
     const action = approvalPolicy.classifyAction(fleet, slot);
-    const isReasonRequired = action === "REPLACED" || action === "RESUBMITTED";
+    const isReasonRequired = action === "RESUBMITTED";
     const changeReason = requestPolicy.validateChangeReason(body?.changeReason, isReasonRequired);
     const metadata = requestPolicy.validateSlotMetadata(slot, body || {});
 
-    const fileList = requestPolicy.validateFilesPayload(slot, files);
-    const validatedFiles = filePolicy.validateFileCollection(fileList, slot);
+    const fileDescriptors = requestPolicy.validateFilesPayload(slot, files);
+    const fileList = fileDescriptors.map(({ file }) => file);
+    filePolicy.validateFileCollection(fileList, slot);
 
     const newAssets = [];
     const uploadedKeys = [];
 
     try {
       for (let i = 0; i < fileList.length; i++) {
-        const fileObj = fileList[i];
-        const valInfo = validatedFiles[i];
+        const descriptor = fileDescriptors[i];
+        let fileObj;
+        try {
+          fileObj = await processUpload(descriptor.file);
+        } catch {
+          throw errors.signatureMismatch();
+        }
+        const valInfo = filePolicy.validateSingleFile(fileObj, slot);
         const requestedKey = storage.buildPrivateObjectKey(fleetId, slot, valInfo.extension);
         const storedObjectKey = await storage.uploadPrivate({ file: fileObj, objectKey: requestedKey });
         uploadedKeys.push(storedObjectKey);
 
         newAssets.push({
           imageId: crypto.randomUUID(),
+          view: descriptor.view,
           objectKey: storedObjectKey,
           mimeType: valInfo.mimeType,
           size: valInfo.size,
@@ -110,7 +119,6 @@ function createFleetDocumentUploadService(deps = {}) {
       throw errors.concurrentModification();
     }
 
-    // Best effort old object cleanup
     const oldKeys = [];
     if (slot === "fleetImages" && Array.isArray(fleet.fleetImages)) {
       for (const img of fleet.fleetImages) {
@@ -126,15 +134,7 @@ function createFleetDocumentUploadService(deps = {}) {
 
     const docStatus = updatedFleet.documentReviews?.[slot]?.status || "pending";
 
-    return dto.buildUploadResponse({
-      fleetId,
-      slot,
-      action,
-      documentStatus: docStatus,
-      fleetApprovalStatus: updatedFleet.approvalStatus,
-      operationalStatus: updatedFleet.status,
-      uploadedAt: now,
-    });
+    return dto.buildUploadResponse({ fleetId, slot, action, documentStatus: docStatus, fleetApprovalStatus: updatedFleet.approvalStatus, operationalStatus: updatedFleet.status, uploadedAt: now });
   }
 
   return { uploadDocument };

@@ -36,7 +36,8 @@ function createFleetSetupService({ repository }) {
       scheduleCreated: !!schedule,
       returnTripLinked: !!schedule?.returnScheduleId,
       activated:
-        schedule?.status === "ACTIVE" || returnSchedule?.status === "ACTIVE",
+        Boolean(fleet.setupComplete) &&
+        (schedule?.status === "ACTIVE" || returnSchedule?.status === "ACTIVE"),
     };
 
     return {

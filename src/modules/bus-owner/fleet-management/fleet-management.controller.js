@@ -5,10 +5,11 @@ const { createBusOwnerFleetCommandController } = require("./fleet-command.contro
 const { createFleetReadService } = require("../../read-contracts/fleet/fleet-read.service");
 
 const { createFleetSubmissionService } = require("../../fleet-management/fleet-submission.service");
+const FleetRouteSetup = require("../../../../models/fleetRouteSetupModel");
 
 const defaultReadService = createFleetReadService();
 const defaultFleetReadController = createBusOwnerFleetReadController();
-const defaultSubmissionService = createFleetSubmissionService();
+const defaultSubmissionService = createFleetSubmissionService({ FleetRouteSetup });
 
 function createFleetManagementController({
   fleetService,

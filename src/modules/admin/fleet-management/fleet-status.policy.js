@@ -26,11 +26,12 @@ function applyStatus(bus, status, rejectionReason, now = new Date()) {
 
 function buildStatusMessage(bus, status) {
   const title = `Fleet Status Update: ${bus.busName} (${bus.busNumber})`;
-  const suffix =
-    status === "REJECTED" ? ` Reason: ${bus.rejectionReason}` : "";
+  const body = status === "REJECTED"
+    ? `Your fleet application needs changes. Reason: ${bus.rejectionReason}. Open Your buses to correct and resubmit it.`
+    : "Your fleet application has been approved. Shuvmarg will now complete driver, schedule, and activation setup.";
   return {
     title,
-    body: `Your bus fleet status has been updated to ${status}.${suffix}`,
+    body,
   };
 }
 

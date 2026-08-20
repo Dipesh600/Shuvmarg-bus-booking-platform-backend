@@ -14,6 +14,7 @@ function createFleetApprovalService(deps = {}) {
   const notify = deps.notify || (async () => {});
   const clock = deps.clock || (() => new Date());
   const logger = deps.logger;
+  const FleetRouteSetup = deps.FleetRouteSetup || null;
 
   async function decideFleetApproval(input = {}) {
     const { actor, ...body } = input;
@@ -31,6 +32,21 @@ function createFleetApprovalService(deps = {}) {
     });
 
     const isApprove = decision === "APPROVED";
+    if (isApprove && FleetRouteSetup) {
+      const routeSetup = await FleetRouteSetup.findOne({ fleetId })
+        .select("status resolutionStatus unresolvedPlaces").lean();
+      if (!routeSetup || (
+        !["READY", "APPROVED"].includes(routeSetup.status)
+        || routeSetup.resolutionStatus !== "AVAILABLE"
+        || (routeSetup.unresolvedPlaces || []).some((item) => item.reviewStatus !== "APPROVED")
+      )) {
+        throw new FleetApprovalError(
+          "FLEET_ROUTE_REVIEW_INCOMPLETE",
+          "Resolve the fleet route and added places before approving this fleet.",
+          409
+        );
+      }
+    }
     const update = {
       $set: {
         approvalStatus: decision,

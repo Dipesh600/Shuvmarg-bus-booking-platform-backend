@@ -35,6 +35,7 @@ test("fleet-approval-push-validation real Mongoose $push tests", async () => {
       busType: "DELUXE",
       vehicleType: "bus",
       totalSeats: 30,
+      registrationYear: 2024,
       approvalStatus: "DRAFT",
       status: "INACTIVE",
     });

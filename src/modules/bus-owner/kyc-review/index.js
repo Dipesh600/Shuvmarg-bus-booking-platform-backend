@@ -1,15 +1,17 @@
 "use strict";
 
+const mongoose = require("mongoose");
 const Admin = require("../../../../models/adminModel");
 const BusOwner = require("../../../../models/busOwnerModel");
 const User = require("../../../../models/userModel");
+const OperatorBrand = require("../../../../models/operatorBrandModel");
 const {
   applyDocumentVerdicts,
   invalidDocuments,
 } = require("../../admin/bus-owner-management/kyc-verdict.policy");
 const {
-  notifyKycResult,
-} = require("../../admin/bus-owner-management/kyc-notification.service");
+  busOwnerNotificationService,
+} = require("../../notifications/bus-owner");
 const { createKycReviewService } = require("./kyc-review.service");
 const { createKycReviewController } = require("./kyc-review.controller");
 const { getKycReviewerActor, assertCanReviewBusOwnerKyc } = require("./kyc-review-actor.policy");
@@ -20,13 +22,15 @@ const reviewService = createKycReviewService({
   Admin,
   BusOwner,
   User,
+  OperatorBrand,
   applyDocumentVerdicts,
   invalidDocuments,
+  mongoose,
 });
 
 const controller = createKycReviewController({
   reviewService,
-  notifyKycResult,
+  notifyKycResult: busOwnerNotificationService.notifyKycResult,
 });
 
 module.exports = {

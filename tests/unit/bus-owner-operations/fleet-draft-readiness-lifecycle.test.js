@@ -13,6 +13,7 @@ function createMockFleet(overrides = {}) {
     busType: "AC",
     vehicleType: "bus",
     totalSeats: 35,
+    registrationYear: 2024,
     status: "INACTIVE",
     approvalStatus: "DRAFT",
     setupComplete: false,
@@ -22,7 +23,7 @@ function createMockFleet(overrides = {}) {
       bluebook: { objectKey: "keys/blue.pdf", uploadedAt: new Date() },
       routePermit: { objectKey: "keys/permit.pdf", uploadedAt: new Date() },
     },
-    fleetImages: [{ imageId: "img1", objectKey: "keys/img.jpg", uploadedAt: new Date() }],
+    fleetImages: ["FRONT", "SIDE", "BACK", "INSIDE"].map((view) => ({ imageId: view, view, objectKey: `keys/${view}.webp`, uploadedAt: new Date() })),
     ...overrides,
   };
 }
@@ -70,4 +71,22 @@ test("27. Draft document reviews default to not_submitted", () => {
   const draftFleet = createMockFleet({ approvalStatus: "DRAFT" });
   const detail = mapBusOwnerFleetDetail(draftFleet);
   assert.equal(detail.approvalStatus, "DRAFT");
+});
+
+test("submission requires four named photo views and a matching published seat layout", () => {
+  const incomplete = evaluateFleetSubmissionReadiness(createMockFleet({
+    fleetImages: [{ view: "FRONT", objectKey: "front.webp", uploadedAt: new Date() }],
+  }), { seatLayout: { assigned: false } });
+  assert.deepEqual(incomplete.missingAssets, ["fleetImages"]);
+  assert.deepEqual(incomplete.missingConfiguration, ["seatLayout"]);
+
+  const mismatch = evaluateFleetSubmissionReadiness(createMockFleet(), {
+    seatLayout: { assigned: true, published: true, totalPlaces: 36 },
+  });
+  assert.deepEqual(mismatch.configurationErrors, ["seatCountMismatch"]);
+
+  const ready = evaluateFleetSubmissionReadiness(createMockFleet(), {
+    seatLayout: { assigned: true, published: true, totalPlaces: 35 },
+  });
+  assert.equal(ready.complete, true);
 });
