@@ -1,5 +1,4 @@
 "use strict";
-
 const BusModel = require("../../../models/fleetModel");
 const BusOwnerModel = require("../../../models/busOwnerModel");
 const FleetSeatLayoutAssignmentModel = require("../../../models/fleetSeatLayoutAssignmentModel");
@@ -7,7 +6,6 @@ const SeatLayoutRevisionModel = require("../../../models/seatLayoutRevisionModel
 const { ApiError } = require("../../contracts");
 const { FLEET_APPROVAL_STATUS } = require("../../contracts/status/fleet-approval.status");
 const { evaluateFleetSubmissionReadiness } = require("./fleet-readiness.evaluator");
-
 function createFleetSubmissionService(deps = {}) {
   const Bus = deps.Bus || BusModel;
   const BusOwner = deps.BusOwner || BusOwnerModel;
@@ -30,7 +28,6 @@ function createFleetSubmissionService(deps = {}) {
       totalPlaces: revision?.totalPlaces,
     };
   });
-
   async function submitFleetForVerification({ fleetId, ownerId }) {
     if (!fleetId) {
       throw new ApiError("FLEET_INVALID_ID", "Fleet ID is required.");
@@ -38,11 +35,9 @@ function createFleetSubmissionService(deps = {}) {
     if (!ownerId) {
       throw new ApiError("UNAUTHORIZED", "Owner ID is required.");
     }
-
     const busOwner = await BusOwner.findOne({ user: ownerId })
       .select("verificationStatus")
       .lean();
-
     if (!busOwner || busOwner.verificationStatus !== "approved") {
       throw new ApiError(
         "PROFILE_NOT_APPROVED",
@@ -50,7 +45,6 @@ function createFleetSubmissionService(deps = {}) {
         403
       );
     }
-
     let fleetQuery = Bus.findOne({ _id: fleetId, ownerId });
     if (typeof fleetQuery.schemaLevelProjections === "function") {
       fleetQuery = fleetQuery.schemaLevelProjections(false);
@@ -59,7 +53,6 @@ function createFleetSubmissionService(deps = {}) {
     if (!fleet) {
       throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.", 404);
     }
-
     if (
       fleet.approvalStatus === FLEET_APPROVAL_STATUS.PENDING ||
       fleet.approvalStatus === FLEET_APPROVAL_STATUS.APPROVED
@@ -70,7 +63,6 @@ function createFleetSubmissionService(deps = {}) {
         409
       );
     }
-
     const seatLayout = await loadSeatLayout(fleetId);
     const routeSetup = FleetRouteSetup
       ? await FleetRouteSetup.findOne({ fleetId, ownerId })
@@ -92,7 +84,6 @@ function createFleetSubmissionService(deps = {}) {
         readiness
       );
     }
-
     const now = new Date();
     const updated = await Bus.findOneAndUpdate(
       {
@@ -106,8 +97,6 @@ function createFleetSubmissionService(deps = {}) {
         $set: {
           approvalStatus: FLEET_APPROVAL_STATUS.PENDING,
           status: "INACTIVE",
-          // Compliance readiness is complete, but operational setup (driver,
-          // schedule and activation) is completed later by the setup workflow.
           setupComplete: false,
           submittedAt: now,
           rejectionReason: null,
@@ -140,7 +129,6 @@ function createFleetSubmissionService(deps = {}) {
       },
       { new: true, runValidators: true }
     ).lean();
-
     if (!updated) {
       throw new ApiError(
         "FLEET_SUBMISSION_LOCKED",
@@ -148,18 +136,14 @@ function createFleetSubmissionService(deps = {}) {
         409
       );
     }
-
     if (FleetRouteSetup && routeSetup) {
       await FleetRouteSetup.updateOne(
         { fleetId, ownerId },
         { $set: { status: routeSetup.status === "READY" ? "READY" : "PENDING_REVIEW" } }
       );
     }
-
     return updated;
   }
-
   return { submitFleetForVerification };
 }
-
 module.exports = { createFleetSubmissionService };

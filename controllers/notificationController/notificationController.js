@@ -7,14 +7,12 @@ const getDeviceInfo = async (req, res) => {
   try {
     const { token, userType, os, osVersion, deviceModel } = req.body;
     const userId = req.userInfo?.id;
-
     if (!userId) {
       return res.status(400).json({
         status: false,
         message: "Please provide userId!",
       });
     }
-
     const newDeviceInfo = {
       userId,
       token,
@@ -23,15 +21,12 @@ const getDeviceInfo = async (req, res) => {
       osVersion,
       deviceModel,
     };
-
     const existingDevice = await UserDeviceInfo.findOne({ userId });
-
     if (existingDevice) {
       await UserDeviceInfo.updateOne({ userId }, newDeviceInfo);
     } else {
       await UserDeviceInfo.create(newDeviceInfo);
     }
-
     return res.status(200).json({
       status: true,
       message: "Device info saved/updated successfully!",
@@ -44,8 +39,6 @@ const getDeviceInfo = async (req, res) => {
     });
   }
 };
-// Send notification to user
-
 const notifyUsers = async (req, res) => {
   try {
     const { title, body } = req.body;
@@ -61,12 +54,7 @@ const notifyUsers = async (req, res) => {
         message: "No valid tokens found",
       });
     }
-
-    // const title = 'Hello Sumarg Users';
-    // const body = 'Good Evening!';
-
     const result = await notificationManager(tokens, title, body);
-
     if (result.success) {
       return res.status(200).json(result);
     } else {
@@ -81,7 +69,6 @@ const notifyUsers = async (req, res) => {
     });
   }
 };
-// Get local notifications for the current user
 const getMyLocalNotifications = async (req, res) => {
   try {
     const userId = req.userInfo?.id;
@@ -111,34 +98,27 @@ const getMyLocalNotifications = async (req, res) => {
     });
   }
 };
-
-// Mark notification as read
 const markNotificationAsRead = async (req, res) => {
   try {
     const { notificationId } = req.params;
     const userId = req.userInfo?.id;
-
     if (!userId) {
       return res.status(400).json({
         success: false,
         message: "Please provide userId!",
       });
     }
-
     if (!notificationId) {
       return res.status(400).json({
         success: false,
         message: "Please provide notification ID!",
       });
     }
-
-    // Find and update the notification, ensuring it belongs to the current user
     const notification = await LocalNotification.findOneAndUpdate(
       { _id: notificationId, user: userId },
       { isRead: true },
       { new: true }
     );
-
     if (!notification) {
       return res.status(404).json({
         success: false,
@@ -146,7 +126,6 @@ const markNotificationAsRead = async (req, res) => {
           "Notification not found or you don't have permission to update it!",
       });
     }
-
     return res.status(200).json({
       success: true,
       message: "Notification marked as read successfully!",
@@ -161,31 +140,26 @@ const markNotificationAsRead = async (req, res) => {
     });
   }
 };
-// Delete notification
 const deleteNotification = async (req, res) => {
   try {
     const { notificationId } = req.params;
     const userId = req.userInfo?.id;
-
     if (!userId) {
       return res.status(400).json({
         success: false,
         message: "Please provide userId!",
       });
     }
-
     if (!notificationId) {
       return res.status(400).json({
         success: false,
         message: "Please provide notification ID!",
       });
     }
-
     const notification = await LocalNotification.findOneAndDelete({
       _id: notificationId,
       user: userId,
     });
-
     if (!notification) {
       return res.status(404).json({
         success: false,
@@ -193,7 +167,6 @@ const deleteNotification = async (req, res) => {
           "Notification not found or you don't have permission to delete it!",
       });
     }
-
     return res.status(200).json({
       success: true,
       message: "Notification deleted successfully!",
@@ -207,7 +180,6 @@ const deleteNotification = async (req, res) => {
     });
   }
 };
-
 module.exports = {
   getDeviceInfo,
   notifyUsers,

@@ -1,5 +1,4 @@
 "use strict";
-
 const mongoose = require("mongoose");
 const Bus = require("../../../../models/fleetModel.js");
 const Variant = require("../../../../models/routeVariantModel.js");
@@ -15,7 +14,6 @@ const {
   sanitizeText,
   validateCoordinates,
 } = require("./route-setup.validation.js");
-
 async function validateFleet(ownerId, fleetId, brandId) {
   if (!mongoose.isValidObjectId(fleetId)) throw fleetRouteError("INVALID_FLEET", "Select a valid fleet.");
   const fleet = await Bus.findOne({ _id: fleetId, ownerId }).select("brandId approvalStatus").lean();
@@ -28,7 +26,6 @@ async function validateFleet(ownerId, fleetId, brandId) {
   }
   return fleet;
 }
-
 async function validateResolvedRoute(data) {
   if (data.resolutionStatus !== "AVAILABLE") return { returnVariantId: null, allowedStopIds: null };
   const variant = await Variant.findOne({
@@ -67,7 +64,6 @@ async function validateResolvedRoute(data) {
   }
   return { returnVariantId, allowedStopIds: new Set(allowed.keys()) };
 }
-
 async function validateUnresolvedPlaces(data, allowedStopIds) {
   const places = Array.isArray(data.unresolvedPlaces) ? data.unresolvedPlaces : [];
   const keys = new Set();
@@ -105,30 +101,24 @@ async function validateUnresolvedPlaces(data, allowedStopIds) {
     }
   }
 }
-
 async function saveRouteSetup(ownerId, fleetId, data) {
   await validateFleet(ownerId, fleetId, data.brandId);
   validateEndpoints(data);
-
   const isCanonicalOrigin = mongoose.isValidObjectId(data.originStopId);
   const isCanonicalDestination = mongoose.isValidObjectId(data.destinationStopId);
-
   const customOrigin = data.customOrigin ? {
     name: sanitizeText(data.customOrigin.name, 150),
     address: sanitizeText(data.customOrigin.address, 500),
     coordinates: validateCoordinates(data.customOrigin.coordinates),
   } : null;
-
   const customDestination = data.customDestination ? {
     name: sanitizeText(data.customDestination.name, 150),
     address: sanitizeText(data.customDestination.address, 500),
     coordinates: validateCoordinates(data.customDestination.coordinates),
   } : null;
-
   const resolutionStatus = (!isCanonicalOrigin || !isCanonicalDestination || data.resolutionStatus !== "AVAILABLE")
     ? "NEEDS_PLATFORM_REVIEW"
     : "AVAILABLE";
-
   const cleanData = {
     ...data,
     originStopId: isCanonicalOrigin ? data.originStopId : null,
@@ -137,7 +127,6 @@ async function saveRouteSetup(ownerId, fleetId, data) {
     customDestination,
     resolutionStatus,
   };
-
   const { returnVariantId, allowedStopIds } = await validateResolvedRoute(cleanData);
   await validateUnresolvedPlaces(cleanData, allowedStopIds);
   const unresolvedPlaces = Array.isArray(cleanData.unresolvedPlaces) ? cleanData.unresolvedPlaces : [];
@@ -154,9 +143,7 @@ async function saveRouteSetup(ownerId, fleetId, data) {
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   ).lean();
 }
-
 function getRouteSetup(ownerId, fleetId) {
   return FleetRouteSetup.findOne({ fleetId, ownerId }).lean();
 }
-
 module.exports = { saveRouteSetup, getRouteSetup, validateResolvedRoute };
