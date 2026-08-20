@@ -32,6 +32,17 @@ async function createVariantDraft(req, res) {
     return sendError(res, error);
   }
 }
+
+async function previewCorridorRoutePaths(req, res) {
+  try {
+    const data = await workflow.previewCorridorRoutePaths(
+      req.params.corridorId, req.body || {}
+    );
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return sendError(res, error);
+  }
+}
 async function getVariantDraft(req, res) {
   try {
     const data = await workflow.getVariantDraft(req.params.variantId, {
@@ -141,6 +152,7 @@ module.exports = {
   createVariantDraft,
   getVariantDraft,
   prepareVariantDraftStopCandidates,
+  previewCorridorRoutePaths,
   refreshVariantDraftRouteOptions,
   searchVariantDraftGuidancePlaces,
   selectVariantDraftRouteOption,

@@ -106,3 +106,18 @@ test("notification failure is non-fatal post-save", async () => {
   assert.equal(result.success, true);
   assert.equal(result.data.approvalStatus, "REJECTED");
 });
+
+test("approval is blocked when the fleet route setup is missing", async () => {
+  const FleetRouteSetup = {
+    findOne: () => ({ select: () => ({ lean: async () => null }) }),
+  };
+  const { service } = makeService({ FleetRouteSetup });
+  await assert.rejects(
+    () => service.decideFleetApproval({
+      status: "APPROVED",
+      fleetId: validFleetId,
+      actor: { adminId: validAdminId, tokenRole: "ADMIN" },
+    }),
+    (error) => error.code === "FLEET_ROUTE_REVIEW_INCOMPLETE" && error.statusCode === 409
+  );
+});

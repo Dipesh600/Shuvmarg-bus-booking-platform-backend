@@ -10,7 +10,7 @@ function createFleetSetupRepository({
   async function findFleet(id) {
     return Bus.findById(id)
       .select(
-        "busName busNumber approvalStatus status corridorId routeRequestId brandId"
+        "busName busNumber approvalStatus status setupComplete corridorId routeRequestId brandId"
       )
       .populate({
         path: "corridorId",

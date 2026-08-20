@@ -85,13 +85,17 @@ const notifyUsers = async (req, res) => {
 const getMyLocalNotifications = async (req, res) => {
   try {
     const userId = req.userInfo?.id;
+    const activeRole = req.userInfo?.activeRole || req.userInfo?.role || "passenger";
     if (!userId) {
       return res.status(400).json({
         status: false,
         message: "Please provide userId!",
       });
     }
-    const notifications = await LocalNotification.find({ user: userId }).sort({
+    const notifications = await LocalNotification.find({
+      user: userId,
+      recipientRole: { $in: [activeRole, "all"] }
+    }).sort({
       createdAt: -1,
     });
     return res.status(200).json({

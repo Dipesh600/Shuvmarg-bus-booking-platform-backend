@@ -50,15 +50,7 @@ async function loadDraftContext(variantId, {
 
 async function createOrReplaceMapReview(input, adminId, dependencies = {}) {
   const { variant, corridor } = await loadDraftContext(input.variantId, dependencies);
-  const hasOriginTerminal = Boolean(variant.originTerminalStopId);
-  const hasDestinationTerminal = Boolean(variant.destinationTerminalStopId);
-  if (hasOriginTerminal !== hasDestinationTerminal) {
-    throw corridorError(
-      "INCOMPLETE_VARIANT_TERMINALS",
-      "A variant must define both physical terminals or neither."
-    );
-  }
-  if (hasOriginTerminal) {
+  if (variant.originTerminalStopId || variant.destinationTerminalStopId) {
     await assertVariantTerminalScope({
       corridor,
       direction: variant.direction,

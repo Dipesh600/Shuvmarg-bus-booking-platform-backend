@@ -2,7 +2,10 @@
 
 const mongoose = require("mongoose");
 const Fleet = require("../../../../models/fleetModel");
+const FleetRouteSetup = require("../../../../models/fleetRouteSetupModel");
 const BusOwner = require("../../../../models/busOwnerModel");
+const FleetSeatLayoutAssignment = require("../../../../models/fleetSeatLayoutAssignmentModel");
+const SeatLayoutRevision = require("../../../../models/seatLayoutRevisionModel");
 const { ReadContractValidationError, ReadContractNotFoundError } = require("../common/read-errors");
 const { mapAdminFleetListItem } = require("./admin-fleet-list.dto");
 const { mapAdminFleetDetail } = require("./admin-fleet-detail.dto");
@@ -13,7 +16,21 @@ const { buildAdminFleetFilter } = require("./fleet-read-filter.builder");
 function createFleetReadRepository({
   FleetModel = Fleet,
   BusOwnerModel = BusOwner,
+  FleetRouteSetupModel = FleetRouteSetup,
+  FleetSeatLayoutAssignmentModel = FleetSeatLayoutAssignment,
+  SeatLayoutRevisionModel = SeatLayoutRevision,
 } = {}) {
+  async function loadSeatLayout(fleetId) {
+    try {
+      const assignment = await FleetSeatLayoutAssignmentModel.findOne({ fleetId }).lean();
+      if (!assignment) return {};
+      const revision = await SeatLayoutRevisionModel.findById(assignment.activeRevisionId).lean();
+      return { assignment, revision };
+    } catch (error) {
+      console.warn("Could not load seat layout for fleet:", error?.message);
+      return {};
+    }
+  }
   async function resolveOwnerObjectIds(userId) {
     if (!userId || typeof userId !== "string" || !mongoose.Types.ObjectId.isValid(userId)) {
       throw new ReadContractValidationError("READ_INVALID_FILTER", "Invalid ownerId filter.");
@@ -60,6 +77,7 @@ function createFleetReadRepository({
     let fleet;
     try {
       fleet = await FleetModel.findById(id)
+        .select("+fleetImages.objectKey +fleetImages.mimeType +fleetDocuments.fitnessCert.objectKey +fleetDocuments.fitnessCert.mimeType +fleetDocuments.insurance.objectKey +fleetDocuments.insurance.mimeType +fleetDocuments.bluebook.objectKey +fleetDocuments.bluebook.mimeType +fleetDocuments.routePermit.objectKey +fleetDocuments.routePermit.mimeType")
         .populate({ path: "ownerId", select: "name email phone", options: { strictPopulate: false } })
         .populate({ path: "brandId", select: "brandName brandCode ownerId logo baseCity status", options: { strictPopulate: false } })
         .populate({
@@ -73,18 +91,32 @@ function createFleetReadRepository({
         })
         .populate({ path: "routeRequestId", select: "originCity destinationCity viaStops status", options: { strictPopulate: false } })
         .populate({ path: "approvedBy", select: "name email", options: { strictPopulate: false } })
+        .populate({ path: "rejectedBy", select: "name email", options: { strictPopulate: false } })
         .lean();
     } catch (populateError) {
       // Fallback: fetch without populate if refs are corrupt
       console.error("Fleet detail populate failed, falling back:", populateError?.message);
-      fleet = await FleetModel.findById(id).lean();
+      fleet = await FleetModel.findById(id).select("+fleetImages.objectKey +fleetImages.mimeType +fleetDocuments.fitnessCert.objectKey +fleetDocuments.fitnessCert.mimeType +fleetDocuments.insurance.objectKey +fleetDocuments.insurance.mimeType +fleetDocuments.bluebook.objectKey +fleetDocuments.bluebook.mimeType +fleetDocuments.routePermit.objectKey +fleetDocuments.routePermit.mimeType").lean();
     }
 
     if (!fleet) {
       throw new ReadContractNotFoundError("FLEET_NOT_FOUND", "Fleet record not found.");
     }
 
-    return mapAdminFleetDetail(fleet);
+    // Attach route setup data for admin view
+    let routeSetup = null;
+    try {
+      routeSetup = await FleetRouteSetupModel.findOne({ fleetId: id })
+        .populate({ path: "servedStops.stopId", select: "name city code", options: { strictPopulate: false } })
+        .populate({ path: "originStopId", select: "name city", options: { strictPopulate: false } })
+        .populate({ path: "destinationStopId", select: "name city", options: { strictPopulate: false } })
+        .lean();
+    } catch (err) {
+      console.warn("Could not load route setup for fleet:", err?.message);
+    }
+
+    const seatLayout = await loadSeatLayout(id);
+    return mapAdminFleetDetail(fleet, routeSetup, seatLayout);
   }
 
   async function findOwnerPaginatedFleets({ userId, page, limit, skip }) {
@@ -95,6 +127,7 @@ function createFleetReadRepository({
 
     const [rawFleets, totalItems] = await Promise.all([
       FleetModel.find(filter)
+        .select("+fleetImages.objectKey +fleetImages.mimeType +fleetDocuments.fitnessCert.objectKey +fleetDocuments.fitnessCert.mimeType +fleetDocuments.insurance.objectKey +fleetDocuments.insurance.mimeType +fleetDocuments.bluebook.objectKey +fleetDocuments.bluebook.mimeType +fleetDocuments.routePermit.objectKey +fleetDocuments.routePermit.mimeType")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -111,13 +144,26 @@ function createFleetReadRepository({
     const fleet = await FleetModel.findOne({
       _id: fleetId,
       $or: [{ ownerId: { $in: ownerIds } }, { busOwnerId: { $in: ownerIds } }],
-    }).lean();
+    }).select("+fleetImages.objectKey +fleetImages.mimeType +fleetDocuments.fitnessCert.objectKey +fleetDocuments.fitnessCert.mimeType +fleetDocuments.insurance.objectKey +fleetDocuments.insurance.mimeType +fleetDocuments.bluebook.objectKey +fleetDocuments.bluebook.mimeType +fleetDocuments.routePermit.objectKey +fleetDocuments.routePermit.mimeType").lean();
 
     if (!fleet) {
       throw new ReadContractNotFoundError("FLEET_NOT_FOUND", "Fleet record not found or not owned by user.");
     }
 
-    return mapBusOwnerFleetDetail(fleet);
+    // Attach route setup data so the operator preview shows corridor/stops
+    let routeSetup = null;
+    try {
+      routeSetup = await FleetRouteSetupModel.findOne({ fleetId })
+        .populate({ path: "servedStops.stopId", select: "name city code", options: { strictPopulate: false } })
+        .populate({ path: "originStopId", select: "name city", options: { strictPopulate: false } })
+        .populate({ path: "destinationStopId", select: "name city", options: { strictPopulate: false } })
+        .lean();
+    } catch (err) {
+      console.warn("Could not load route setup for owner fleet detail:", err?.message);
+    }
+
+    const seatLayout = await loadSeatLayout(fleetId);
+    return mapBusOwnerFleetDetail(fleet, routeSetup, seatLayout);
   }
 
   return {

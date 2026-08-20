@@ -107,8 +107,29 @@ test("admin fleet detail exposes review data without exposing storage references
     registrationYear: 2026,
     seatConfig: { floors: [{ floorIndex: 0, rows: [] }] },
     approvalStatus: "APPROVED",
-    fleetImages: ["private/fleet-one.png"],
+    fleetImages: [{ objectKey: "private/fleet-one.png", view: "front", uploadedAt: new Date("2026-08-01") }],
     fleetDocuments: { insurance: { url: "private/insurance.pdf", policyNumber: "POL-1" } },
+    submittedAt: new Date("2026-08-02"),
+    rejectedAt: new Date("2026-08-03"),
+    rejectedBy: { _id: "64f000000000000000000005", name: "Reviewer" },
+    rejectionReason: "Replace insurance",
+  }, {
+    _id: "64f000000000000000000006",
+    originStopId: { _id: "64f000000000000000000007", name: "Kathmandu" },
+    destinationStopId: { _id: "64f000000000000000000008", name: "Pokhara" },
+    servedStops: [],
+  }, {
+    assignment: {
+      templateId: "64f000000000000000000009",
+      activeRevisionId: "64f000000000000000000010",
+      assignmentVersion: 2,
+    },
+    revision: {
+      revisionNumber: 3,
+      status: "PUBLISHED",
+      totalPlaces: 40,
+      layout: { schemaVersion: "v3", sections: [] },
+    },
   });
 
   assert.equal(dto.vehicle.registrationYear, 2026);
@@ -117,6 +138,13 @@ test("admin fleet detail exposes review data without exposing storage references
   assert.equal(dto.assignment.operatorCode, "OB-MNT001");
   assert.equal(dto.isApproved, true);
   assert.equal(dto.documents.fleetImages.count, 1);
+  assert.equal(dto.documents.fleetImages.images[0].view, "front");
+  assert.equal(dto.route.origin, "Kathmandu");
+  assert.equal(dto.route.destination, "Pokhara");
+  assert.equal(dto.seatLayout.revisionNumber, 3);
+  assert.equal(dto.seatLayout.totalPlaces, 40);
+  assert.equal(dto.review.rejectedBy.name, "Reviewer");
+  assert.equal(dto.review.rejectionReason, "Replace insurance");
   assert.equal(JSON.stringify(dto).includes("private/fleet-one.png"), false);
   assert.equal(JSON.stringify(dto).includes("private/insurance.pdf"), false);
 });

@@ -10,8 +10,8 @@ const {
   invalidDocuments,
 } = require("../../admin/bus-owner-management/kyc-verdict.policy");
 const {
-  notifyKycResult,
-} = require("../../admin/bus-owner-management/kyc-notification.service");
+  busOwnerNotificationService,
+} = require("../../notifications/bus-owner");
 const { createKycReviewService } = require("./kyc-review.service");
 const { createKycReviewController } = require("./kyc-review.controller");
 const { getKycReviewerActor, assertCanReviewBusOwnerKyc } = require("./kyc-review-actor.policy");
@@ -30,7 +30,7 @@ const reviewService = createKycReviewService({
 
 const controller = createKycReviewController({
   reviewService,
-  notifyKycResult,
+  notifyKycResult: busOwnerNotificationService.notifyKycResult,
 });
 
 module.exports = {

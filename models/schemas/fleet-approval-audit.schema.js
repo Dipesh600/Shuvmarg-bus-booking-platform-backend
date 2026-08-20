@@ -6,7 +6,7 @@ const fleetApprovalAuditSchema = new mongoose.Schema(
   {
     eventType: {
       type: String,
-      enum: ["FLEET_APPROVED", "FLEET_REJECTED", "FLEET_RESUBMITTED"],
+      enum: ["FLEET_APPROVED", "FLEET_REJECTED", "FLEET_RESUBMITTED", "FLEET_SUBMITTED"],
       required: true,
       validate: {
         validator: function (val) {
@@ -17,7 +17,10 @@ const fleetApprovalAuditSchema = new mongoose.Schema(
             return this.actorType === "ADMIN" && this.fromStatus === "PENDING" && this.toStatus === "REJECTED";
           }
           if (val === "FLEET_RESUBMITTED") {
-            return (this.actorType === "BUS_OWNER" || this.actorType === "ADMIN") && this.fromStatus === "REJECTED" && this.toStatus === "PENDING";
+            return this.actorType === "BUS_OWNER" && this.fromStatus === "REJECTED" && this.toStatus === "PENDING";
+          }
+          if (val === "FLEET_SUBMITTED") {
+            return this.actorType === "BUS_OWNER" && this.fromStatus === "DRAFT" && this.toStatus === "PENDING";
           }
           return false;
         },
@@ -35,7 +38,7 @@ const fleetApprovalAuditSchema = new mongoose.Schema(
     },
     fromStatus: {
       type: String,
-      enum: ["PENDING", "REJECTED"],
+      enum: ["PENDING", "REJECTED", "DRAFT"],
       required: true,
     },
     toStatus: {

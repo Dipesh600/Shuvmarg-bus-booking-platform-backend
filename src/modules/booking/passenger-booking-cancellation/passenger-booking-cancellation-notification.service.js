@@ -19,7 +19,8 @@ const createPassengerBookingCancellationNotificationService = (repository) => {
           ticketId: booking.ticketId,
           route: routeInfo,
           refundAmount: estimate.refundAmount,
-        }
+        },
+        "passenger"
       );
 
       const userDevices = await repository.findUserDevices(userId);

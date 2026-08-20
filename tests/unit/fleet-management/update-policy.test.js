@@ -7,6 +7,7 @@ const {
   createFleetUpdatePolicy,
   restrictOwnerUpdate,
   lockApprovedIdentity,
+  rejectLifecycleUpdate,
 } = require("../../../src/modules/fleet-management/fleet-update.policy");
 
 test("owner updates discard fields outside the legacy allow-list", () => {
@@ -15,13 +16,21 @@ test("owner updates discard fields outside the legacy allow-list", () => {
   assert.deepEqual(update, { busName: "Safe" });
 });
 
+test("generic admin updates cannot mutate fleet lifecycle fields", () => {
+  assert.throws(
+    () => rejectLifecycleUpdate({ busName: "Safe", approvalStatus: "APPROVED" }),
+    (err) => err instanceof ApiError && err.code === "FLEET_LIFECYCLE_UPDATE_FORBIDDEN"
+  );
+  assert.doesNotThrow(() => rejectLifecycleUpdate({ busName: "Safe", status: "MAINTENANCE" }));
+});
+
 test("approved fleets retain locked identity and layout fields", () => {
   const update = {
     busName: "Allowed", busNumber: "blocked", vehicleType: "blocked",
     registrationYear: 2025, seatConfig: {}, totalSeats: 50,
     busType: "blocked", corridorId: "blocked",
   };
-  lockApprovedIdentity({ approvalStatus: "APPROVED" }, update);
+  lockApprovedIdentity({ approvalStatus: "APPROVED" }, update, "owner");
   assert.deepEqual(update, { busName: "Allowed" });
 });
 

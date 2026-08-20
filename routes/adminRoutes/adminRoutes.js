@@ -234,7 +234,6 @@ router.get("/fleet/owner/:ownerId", adminMiddleware, adminFleetController.getFle
 // router.get("/fleet/details/:id" mounted via adminFrontendReadRoutes)
 router.patch("/fleet/update/:id", adminMiddleware, adminFleetController.updateFleetByAdmin);
 router.delete("/fleet/delete/:id", adminMiddleware, adminFleetController.deleteFleetByAdmin);
-router.patch("/fleet/resubmit/:id", adminMiddleware, adminFleetController.resubmitFleetByAdmin);
 router.patch("/fleet/reupload-doc/:id", adminMiddleware, adminFleetController.reuploadFleetDocument);
 router.put("/fleet/:fleetId/documents/:slot", adminMiddleware, adminFleetDocumentController.uploadDocument);
 router.get("/fleet/:fleetId/documents/:slot/read-url", adminMiddleware, adminFleetDocumentController.getDocumentReadUrl);
@@ -320,6 +319,12 @@ router.patch("/registry/variants/:id",                    adminMiddleware, platf
 router.delete("/registry/variants/:id",                   adminMiddleware, platformRegistry.deleteVariant);
 // Draft-first route variant workflow. Google output is temporary review data;
 // only approved platform Stops and the final sequence become canonical.
+
+// Stateless path preview — returns Google road suggestions without creating a draft.
+// The wizard uses this for step-1 so a draft record is only created once the
+// operator confirms a path and proceeds to stop discovery.
+router.post("/registry/corridors/:corridorId/route-preview", adminMiddleware, platformRegistry.previewCorridorRoutePaths);
+
 router.post("/registry/corridors/:corridorId/variant-drafts", adminMiddleware, platformRegistry.createVariantDraft);
 router.get("/registry/variant-drafts/:variantId", adminMiddleware, platformRegistry.getVariantDraft);
 router.post("/registry/variant-drafts/:variantId/route-options", adminMiddleware, platformRegistry.refreshVariantDraftRouteOptions);

@@ -13,6 +13,7 @@ function createFleetSubmissionService(deps = {}) {
   const BusOwner = deps.BusOwner || BusOwnerModel;
   const FleetSeatLayoutAssignment = deps.FleetSeatLayoutAssignment || FleetSeatLayoutAssignmentModel;
   const SeatLayoutRevision = deps.SeatLayoutRevision || SeatLayoutRevisionModel;
+  const FleetRouteSetup = deps.FleetRouteSetup || null;
   const readinessEvaluator = deps.readinessEvaluator || evaluateFleetSubmissionReadiness;
   const loadSeatLayout = deps.loadSeatLayout || (async (fleetId) => {
     const assignment = await FleetSeatLayoutAssignment.findOne({ fleetId })
@@ -71,6 +72,15 @@ function createFleetSubmissionService(deps = {}) {
     }
 
     const seatLayout = await loadSeatLayout(fleetId);
+    const routeSetup = FleetRouteSetup
+      ? await FleetRouteSetup.findOne({ fleetId, ownerId })
+        .select("status resolutionStatus unresolvedPlaces").lean()
+      : null;
+    if (FleetRouteSetup && !routeSetup) {
+      throw new ApiError("FLEET_SUBMISSION_INCOMPLETE",
+        "Choose this bus's journey and route before submitting.", 422,
+        { routeSetup: { complete: false } });
+    }
     const readiness = readinessEvaluator(fleet, {
       seatLayout,
     });
@@ -96,7 +106,9 @@ function createFleetSubmissionService(deps = {}) {
         $set: {
           approvalStatus: FLEET_APPROVAL_STATUS.PENDING,
           status: "INACTIVE",
-          setupComplete: true,
+          // Compliance readiness is complete, but operational setup (driver,
+          // schedule and activation) is completed later by the setup workflow.
+          setupComplete: false,
           submittedAt: now,
           rejectionReason: null,
           rejectedAt: null,
@@ -115,7 +127,9 @@ function createFleetSubmissionService(deps = {}) {
         },
         $push: {
           approvalAuditHistory: {
-            eventType: "FLEET_SUBMITTED",
+            eventType: fleet.approvalStatus === FLEET_APPROVAL_STATUS.REJECTED
+              ? "FLEET_RESUBMITTED"
+              : "FLEET_SUBMITTED",
             actorType: "BUS_OWNER",
             actorId: ownerId,
             fromStatus: fleet.approvalStatus,
@@ -132,6 +146,13 @@ function createFleetSubmissionService(deps = {}) {
         "FLEET_SUBMISSION_LOCKED",
         "Fleet submission failed or status changed concurrently.",
         409
+      );
+    }
+
+    if (FleetRouteSetup && routeSetup) {
+      await FleetRouteSetup.updateOne(
+        { fleetId, ownerId },
+        { $set: { status: routeSetup.status === "READY" ? "READY" : "PENDING_REVIEW" } }
       );
     }
 

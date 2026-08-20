@@ -27,6 +27,30 @@ const FORBIDDEN_UPDATE_FIELDS = [
   "status",
 ];
 
+const LIFECYCLE_UPDATE_FIELDS = new Set([
+  "approvalStatus",
+  "isApproved",
+  "submittedAt",
+  "approvedAt",
+  "approvedBy",
+  "rejectedAt",
+  "rejectedBy",
+  "rejectionReason",
+  "approvalAuditHistory",
+  "documentReviews",
+]);
+
+function rejectLifecycleUpdate(updateData) {
+  const attempted = Object.keys(updateData || {}).filter((field) =>
+    LIFECYCLE_UPDATE_FIELDS.has(field)
+  );
+  if (attempted.length > 0) {
+    throw new ApiError("FLEET_LIFECYCLE_UPDATE_FORBIDDEN", {
+      details: { fields: attempted },
+    });
+  }
+}
+
 const APPROVED_LOCKED_FIELDS = [
   "busNumber",
   "vehicleType",
@@ -37,9 +61,17 @@ const APPROVED_LOCKED_FIELDS = [
   "corridorId",
 ];
 
-function sanitizeUpdatePayload(updateData) {
-  for (const field of FORBIDDEN_UPDATE_FIELDS) {
-    delete updateData[field];
+function sanitizeUpdatePayload(updateData, ownerId = null) {
+  if (ownerId) {
+    for (const field of FORBIDDEN_UPDATE_FIELDS) {
+      delete updateData[field];
+    }
+  } else {
+    delete updateData["url"];
+    delete updateData["objectKey"];
+    delete updateData["storageKey"];
+    delete updateData["fleetDocuments"];
+    delete updateData["fleetImages"];
   }
 }
 
@@ -50,13 +82,15 @@ function restrictOwnerUpdate(updateData) {
   }
   for (const key of Object.keys(updateData)) delete updateData[key];
   Object.assign(updateData, sanitized);
-  sanitizeUpdatePayload(updateData);
+  sanitizeUpdatePayload(updateData, "owner");
 }
 
-function lockApprovedIdentity(fleet, updateData) {
-  sanitizeUpdatePayload(updateData);
+function lockApprovedIdentity(fleet, updateData, ownerId = null) {
+  sanitizeUpdatePayload(updateData, ownerId);
   if (fleet.approvalStatus !== "APPROVED") return;
-  for (const field of APPROVED_LOCKED_FIELDS) delete updateData[field];
+  if (ownerId) {
+    for (const field of APPROVED_LOCKED_FIELDS) delete updateData[field];
+  }
 }
 
 function parseJsonField(updateData, field) {
@@ -124,12 +158,16 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) {
     }
   }
 
-  function parseCatalogAndReviews(updateData) {
+  function parseCatalogAndReviews(updateData, ownerId = null) {
     parseJsonField(updateData, "amenityIds");
-    sanitizeUpdatePayload(updateData);
+    if (!ownerId) {
+      parseJsonField(updateData, "documentReviews");
+    }
+    sanitizeUpdatePayload(updateData, ownerId);
   }
 
   return {
+    rejectLifecycleUpdate,
     restrictOwnerUpdate,
     lockApprovedIdentity,
     normalizeBusNumber,
@@ -145,4 +183,6 @@ module.exports = {
   lockApprovedIdentity,
   OWNER_PERMITTED_FIELDS,
   validateIdentityUpdate,
+  rejectLifecycleUpdate,
+  LIFECYCLE_UPDATE_FIELDS,
 };

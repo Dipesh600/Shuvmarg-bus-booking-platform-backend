@@ -1,6 +1,7 @@
 "use strict";
 
 const RouteVariant = require("../../../../../models/routeVariantModel.js");
+const Stop = require("../../../../../models/stopModel.js");
 const { fetchGoogleRouteOptions } = require("../../../../../services/googleRoutesClient.js");
 const { resolveGoogleGuidancePlaces } = require("../../../../../services/googleRouteGuidancePlaces.js");
 const { getCorridorById } = require("../corridor-registry.service.js");
@@ -16,45 +17,167 @@ const { assertObjectId, hasValidCoordinates, mapProviderOptions, validateDirecti
 const { resolveGuidanceStops } = require("./route-guidance.policy.js");
 const { createPairedDrafts } = require("./draft-pair.service.js");
 
-async function createVariantDraft(corridorId, data, adminId) {
+/**
+ * Stateless route preview — fetches Google road-path suggestions for a corridor
+ * without creating or modifying any draft. Used by the wizard's step-1 "Find Road
+ * Paths" action so a draft record is only created once the operator proceeds to
+ * stop discovery.
+ */
+async function previewCorridorRoutePaths(corridorId, data, dependencies = {}) {
   assertObjectId(corridorId, "INVALID_CORRIDOR_ID", "Corridor ID");
   const direction = validateDirection(data.direction);
   const corridor = await getCorridorById(corridorId);
-  const hasOriginTerminal = Boolean(data.originTerminalStopId);
-  const hasDestinationTerminal = Boolean(data.destinationTerminalStopId);
-  if (hasOriginTerminal !== hasDestinationTerminal) {
+
+  // Validate and resolve terminal stops if provided (parent-stop endpoints only).
+  let terminals = { originTerminal: null, destinationTerminal: null };
+  if (data.originTerminalStopId || data.destinationTerminalStopId) {
+    terminals = await assertVariantTerminalScope({
+      corridor, direction,
+      originTerminalStopId: data.originTerminalStopId,
+      destinationTerminalStopId: data.destinationTerminalStopId,
+      StopModel: dependencies.StopModel || Stop,
+    });
+  }
+
+  const { originEndpointId, destinationEndpointId } = resolveDirectionalEndpoints(corridor, direction);
+  const StopModel = dependencies.StopModel || Stop;
+
+  // Resolve origin map anchor: use the chosen terminal stop if provided, else
+  // the corridor's own origin endpoint.
+  async function resolveAnchor(terminalDoc, endpointRef) {
+    if (terminalDoc?.coordinates && hasValidCoordinates(terminalDoc.coordinates)) return terminalDoc;
+    const endpointId = endpointRef?._id || endpointRef;
+    if (endpointRef?.coordinates && hasValidCoordinates(endpointRef.coordinates)) return endpointRef;
+    if (endpointId) return StopModel.findById(endpointId).select("name coordinates").lean();
+    return null;
+  }
+
+  const [origin, destination] = await Promise.all([
+    resolveAnchor(terminals.originTerminal, originEndpointId),
+    resolveAnchor(terminals.destinationTerminal, destinationEndpointId),
+  ]);
+
+  const isTerminalAnchored = Boolean(data.originTerminalStopId || data.destinationTerminalStopId);
+  if (!hasValidCoordinates(origin?.coordinates) || !hasValidCoordinates(destination?.coordinates)) {
     throw routeVariantError(
-      "INCOMPLETE_VARIANT_TERMINALS",
-      "Choose both physical terminals or leave both empty so they can be resolved during stop review."
+      isTerminalAnchored ? "VARIANT_TERMINAL_COORDINATES_REQUIRED" : "CORRIDOR_ENDPOINT_COORDINATES_REQUIRED",
+      isTerminalAnchored
+        ? "The selected bus park needs a verified map position before road paths can be suggested."
+        : "Both corridor endpoints need map positions before road paths can be suggested.",
+      409
     );
   }
-  if (hasOriginTerminal) await assertVariantTerminalScope({ corridor, direction, ...data });
+
+  let options;
+  try {
+    const fetchRoutes = dependencies.fetchGoogleRouteOptions || fetchGoogleRouteOptions;
+    options = mapProviderOptions(await fetchRoutes(origin.coordinates, destination.coordinates));
+  } catch (error) {
+    console.error("[variant-draft-workflow] preview Google route lookup failed", error);
+    throw routeVariantError(
+      "GOOGLE_ROUTE_LOOKUP_FAILED",
+      "Road-path suggestions could not be loaded. Check the corridor endpoint map positions or try again shortly.",
+      502
+    );
+  }
+
+  return {
+    corridorId: String(corridor._id),
+    direction,
+    originStopId: String(origin._id || originEndpointId._id || originEndpointId),
+    destinationStopId: String(destination._id || destinationEndpointId._id || destinationEndpointId),
+    routeOptions: options.map((opt, i) => ({
+      id: `preview-${i}`,
+      label: opt.description || (i === 0 ? "Recommended road path" : `Alternative path ${i + 1}`),
+      distanceKm: Math.round((opt.distanceMeters || 0) / 100) / 10,
+      durationMinutes: Math.round((opt.durationSeconds || 0) / 60),
+      encodedPolyline: opt.encodedPolyline || null,
+      isRecommended: i === 0,
+      roadLabels: opt.roadLabels || [],
+      providerRouteIndex: opt.providerRouteIndex ?? i,
+    })),
+  };
+}
+
+async function createVariantDraft(corridorId, data, adminId, dependencies = {}) {
+  assertObjectId(corridorId, "INVALID_CORRIDOR_ID", "Corridor ID");
+  const direction = validateDirection(data.direction);
+  const corridor = await getCorridorById(corridorId);
+  if (data.originTerminalStopId || data.destinationTerminalStopId) {
+    await assertVariantTerminalScope({ corridor, direction, ...data });
+  }
   const variant = await createPairedDrafts({ corridor, direction, data, adminId });
+
+  // If preview route options and selection were passed from the wizard,
+  // set up the review, select the route, and discover stops in ONE atomic step.
+  if (Array.isArray(data.routeOptions) && data.routeOptions.length > 0) {
+    const rawOptions = data.routeOptions.map((opt, i) => ({
+      providerRouteIndex: opt.providerRouteIndex ?? i,
+      encodedPolyline: opt.encodedPolyline,
+      distanceMeters: opt.distanceMeters || Math.round((opt.distanceKm || 0) * 1000),
+      durationSeconds: opt.durationSeconds || Math.round((opt.durationMinutes || 0) * 60),
+      description: opt.label || opt.description || undefined,
+      roadLabels: opt.roadLabels || [],
+    }));
+
+    const review = await createOrReplaceMapReview(
+      { variantId: variant._id, providerRouteOptions: rawOptions },
+      adminId, dependencies
+    );
+
+    const selectedIndex = data.selectedProviderRouteIndex ?? 0;
+    const selectedOption = review.routeOptions.find(
+      (opt) => opt.providerRouteIndex === selectedIndex
+    ) || review.routeOptions[0];
+
+    if (selectedOption) {
+      await selectMapReviewRouteOption(review._id, selectedOption.optionKey);
+      const { prepareVariantDraftStopCandidates } = require("./candidate-preparation.service.js");
+      return prepareVariantDraftStopCandidates(variant._id);
+    }
+  }
+
   return getVariantDraft(variant._id);
 }
 
-async function resolveMapAnchors(variant) {
-  if (variant.originTerminalStopId && variant.destinationTerminalStopId) {
-    return {
-      origin: variant.originTerminalStopId,
-      destination: variant.destinationTerminalStopId,
-      isTerminalAnchored: true,
-    };
-  }
+async function resolveMapAnchors(variant, StopModel = Stop) {
   const corridor = await getCorridorById(variant.corridorId);
   const { originEndpointId, destinationEndpointId } = resolveDirectionalEndpoints(
     corridor, variant.direction
   );
+
+  let origin = variant.originTerminalStopId;
+  if (!origin?.coordinates) {
+    const originId = origin?._id || origin || originEndpointId?._id || originEndpointId;
+    if (originEndpointId?.coordinates && String(originEndpointId._id) === String(originId)) {
+      origin = originEndpointId;
+    } else if (originId) {
+      origin = await StopModel.findById(originId).select("name code municipality district coordinates").lean();
+    }
+  }
+
+  let destination = variant.destinationTerminalStopId;
+  if (!destination?.coordinates) {
+    const destinationId = destination?._id || destination || destinationEndpointId?._id || destinationEndpointId;
+    if (destinationEndpointId?.coordinates && String(destinationEndpointId._id) === String(destinationId)) {
+      destination = destinationEndpointId;
+    } else if (destinationId) {
+      destination = await StopModel.findById(destinationId).select("name code municipality district coordinates").lean();
+    }
+  }
+
+  const isTerminalAnchored = Boolean(variant.originTerminalStopId || variant.destinationTerminalStopId);
   return {
-    origin: originEndpointId,
-    destination: destinationEndpointId,
-    isTerminalAnchored: false,
+    origin,
+    destination,
+    isTerminalAnchored,
   };
 }
 
 async function refreshVariantDraftRouteOptions(variantId, adminId, input = {}, dependencies = {}) {
+  const StopModel = dependencies.StopModel || Stop;
   const variant = await loadDraftVariant(variantId);
-  const { origin, destination, isTerminalAnchored } = await resolveMapAnchors(variant);
+  const { origin, destination, isTerminalAnchored } = await resolveMapAnchors(variant, StopModel);
   if (!hasValidCoordinates(origin?.coordinates) || !hasValidCoordinates(destination?.coordinates)) {
     throw routeVariantError(
       isTerminalAnchored ? "VARIANT_TERMINAL_COORDINATES_REQUIRED" : "CORRIDOR_ENDPOINT_COORDINATES_REQUIRED",
@@ -133,6 +256,7 @@ async function updateVariantDraftDetails(variantId, data, adminId) {
 }
 
 module.exports = {
-  createVariantDraft, refreshVariantDraftRouteOptions,
+  createVariantDraft, previewCorridorRoutePaths,
+  refreshVariantDraftRouteOptions,
   selectVariantDraftRouteOption, updateVariantDraftDetails,
 };

@@ -21,7 +21,7 @@ const setupFleetDocumentExpiryCron = () => {
         try {
             // Lazy require to avoid circular dependency at boot
             const Fleet  = require("../models/fleetModel.js");
-            const { createLocalNotification } = require("../controllers/notificationController/notification_manager.js");
+            const { busOwnerNotificationService } = require("../src/modules/notifications/bus-owner");
 
             const now = new Date();
 
@@ -59,20 +59,8 @@ const setupFleetDocumentExpiryCron = () => {
                 check("Route Permit",        docs.routePermit?.validTill);
 
                 if (expiredSoon.length > 0) {
-                    const docList = expiredSoon
-                        .map(d => `• ${d.name}: expires in ${d.daysLeft} day(s)`)
-                        .join("\n");
-
-                    const message = `Fleet "${fleet.busName}" has documents expiring soon:\n${docList}\nPlease renew immediately to avoid suspension.`;
-
                     try {
-                        await createLocalNotification(
-                            fleet.ownerId,
-                            "FLEET_DOC_EXPIRY_ALERT",
-                            "Document Expiry Alert",
-                            message,
-                            { fleetId: fleet._id, fleetName: fleet.busName, documents: expiredSoon }
-                        );
+                        await busOwnerNotificationService.notifyDocumentExpiryAlert(fleet, expiredSoon);
                     } catch (notifErr) {
                         logger.error("CRON [fleetDocExpiry]: Failed to send notification", { fleetId: fleet._id, error: notifErr.message });
                     }
@@ -100,13 +88,7 @@ const setupFleetDocumentExpiryCron = () => {
                 logger.warn(`CRON [fleetDocExpiry]: Fleet ${fleet.busName} (${fleet.fleetId}) suspended due to expired documents.`);
 
                 try {
-                    await createLocalNotification(
-                        fleet.ownerId,
-                        "FLEET_SUSPENDED",
-                        "Fleet Suspended — Expired Documents",
-                        `Your fleet "${fleet.busName}" has been suspended due to expired compliance documents. Please update your documents and contact support.`,
-                        { fleetId: fleet._id }
-                    );
+                    await busOwnerNotificationService.notifyFleetSuspendedForDocs(fleet);
                 } catch (notifErr) {
                     logger.error("CRON [fleetDocExpiry]: Failed to send suspension notification", { fleetId: fleet._id });
                 }

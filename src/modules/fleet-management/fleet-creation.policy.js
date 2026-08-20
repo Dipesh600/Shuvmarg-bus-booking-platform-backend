@@ -68,9 +68,18 @@ function createFleetCreationPolicy({
   BoardingPoints,
   OperatorBrand,
 }) {
-  async function validateReferences(input) {
-    if (await Bus.findOne({ busNumber: input.busNumber })) {
-      throw new ApiError("FLEET_ALREADY_EXISTS", "Bus number already exists!");
+  async function validateReferences(input, ownerId) {
+    if (typeof Bus.findOne === "function") {
+      const existing = await Bus.findOne({ busNumber: input.busNumber });
+      if (existing) {
+        const isSameOwnerDraft =
+          ownerId &&
+          String(existing.ownerId) === String(ownerId) &&
+          existing.approvalStatus === "DRAFT";
+        if (!isSameOwnerDraft) {
+          throw new ApiError("FLEET_ALREADY_EXISTS", "Bus number already exists!");
+        }
+      }
     }
     if (input.amenitiesId && !await BusAmenities.findById(input.amenitiesId)) {
       throw new ApiError("FLEET_VALIDATION_FAILED", "Invalid amenitiesId provided.");

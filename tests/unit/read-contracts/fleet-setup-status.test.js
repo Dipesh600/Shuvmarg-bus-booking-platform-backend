@@ -14,6 +14,7 @@ test("fleet setup status convergence unit tests", async (t) => {
         busName: "Express Alpha",
         busNumber: "BA 1 PA 1234",
         approvalStatus: "APPROVED",
+        setupComplete: true,
         corridorId: "corridor_100",
       }),
       findRouteConfigs: async () => [{ _id: "cfg_1" }],
@@ -61,9 +62,9 @@ test("fleet setup status convergence unit tests", async (t) => {
     assert.equal(dto.setupComplete, false);
     assert.equal(dto.nextStep, "driverAssigned");
     assert.equal(dto.progress.completedSteps, 2);
-    assert.equal(dto.progress.totalSteps, 6);
-    assert.equal(dto.progress.percentage, 33);
-    assert.equal(dto.blockingReasons.length, 4);
+    assert.equal(dto.progress.totalSteps, 5);
+    assert.equal(dto.progress.percentage, 40);
+    assert.equal(dto.blockingReasons.length, 3);
   });
 
   await t.test("fleet read service calls canonical setup service exactly once and bypasses raw repository method", async () => {
@@ -113,8 +114,8 @@ test("fleet setup status convergence unit tests", async (t) => {
     assert.equal(response.success, true);
     assert.equal(response.data.fleetId, "507f1f77bcf86cd799439011");
     assert.equal(response.data.progress.completedSteps, 4);
-    assert.equal(response.data.progress.totalSteps, 6);
-    assert.equal(response.data.progress.percentage, 67);
+    assert.equal(response.data.progress.totalSteps, 5);
+    assert.equal(response.data.progress.percentage, 80);
     assert.equal(response.data.nextStep, "activated");
   });
 });

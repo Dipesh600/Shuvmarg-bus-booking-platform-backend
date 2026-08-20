@@ -30,12 +30,10 @@ async function loadCommittableDraft(variantId, session = null) {
 async function writeCommittedDraft(variantId, adminId, session = null) {
   const { variant, included } = await loadCommittableDraft(variantId, session);
   const stops = await resolveCommittedStops(included, adminId, { session });
-  const terminalUpdate = (!variant.originTerminalStopId && !variant.destinationTerminalStopId)
-    ? {
-        originTerminalStopId: stops[0]._id,
-        destinationTerminalStopId: stops.at(-1)._id,
-      }
-    : {};
+  const terminalUpdate = {
+    ...(!variant.originTerminalStopId && { originTerminalStopId: stops[0]._id }),
+    ...(!variant.destinationTerminalStopId && { destinationTerminalStopId: stops.at(-1)._id }),
+  };
   await RouteVariant.findByIdAndUpdate(
     variant._id, { ...terminalUpdate, updatedBy: adminId || null }, session ? { session } : undefined
   );

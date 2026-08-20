@@ -3,7 +3,7 @@
 function createFleetRepository({ Bus, Trip, Schedule }) {
   async function findAll(query) {
     return Bus.find(query)
-      .populate("ownerId", "name email contactNumber")
+      .populate("ownerId", "name email phone")
       .populate("corridorId", "code", null, {
         populate: [
           { path: "originId", select: "name" },
@@ -24,9 +24,17 @@ function createFleetRepository({ Bus, Trip, Schedule }) {
 
   async function findById(id) {
     return Bus.findById(id)
-      .populate("ownerId", "name email contactNumber address")
+      .select("+fleetDocuments.fitnessCert.objectKey +fleetDocuments.insurance.objectKey +fleetDocuments.bluebook.objectKey +fleetDocuments.routePermit.objectKey +fleetDocuments.fitnessCert.mimeType +fleetDocuments.insurance.mimeType +fleetDocuments.bluebook.mimeType +fleetDocuments.routePermit.mimeType +fleetImages.objectKey +fleetImages.mimeType")
+      .populate("ownerId", "name email phone address")
       .populate("amenitiesId")
-      .populate("boardingPointId");
+      .populate("boardingPointId")
+      .populate({
+        path: "corridorId",
+        populate: [
+          { path: "originId", select: "name city" },
+          { path: "destinationId", select: "name city" }
+        ]
+      });
   }
 
   async function findRecentTrips(busId) {
@@ -46,7 +54,7 @@ function createFleetRepository({ Bus, Trip, Schedule }) {
       update,
       { new: true, runValidators: true }
     )
-      .populate("ownerId", "name email contactNumber")
+      .populate("ownerId", "name email phone")
       .exec();
   }
 
