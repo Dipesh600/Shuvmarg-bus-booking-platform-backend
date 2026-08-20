@@ -62,7 +62,7 @@ test("validates the complete sequence before replacing persisted route stops", a
   const result = await service.setVariantStops("v1", [
     { stopCode: "DEST", sequence: 2, estimatedMinutesFromOrigin: 240 },
     { stopCode: "origin", sequence: 1, estimatedMinutesFromOrigin: 0 },
-  ]);
+  ], { syncCompanion: false });
   assert.equal(deletes.length, 1);
   assert.equal(inserts.length, 1);
   assert.deepEqual(result, inserts[0]);

@@ -65,7 +65,6 @@ router.patch("/administrators/:adminId/status", adminMiddleware, rootAdminMiddle
 // Super Admin sessions are explicit by design — when a token expires, the admin
 // must re-authenticate with their credentials. Silent token refresh is a consumer
 // app pattern; for a privileged admin panel it is a security liability.
-
 // User Management Routes
 router.delete("/deleteAccount", adminMiddleware, admin.deleteAccount);
 router.get("/getAllUsers", adminMiddleware, admin.getAllUsers);
@@ -315,9 +314,10 @@ router.post("/registry/variants",                          adminMiddleware, plat
 router.get("/registry/corridors/:corridorId/variants",    adminMiddleware, platformRegistry.getVariantsByCorridor);
 router.get("/registry/variants/:id",                     adminMiddleware, platformRegistry.getVariantDetails);
 router.post("/registry/variants/:id/revisions",          adminMiddleware, platformRegistry.createVariantRevision);
+router.post("/registry/variants/:id/rollback",           adminMiddleware, platformRegistry.rollbackVariantRevision);
+router.delete("/registry/variants/:id/history",          adminMiddleware, platformRegistry.deleteHistoricalRevision);
 router.patch("/registry/variants/:id",                    adminMiddleware, platformRegistry.updateVariant);
 router.delete("/registry/variants/:id",                   adminMiddleware, platformRegistry.deleteVariant);
-
 // Draft-first route variant workflow. Google output is temporary review data;
 // only approved platform Stops and the final sequence become canonical.
 router.post("/registry/corridors/:corridorId/variant-drafts", adminMiddleware, platformRegistry.createVariantDraft);

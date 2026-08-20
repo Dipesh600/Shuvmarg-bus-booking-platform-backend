@@ -1,5 +1,4 @@
 "use strict";
-
 const RouteVariant = require("../../../../../models/routeVariantModel.js");
 const RouteVariantStopCandidate = require("../../../../../models/routeVariantStopCandidateModel.js");
 const RouteStop = require("../../../../../models/routeStopModel.js");
@@ -79,41 +78,72 @@ async function deriveCompanionSequence(variant, stops, included, adminId, sessio
 async function commitVariantDraft(variantId, adminId, dependencies = {}) {
   await runVariantWrite({
     mongooseImpl: dependencies.mongoose,
-    // Transactions keep newly created canonical Stops, candidate resolutions,
-    // and the RouteStop sequence all-or-nothing on replica-set deployments.
     transactionWork: (session) => writeCommittedDraft(variantId, adminId, session),
-    // A standalone development MongoDB cannot transact. In that case a newly
-    // created Stop is first retained on its candidate; if sequence persistence
-    // fails, a later retry reuses that exact Stop rather than duplicating it.
     fallbackWork: () => writeCommittedDraft(variantId, adminId),
   });
   return getVariantDraft(variantId, { includeRouteGeometry: true });
 }
 
-async function activateVariantDraft(variantId, adminId) {
-  const variant = await loadDraftVariant(variantId);
-  const { updateVariant } = require("../route-variant-registry.service.js");
+async function activateVariantDraft(variantId, adminId, { syncCompanion = true } = {}) {
+  const variant = await loadDraftVariant(variantId); const { updateVariant } = require("../route-variant-registry.service.js");
+  const OperatorRouteConfig = require("../../../../../models/operatorRouteConfigModel.js");
+  const Schedule = require("../../../../../models/scheduleModel.js");
+  const Trip = require("../../../../../models/tripModel.js");
+  const Agent = require("../../../../../models/agentModel.js");
+  const LegacyRouteDiscovery = require("../../../../../models/legacyRouteDiscoveryModel.js");
+  const FleetRouteSetup = require("../../../../../models/fleetRouteSetupModel.js");
+
   let source = null;
   if (variant.revisionOfVariantId) {
     source = await RouteVariant.findById(variant.revisionOfVariantId);
-    if (source?.status === "ACTIVE") {
-      const counts = await getVariantOperationalReferenceCounts(source._id);
-      if (hasOperationalReferences(counts)) {
-        throw routeVariantError(
-          "VARIANT_REVISION_MIGRATION_REQUIRED",
-          "This revision cannot replace the live path until its active fleet route configurations, schedules, agent access and future trips are migrated.",
-          409, counts
-        );
-      }
-    }
   }
+
   const activated = await updateVariant(variant._id, { status: "ACTIVE" }, adminId);
+
   if (source?.status === "ACTIVE") {
+    const migrationTasks = [
+      OperatorRouteConfig.updateMany({ variantId: source._id }, { $set: { variantId: activated._id } }),
+      Schedule.updateMany({ variantId: source._id }, { $set: { variantId: activated._id } }),
+      Trip.updateMany(
+        { variantId: source._id, status: { $in: ["scheduled", "boarding", "in-transit"] } },
+        { $set: { variantId: activated._id } }
+      ),
+      Agent.updateMany(
+        { allowedRouteIds: source._id },
+        { $set: { "allowedRouteIds.$[elem]": activated._id } },
+        { arrayFilters: [{ elem: source._id }] }
+      ),
+      LegacyRouteDiscovery.updateMany(
+        { "publishedVariant.variantId": source._id },
+        { $set: { "publishedVariant.variantId": activated._id } }
+      ),
+      FleetRouteSetup.updateMany({ variantId: source._id }, { $set: { variantId: activated._id } }),
+      FleetRouteSetup.updateMany({ returnVariantId: source._id }, { $set: { returnVariantId: activated._id } }),
+    ];
+
+    await Promise.allSettled(migrationTasks);
+
     source.status = "INACTIVE";
     source.supersededByVariantId = activated._id;
     source.updatedBy = adminId || null;
     await source.save();
   }
+
+  let companionId = variant.returnVariantId;
+  if (!companionId) {
+    const oppositeDir = variant.direction === "FORWARD" ? "RETURN" : "FORWARD";
+    const comp = await RouteVariant.findOne({
+      corridorId: variant.corridorId, direction: oppositeDir, status: "DRAFT",
+    });
+    if (comp) companionId = comp._id;
+  }
+  if (syncCompanion && companionId) {
+    const companion = await RouteVariant.findById(companionId);
+    if (companion && companion.status === "DRAFT") {
+      await activateVariantDraft(companion._id, adminId, { syncCompanion: false });
+    }
+  }
+
   return activated;
 }
 
