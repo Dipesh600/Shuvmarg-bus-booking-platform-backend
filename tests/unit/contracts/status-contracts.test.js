@@ -60,7 +60,7 @@ test("fleet approval and operational status contracts", async (t) => {
 
 test("document review and KYC derived state precedence", async (t) => {
   await t.test("document review status contract", () => {
-    assert.deepEqual(DOCUMENT_REVIEW_VALUES, ["pending", "approved", "rejected"]);
+    assert.deepEqual(DOCUMENT_REVIEW_VALUES, ["not_submitted", "pending", "approved", "rejected"]);
     assert.equal(isDocumentReviewStatus("approved"), true);
     assert.equal(getDocumentReviewLabel("approved"), "Approved");
   });
