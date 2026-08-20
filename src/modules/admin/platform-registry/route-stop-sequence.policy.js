@@ -1,6 +1,7 @@
 "use strict";
 
 const { routeVariantError } = require("./route-variant-errors.js");
+const { interpolateMissingTimings } = require("./route-stop-interpolation.policy.js");
 
 function asNonNegativeNumber(value, label, index, defaultValue = null) {
   if (value === undefined || value === null || value === "") return defaultValue;
@@ -27,7 +28,7 @@ function resolveDuration(stop, index) {
       `Stop ${index + 1} has conflicting duration fields.`
     );
   }
-  return duration ?? legacy ?? 0;
+  return duration ?? legacy;
 }
 
 function normalizeSequenceInput(stops) {
@@ -81,6 +82,8 @@ function normalizeSequenceInput(stops) {
       ),
     };
   }).sort((left, right) => left.sequence - right.sequence);
+
+  interpolateMissingTimings(normalized);
 
   let previousDuration = -1;
   let previousDistance = null;

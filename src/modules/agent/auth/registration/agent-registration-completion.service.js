@@ -84,11 +84,14 @@ const buildResponse = ({ savedUser, accessToken, isUpgradePath }) => {
   };
 };
 
-const convertLead = ({ savedUser, phone, name }) => {
+const convertLead = async ({ savedUser, phone, name }) => {
   const normalizedPhone = phoneGuard.normalizePhone(savedUser.phone || phone);
   if (!normalizedPhone) return;
-  leadRepository.convertOtpVerifiedLead(normalizedPhone, name.trim())
-    .catch((err) => console.error('[PartnerLead convert - agent register] Non-fatal:', err.message));
+  try {
+    await leadRepository.convertOtpVerifiedLead(normalizedPhone, name.trim());
+  } catch (err) {
+    console.error('[PartnerLead convert - agent register] Non-fatal:', err.message);
+  }
 };
 
 const register = async ({ phone, name, password, email, verificationToken, deviceInfo, ipAddress }) => {
@@ -107,7 +110,7 @@ const register = async ({ phone, name, password, email, verificationToken, devic
     : await persistNewUser({ phone, name, password, email, now });
   await ensureAgentProfile(savedUser._id);
   const { accessToken, refreshToken } = await issueTokens({ savedUser, deviceInfo, ipAddress });
-  convertLead({ savedUser, phone, name });
+  await convertLead({ savedUser, phone, name });
   return {
     statusCode: 201,
     refreshToken,

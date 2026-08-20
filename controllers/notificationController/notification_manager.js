@@ -69,7 +69,8 @@ const createLocalNotification = async (
   type,
   title,
   message,
-  meta = {}
+  meta = {},
+  recipientRole = "all"
 ) => {
   try {
     const notification = await Notification.create({
@@ -78,6 +79,7 @@ const createLocalNotification = async (
       title,
       message,
       meta,
+      recipientRole,
     });
     return notification;
   } catch (error) {

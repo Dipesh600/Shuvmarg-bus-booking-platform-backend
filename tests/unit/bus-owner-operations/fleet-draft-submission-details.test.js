@@ -27,6 +27,7 @@ function createMockFleet(overrides = {}) {
     busType: "AC",
     vehicleType: "bus",
     totalSeats: 35,
+    registrationYear: 2024,
     status: "INACTIVE",
     approvalStatus: "DRAFT",
     setupComplete: false,
@@ -36,7 +37,7 @@ function createMockFleet(overrides = {}) {
       bluebook: { objectKey: "keys/blue.pdf", uploadedAt: new Date() },
       routePermit: { objectKey: "keys/permit.pdf", uploadedAt: new Date() },
     },
-    fleetImages: [{ imageId: "img1", objectKey: "keys/img.jpg", uploadedAt: new Date() }],
+    fleetImages: ["FRONT", "SIDE", "BACK", "INSIDE"].map((view) => ({ imageId: view, view, objectKey: `keys/${view}.webp`, uploadedAt: new Date() })),
     ...overrides,
   };
 }
@@ -56,6 +57,7 @@ test("25. Submission transition is safe under concurrent submit attempts", async
   const submissionService = createFleetSubmissionService({
     BusOwner: mockBusOwnerModel("approved", "owner_123"),
     Bus: mockBusModel,
+    loadSeatLayout: async () => ({ assigned: true, published: true, totalPlaces: 35 }),
   });
 
   const req1 = submissionService.submitFleetForVerification({ fleetId: "fleet_101", ownerId: "owner_123" });
@@ -82,11 +84,34 @@ test("28. Submission appends an approvalAuditHistory lifecycle entry", async () 
   const submissionService = createFleetSubmissionService({
     BusOwner: mockBusOwnerModel("approved", "owner_123"),
     Bus: mockBusModel,
+    loadSeatLayout: async () => ({ assigned: true, published: true, totalPlaces: 35 }),
   });
 
   await submissionService.submitFleetForVerification({ fleetId: "fleet_101", ownerId: "owner_123" });
   assert.equal(pushedAudit.eventType, "FLEET_SUBMITTED");
   assert.equal(pushedAudit.fromStatus, "DRAFT");
+  assert.equal(pushedAudit.toStatus, "PENDING");
+});
+
+test("rejected fleet resubmission appends an owner-only resubmission lifecycle entry", async () => {
+  let pushedAudit = null;
+  const mockBusModel = {
+    findOne: () => ({ lean: async () => createMockFleet({ approvalStatus: "REJECTED" }) }),
+    findOneAndUpdate: (_query, update) => {
+      pushedAudit = update.$push.approvalAuditHistory;
+      return { lean: async () => createMockFleet({ approvalStatus: "PENDING" }) };
+    },
+  };
+  const submissionService = createFleetSubmissionService({
+    BusOwner: mockBusOwnerModel("approved", "owner_123"),
+    Bus: mockBusModel,
+    loadSeatLayout: async () => ({ assigned: true, published: true, totalPlaces: 35 }),
+  });
+
+  await submissionService.submitFleetForVerification({ fleetId: "fleet_101", ownerId: "owner_123" });
+  assert.equal(pushedAudit.eventType, "FLEET_RESUBMITTED");
+  assert.equal(pushedAudit.actorType, "BUS_OWNER");
+  assert.equal(pushedAudit.fromStatus, "REJECTED");
   assert.equal(pushedAudit.toStatus, "PENDING");
 });
 
@@ -102,6 +127,7 @@ test("33. Successful submission increments __v version count", async () => {
   const submissionService = createFleetSubmissionService({
     BusOwner: mockBusOwnerModel("approved", "owner_123"),
     Bus: mockBusModel,
+    loadSeatLayout: async () => ({ assigned: true, published: true, totalPlaces: 35 }),
   });
 
   await submissionService.submitFleetForVerification({ fleetId: "fleet_101", ownerId: "owner_123" });

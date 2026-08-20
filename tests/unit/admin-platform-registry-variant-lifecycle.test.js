@@ -85,10 +85,10 @@ test("a map-reviewed variant cannot activate without matching selected terminals
   await assert.rejects(
     assertVariantCanActivate({
       _id: "variant-1", name: "Via Highway", direction: "FORWARD",
-      definitionSource: "GOOGLE_ROUTE_REVIEW",
+      originTerminalStopId: "different-origin",
       corridorId: { originId: "origin-parent", destinationId: "destination-parent" },
     }),
-    (error) => error.code === "VARIANT_TERMINALS_REQUIRED"
+    (error) => error.code === "VARIANT_TERMINAL_SEQUENCE_MISMATCH"
   );
 });
 

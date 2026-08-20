@@ -3,6 +3,7 @@
 const { discoverStopsAlongRoute } = require("../../../../../services/googlePlacesClient.js");
 const { buildRouteMetric, locateOnRoute, routeTiming } = require("./route-stop-candidate.geometry.js");
 const {
+  buildRegistryCandidates,
   buildTerminalCandidate, deduplicateCandidates, loadNearbyCanonicalStops,
 } = require("./route-stop-candidate.registry.js");
 const { reconcileTransitPlaces } = require("./route-stop-candidate.place-matching.js");

@@ -1,16 +1,33 @@
 "use strict";
-
 const BusModel = require("../../../models/fleetModel");
 const BusOwnerModel = require("../../../models/busOwnerModel");
+const FleetSeatLayoutAssignmentModel = require("../../../models/fleetSeatLayoutAssignmentModel");
+const SeatLayoutRevisionModel = require("../../../models/seatLayoutRevisionModel");
 const { ApiError } = require("../../contracts");
 const { FLEET_APPROVAL_STATUS } = require("../../contracts/status/fleet-approval.status");
 const { evaluateFleetSubmissionReadiness } = require("./fleet-readiness.evaluator");
-
 function createFleetSubmissionService(deps = {}) {
   const Bus = deps.Bus || BusModel;
   const BusOwner = deps.BusOwner || BusOwnerModel;
+  const FleetSeatLayoutAssignment = deps.FleetSeatLayoutAssignment || FleetSeatLayoutAssignmentModel;
+  const SeatLayoutRevision = deps.SeatLayoutRevision || SeatLayoutRevisionModel;
+  const FleetRouteSetup = deps.FleetRouteSetup || null;
   const readinessEvaluator = deps.readinessEvaluator || evaluateFleetSubmissionReadiness;
-
+  const loadSeatLayout = deps.loadSeatLayout || (async (fleetId) => {
+    const assignment = await FleetSeatLayoutAssignment.findOne({ fleetId })
+      .select("activeRevisionId")
+      .lean();
+    const revision = assignment
+      ? await SeatLayoutRevision.findById(assignment.activeRevisionId)
+        .select("status totalPlaces")
+        .lean()
+      : null;
+    return {
+      assigned: Boolean(assignment),
+      published: revision?.status === "PUBLISHED",
+      totalPlaces: revision?.totalPlaces,
+    };
+  });
   async function submitFleetForVerification({ fleetId, ownerId }) {
     if (!fleetId) {
       throw new ApiError("FLEET_INVALID_ID", "Fleet ID is required.");
@@ -18,11 +35,9 @@ function createFleetSubmissionService(deps = {}) {
     if (!ownerId) {
       throw new ApiError("UNAUTHORIZED", "Owner ID is required.");
     }
-
     const busOwner = await BusOwner.findOne({ user: ownerId })
       .select("verificationStatus")
       .lean();
-
     if (!busOwner || busOwner.verificationStatus !== "approved") {
       throw new ApiError(
         "PROFILE_NOT_APPROVED",
@@ -30,12 +45,14 @@ function createFleetSubmissionService(deps = {}) {
         403
       );
     }
-
-    const fleet = await Bus.findOne({ _id: fleetId, ownerId }).lean();
+    let fleetQuery = Bus.findOne({ _id: fleetId, ownerId });
+    if (typeof fleetQuery.schemaLevelProjections === "function") {
+      fleetQuery = fleetQuery.schemaLevelProjections(false);
+    }
+    const fleet = await fleetQuery.lean();
     if (!fleet) {
       throw new ApiError("FLEET_NOT_FOUND", "Fleet not found or unauthorized.", 404);
     }
-
     if (
       fleet.approvalStatus === FLEET_APPROVAL_STATUS.PENDING ||
       fleet.approvalStatus === FLEET_APPROVAL_STATUS.APPROVED
@@ -46,8 +63,19 @@ function createFleetSubmissionService(deps = {}) {
         409
       );
     }
-
-    const readiness = readinessEvaluator(fleet);
+    const seatLayout = await loadSeatLayout(fleetId);
+    const routeSetup = FleetRouteSetup
+      ? await FleetRouteSetup.findOne({ fleetId, ownerId })
+        .select("status resolutionStatus unresolvedPlaces").lean()
+      : null;
+    if (FleetRouteSetup && !routeSetup) {
+      throw new ApiError("FLEET_SUBMISSION_INCOMPLETE",
+        "Choose this bus's journey and route before submitting.", 422,
+        { routeSetup: { complete: false } });
+    }
+    const readiness = readinessEvaluator(fleet, {
+      seatLayout,
+    });
     if (!readiness.complete) {
       throw new ApiError(
         "FLEET_SUBMISSION_INCOMPLETE",
@@ -56,7 +84,6 @@ function createFleetSubmissionService(deps = {}) {
         readiness
       );
     }
-
     const now = new Date();
     const updated = await Bus.findOneAndUpdate(
       {
@@ -70,7 +97,7 @@ function createFleetSubmissionService(deps = {}) {
         $set: {
           approvalStatus: FLEET_APPROVAL_STATUS.PENDING,
           status: "INACTIVE",
-          setupComplete: true,
+          setupComplete: false,
           submittedAt: now,
           rejectionReason: null,
           rejectedAt: null,
@@ -89,7 +116,9 @@ function createFleetSubmissionService(deps = {}) {
         },
         $push: {
           approvalAuditHistory: {
-            eventType: "FLEET_SUBMITTED",
+            eventType: fleet.approvalStatus === FLEET_APPROVAL_STATUS.REJECTED
+              ? "FLEET_RESUBMITTED"
+              : "FLEET_SUBMITTED",
             actorType: "BUS_OWNER",
             actorId: ownerId,
             fromStatus: fleet.approvalStatus,
@@ -100,7 +129,6 @@ function createFleetSubmissionService(deps = {}) {
       },
       { new: true, runValidators: true }
     ).lean();
-
     if (!updated) {
       throw new ApiError(
         "FLEET_SUBMISSION_LOCKED",
@@ -108,11 +136,14 @@ function createFleetSubmissionService(deps = {}) {
         409
       );
     }
-
+    if (FleetRouteSetup && routeSetup) {
+      await FleetRouteSetup.updateOne(
+        { fleetId, ownerId },
+        { $set: { status: routeSetup.status === "READY" ? "READY" : "PENDING_REVIEW" } }
+      );
+    }
     return updated;
   }
-
   return { submitFleetForVerification };
 }
-
 module.exports = { createFleetSubmissionService };

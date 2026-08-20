@@ -3,6 +3,7 @@
 const SeatLayoutTemplate = require("../../../models/seatLayoutTemplateModel");
 const SeatLayoutRevision = require("../../../models/seatLayoutRevisionModel");
 const SeatLayoutAuditEvent = require("../../../models/seatLayoutAuditEventModel");
+const SeatLayoutCodeSequence = require("../../../models/seatLayoutCodeSequenceModel");
 const { SeatLayoutPersistenceError } = require("./seat-layout-persistence.error");
 const { adoptPlatformTemplate, publishRevision } = require("./seat-layout-lifecycle.repository");
 
@@ -19,6 +20,19 @@ async function createTemplate(data) {
     });
     return result;
   } finally { await session.endSession(); }
+}
+
+async function allocateTemplateCode(vehicleCategory) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const sequence = await SeatLayoutCodeSequence.findOneAndUpdate(
+      { _id: vehicleCategory }, { $inc: { value: 1 } }, { upsert: true, new: true }
+    ).lean();
+    const code = `${vehicleCategory}-${String(sequence.value).padStart(4, "0")}`;
+    if (!await SeatLayoutTemplate.exists({ templateCode: code })) return code;
+  }
+  throw new SeatLayoutPersistenceError(
+    "SEAT_LAYOUT_CODE_ALLOCATION_FAILED", "A unique seat-layout registry code could not be allocated.", 503
+  );
 }
 
 async function findTemplate(id) {
@@ -91,6 +105,6 @@ async function submitRevision({ templateId, revisionId, actor }) {
 }
 
 module.exports = {
-  createTemplate, findTemplate, findRevision, findOwnedAdoption, allocateRevisionNumber,
+  createTemplate, allocateTemplateCode, findTemplate, findRevision, findOwnedAdoption, allocateRevisionNumber,
   createRevision, createRevisionAtomic, submitRevision, adoptPlatformTemplate, publishRevision,
 };

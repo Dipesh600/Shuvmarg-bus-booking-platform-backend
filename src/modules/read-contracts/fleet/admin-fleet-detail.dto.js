@@ -2,6 +2,8 @@
 
 const { toIsoDate } = require("../common/read-date.mapper");
 const { mapFleetDocumentDescriptors, calculateFleetDocumentSummary } = require("../common/fleet-document-descriptor.mapper");
+const { mapRouteSetup } = require("./fleet-route-setup.dto");
+const { mapFleetSeatLayout } = require("./fleet-seat-layout.dto");
 
 function mapAdminReviewer(reviewer) {
   if (!reviewer) return null;
@@ -14,7 +16,7 @@ function mapAdminReviewer(reviewer) {
   return { adminId: String(reviewer), name: "Admin" };
 }
 
-function mapAdminFleetDetail(fleet) {
+function mapAdminFleetDetail(fleet, routeSetup, seatLayout = {}) {
   if (!fleet) return null;
   const ownerUser = fleet.ownerId || {};
   const brand = fleet.brandId || {};
@@ -74,11 +76,17 @@ function mapAdminFleetDetail(fleet) {
     isApproved: fleet.approvalStatus === "APPROVED" || fleet.isApproved || false,
     rejectionReason: fleet.rejectionReason || null,
     setupComplete: fleet.setupComplete || false,
+    route: mapRouteSetup(routeSetup),
     documents: docDescriptors,
     documentSummary: docSummary,
+    seatLayout: mapFleetSeatLayout(seatLayout.assignment, seatLayout.revision),
     review: {
       approvedBy: mapAdminReviewer(fleet.approvedBy),
+      rejectedBy: mapAdminReviewer(fleet.rejectedBy),
+      submittedAt: toIsoDate(fleet.submittedAt),
       approvedAt: toIsoDate(fleet.approvedAt),
+      rejectedAt: toIsoDate(fleet.rejectedAt),
+      rejectionReason: fleet.rejectionReason || null,
     },
     createdAt: toIsoDate(fleet.createdAt),
     updatedAt: toIsoDate(fleet.updatedAt),

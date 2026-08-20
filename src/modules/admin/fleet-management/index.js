@@ -9,6 +9,7 @@ const OperatorRouteConfig = require(
   "../../../../models/operatorRouteConfigModel"
 );
 const RouteVariant = require("../../../../models/routeVariantModel");
+const FleetRouteSetup = require("../../../../models/fleetRouteSetupModel");
 const UserDeviceInfo = require("../../../../models/userDeviceInfoModel");
 const emailManager = require("../../../../emailManager/emailManager");
 const {
@@ -32,9 +33,6 @@ const { createFleetDetailService } = require("./fleet-detail.service");
 const { createFleetSetupService } = require("./fleet-setup.service");
 const { createFleetApprovalService } = require("./fleet-status.service");
 const {
-  createFleetNotificationService,
-} = require("./fleet-notification.service");
-const {
   createFleetDashboardService,
 } = require("./fleet-dashboard.service");
 const {
@@ -45,6 +43,10 @@ const {
   createFleetReadService,
 } = require("../../read-contracts/fleet/fleet-read.service");
 
+const {
+  busOwnerNotificationService,
+} = require("../../notifications/bus-owner");
+
 const repository = createFleetRepository({ Bus, Trip, Schedule });
 const setupRepository = createFleetSetupRepository({
   Bus,
@@ -53,15 +55,8 @@ const setupRepository = createFleetSetupRepository({
   DriverProfile,
   Schedule,
 });
-const notify = createFleetNotificationService({
-  UserDeviceInfo,
-  emailManager,
-  notificationManager,
-  createLocalNotification,
-  sendOTP,
-  console,
-  policy: statusPolicy,
-});
+// Use the centralized bus owner notification service
+const notify = busOwnerNotificationService.notifyFleetStatus;
 
 const approvalService = createFleetApprovalService({
   repository,
@@ -70,6 +65,7 @@ const approvalService = createFleetApprovalService({
   notify,
   clock: () => new Date(),
   logger: console,
+  FleetRouteSetup,
 });
 
 const canonicalSetupService = createFleetSetupService({

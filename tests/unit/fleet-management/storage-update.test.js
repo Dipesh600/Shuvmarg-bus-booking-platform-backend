@@ -9,6 +9,11 @@ const {
   createFleetUpdateService,
 } = require("../../../src/modules/fleet-management/fleet-update.service");
 
+const testUploadDeps = {
+  validateFile: (file) => ({ mimeType: "image/webp", size: String(file).length }),
+  processUpload: async (file) => file,
+};
+
 test("creation assets preserve structured paths and exact key tracking", async () => {
   const uploads = [];
   const storage = createFleetStorageService({
@@ -18,22 +23,23 @@ test("creation assets preserve structured paths and exact key tracking", async (
       return `key:${file}`;
     },
     deleteFromS3: async () => {},
+    ...testUploadDeps,
   });
   const keys = [];
   const result = await storage.uploadCreationAssets(
     { _id: "fleet", fleetId: "F-1", ownerId: "owner", brandId: "brand" },
     { insurancePolicyNumber: "P1" },
-    { imageFront: "front", insurance: "policy" },
+    { imageFront: "front", imageSide: "side", imageBack: "back", imageInside: "inside", insurance: "policy" },
     keys
   );
-  assert.deepEqual(keys, ["key:front", "key:policy"]);
-  assert.deepEqual(result.fleetImages, ["key:front"]);
-  assert.equal(result.fleetDocuments.insurance.url, "key:policy");
+  assert.deepEqual(keys, ["key:front", "key:side", "key:back", "key:inside", "key:policy"]);
+  assert.deepEqual(result.fleetImages.map((image) => image.view), ["FRONT", "SIDE", "BACK", "INSIDE"]);
+  assert.equal(result.fleetDocuments.insurance.objectKey, "key:policy");
   assert.equal(result.fleetDocuments.insurance.policyNumber, "P1");
   assert.deepEqual(JSON.parse(uploads[0].destination), {
     type: "fleet_images", ownerId: "owner", brandId: "brand", fleetId: "F-1",
   });
-  assert.deepEqual(JSON.parse(uploads[1].destination), {
+  assert.deepEqual(JSON.parse(uploads[4].destination), {
     type: "fleet_docs", ownerId: "owner", brandId: "brand", fleetId: "F-1",
     documentType: "insurance",
   });
@@ -46,16 +52,17 @@ test("image replacement uploads new files before deleting old keys", async () =>
     uploadFileToS3: async (file) => { events.push(`upload:${file}`); return `key:${file}`; },
     deleteFromS3: async (keys) => { events.push(`delete:${keys.join(",")}`); },
     logger: { error() {} },
+    ...testUploadDeps,
   });
   const fleet = {
     _id: "fleet", ownerId: "owner", brandId: null, fleetImages: ["old"],
   };
   assert.deepEqual(
-    await storage.replaceFleetImages(fleet, { fleetImages: ["a", "b"] }),
-    ["key:a", "key:b"]
+    (await storage.replaceFleetImages(fleet, { fleetImages: ["a", "b", "c", "d"] })).map((image) => image.objectKey),
+    ["key:a", "key:b", "key:c", "key:d"]
   );
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(events, ["upload:a", "upload:b", "delete:old"]);
+  assert.deepEqual(events, ["upload:a", "upload:b", "upload:c", "upload:d", "delete:old"]);
 });
 
 test("partial replacement failure removes only newly uploaded keys", async () => {
@@ -67,11 +74,12 @@ test("partial replacement failure removes only newly uploaded keys", async () =>
       return `key:${file}`;
     },
     deleteFromS3: async (keys) => deleted.push(keys),
+    ...testUploadDeps,
   });
   await assert.rejects(
     storage.replaceFleetImages(
       { _id: "f", ownerId: "o", fleetImages: ["old"] },
-      { fleetImages: ["good", "bad"] }
+      { fleetImages: ["good", "bad", "third", "fourth"] }
     ),
     /upload failed/
   );
@@ -90,6 +98,7 @@ test("fleet update preserves policy ordering and persistence options", async () 
   const policy = {
     restrictOwnerUpdate: () => events.push("restrict"),
     lockApprovedIdentity: () => events.push("lock"),
+    validateIdentityUpdate: () => events.push("identity"),
     normalizeBusNumber: async () => events.push("number"),
     verifySeatLayout: async () => events.push("layout"),
     parseCatalogAndReviews: () => events.push("parse"),
@@ -101,10 +110,39 @@ test("fleet update preserves policy ordering and persistence options", async () 
     mapper: { withPresignedUrls: async (fleet) => fleet },
   });
   const result = await service.updateFleetDetails("f", { busName: "Name" }, {}, "owner");
-  assert.deepEqual(events, ["restrict", "lock", "images", "number", "layout", "parse"]);
+  assert.deepEqual(events, ["restrict", "lock", "identity", "images", "number", "layout", "parse"]);
   assert.deepEqual(persisted, {
     id: "f", update: { busName: "Name", fleetImages: ["new"] },
     options: { new: true, runValidators: true },
   });
   assert.equal(result._id, "f");
+});
+
+test("generic admin lifecycle mutation is rejected before storage or persistence", async () => {
+  let storageCalled = false;
+  let persistenceCalled = false;
+  const service = createFleetUpdateService({
+    Bus: {
+      findByIdAndUpdate() {
+        persistenceCalled = true;
+      },
+    },
+    policy: {
+      rejectLifecycleUpdate: () => {
+        const error = new Error("dedicated endpoint required");
+        error.code = "FLEET_LIFECYCLE_UPDATE_FORBIDDEN";
+        throw error;
+      },
+    },
+    repository: { findDocument: async () => ({ _id: "f", approvalStatus: "PENDING" }) },
+    storage: { replaceFleetImages: async () => { storageCalled = true; } },
+    mapper: { withPresignedUrls: async (fleet) => fleet },
+  });
+
+  await assert.rejects(
+    service.updateFleetDetails("f", { approvalStatus: "APPROVED" }, {}, null),
+    (error) => error.code === "FLEET_LIFECYCLE_UPDATE_FORBIDDEN"
+  );
+  assert.equal(storageCalled, false);
+  assert.equal(persistenceCalled, false);
 });

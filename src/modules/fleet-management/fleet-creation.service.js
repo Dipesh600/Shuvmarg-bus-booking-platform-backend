@@ -34,39 +34,63 @@ function createFleetCreationService({
     createdBy = "BUS_OWNER"
   ) {
     const input = parseCreationInput(fleetData);
-    await policy.validateReferences(input);
+    await policy.validateReferences(input, ownerId);
+    await policy.validateBrand(input.brandId, ownerId);
     const routeRequest = await createRouteRequest(ownerId, input);
-    await policy.validateBrand(input.brandId);
-    const fleetSkeleton = new Bus({
-      ownerId,
-      brandId: input.brandId || null,
-      busName: input.busName,
-      busNumber: input.busNumber,
-      busType: input.busType,
-      totalSeats: input.totalSeats,
-      seatConfig: input.seatConfig,
-      vehicleType: input.vehicleType,
-      registrationYear: input.registrationYear,
-      amenitiesId: input.amenitiesId || null,
-      amenityIds: input.amenityIds,
-      boardingPointId: input.boardingPointId || null,
-      corridorId: input.corridorId || null,
-      routeRequestId: routeRequest?._id || null,
-      fleetImages: [],
-      fleetDocuments: createFleetDocuments(input),
-      status: "INACTIVE",
-      approvalStatus: FLEET_APPROVAL_STATUS.DRAFT,
-      isApproved: false,
-      setupComplete: false,
-      submittedAt: null,
-      approvedAt: null,
-      approvedBy: null,
-      rejectedAt: null,
-      rejectedBy: null,
-      rejectionReason: null,
-      createdBy,
-    });
-    const savedFleet = await fleetSkeleton.save();
+
+    const existingDraft = typeof Bus.findOne === "function"
+      ? await Bus.findOne({
+          ownerId,
+          busNumber: input.busNumber,
+          approvalStatus: FLEET_APPROVAL_STATUS.DRAFT,
+        })
+      : null;
+
+    let savedFleet;
+    if (existingDraft) {
+      existingDraft.brandId = input.brandId;
+      existingDraft.busName = input.busName;
+      existingDraft.busType = input.busType;
+      existingDraft.totalSeats = input.totalSeats;
+      existingDraft.seatConfig = input.seatConfig;
+      existingDraft.vehicleType = input.vehicleType;
+      existingDraft.registrationYear = input.registrationYear;
+      existingDraft.amenityIds = input.amenityIds;
+      existingDraft.corridorId = input.corridorId || null;
+      if (routeRequest?._id) existingDraft.routeRequestId = routeRequest._id;
+      savedFleet = await existingDraft.save();
+    } else {
+      const fleetSkeleton = new Bus({
+        ownerId,
+        brandId: input.brandId,
+        busName: input.busName,
+        busNumber: input.busNumber,
+        busType: input.busType,
+        totalSeats: input.totalSeats,
+        seatConfig: input.seatConfig,
+        vehicleType: input.vehicleType,
+        registrationYear: input.registrationYear,
+        amenitiesId: input.amenitiesId || null,
+        amenityIds: input.amenityIds,
+        boardingPointId: input.boardingPointId || null,
+        corridorId: input.corridorId || null,
+        routeRequestId: routeRequest?._id || null,
+        fleetImages: [],
+        fleetDocuments: createFleetDocuments(input),
+        status: "INACTIVE",
+        approvalStatus: FLEET_APPROVAL_STATUS.DRAFT,
+        isApproved: false,
+        setupComplete: false,
+        submittedAt: null,
+        approvedAt: null,
+        approvedBy: null,
+        rejectedAt: null,
+        rejectedBy: null,
+        rejectionReason: null,
+        createdBy,
+      });
+      savedFleet = await fleetSkeleton.save();
+    }
     const uploadedKeys = [];
     try {
       const assets = await storage.uploadCreationAssets(

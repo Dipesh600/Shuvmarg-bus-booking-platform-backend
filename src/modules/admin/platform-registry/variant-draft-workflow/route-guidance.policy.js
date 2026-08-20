@@ -13,7 +13,9 @@ async function resolveGuidanceStops(stopIds, endpoints, StopModel = Stop) {
   }
   const ids = [...new Set(stopIds.map(String))];
   ids.forEach((id) => assertObjectId(id, "INVALID_ROUTE_GUIDANCE", "Route guidance stop ID"));
-  const endpointIds = [endpoints.origin, endpoints.destination].map((stop) => String(stop._id));
+  const endpointIds = [endpoints.origin, endpoints.destination]
+    .filter(Boolean)
+    .map((stop) => String(stop._id || stop));
   if (ids.some((id) => endpointIds.includes(id))) {
     throw routeVariantError("INVALID_ROUTE_GUIDANCE", "Corridor endpoints cannot also be route guidance places.");
   }

@@ -1,6 +1,7 @@
 "use strict";
 
 const { SeatLayoutPersistenceError } = require("./seat-layout-persistence.error");
+const { VEHICLE_CATEGORIES } = require("./seat-layout-persistence.constants");
 
 function requiredBodyId(req, field) {
   const value = req.body?.[field];
@@ -31,9 +32,18 @@ function validateTemplateIdentity(input) {
   };
 }
 
+function validateVehicleCategory(value) {
+  if (!VEHICLE_CATEGORIES.includes(value)) {
+    throw new SeatLayoutPersistenceError(
+      "SEAT_LAYOUT_INPUT_INVALID", "vehicleCategory is invalid.", 422, { field: "vehicleCategory" }
+    );
+  }
+  return value;
+}
+
 function optionalSummary(value) {
   if (value == null || value === "") return null;
   return requiredText(value, "changeSummary", { min: 3, max: 500 });
 }
 
-module.exports = { requiredBodyId, validateTemplateIdentity, optionalSummary };
+module.exports = { requiredBodyId, validateTemplateIdentity, validateVehicleCategory, optionalSummary };

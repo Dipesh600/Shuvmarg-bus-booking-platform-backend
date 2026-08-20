@@ -31,8 +31,12 @@ function orderedOverlap(left, right) {
 
 async function assertNoLivePathDuplicate(variant) {
   const identity = await sequenceIdentity(variant._id);
+  const excludedIds = [variant._id];
+  if (variant.revisionOfVariantId) {
+    excludedIds.push(variant.revisionOfVariantId);
+  }
   const live = await RouteVariant.find({
-    _id: { $ne: variant._id }, corridorId: variant.corridorId,
+    _id: { $nin: excludedIds }, corridorId: variant.corridorId,
     direction: variant.direction, status: "ACTIVE",
   }).select("_id code name pathFingerprint").lean();
   const exact = live.find((item) => item.pathFingerprint === identity.fingerprint);

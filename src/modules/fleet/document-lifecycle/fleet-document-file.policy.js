@@ -5,10 +5,10 @@ const errors = require("./fleet-document.errors");
 const { LEGAL_FILE_LIMITS, IMAGE_COLLECTION_LIMITS } = require("./fleet-document.constants");
 
 const ALLOWED_MIME_BY_SLOT = Object.freeze({
-  fitnessCert: ["application/pdf", "image/jpeg", "image/png"],
-  insurance: ["application/pdf", "image/jpeg", "image/png"],
-  bluebook: ["application/pdf", "image/jpeg", "image/png"],
-  routePermit: ["application/pdf", "image/jpeg", "image/png"],
+  fitnessCert: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
+  insurance: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
+  bluebook: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
+  routePermit: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
   fleetImages: ["image/jpeg", "image/png", "image/webp"],
 });
 

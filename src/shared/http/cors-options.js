@@ -71,7 +71,7 @@ const createCorsOptions = ({
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-App-Source"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-App-Source", "Cache-Control", "Pragma", "Expires"],
     optionsSuccessStatus: 200,
   };
 };

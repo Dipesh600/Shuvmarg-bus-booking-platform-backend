@@ -130,5 +130,9 @@ test("fleet-document-read unit tests", async (t) => {
       () => service.getDocumentObject({ fleetId, slot: "insurance", actorContext: {} }),
       (error) => error.code === "FLEET_DOCUMENT_LEGACY_REFERENCE" && error.statusCode === 422
     );
+    await assert.rejects(
+      () => service.getDocumentReadUrl({ fleetId, slot: "insurance", actorContext: {} }),
+      (error) => error.code === "FLEET_DOCUMENT_LEGACY_REFERENCE" && error.statusCode === 422
+    );
   });
 });

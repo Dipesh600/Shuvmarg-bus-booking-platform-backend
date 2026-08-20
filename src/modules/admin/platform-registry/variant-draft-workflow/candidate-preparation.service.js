@@ -13,23 +13,15 @@ const { getVariantDraft, loadDraftVariant, loadMapReview } = require("./context.
 const { routeVariantError } = require("../route-variant-errors.js");
 
 async function resolveCandidateAnchors(variant) {
-  if (variant.originTerminalStopId && variant.destinationTerminalStopId) {
-    return {
-      originTerminal: variant.originTerminalStopId,
-      destinationTerminal: variant.destinationTerminalStopId,
-      originAnchor: variant.originTerminalStopId,
-      destinationAnchor: variant.destinationTerminalStopId,
-    };
-  }
   const corridor = await getCorridorById(variant.corridorId);
   const { originEndpointId, destinationEndpointId } = resolveDirectionalEndpoints(
     corridor, variant.direction
   );
   return {
-    originTerminal: null,
-    destinationTerminal: null,
-    originAnchor: originEndpointId,
-    destinationAnchor: destinationEndpointId,
+    originTerminal: variant.originTerminalStopId || null,
+    destinationTerminal: variant.destinationTerminalStopId || null,
+    originAnchor: variant.originTerminalStopId || originEndpointId,
+    destinationAnchor: variant.destinationTerminalStopId || destinationEndpointId,
   };
 }
 

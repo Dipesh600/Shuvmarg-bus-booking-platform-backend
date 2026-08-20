@@ -3,7 +3,7 @@
 const Stop = require("../../../../models/stopModel.js");
 const { corridorError } = require("../../../domain/corridor/corridor-errors.js");
 
-const TERMINAL_FIELDS = "_id parentStopId status verificationStatus isRouteStop";
+const TERMINAL_FIELDS = "_id name code parentStopId status verificationStatus isRouteStop municipality district coordinates";
 
 function idOf(value) {
   return value && String(value._id || value);
@@ -43,11 +43,10 @@ async function assertTerminalWithinEndpointScope({
   if (!terminal) {
     throw corridorError("VARIANT_TERMINAL_NOT_FOUND", `${label} terminal was not found.`, 404);
   }
-  if (terminal.status !== "ACTIVE" || terminal.verificationStatus !== "VERIFIED" ||
-      terminal.isRouteStop !== true) {
+  if (terminal.status !== "ACTIVE" || terminal.verificationStatus !== "VERIFIED") {
     throw corridorError(
       "INVALID_VARIANT_TERMINAL",
-      `${label} terminal must be an active, verified operational route stop.`,
+      `${label} terminal must be an active, verified operational stop.`,
       400,
       { stopId: String(terminal._id) }
     );
@@ -86,14 +85,18 @@ async function assertVariantTerminalScope({
     corridor, direction
   );
   const [originTerminal, destinationTerminal] = await Promise.all([
-    assertTerminalWithinEndpointScope({
-      endpointId: originEndpointId, terminalStopId: originTerminalStopId,
-      label: "Origin", StopModel, session,
-    }),
-    assertTerminalWithinEndpointScope({
-      endpointId: destinationEndpointId, terminalStopId: destinationTerminalStopId,
-      label: "Destination", StopModel, session,
-    }),
+    originTerminalStopId
+      ? assertTerminalWithinEndpointScope({
+          endpointId: originEndpointId, terminalStopId: originTerminalStopId,
+          label: "Origin", StopModel, session,
+        })
+      : null,
+    destinationTerminalStopId
+      ? assertTerminalWithinEndpointScope({
+          endpointId: destinationEndpointId, terminalStopId: destinationTerminalStopId,
+          label: "Destination", StopModel, session,
+        })
+      : null,
   ]);
   return { originTerminal, destinationTerminal, originEndpointId, destinationEndpointId };
 }

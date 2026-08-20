@@ -13,6 +13,7 @@ const ERROR_DETAIL_FIELDS = Object.freeze({
   INVALID_STATUS: Object.freeze(["field", "allowedValues"]),
   DOCUMENT_SLOT_INVALID: Object.freeze(["slot", "allowedSlots"]),
   FLEET_SUBMISSION_INCOMPLETE: Object.freeze(["fleetId", "missingFields", "missingDocuments", "missingAssets"]),
+  FLEET_LIFECYCLE_UPDATE_FORBIDDEN: Object.freeze(["fields"]),
 });
 
 function sanitizeErrorDetails(code, details) {

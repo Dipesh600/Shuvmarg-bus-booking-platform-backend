@@ -7,7 +7,7 @@ const {
 
 const sendAllUserToPushnotification = async (req, res) => {
     try {
-        const { title, description } = req.body;
+        const { title, description, targetRole } = req.body;
 
         if (!title || !description) {
             return res.status(400).json({
@@ -16,7 +16,8 @@ const sendAllUserToPushnotification = async (req, res) => {
             });
         }
 
-        const devices = await UserDeviceInfo.find({});
+        const query = targetRole ? { userType: targetRole } : {};
+        const devices = await UserDeviceInfo.find(query);
         const tokens = devices.map((d) => d.token).filter(Boolean);
 
         if (tokens.length === 0) {
@@ -31,9 +32,10 @@ const sendAllUserToPushnotification = async (req, res) => {
         ];
 
         try {
+            const role = targetRole || "all";
             await Promise.all(
                 uniqueUserIds.map((userId) =>
-                    createLocalNotification(userId, "ADMIN_BROADCAST", title, description, {})
+                    createLocalNotification(userId, "ADMIN_BROADCAST", title, description, {}, role)
                 )
             );
         } catch (localError) {

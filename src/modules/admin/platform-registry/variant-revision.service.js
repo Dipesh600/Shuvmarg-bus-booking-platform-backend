@@ -4,22 +4,8 @@ const mongoose = require("mongoose");
 const RouteStop = require("../../../../models/routeStopModel.js");
 const RouteVariant = require("../../../../models/routeVariantModel.js");
 const { allocateVariantCode } = require("./variant-code-allocation.service.js");
-const { getVariantReferenceCounts } = require("./variant-reference.policy.js");
 const { routeVariantError } = require("./route-variant-errors.js");
-
-async function getVariantDetails(id) {
-  const variant = await RouteVariant.findById(id)
-    .populate({ path: "corridorId", populate: [{ path: "originId" }, { path: "destinationId" }] })
-    .populate("returnVariantId", "code name direction status revisionNumber")
-    .populate("revisionOfVariantId", "code name status revisionNumber")
-    .lean();
-  if (!variant) throw routeVariantError("VARIANT_NOT_FOUND", "Route variant not found.", 404);
-  const [stops, references] = await Promise.all([
-    RouteStop.find({ variantId: id }).populate("stopId", "name code type province district municipality coordinates").sort({ sequence: 1 }).lean(),
-    getVariantReferenceCounts(id),
-  ]);
-  return { variant, stops, references };
-}
+const { getVariantDetails } = require("./variant-detail.service.js");
 
 async function cloneOne(source, routeFamilyId, adminId) {
   const existing = await RouteVariant.findOne({
@@ -57,8 +43,20 @@ async function createVariantRevision(id, adminId, { includeCompanion = true } = 
   }
   const routeFamilyId = source.routeFamilyId || new mongoose.Types.ObjectId();
   const revision = await cloneOne(source, routeFamilyId, adminId);
-  if (includeCompanion && source.returnVariantId) {
-    const companionSource = await RouteVariant.findById(source.returnVariantId);
+  if (includeCompanion) {
+    let companionSource = source.returnVariantId ? await RouteVariant.findById(source.returnVariantId) : null;
+    if (!companionSource) {
+      const oppositeDir = source.direction === "FORWARD" ? "RETURN" : "FORWARD";
+      companionSource = await RouteVariant.findOne({
+        corridorId: source.corridorId, direction: oppositeDir,
+        status: { $in: ["ACTIVE", "INACTIVE"] },
+      });
+      if (companionSource) {
+        source.returnVariantId = companionSource._id;
+        companionSource.returnVariantId = source._id;
+        await Promise.all([source.save(), companionSource.save()]);
+      }
+    }
     if (companionSource && ['ACTIVE', 'INACTIVE'].includes(companionSource.status)) {
       const companionRevision = await cloneOne(companionSource, routeFamilyId, adminId);
       revision.returnVariantId = companionRevision._id;
@@ -69,4 +67,83 @@ async function createVariantRevision(id, adminId, { includeCompanion = true } = 
   return getVariantDetails(revision._id);
 }
 
-module.exports = { createVariantRevision, getVariantDetails };
+async function rollbackVariantRevision(historicalVariantId, adminId) {
+  const target = await RouteVariant.findById(historicalVariantId);
+  if (!target) throw routeVariantError("VARIANT_NOT_FOUND", "Target historical revision not found.", 404);
+  if (target.status === "ACTIVE") {
+    throw routeVariantError("VARIANT_ALREADY_ACTIVE", "This revision is already the active version.", 409);
+  }
+
+  // Find currently ACTIVE variant in this family or corridor direction
+  const activeQuery = target.routeFamilyId
+    ? { routeFamilyId: target.routeFamilyId, direction: target.direction, status: "ACTIVE" }
+    : { corridorId: target.corridorId, direction: target.direction, status: "ACTIVE" };
+  const currentActive = await RouteVariant.findOne(activeQuery);
+  if (!currentActive) {
+    throw routeVariantError("ACTIVE_VARIANT_NOT_FOUND", "No active variant found to rollback from.", 404);
+  }
+
+  // Create a new revision from the current active variant
+  const revisionResult = await createVariantRevision(currentActive._id, adminId, { includeCompanion: true });
+  const newRevisionId = revisionResult.variant._id;
+
+  // Load target historical stops
+  const targetStops = await RouteStop.find({ variantId: target._id })
+    .populate("stopId", "code")
+    .sort({ sequence: 1 })
+    .lean();
+
+  if (targetStops.length < 2) {
+    throw routeVariantError("INVALID_HISTORICAL_STOPS", "Historical revision does not contain a valid stop sequence.", 400);
+  }
+
+  const inputStops = targetStops.map((s, idx) => ({
+    stopCode: s.stopId.code,
+    sequence: idx + 1,
+    isMajor: s.isMajor,
+    distanceFromOriginKm: s.distanceFromOriginKm,
+    durationFromOriginMins: s.durationFromOriginMins,
+  }));
+
+  const { setVariantStops } = require("./route-stop-sequence.service.js");
+  const { activateVariantDraft } = require("./variant-draft-workflow/commit.service.js");
+
+  await setVariantStops(newRevisionId, inputStops, { syncCompanion: true });
+  const activated = await activateVariantDraft(newRevisionId, adminId, { syncCompanion: true });
+
+  return getVariantDetails(activated._id);
+}
+
+async function deleteHistoricalRevision(revisionId) {
+  const variant = await RouteVariant.findById(revisionId);
+  if (!variant) throw routeVariantError("VARIANT_NOT_FOUND", "Variant revision not found.", 404);
+  if (variant.status === "ACTIVE") {
+    throw routeVariantError("CANNOT_DELETE_ACTIVE_VARIANT", "Active variants cannot be deleted. Rollback or deactivate first.", 409);
+  }
+
+  const Trip = require("../../../../models/tripModel.js");
+  const tripCount = await Trip.countDocuments({ variantId: revisionId });
+
+  if (tripCount > 0) {
+    variant.status = "ARCHIVED";
+    await variant.save();
+    return {
+      archived: true,
+      message: "Revision has historical trip records and was archived to preserve audit integrity.",
+    };
+  }
+
+  await RouteStop.deleteMany({ variantId: variant._id });
+  await RouteVariant.findByIdAndDelete(variant._id);
+  return {
+    deleted: true,
+    message: "Revision permanently deleted.",
+  };
+}
+
+module.exports = {
+  createVariantRevision,
+  getVariantDetails,
+  rollbackVariantRevision,
+  deleteHistoricalRevision,
+};

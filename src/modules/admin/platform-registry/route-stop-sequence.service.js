@@ -1,18 +1,11 @@
 "use strict";
-
 const Stop = require("../../../../models/stopModel.js");
 const RouteStop = require("../../../../models/routeStopModel.js");
 const { getVariantById } = require("./route-variant-registry.service.js");
 const { normalizeSequenceInput } = require("./route-stop-sequence.policy.js");
-const {
-  replaceVariantStopSequence,
-} = require("./route-stop-sequence.persistence.js");
-const {
-  assertVariantTerminalScope,
-} = require("./variant-terminal-scope.policy.js");
-const {
-  assertSelectedTerminalsMatchSequence,
-} = require("./variant-terminal-selection.policy.js");
+const { replaceVariantStopSequence } = require("./route-stop-sequence.persistence.js");
+const { assertVariantTerminalScope } = require("./variant-terminal-scope.policy.js");
+const { assertSelectedTerminalsMatchSequence } = require("./variant-terminal-selection.policy.js");
 const { routeVariantError } = require("./route-variant-errors.js");
 const {
   VARIANT_WRITE_CONTEXT,
@@ -66,9 +59,63 @@ async function resolveOperationalStops(stops, session = null) {
   );
 }
 
+async function syncCompanionSequence(variant, normalizedStops, rows, stopMap, session = null) {
+  const RouteVariant = require("../../../../models/routeVariantModel.js");
+  let companion = null;
+  if (variant.returnVariantId) {
+    let companionQuery = RouteVariant.findById(variant.returnVariantId);
+    if (session && typeof companionQuery.session === "function") companionQuery = companionQuery.session(session);
+    companion = await companionQuery;
+  }
+  if (!companion) {
+    const oppositeDir = variant.direction === "FORWARD" ? "RETURN" : "FORWARD";
+    let findQuery = RouteVariant.findOne({
+      corridorId: variant.corridorId, direction: oppositeDir,
+      status: { $in: ["DRAFT", "ACTIVE"] },
+    });
+    if (session && typeof findQuery.session === "function") findQuery = findQuery.session(session);
+    companion = await findQuery;
+    if (companion) {
+      variant.returnVariantId = companion._id;
+      companion.returnVariantId = variant._id;
+      await Promise.all([
+        variant.save(session ? { session } : undefined),
+        companion.save(session ? { session } : undefined),
+      ]);
+    }
+  }
+  if (!companion || companion.status !== "DRAFT") return;
+
+  const totalDistance = normalizedStops.at(-1).distanceFromOriginKm || 0;
+  const totalDuration = normalizedStops.at(-1).durationFromOriginMins || 0;
+  const reversedNormalized = [...normalizedStops].reverse();
+  const reversedRows = [...rows].reverse();
+
+  companion.originTerminalStopId = reversedRows[0].stopId;
+  companion.destinationTerminalStopId = reversedRows.at(-1).stopId;
+  if (totalDistance) companion.distanceKm = Math.round(totalDistance * 10) / 10;
+  if (totalDuration) companion.durationMinutes = Math.round(totalDuration);
+  await companion.save(session ? { session } : undefined);
+
+  const companionSequence = reversedNormalized.map((stop, index) => ({
+    stopCode: stop.stopCode,
+    sequence: index + 1,
+    isMajor: stop.isMajor,
+    distanceFromOriginKm: Number.isFinite(stop.distanceFromOriginKm)
+      ? Math.max(0, Math.round((totalDistance - stop.distanceFromOriginKm) * 10) / 10)
+      : null,
+    durationFromOriginMins: Number.isFinite(stop.durationFromOriginMins)
+      ? Math.max(0, Math.round(totalDuration - stop.durationFromOriginMins))
+      : 0,
+  }));
+
+  const companionRows = mappedStops(companion._id, companionSequence, stopMap);
+  await replaceVariantStopSequence(companion._id, companionRows, { session });
+}
+
 async function setVariantStops(
   variantId, stops,
-  { writeContext = VARIANT_WRITE_CONTEXT.INTERNAL_WORKFLOW, session = null } = {}
+  { writeContext = VARIANT_WRITE_CONTEXT.INTERNAL_WORKFLOW, session = null, syncCompanion = true } = {}
 ) {
   const variant = await getVariantById(variantId, { session });
   assertVariantSequenceMutable(variant, writeContext);
@@ -85,7 +132,11 @@ async function setVariantStops(
     destinationTerminalStopId: rows.at(-1).stopId,
     session,
   });
-  return replaceVariantStopSequence(variantId, rows, { session });
+  const result = await replaceVariantStopSequence(variantId, rows, { session });
+  if (syncCompanion) {
+    await syncCompanionSequence(variant, normalizedStops, rows, stopMap, session);
+  }
+  return result;
 }
 
 function getStopsForVariant(variantId) {

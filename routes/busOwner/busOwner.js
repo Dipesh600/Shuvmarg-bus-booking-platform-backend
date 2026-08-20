@@ -54,6 +54,20 @@ router.put("/fleets/:fleetId/documents/:slot", busOwnerFleetDocumentController.u
 router.get("/fleets/:fleetId/documents/:slot/read-url", busOwnerFleetDocumentController.getDocumentReadUrl);
 registerBusOwnerSeatLayoutV3Routes(router);
 
+// Owner-scoped operator brands (draft-safe)
+const ownerBrand = require("../../src/modules/bus-owner/brand");
+router.get("/brands", ownerBrand.listBrands);
+
+// Canonical route discovery is draft-safe so an owner can prepare every bus
+// before KYC approval. Only verified, active platform geography is exposed.
+const fleetRouteSetup = require("../../src/modules/bus-owner/fleet-route-setup");
+router.get("/fleet-route-setup/stops", fleetRouteSetup.searchStops);
+router.get("/fleet-route-setup/options", fleetRouteSetup.listRouteOptions);
+router.get("/fleet-route-setup/boarding-locations", fleetRouteSetup.listBoardingLocations);
+router.get("/fleet-route-setup/reusable", fleetRouteSetup.getReusableSetup);
+router.get("/fleets/:fleetId/route-setup", fleetRouteSetup.getRouteSetup);
+router.put("/fleets/:fleetId/route-setup", fleetRouteSetup.saveRouteSetup);
+
 // ── REQUIRE APPROVED KYC FOR OPERATIONAL ROUTES BELOW ─────────────────────────
 router.use(requireApprovedBusOwner);
 

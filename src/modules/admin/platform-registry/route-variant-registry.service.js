@@ -25,15 +25,7 @@ async function createVariant(data, adminId) {
       "Create the reverse-direction variant separately so its physical terminals and timing can be reviewed."
     );
   }
-  const hasOriginTerminal = Boolean(originTerminalStopId);
-  const hasDestinationTerminal = Boolean(destinationTerminalStopId);
-  if (hasOriginTerminal !== hasDestinationTerminal) {
-    throw routeVariantError(
-      "INCOMPLETE_VARIANT_TERMINALS",
-      "A variant must define both physical terminals or neither."
-    );
-  }
-  if (hasOriginTerminal) {
+  if (originTerminalStopId || destinationTerminalStopId) {
     await assertVariantTerminalScope({
       corridor,
       direction,

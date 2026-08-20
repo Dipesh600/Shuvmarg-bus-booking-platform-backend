@@ -2,7 +2,7 @@
 
 const { KYC_REVIEW_STATUS } = require("./kyc-review.policy");
 
-async function syncReviewedOwnerUser({ userId, targetStatus, User, logger = console }) {
+async function syncReviewedOwnerUser({ userId, targetStatus, User, session, logger = console }) {
   if (!userId || !User) return null;
 
   try {
@@ -16,7 +16,9 @@ async function syncReviewedOwnerUser({ userId, targetStatus, User, logger = cons
     if (!updateDoc) return null;
 
     if (typeof User.findByIdAndUpdate === "function") {
-      let q = User.findByIdAndUpdate(userId, updateDoc, { new: true });
+      const options = { new: true };
+      if (session) options.session = session;
+      let q = User.findByIdAndUpdate(userId, updateDoc, options);
       if (q && typeof q.lean === "function") {
         q = q.lean();
       }

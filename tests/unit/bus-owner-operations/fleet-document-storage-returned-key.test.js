@@ -81,13 +81,15 @@ test("fleet-document-storage-returned-key unit tests", async (t) => {
 
     const file1 = { name: "img1.jpg", mimetype: "image/jpeg", data: jpgHeader, size: 100 };
     const file2 = { name: "img2.jpg", mimetype: "image/jpeg", data: jpgHeader, size: 100 };
+    const file3 = { name: "img3.jpg", mimetype: "image/jpeg", data: jpgHeader, size: 100 };
+    const file4 = { name: "img4.jpg", mimetype: "image/jpeg", data: jpgHeader, size: 100 };
 
     await assert.rejects(
       async () => service.uploadDocument({
         fleetId,
         slot: "fleetImages",
         body: {},
-        files: { fleetImages: [file1, file2] },
+        files: { fleetImages: [file1, file2, file3, file4] },
         actorContext: { userInfo: { id: userId, role: "busOwner" } },
       }),
       (err) => err.message.includes("Storage returned an unexpected object key")

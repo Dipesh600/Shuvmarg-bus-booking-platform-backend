@@ -1,6 +1,5 @@
 const User = require("../../../models/userModel.js");
 const BusOwner = require("../../../models/busOwnerModel.js");
-const OperatorBrand = require("../../../models/operatorBrandModel.js");
 const fleetService = require("../../../src/modules/fleet-management");
 
 // Create Fleet for Owner by Admin
@@ -133,37 +132,6 @@ const updateFleetByAdmin = async (req, res) => {
     }
 };
 
-// Resubmit a REJECTED fleet for re-review
-const resubmitFleetByAdmin = async (req, res) => {
-    try {
-        const { id } = req.params;
-        if (!id) return res.status(400).json({ success: false, message: "Fleet ID is required." });
-
-        // Brand suspension guard — check before attempting resubmit
-        const currentFleet = await require("../../../models/fleetModel.js").findById(id).select("brandId").lean();
-        if (currentFleet?.brandId) {
-            const brand = await OperatorBrand.findById(currentFleet.brandId).select("status brandName").lean();
-            if (brand && brand.status === "SUSPENDED") {
-                return res.status(403).json({
-                    success: false,
-                    message: `Cannot resubmit: Brand "${brand.brandName}" is currently suspended. Reinstate the brand first.`,
-                });
-            }
-        }
-
-        const fleet = await fleetService.resubmitFleet(id, null);
-        return res.status(200).json({
-            success: true,
-            message: "Fleet resubmitted for review. It is now PENDING approval.",
-            data: fleet,
-        });
-    } catch (error) {
-        console.error("resubmitFleetByAdmin error:", error);
-        const status = error.message.includes("found") ? 404 : 400;
-        return res.status(status).json({ success: false, message: error.message });
-    }
-};
-
 const { adminFleetDocumentController } = require("../../../src/modules/fleet/document-lifecycle");
 
 // ─── Re-upload a single failed document on a REJECTED fleet ──────────────────
@@ -206,6 +174,5 @@ module.exports = {
     getFleetById,
     updateFleetByAdmin,
     deleteFleetByAdmin,
-    resubmitFleetByAdmin,
     reuploadFleetDocument,
 };

@@ -92,12 +92,40 @@ const operatorBrandSchema = new mongoose.Schema(
         },
         suspendedReason: { type: String, default: null },
 
+        // Default brand flag
+        isDefault: {
+            type: Boolean,
+            default: false,
+        },
+
+        // Normalized name for searching & deterministic deduplication
+        normalizedName: {
+            type: String,
+            default: null,
+            index: true,
+        },
+
+        // Source of brand creation
+        source: {
+            type: String,
+            enum: ["ADMIN", "KYC_APPROVAL", "OWNER"],
+            default: "ADMIN",
+        },
+
         // Notes from admin
         notes: { type: String, default: null },
     },
     { timestamps: true }
 );
 
+operatorBrandSchema.index(
+    { ownerId: 1, isDefault: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { isDefault: true },
+        name: "one_default_brand_per_owner",
+    }
+);
 // Auto-generate brandCode: OB-XXXNNN
 operatorBrandSchema.pre("save", async function (next) {
     if (this.brandCode) return next();

@@ -16,6 +16,12 @@ function extractFleetSlotEvidence(fleet, slot) {
     return {
       present: images.length > 0,
       count: images.length,
+      images: images.map((image, index) => ({
+        imageId: image?._id ? String(image._id) : null,
+        index,
+        view: image?.view || null,
+        uploadedAt: toIsoDate(image?.uploadedAt),
+      })),
     };
   }
 
@@ -24,11 +30,15 @@ function extractFleetSlotEvidence(fleet, slot) {
     return { present: false };
   }
 
-  const hasUrl = Boolean(doc.url);
+  // Some legacy records contain URLs, while current records use private object
+  // keys. Metadata is also valid evidence when hidden storage fields were not
+  // selected by a list query.
+  const hasUrl = Boolean(doc.url || doc.objectKey || doc.uploadedAt || doc.mimeType || doc.size);
   return {
     present: hasUrl,
     validTill: toIsoDate(doc.validTill),
     policyNumber: doc.policyNumber || null,
+    uploadedAt: toIsoDate(doc.uploadedAt),
   };
 }
 
@@ -46,7 +56,9 @@ function mapFleetSlotDescriptor(fleet, slot) {
     reason,
     validTill: evidence.validTill || null,
     policyNumber: evidence.policyNumber || null,
+    uploadedAt: evidence.uploadedAt || null,
     count: evidence.count !== undefined ? evidence.count : (evidence.present ? 1 : 0),
+    ...(slot === "fleetImages" ? { images: evidence.images || [] } : {}),
   };
 }
 

@@ -23,7 +23,7 @@ test("fleet-approval-audit.schema validation tests", async (t) => {
     assert.equal(err, undefined);
   });
 
-  await t.test("FLEET_RESUBMITTED validates with ADMIN and REJECTED -> PENDING", () => {
+  await t.test("FLEET_RESUBMITTED rejects ADMIN actor even for REJECTED -> PENDING", () => {
     const doc = new AuditModel({
       eventType: "FLEET_RESUBMITTED",
       actorType: "ADMIN",
@@ -33,7 +33,8 @@ test("fleet-approval-audit.schema validation tests", async (t) => {
       occurredAt: new Date(),
     });
     const err = doc.validateSync();
-    assert.equal(err, undefined);
+    assert.ok(err);
+    assert.match(err.message, /Invalid audit event combination/);
   });
 
   await t.test("FLEET_APPROVED rejects BUS_OWNER actorType", () => {

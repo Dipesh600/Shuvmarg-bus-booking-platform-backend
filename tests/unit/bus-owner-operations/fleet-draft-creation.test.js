@@ -32,6 +32,7 @@ test("1. Fleet creation produces DRAFT, not PENDING", async () => {
     busType: "AC",
     vehicleType: "bus",
     totalSeats: 30,
+    registrationYear: 2024,
     approvalStatus: "APPROVED",
   });
 
@@ -68,6 +69,7 @@ test("21. Caller cannot create a fleet directly as PENDING, APPROVED, or REJECTE
       busType: "AC",
       vehicleType: "bus",
       totalSeats: 30,
+      registrationYear: 2024,
       approvalStatus: attemptedStatus,
     });
     assert.equal(createdData.approvalStatus, "DRAFT");
@@ -84,6 +86,7 @@ test("35. Direct model instantiation rejects non-DRAFT approvalStatus", async ()
     busType: "AC",
     vehicleType: "bus",
     totalSeats: 30,
+    registrationYear: 2024,
     approvalStatus: "PENDING",
   });
 

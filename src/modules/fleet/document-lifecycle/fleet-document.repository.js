@@ -35,6 +35,7 @@ function createFleetDocumentRepository(deps = {}) {
 
     if (slot === "fleetImages") {
       projection["fleetImages.imageId"] = 1;
+      projection["fleetImages.view"] = 1;
       projection["fleetImages.objectKey"] = 1;
       projection["fleetImages.mimeType"] = 1;
       projection["fleetImages.size"] = 1;
