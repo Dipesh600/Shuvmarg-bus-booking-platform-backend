@@ -1,6 +1,7 @@
 "use strict";
 
 const { routeVariantError } = require("./route-variant-errors.js");
+const { interpolateMissingTimings } = require("./route-stop-interpolation.policy.js");
 
 function asNonNegativeNumber(value, label, index, defaultValue = null) {
   if (value === undefined || value === null || value === "") return defaultValue;
@@ -28,75 +29,6 @@ function resolveDuration(stop, index) {
     );
   }
   return duration ?? legacy;
-}
-
-function interpolateMissingTimings(stops) {
-  const n = stops.length;
-  if (n < 2) return;
-
-  if (stops[0].durationFromOriginMins === null || stops[0].durationFromOriginMins === undefined) {
-    stops[0].durationFromOriginMins = 0;
-  }
-  if (stops[0].distanceFromOriginKm === null || stops[0].distanceFromOriginKm === undefined) {
-    stops[0].distanceFromOriginKm = 0;
-  }
-
-  const last = stops[n - 1];
-  if (last.durationFromOriginMins === null || last.durationFromOriginMins === undefined) {
-    const maxKnown = stops.reduce((max, s) => Math.max(max, s.durationFromOriginMins || 0), 0);
-    last.durationFromOriginMins = maxKnown > 0 ? maxKnown + 15 : (n - 1) * 30;
-  }
-
-  let anchorIdx = 0;
-  while (anchorIdx < n - 1) {
-    let nextAnchorIdx = n - 1;
-    for (let j = anchorIdx + 1; j < n - 1; j++) {
-      const val = stops[j].durationFromOriginMins;
-      const targetVal = stops[n - 1].durationFromOriginMins;
-      if (val !== null && val !== undefined && val >= stops[anchorIdx].durationFromOriginMins && val <= targetVal) {
-        nextAnchorIdx = j;
-        break;
-      }
-    }
-    const startDur = stops[anchorIdx].durationFromOriginMins;
-    const endDur = stops[nextAnchorIdx].durationFromOriginMins;
-    const gap = nextAnchorIdx - anchorIdx;
-    for (let k = anchorIdx + 1; k < nextAnchorIdx; k++) {
-      const fraction = (k - anchorIdx) / gap;
-      stops[k].durationFromOriginMins = Math.round(startDur + fraction * (endDur - startDur));
-    }
-    anchorIdx = nextAnchorIdx;
-  }
-
-  // Also interpolate distanceFromOriginKm if at least one stop has distance
-  const hasAnyDistance = stops.some((s) => s.distanceFromOriginKm !== null && s.distanceFromOriginKm !== undefined);
-  if (hasAnyDistance) {
-    if (last.distanceFromOriginKm === null || last.distanceFromOriginKm === undefined) {
-      const maxDist = stops.reduce((max, s) => Math.max(max, s.distanceFromOriginKm || 0), 0);
-      last.distanceFromOriginKm = maxDist > 0 ? maxDist + 10 : (n - 1) * 20;
-    }
-
-    anchorIdx = 0;
-    while (anchorIdx < n - 1) {
-      let nextAnchorIdx = n - 1;
-      for (let j = anchorIdx + 1; j < n - 1; j++) {
-        const val = stops[j].distanceFromOriginKm;
-        const targetVal = stops[n - 1].distanceFromOriginKm;
-        if (val !== null && val !== undefined && val >= stops[anchorIdx].distanceFromOriginKm && val <= targetVal) {
-          nextAnchorIdx = j;
-          break;
-        }
-      }
-      const startDist = stops[anchorIdx].distanceFromOriginKm;
-      const endDist = stops[nextAnchorIdx].distanceFromOriginKm;
-      const gap = nextAnchorIdx - anchorIdx;
-      for (let k = anchorIdx + 1; k < nextAnchorIdx; k++) {
-        const fraction = (k - anchorIdx) / gap;
-        stops[k].distanceFromOriginKm = Math.round((startDist + fraction * (endDist - startDist)) * 10) / 10;
-      }
-      anchorIdx = nextAnchorIdx;
-    }
-  }
 }
 
 function normalizeSequenceInput(stops) {

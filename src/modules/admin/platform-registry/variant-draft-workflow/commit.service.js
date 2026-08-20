@@ -1,5 +1,4 @@
 "use strict";
-
 const RouteVariant = require("../../../../../models/routeVariantModel.js");
 const RouteVariantStopCandidate = require("../../../../../models/routeVariantStopCandidateModel.js");
 const RouteStop = require("../../../../../models/routeStopModel.js");
@@ -79,20 +78,14 @@ async function deriveCompanionSequence(variant, stops, included, adminId, sessio
 async function commitVariantDraft(variantId, adminId, dependencies = {}) {
   await runVariantWrite({
     mongooseImpl: dependencies.mongoose,
-    // Transactions keep newly created canonical Stops, candidate resolutions,
-    // and the RouteStop sequence all-or-nothing on replica-set deployments.
     transactionWork: (session) => writeCommittedDraft(variantId, adminId, session),
-    // A standalone development MongoDB cannot transact. In that case a newly
-    // created Stop is first retained on its candidate; if sequence persistence
-    // fails, a later retry reuses that exact Stop rather than duplicating it.
     fallbackWork: () => writeCommittedDraft(variantId, adminId),
   });
   return getVariantDraft(variantId, { includeRouteGeometry: true });
 }
 
 async function activateVariantDraft(variantId, adminId, { syncCompanion = true } = {}) {
-  const variant = await loadDraftVariant(variantId);
-  const { updateVariant } = require("../route-variant-registry.service.js");
+  const variant = await loadDraftVariant(variantId); const { updateVariant } = require("../route-variant-registry.service.js");
   const OperatorRouteConfig = require("../../../../../models/operatorRouteConfigModel.js");
   const Schedule = require("../../../../../models/scheduleModel.js");
   const Trip = require("../../../../../models/tripModel.js");
@@ -108,7 +101,6 @@ async function activateVariantDraft(variantId, adminId, { syncCompanion = true }
   const activated = await updateVariant(variant._id, { status: "ACTIVE" }, adminId);
 
   if (source?.status === "ACTIVE") {
-    // Automatically migrate active references to the newly activated revision
     const migrationTasks = [
       OperatorRouteConfig.updateMany({ variantId: source._id }, { $set: { variantId: activated._id } }),
       Schedule.updateMany({ variantId: source._id }, { $set: { variantId: activated._id } }),
@@ -137,7 +129,6 @@ async function activateVariantDraft(variantId, adminId, { syncCompanion = true }
     await source.save();
   }
 
-  // Also activate paired companion draft if present
   let companionId = variant.returnVariantId;
   if (!companionId) {
     const oppositeDir = variant.direction === "FORWARD" ? "RETURN" : "FORWARD";

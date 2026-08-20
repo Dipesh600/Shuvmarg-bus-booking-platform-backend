@@ -1,18 +1,11 @@
 "use strict";
-
 const Stop = require("../../../../models/stopModel.js");
 const RouteStop = require("../../../../models/routeStopModel.js");
 const { getVariantById } = require("./route-variant-registry.service.js");
 const { normalizeSequenceInput } = require("./route-stop-sequence.policy.js");
-const {
-  replaceVariantStopSequence,
-} = require("./route-stop-sequence.persistence.js");
-const {
-  assertVariantTerminalScope,
-} = require("./variant-terminal-scope.policy.js");
-const {
-  assertSelectedTerminalsMatchSequence,
-} = require("./variant-terminal-selection.policy.js");
+const { replaceVariantStopSequence } = require("./route-stop-sequence.persistence.js");
+const { assertVariantTerminalScope } = require("./variant-terminal-scope.policy.js");
+const { assertSelectedTerminalsMatchSequence } = require("./variant-terminal-selection.policy.js");
 const { routeVariantError } = require("./route-variant-errors.js");
 const {
   VARIANT_WRITE_CONTEXT,
