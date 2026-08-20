@@ -1,6 +1,7 @@
 "use strict";
 
 const RouteVariant = require("../../../../../models/routeVariantModel.js");
+const Stop = require("../../../../../models/stopModel.js");
 const { fetchGoogleRouteOptions } = require("../../../../../services/googleRoutesClient.js");
 const { resolveGoogleGuidancePlaces } = require("../../../../../services/googleRouteGuidancePlaces.js");
 const { getCorridorById } = require("../corridor-registry.service.js");
@@ -15,46 +16,54 @@ const { getVariantDraft, loadDraftVariant, loadMapReview } = require("./context.
 const { assertObjectId, hasValidCoordinates, mapProviderOptions, validateDirection } = require("./shared.js");
 const { resolveGuidanceStops } = require("./route-guidance.policy.js");
 const { createPairedDrafts } = require("./draft-pair.service.js");
+const { previewCorridorRoutePaths } = require("./route-preview.service.js");
+const { resolveMapAnchors } = require("./map-anchor.service.js");
 
-async function createVariantDraft(corridorId, data, adminId) {
+async function createVariantDraft(corridorId, data, adminId, dependencies = {}) {
   assertObjectId(corridorId, "INVALID_CORRIDOR_ID", "Corridor ID");
   const direction = validateDirection(data.direction);
   const corridor = await getCorridorById(corridorId);
-  const hasOriginTerminal = Boolean(data.originTerminalStopId);
-  const hasDestinationTerminal = Boolean(data.destinationTerminalStopId);
-  if (hasOriginTerminal !== hasDestinationTerminal) {
-    throw routeVariantError(
-      "INCOMPLETE_VARIANT_TERMINALS",
-      "Choose both physical terminals or leave both empty so they can be resolved during stop review."
-    );
+  if (data.originTerminalStopId || data.destinationTerminalStopId) {
+    await assertVariantTerminalScope({ corridor, direction, ...data });
   }
-  if (hasOriginTerminal) await assertVariantTerminalScope({ corridor, direction, ...data });
   const variant = await createPairedDrafts({ corridor, direction, data, adminId });
+
+  // If preview route options and selection were passed from the wizard,
+  // set up the review, select the route, and discover stops in ONE atomic step.
+  if (Array.isArray(data.routeOptions) && data.routeOptions.length > 0) {
+    const rawOptions = data.routeOptions.map((opt, i) => ({
+      providerRouteIndex: opt.providerRouteIndex ?? i,
+      encodedPolyline: opt.encodedPolyline,
+      distanceMeters: opt.distanceMeters || Math.round((opt.distanceKm || 0) * 1000),
+      durationSeconds: opt.durationSeconds || Math.round((opt.durationMinutes || 0) * 60),
+      description: opt.label || opt.description || undefined,
+      roadLabels: opt.roadLabels || [],
+    }));
+
+    const review = await createOrReplaceMapReview(
+      { variantId: variant._id, providerRouteOptions: rawOptions },
+      adminId, dependencies
+    );
+
+    const selectedIndex = data.selectedProviderRouteIndex ?? 0;
+    const selectedOption = review.routeOptions.find(
+      (opt) => opt.providerRouteIndex === selectedIndex
+    ) || review.routeOptions[0];
+
+    if (selectedOption) {
+      await selectMapReviewRouteOption(review._id, selectedOption.optionKey);
+      const { prepareVariantDraftStopCandidates } = require("./candidate-preparation.service.js");
+      return prepareVariantDraftStopCandidates(variant._id);
+    }
+  }
+
   return getVariantDraft(variant._id);
 }
 
-async function resolveMapAnchors(variant) {
-  if (variant.originTerminalStopId && variant.destinationTerminalStopId) {
-    return {
-      origin: variant.originTerminalStopId,
-      destination: variant.destinationTerminalStopId,
-      isTerminalAnchored: true,
-    };
-  }
-  const corridor = await getCorridorById(variant.corridorId);
-  const { originEndpointId, destinationEndpointId } = resolveDirectionalEndpoints(
-    corridor, variant.direction
-  );
-  return {
-    origin: originEndpointId,
-    destination: destinationEndpointId,
-    isTerminalAnchored: false,
-  };
-}
-
 async function refreshVariantDraftRouteOptions(variantId, adminId, input = {}, dependencies = {}) {
+  const StopModel = dependencies.StopModel || Stop;
   const variant = await loadDraftVariant(variantId);
-  const { origin, destination, isTerminalAnchored } = await resolveMapAnchors(variant);
+  const { origin, destination, isTerminalAnchored } = await resolveMapAnchors(variant, StopModel);
   if (!hasValidCoordinates(origin?.coordinates) || !hasValidCoordinates(destination?.coordinates)) {
     throw routeVariantError(
       isTerminalAnchored ? "VARIANT_TERMINAL_COORDINATES_REQUIRED" : "CORRIDOR_ENDPOINT_COORDINATES_REQUIRED",
@@ -133,6 +142,7 @@ async function updateVariantDraftDetails(variantId, data, adminId) {
 }
 
 module.exports = {
-  createVariantDraft, refreshVariantDraftRouteOptions,
+  createVariantDraft, previewCorridorRoutePaths,
+  refreshVariantDraftRouteOptions,
   selectVariantDraftRouteOption, updateVariantDraftDetails,
 };

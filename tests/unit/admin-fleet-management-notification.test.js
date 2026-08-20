@@ -3,14 +3,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  createFleetNotificationService,
-} = require("../../src/modules/admin/fleet-management/fleet-notification.service");
+  createBusOwnerNotificationService,
+} = require("../../src/modules/notifications/bus-owner/bus-owner-notification.service");
 const policy = require("../../src/modules/admin/fleet-management/fleet-status.policy");
 
 function setup(overrides = {}) {
   const calls = [];
   const errors = [];
-  const notify = createFleetNotificationService({
+  const warnings = [];
+  const service = createBusOwnerNotificationService({
     UserDeviceInfo: {
       find: async () => [{ token: "one" }, { token: null }, { token: "two" }],
     },
@@ -18,7 +19,11 @@ function setup(overrides = {}) {
     notificationManager: async (...args) => calls.push(["push", ...args]),
     createLocalNotification: async (...args) => calls.push(["local", ...args]),
     sendOTP: async (...args) => calls.push(["sms", ...args]),
-    console: { error: (...args) => errors.push(args) },
+    generateStatusEmail: () => "<p>Status changed</p>",
+    logger: {
+      error: (...args) => errors.push(args),
+      warn: (...args) => warnings.push(args),
+    },
     policy,
     ...overrides,
   });
@@ -34,43 +39,44 @@ function setup(overrides = {}) {
       contactNumber: "9800000000",
     },
   };
-  return { notify, calls, errors, bus };
+  return { notify: service.notifyFleetStatus, calls, errors, warnings, bus };
 }
 
-test("status notification preserves email, push, local, and SMS order", async () => {
+test("status notification preserves email, SMS, local, and push order", async () => {
   const { notify, calls, bus } = setup();
   await notify(bus, "REJECTED");
   assert.deepEqual(
     calls.map((entry) => entry[0]),
-    ["email", "push", "local", "sms"]
+    ["email", "sms", "local", "push"]
   );
-  assert.deepEqual(calls[1].slice(1, 2)[0], ["one", "two"]);
-  assert.equal(calls[3][1], "9800000000");
-  assert.match(calls[3][2], /Reason: Invalid document/);
+  assert.equal(calls[1][1], "9800000000");
+  assert.match(calls[1][2], /Reason: Invalid document/);
+  assert.deepEqual(calls[3].slice(1, 2)[0], ["one", "two"]);
 });
 
-test("push failure is logged, suppressed, and SMS still runs", async () => {
+test("push failure is logged and suppressed after durable local notification", async () => {
   const { notify, calls, errors, bus } = setup({
     notificationManager: async () => {
       throw new Error("push down");
     },
   });
   await notify(bus, "APPROVED");
-  assert.equal(errors[0][0], "Push Notification Error:");
+  assert.match(errors[0][0], /Push Notification Error/);
   assert.deepEqual(
     calls.map((entry) => entry[0]),
-    ["email", "sms"]
+    ["email", "sms", "local"]
   );
 });
 
-test("email failure remains fatal while SMS failure is suppressed", async () => {
+test("email and SMS failures are isolated so lifecycle decisions remain successful", async () => {
   const fatal = setup({
     emailManager: async () => {
       throw new Error("email down");
     },
   });
-  await assert.rejects(fatal.notify(fatal.bus, "APPROVED"), /email down/);
-  assert.equal(fatal.calls.length, 0);
+  await fatal.notify(fatal.bus, "APPROVED");
+  assert.match(fatal.warnings[0][0], /Email notification failed/);
+  assert.deepEqual(fatal.calls.map((entry) => entry[0]), ["sms", "local", "push"]);
 
   const sms = setup({
     sendOTP: async () => {
@@ -78,5 +84,6 @@ test("email failure remains fatal while SMS failure is suppressed", async () => 
     },
   });
   await sms.notify(sms.bus, "APPROVED");
-  assert.equal(sms.errors[0][0], "SMS Error:");
+  assert.match(sms.warnings[0][0], /SMS notification failed/);
+  assert.deepEqual(sms.calls.map((entry) => entry[0]), ["email", "local", "push"]);
 });

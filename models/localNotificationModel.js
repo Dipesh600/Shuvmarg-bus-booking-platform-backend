@@ -58,6 +58,11 @@ const notificationSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  recipientRole: {
+    type: String,
+    enum: ["passenger", "agent", "busOwner", "conductor", "driver", "all"],
+    default: "all",
+  },
 });
 
 module.exports = mongoose.model("Notification", notificationSchema);

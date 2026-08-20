@@ -40,12 +40,12 @@ const fleetDocumentAuditSchema = new mongoose.Schema(
     },
     previousFleetApprovalStatus: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED"],
+      enum: ["DRAFT", "PENDING", "APPROVED", "REJECTED"],
       required: true,
     },
     resultingFleetApprovalStatus: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED"],
+      enum: ["DRAFT", "PENDING", "APPROVED", "REJECTED"],
       required: true,
     },
     action: {

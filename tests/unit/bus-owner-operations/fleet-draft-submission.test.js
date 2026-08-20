@@ -76,7 +76,7 @@ test("5 & 6. Approved owner can submit complete owned DRAFT fleet (DRAFT -> PEND
   const result = await submissionService.submitFleetForVerification({ fleetId: "fleet_101", ownerId: "owner_123" });
   assert.equal(submittedUpdate.approvalStatus, "PENDING");
   assert.equal(submittedUpdate.status, "INACTIVE");
-  assert.equal(submittedUpdate.setupComplete, true);
+  assert.equal(submittedUpdate.setupComplete, false);
   assert.equal(result.approvalStatus, "PENDING");
 });
 

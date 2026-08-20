@@ -46,6 +46,7 @@ test("setup status preserves route, driver, schedule, and return activation", as
     busName: "Bus",
     busNumber: "BA-1",
     approvalStatus: "APPROVED",
+    setupComplete: true,
     brandId: "b1",
     corridorId: { _id: "c1" },
   };

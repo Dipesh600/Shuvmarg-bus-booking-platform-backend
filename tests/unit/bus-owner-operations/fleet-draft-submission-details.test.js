@@ -93,6 +93,28 @@ test("28. Submission appends an approvalAuditHistory lifecycle entry", async () 
   assert.equal(pushedAudit.toStatus, "PENDING");
 });
 
+test("rejected fleet resubmission appends an owner-only resubmission lifecycle entry", async () => {
+  let pushedAudit = null;
+  const mockBusModel = {
+    findOne: () => ({ lean: async () => createMockFleet({ approvalStatus: "REJECTED" }) }),
+    findOneAndUpdate: (_query, update) => {
+      pushedAudit = update.$push.approvalAuditHistory;
+      return { lean: async () => createMockFleet({ approvalStatus: "PENDING" }) };
+    },
+  };
+  const submissionService = createFleetSubmissionService({
+    BusOwner: mockBusOwnerModel("approved", "owner_123"),
+    Bus: mockBusModel,
+    loadSeatLayout: async () => ({ assigned: true, published: true, totalPlaces: 35 }),
+  });
+
+  await submissionService.submitFleetForVerification({ fleetId: "fleet_101", ownerId: "owner_123" });
+  assert.equal(pushedAudit.eventType, "FLEET_RESUBMITTED");
+  assert.equal(pushedAudit.actorType, "BUS_OWNER");
+  assert.equal(pushedAudit.fromStatus, "REJECTED");
+  assert.equal(pushedAudit.toStatus, "PENDING");
+});
+
 test("33. Successful submission increments __v version count", async () => {
   let incUpdate = null;
   const mockBusModel = {

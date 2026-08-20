@@ -21,6 +21,8 @@ async function createPairedDrafts({ corridor, direction, data, adminId }) {
     const companion = await RouteVariant.create({
       code: companionCode, corridorId: corridor._id, direction: companionDirection,
       routeFamilyId, returnVariantId: variant._id,
+      originTerminalStopId: data.destinationTerminalStopId || null,
+      destinationTerminalStopId: data.originTerminalStopId || null,
       definitionSource: "DERIVED_REVERSE", status: "DRAFT",
       createdBy: adminId || null, updatedBy: adminId || null,
     });

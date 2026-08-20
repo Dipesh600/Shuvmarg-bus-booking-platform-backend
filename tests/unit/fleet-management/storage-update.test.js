@@ -117,3 +117,32 @@ test("fleet update preserves policy ordering and persistence options", async () 
   });
   assert.equal(result._id, "f");
 });
+
+test("generic admin lifecycle mutation is rejected before storage or persistence", async () => {
+  let storageCalled = false;
+  let persistenceCalled = false;
+  const service = createFleetUpdateService({
+    Bus: {
+      findByIdAndUpdate() {
+        persistenceCalled = true;
+      },
+    },
+    policy: {
+      rejectLifecycleUpdate: () => {
+        const error = new Error("dedicated endpoint required");
+        error.code = "FLEET_LIFECYCLE_UPDATE_FORBIDDEN";
+        throw error;
+      },
+    },
+    repository: { findDocument: async () => ({ _id: "f", approvalStatus: "PENDING" }) },
+    storage: { replaceFleetImages: async () => { storageCalled = true; } },
+    mapper: { withPresignedUrls: async (fleet) => fleet },
+  });
+
+  await assert.rejects(
+    service.updateFleetDetails("f", { approvalStatus: "APPROVED" }, {}, null),
+    (error) => error.code === "FLEET_LIFECYCLE_UPDATE_FORBIDDEN"
+  );
+  assert.equal(storageCalled, false);
+  assert.equal(persistenceCalled, false);
+});

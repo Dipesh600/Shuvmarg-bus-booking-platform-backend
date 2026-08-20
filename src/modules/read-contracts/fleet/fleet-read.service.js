@@ -98,7 +98,7 @@ function createFleetReadService({
 
   async function getFleetDetailForOwner(req) {
     const authenticatedUserId = authorizeOwner(req);
-    const fleetId = req.params?.id || req.body?.fleetId || req.body?.id || req.query?.fleetId;
+    const fleetId = req.params?.fleetId || req.params?.id || req.body?.fleetId || req.body?.id || req.query?.fleetId;
 
     if (!fleetId || typeof fleetId !== "string" || !mongoose.Types.ObjectId.isValid(fleetId)) {
       throw new ReadContractValidationError("READ_INVALID_ID", "Valid fleet ID is required.");

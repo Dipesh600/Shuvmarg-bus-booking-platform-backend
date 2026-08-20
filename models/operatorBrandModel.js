@@ -126,7 +126,6 @@ operatorBrandSchema.index(
         name: "one_default_brand_per_owner",
     }
 );
-
 // Auto-generate brandCode: OB-XXXNNN
 operatorBrandSchema.pre("save", async function (next) {
     if (this.brandCode) return next();

@@ -15,7 +15,7 @@ const FLEET_ERRORS = Object.freeze({
   }),
   FLEET_ALREADY_EXISTS: Object.freeze({
     statusCode: 409,
-    message: "Fleet record with these details already exists.",
+    message: "A bus with this number already exists.",
     domain: "fleet",
     retryable: false,
   }),
@@ -49,9 +49,15 @@ const FLEET_ERRORS = Object.freeze({
     domain: "fleet",
     retryable: false,
   }),
+  FLEET_LIFECYCLE_UPDATE_FORBIDDEN: Object.freeze({
+    statusCode: 409,
+    message: "Fleet approval decisions must use the dedicated fleet status endpoint.",
+    domain: "fleet",
+    retryable: false,
+  }),
   FLEET_SUBMISSION_LOCKED: Object.freeze({
     statusCode: 409,
-    message: "Fleet cannot be submitted in its current state.",
+    message: "This bus is already in review or approved.",
     domain: "fleet",
     retryable: false,
   }),
