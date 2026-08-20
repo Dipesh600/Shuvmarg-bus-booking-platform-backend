@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test \"tests/**/*.test.js\"",
     "test:seat-layout-v3": "node --test tests/unit/seat-layout-v3-*.test.js",
     "seed:seat-layout-v3": "node scripts/seedPlatformSeatLayouts.js",
     "preflight:admin-bootstrap": "node tools/preflight-admin-bootstrap.js",

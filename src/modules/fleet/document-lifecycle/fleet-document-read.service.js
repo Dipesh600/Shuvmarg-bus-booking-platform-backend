@@ -4,24 +4,6 @@ const requestPolicy = require("./fleet-document-request.policy");
 const errors = require("./fleet-document.errors");
 const dto = require("./fleet-document.dto");
 
-function isAllowlistedLegacyUrl(url) {
-  if (typeof url !== "string" || !url) return false;
-  if (url.includes("..") || url.includes("\\")) return false;
-  const bucketName = process.env.AWS_S3_BUCKET_NAME || "";
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    try {
-      const parsed = new URL(url);
-      if (bucketName && !parsed.hostname.includes(bucketName) && !parsed.pathname.includes(bucketName)) {
-        return false;
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  return true; // S3 path segment string
-}
-
 function createFleetDocumentReadService(deps = {}) {
   const repository = deps.repository;
   const getPresignedUrl = deps.getPresignedUrl;
@@ -75,10 +57,8 @@ function createFleetDocumentReadService(deps = {}) {
       throw errors.notFound(`No document uploaded for slot '${slot}'.`);
     }
 
-    if (typeof targetKey === "string" && (targetKey.startsWith("http://") || targetKey.startsWith("https://"))) {
-      if (!isAllowlistedLegacyUrl(targetKey)) {
-        throw errors.notFound("Legacy document URL is invalid or not allowed.");
-      }
+    if (/^https?:\/\//i.test(targetKey)) {
+      throw errors.legacyReference();
     }
 
     return { fleetId, slot, targetKey };

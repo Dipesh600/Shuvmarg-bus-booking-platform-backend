@@ -115,7 +115,6 @@ function createAdminFleetDocumentController({ uploadService, readService }) {
       }
 
       if (!contentType || !STREAMABLE_TYPES.has(contentType)) {
-        console.error("DEBUG 415:", { rawType, objectKey, contentType });
         const err = new Error("This fleet document type cannot be previewed safely.");
         err.statusCode = 415;
         err.code = "FLEET_DOCUMENT_UNSAFE_MEDIA_TYPE";
