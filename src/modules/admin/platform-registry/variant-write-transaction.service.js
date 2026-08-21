@@ -26,7 +26,12 @@ function transactionsAvailable(mongooseImpl = mongoose) {
  * standalone MongoDB instances cannot run transactions, so callers provide a
  * compensating fallback that keeps a retryable, internally consistent draft.
  */
-async function runVariantWrite({ transactionWork, fallbackWork, mongooseImpl = mongoose }) {
+async function runVariantWrite({
+  transactionWork,
+  fallbackWork,
+  mongooseImpl = mongoose,
+  fallbackOnTransient = true,
+}) {
   if (!transactionsAvailable(mongooseImpl)) return fallbackWork();
   let session;
   try {
@@ -37,7 +42,7 @@ async function runVariantWrite({ transactionWork, fallbackWork, mongooseImpl = m
     });
     return result;
   } catch (error) {
-    if (transactionUnsupported(error) || transientTransactionFailure(error)) {
+    if (transactionUnsupported(error) || (fallbackOnTransient && transientTransactionFailure(error))) {
       return fallbackWork();
     }
     throw error;
