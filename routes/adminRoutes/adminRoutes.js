@@ -226,6 +226,8 @@ router.post("/registry/variants",                          adminMiddleware, plat
 router.get("/registry/corridors/:corridorId/variants",    adminMiddleware, platformRegistry.getVariantsByCorridor);
 router.get("/registry/variants/:id",                     adminMiddleware, platformRegistry.getVariantDetails);
 router.post("/registry/variants/:id/revisions",          adminMiddleware, platformRegistry.createVariantRevision);
+router.post("/registry/variants/:id/repair-pair",        adminMiddleware, platformRegistry.repairVariantPair);
+router.post("/registry/variants/:id/retire-pair",        adminMiddleware, platformRegistry.retireVariantPair);
 router.post("/registry/variants/:id/rollback",           adminMiddleware, platformRegistry.rollbackVariantRevision);
 router.delete("/registry/variants/:id/history",          adminMiddleware, platformRegistry.deleteHistoricalRevision);
 router.patch("/registry/variants/:id",                    adminMiddleware, platformRegistry.updateVariant);
