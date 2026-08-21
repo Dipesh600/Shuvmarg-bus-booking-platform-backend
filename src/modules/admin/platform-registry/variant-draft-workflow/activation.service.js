@@ -83,13 +83,26 @@ async function writeActivationPair(records, adminId, session = null) {
   }
 }
 
+async function loadCurrentActivationSource(variant) {
+  if (!variant.revisionOfVariantId) return null;
+  if (variant.routeFamilyId) {
+    const current = await RouteVariant.findOne({
+      routeFamilyId: variant.routeFamilyId,
+      direction: variant.direction,
+      status: "ACTIVE",
+    });
+    if (current) return current;
+  }
+  return RouteVariant.findById(variant.revisionOfVariantId);
+}
+
 async function activateVariantDraft(variantId, adminId, dependencies = {}) {
   const variant = await loadDraftVariant(variantId);
   const prepared = await prepareActivationPair(variant, adminId);
   const companion = prepared.companion;
   const [source, companionSource] = await Promise.all([
-    variant.revisionOfVariantId ? RouteVariant.findById(variant.revisionOfVariantId) : null,
-    companion.revisionOfVariantId ? RouteVariant.findById(companion.revisionOfVariantId) : null,
+    loadCurrentActivationSource(variant),
+    loadCurrentActivationSource(companion),
   ]);
   const records = [{ variant, source, identity: prepared.selectedIdentity, companionId: companion._id }];
   if (!prepared.recoveringPartialPair) {
