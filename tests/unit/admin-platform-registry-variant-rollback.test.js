@@ -47,12 +47,14 @@ test("Scoped Revision History, Referencing Fleets, Rollback, and Deletion", asyn
     destinationId: pkr._id,
     status: "ACTIVE",
   });
+  const routeFamilyId = new mongoose.Types.ObjectId();
 
   const forwardV1 = await RouteVariant.create({
     corridorId: corridor._id,
     name: "Kathmandu - Pokhara Super Express",
     type: "STANDARD",
     direction: "FORWARD",
+    routeFamilyId,
     originTerminalStopId: ktm._id,
     destinationTerminalStopId: pkr._id,
     distanceKm: 200,
@@ -67,6 +69,7 @@ test("Scoped Revision History, Referencing Fleets, Rollback, and Deletion", asyn
     name: "Pokhara - Kathmandu Super Express",
     type: "STANDARD",
     direction: "RETURN",
+    routeFamilyId,
     originTerminalStopId: pkr._id,
     destinationTerminalStopId: ktm._id,
     distanceKm: 200,

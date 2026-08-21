@@ -38,12 +38,15 @@ async function assertNoLivePathDuplicate(variant) {
   const live = await RouteVariant.find({
     _id: { $nin: excludedIds }, corridorId: variant.corridorId,
     direction: variant.direction, status: "ACTIVE",
-  }).select("_id code name pathFingerprint").lean();
-  const exact = live.find((item) => item.pathFingerprint === identity.fingerprint);
+  }).select("_id code name pathFingerprint routeFamilyId").lean();
+  const competingLive = variant.revisionOfVariantId && variant.routeFamilyId
+    ? live.filter((item) => String(item.routeFamilyId || "") !== String(variant.routeFamilyId))
+    : live;
+  const exact = competingLive.find((item) => item.pathFingerprint === identity.fingerprint);
   if (exact) {
     throw routeVariantError("DUPLICATE_ACTIVE_ROUTE_PATH", "This road path is already live. Open or revise the existing variant instead.", 409, { existingVariantId: String(exact._id), existingVariantCode: exact.code });
   }
-  for (const item of live) {
+  for (const item of competingLive) {
     const other = await sequenceIdentity(item._id);
     if (other.stopIds[0] === identity.stopIds[0] && other.stopIds.at(-1) === identity.stopIds.at(-1) &&
         orderedOverlap(identity.stopIds, other.stopIds) >= 0.8) {

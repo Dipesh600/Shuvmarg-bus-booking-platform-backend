@@ -6,6 +6,7 @@ const RouteVariant = require("../../../../models/routeVariantModel.js");
 const { allocateVariantCode } = require("./variant-code-allocation.service.js");
 const { routeVariantError } = require("./route-variant-errors.js");
 const { getVariantDetails } = require("./variant-detail.service.js");
+const { requireActiveCompanion } = require("./variant-revision-pair.service.js");
 
 async function cloneOne(source, routeFamilyId, adminId) {
   const existing = await RouteVariant.findOne({
@@ -34,38 +35,26 @@ async function cloneOne(source, routeFamilyId, adminId) {
   })));
   return revision;
 }
-
 async function createVariantRevision(id, adminId, { includeCompanion = true } = {}) {
   const source = await RouteVariant.findById(id);
   if (!source) throw routeVariantError("VARIANT_NOT_FOUND", "Route variant not found.", 404);
-  if (!['ACTIVE', 'INACTIVE'].includes(source.status)) {
-    throw routeVariantError("VARIANT_REVISION_REQUIRES_OPERATIONAL_SOURCE", "Resume an existing draft directly; only operational variants need revisions.", 409);
+  if (source.status !== "ACTIVE") {
+    throw routeVariantError(
+      "VARIANT_REVISION_REQUIRES_ACTIVE_SOURCE",
+      source.status === "DRAFT"
+        ? "Resume the existing revision draft directly."
+        : "Only the current active route can be revised. Restore an older version from Revision History instead.",
+      409
+    );
   }
   const routeFamilyId = source.routeFamilyId || new mongoose.Types.ObjectId();
+  const companionSource = includeCompanion ? await requireActiveCompanion(source, routeFamilyId) : null;
   const revision = await cloneOne(source, routeFamilyId, adminId);
-  if (includeCompanion) {
-    let companionSource = source.returnVariantId ? await RouteVariant.findById(source.returnVariantId) : null;
-    if (companionSource && !['ACTIVE', 'INACTIVE'].includes(companionSource.status)) {
-      companionSource = null;
-    }
-    if (!companionSource) {
-      const oppositeDir = source.direction === "FORWARD" ? "RETURN" : "FORWARD";
-      companionSource = await RouteVariant.findOne({
-        corridorId: source.corridorId, direction: oppositeDir,
-        status: { $in: ["ACTIVE", "INACTIVE"] },
-      });
-      if (companionSource) {
-        source.returnVariantId = companionSource._id;
-        companionSource.returnVariantId = source._id;
-        await Promise.all([source.save(), companionSource.save()]);
-      }
-    }
-    if (companionSource && ['ACTIVE', 'INACTIVE'].includes(companionSource.status)) {
-      const companionRevision = await cloneOne(companionSource, routeFamilyId, adminId);
-      revision.returnVariantId = companionRevision._id;
-      companionRevision.returnVariantId = revision._id;
-      await Promise.all([revision.save(), companionRevision.save()]);
-    }
+  if (companionSource) {
+    const companionRevision = await cloneOne(companionSource, routeFamilyId, adminId);
+    revision.returnVariantId = companionRevision._id;
+    companionRevision.returnVariantId = revision._id;
+    await Promise.all([revision.save(), companionRevision.save()]);
   }
   return getVariantDetails(revision._id);
 }
@@ -126,7 +115,6 @@ async function deleteHistoricalRevision(revisionId) {
 
   const Trip = require("../../../../models/tripModel.js");
   const tripCount = await Trip.countDocuments({ variantId: revisionId });
-
   if (tripCount > 0) {
     variant.status = "ARCHIVED";
     await variant.save();
@@ -144,5 +132,4 @@ async function deleteHistoricalRevision(revisionId) {
   };
 }
 
-module.exports = { createVariantRevision, getVariantDetails, rollbackVariantRevision,
-  deleteHistoricalRevision };
+module.exports = { createVariantRevision, getVariantDetails, rollbackVariantRevision, deleteHistoricalRevision };
