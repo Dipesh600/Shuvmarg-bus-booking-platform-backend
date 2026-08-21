@@ -99,3 +99,28 @@ test("an unsupported transaction retries through the non-transactional preservin
   assert.equal(result, "preserved");
   assert.equal(fallbackCalls, 1);
 });
+
+test("a transient transaction abort retries through the idempotent preserving path", async () => {
+  let fallbackCalls = 0;
+  let endCalls = 0;
+  const transientAbort = Object.assign(
+    new Error("Transaction with { txnNumber: 144 } has been aborted."),
+    { code: 251, errorLabels: ["TransientTransactionError"] }
+  );
+
+  const result = await runVariantWrite({
+    mongooseImpl: {
+      connection: { readyState: 1 },
+      startSession: async () => ({
+        withTransaction: async () => { throw transientAbort; },
+        endSession: async () => { endCalls += 1; },
+      }),
+    },
+    transactionWork: async () => assert.fail("the simulated session owns the callback"),
+    fallbackWork: async () => { fallbackCalls += 1; return "recovered"; },
+  });
+
+  assert.equal(result, "recovered");
+  assert.equal(fallbackCalls, 1);
+  assert.equal(endCalls, 1);
+});
