@@ -138,11 +138,13 @@ async function updateVariantDraftDetails(variantId, data, adminId) {
   await RouteVariant.findByIdAndUpdate(variant._id, {
     name, ...(data.type !== undefined && { type: data.type }), updatedBy: adminId || null,
   }, { runValidators: true });
+  if (variant.returnVariantId) {
+    await RouteVariant.findOneAndUpdate(
+      { _id: variant.returnVariantId, status: "DRAFT" },
+      { name, ...(data.type !== undefined && { type: data.type }), updatedBy: adminId || null },
+      { runValidators: true }
+    );
+  }
   return getVariantDraft(variant._id, { includeRouteGeometry: true });
 }
-
-module.exports = {
-  createVariantDraft, previewCorridorRoutePaths,
-  refreshVariantDraftRouteOptions,
-  selectVariantDraftRouteOption, updateVariantDraftDetails,
-};
+module.exports = { createVariantDraft, previewCorridorRoutePaths, refreshVariantDraftRouteOptions, selectVariantDraftRouteOption, updateVariantDraftDetails };
