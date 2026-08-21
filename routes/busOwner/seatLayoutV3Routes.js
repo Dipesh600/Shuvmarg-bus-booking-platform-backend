@@ -22,6 +22,7 @@ function registerBusOwnerSeatLayoutV3Routes(router, controller = busOwnerSeatLay
   router.post("/seat-layout-v3/fleets/:fleetId/assignment", controller.assignInitial);
   router.post("/seat-layout-v3/fleets/:fleetId/initial-custom-layout", ...creationGuards, controller.createInitialCustomLayout);
   router.post("/seat-layout-v3/fleets/:fleetId/change-requests", controller.requestChange);
+  router.patch("/seat-layout-v3/fleets/:fleetId/correction", controller.correctRejectedLayout);
 }
 
 module.exports = { registerBusOwnerSeatLayoutV3Routes };

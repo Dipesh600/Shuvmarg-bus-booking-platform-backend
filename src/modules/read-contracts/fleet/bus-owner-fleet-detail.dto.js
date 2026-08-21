@@ -4,6 +4,7 @@ const { toIsoDate } = require("../common/read-date.mapper");
 const { mapFleetDocumentDescriptors, calculateFleetDocumentSummary } = require("../common/fleet-document-descriptor.mapper");
 const { mapRouteSetup } = require("./fleet-route-setup.dto");
 const { mapFleetSeatLayout } = require("./fleet-seat-layout.dto");
+const { mapFleetReviewRequirements } = require("../common/fleet-review-requirements.mapper");
 
 function mapBusOwnerFleetDetail(fleet, routeSetup, seatLayout = {}) {
   if (!fleet) return null;
@@ -20,7 +21,9 @@ function mapBusOwnerFleetDetail(fleet, routeSetup, seatLayout = {}) {
     vehicleType: fleet.vehicleType || "BUS",
     totalSeats: fleet.totalSeats || 0,
     registrationYear: fleet.registrationYear || null,
-    features: Array.isArray(fleet.features) ? fleet.features : [],
+    features: Array.isArray(fleet.amenityIds)
+      ? fleet.amenityIds.map((item) => ({ id: String(item?._id || item), name: item?.name || "Amenity", icon: item?.icon || null }))
+      : [],
     vehicle: {
       busName: fleet.busName || "N/A",
       busNumber: fleet.busNumber || "N/A",
@@ -28,7 +31,9 @@ function mapBusOwnerFleetDetail(fleet, routeSetup, seatLayout = {}) {
       vehicleType: fleet.vehicleType || "BUS",
       totalSeats: fleet.totalSeats || 0,
       registrationYear: fleet.registrationYear || null,
-      features: Array.isArray(fleet.features) ? fleet.features : [],
+      features: Array.isArray(fleet.amenityIds)
+        ? fleet.amenityIds.map((item) => ({ id: String(item?._id || item), name: item?.name || "Amenity", icon: item?.icon || null }))
+        : [],
     },
     route: mapRouteSetup(routeSetup),
     assignment: {
@@ -45,6 +50,7 @@ function mapBusOwnerFleetDetail(fleet, routeSetup, seatLayout = {}) {
     setupComplete: fleet.setupComplete || false,
     documents: docDescriptors,
     documentSummary: docSummary,
+    reviewRequirements: mapFleetReviewRequirements(fleet),
     seatLayout: mapFleetSeatLayout(seatLayout.assignment, seatLayout.revision),
     review: {
       submittedAt: toIsoDate(fleet.submittedAt),

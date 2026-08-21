@@ -6,6 +6,10 @@ const SeatLayoutRevisionModel = require("../../../models/seatLayoutRevisionModel
 const { ApiError } = require("../../contracts");
 const { FLEET_APPROVAL_STATUS } = require("../../contracts/status/fleet-approval.status");
 const { evaluateFleetSubmissionReadiness } = require("./fleet-readiness.evaluator");
+const {
+  DOCUMENT_REVIEW_KEYS,
+  SECTION_REVIEW_KEYS,
+} = require("../admin/fleet-management/fleet-review-requirements");
 function createFleetSubmissionService(deps = {}) {
   const Bus = deps.Bus || BusModel;
   const BusOwner = deps.BusOwner || BusOwnerModel;
@@ -63,6 +67,20 @@ function createFleetSubmissionService(deps = {}) {
         409
       );
     }
+    if (fleet.approvalStatus === FLEET_APPROVAL_STATUS.REJECTED) {
+      const unresolvedCorrections = [
+        ...DOCUMENT_REVIEW_KEYS.filter((key) => fleet.documentReviews?.[key]?.status === "rejected"),
+        ...SECTION_REVIEW_KEYS.filter((key) => fleet.sectionReviews?.[key]?.status === "rejected"),
+      ];
+      if (unresolvedCorrections.length > 0) {
+        throw new ApiError(
+          "FLEET_CORRECTIONS_INCOMPLETE",
+          "Complete every requested fleet correction before resubmitting.",
+          422,
+          { requirements: unresolvedCorrections }
+        );
+      }
+    }
     const seatLayout = await loadSeatLayout(fleetId);
     const routeSetup = FleetRouteSetup
       ? await FleetRouteSetup.findOne({ fleetId, ownerId })
@@ -85,6 +103,21 @@ function createFleetSubmissionService(deps = {}) {
       );
     }
     const now = new Date();
+    const reviewStateUpdate = {};
+    for (const key of DOCUMENT_REVIEW_KEYS) {
+      if (fleet.documentReviews?.[key]?.status !== "approved") {
+        reviewStateUpdate[`documentReviews.${key}`] = {
+          status: "pending", reason: null, reviewedBy: null, reviewedAt: null,
+        };
+      }
+    }
+    for (const key of SECTION_REVIEW_KEYS) {
+      if (fleet.sectionReviews?.[key]?.status !== "approved") {
+        reviewStateUpdate[`sectionReviews.${key}`] = {
+          status: "pending", reason: null, reviewedBy: null, reviewedAt: null,
+        };
+      }
+    }
     const updated = await Bus.findOneAndUpdate(
       {
         _id: fleetId,
@@ -105,11 +138,7 @@ function createFleetSubmissionService(deps = {}) {
           isApproved: false,
           approvedAt: null,
           approvedBy: null,
-          "documentReviews.fleetImages.status": "pending",
-          "documentReviews.fitnessCert.status": "pending",
-          "documentReviews.insurance.status": "pending",
-          "documentReviews.bluebook.status": "pending",
-          "documentReviews.routePermit.status": "pending",
+          ...reviewStateUpdate,
         },
         $inc: {
           __v: 1,

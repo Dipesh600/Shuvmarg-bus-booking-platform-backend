@@ -62,6 +62,14 @@ function createFleetRepository({ Bus, Trip, Schedule }) {
     return Bus.findById(fleetId).select("approvalStatus").lean();
   }
 
+  async function savePendingReviewItem({ fleetId, path, review }) {
+    return Bus.findOneAndUpdate(
+      { _id: fleetId, approvalStatus: "PENDING" },
+      { $set: { [path]: review }, $inc: { __v: 1 } },
+      { new: true, runValidators: true }
+    ).select("_id approvalStatus").lean();
+  }
+
   async function countDashboard() {
     return Promise.all([
       Bus.countDocuments({
@@ -88,6 +96,7 @@ function createFleetRepository({ Bus, Trip, Schedule }) {
     findForStatusUpdate,
     atomicDecidePendingFleet,
     findApprovalStatusById,
+    savePendingReviewItem,
     countDashboard,
   };
 }

@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createFleetApprovalService } = require("../../../src/modules/admin/fleet-management/fleet-status.service");
+const { approvedFleetReviews } = require("../../helpers/fleet-review-fixtures");
 
 test("fleet-approval-authorization unit tests", async (t) => {
   const validAdminId = "64f000000000000000000099";
@@ -53,7 +54,7 @@ test("fleet-approval-authorization unit tests", async (t) => {
   await t.test("missing actor returns 401 before atomic update", async () => {
     const { service, wasAtomicCalled } = makeService({ _id: validAdminId, role: "ADMIN", isActive: true });
     await assert.rejects(
-      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: null }),
+      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: null }),
       (err) => err.statusCode === 401
     );
     assert.equal(wasAtomicCalled(), false);
@@ -62,7 +63,7 @@ test("fleet-approval-authorization unit tests", async (t) => {
   await t.test("role drift returns 403 ADMIN_ROLE_MISMATCH before atomic update", async () => {
     const { service, wasAtomicCalled } = makeService({ _id: validAdminId, role: "SUB_ADMIN", isActive: true });
     await assert.rejects(
-      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
+      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
       (err) => err.statusCode === 403 && err.code === "ADMIN_ROLE_MISMATCH"
     );
     assert.equal(wasAtomicCalled(), false);
@@ -71,7 +72,7 @@ test("fleet-approval-authorization unit tests", async (t) => {
   await t.test("inactive admin returns 403 before atomic update", async () => {
     const { service, wasAtomicCalled } = makeService({ _id: validAdminId, role: "ADMIN", isActive: false });
     await assert.rejects(
-      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
+      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
       (err) => err.statusCode === 403 && err.code === "ADMIN_INACTIVE"
     );
     assert.equal(wasAtomicCalled(), false);

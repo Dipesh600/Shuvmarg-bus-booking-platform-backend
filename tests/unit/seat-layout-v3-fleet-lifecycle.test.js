@@ -97,6 +97,33 @@ test("layout change creates review request without mutating assignment", async (
   assert.equal(result.revision._id, "rev-2");
 });
 
+test("legacy overall-rejected fleet can preserve or correct its seat layout", async () => {
+  const repo = repository();
+  repo.findFleet = async () => ({
+    _id: "fleet-1",
+    ownerId: "owner-1",
+    approvalStatus: "REJECTED",
+    documentReviews: { insurance: { status: "pending" } },
+  });
+  const result = await createFleetSeatLayoutService(repo).requestChange("fleet-1", "rev-2", owner);
+  assert.equal(result.revision._id, "rev-2");
+});
+
+test("granular correction cannot alter an accepted seat layout", async () => {
+  const repo = repository();
+  repo.findFleet = async () => ({
+    _id: "fleet-1",
+    ownerId: "owner-1",
+    approvalStatus: "REJECTED",
+    documentReviews: { insurance: { status: "rejected" } },
+    sectionReviews: { seatLayout: { status: "approved" } },
+  });
+  await assert.rejects(
+    createFleetSeatLayoutService(repo).requestChange("fleet-1", "rev-2", owner),
+    (error) => error.code === "FLEET_LAYOUT_NOT_REJECTED"
+  );
+});
+
 test("requesting the already active revision is rejected", async () => {
   const repo = repository();
   await assert.rejects(
