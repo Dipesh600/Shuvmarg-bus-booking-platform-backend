@@ -67,6 +67,18 @@ const FLEET_ERRORS = Object.freeze({
     domain: "fleet",
     retryable: false,
   }),
+  FLEET_CORRECTIONS_INCOMPLETE: Object.freeze({
+    statusCode: 422,
+    message: "Complete every requested fleet correction before resubmitting.",
+    domain: "fleet",
+    retryable: false,
+  }),
+  FLEET_SECTION_NOT_REJECTED: Object.freeze({
+    statusCode: 409,
+    message: "This fleet section was accepted and cannot be changed in this correction round.",
+    domain: "fleet",
+    retryable: false,
+  }),
   FLEET_BRAND_REQUIRED: Object.freeze({
     statusCode: 400,
     message: "Operator brand is required.",

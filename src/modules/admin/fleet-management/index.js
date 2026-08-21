@@ -79,6 +79,7 @@ const fleetReadService = createFleetReadService({
 module.exports = createFleetManagementController({
   readService: fleetReadService,
   updateFleetStatus: approvalService.decideFleetApproval,
+  saveFleetReviewItem: approvalService.saveFleetReviewItem,
   getFleetDashboard: createFleetDashboardService({ repository }),
   console,
 });

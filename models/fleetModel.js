@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const fleetApprovalFields = require("./schemas/fleet-approval-fields");
 const fleetDocumentFields = require("./schemas/fleet-document-fields");
+const fleetSectionReviewFields = require("./schemas/fleet-section-review-fields");
 const { FLEET_APPROVAL_STATUS } = require("../src/contracts/status/fleet-approval.status");
 
 const BusSchema = new mongoose.Schema(
@@ -181,6 +182,8 @@ const BusSchema = new mongoose.Schema(
         },
 
         ...fleetDocumentFields,
+
+        ...fleetSectionReviewFields,
 
         ...fleetApprovalFields,
 

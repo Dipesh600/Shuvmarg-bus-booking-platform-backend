@@ -52,6 +52,7 @@ registerBusOwnerApprovedFleetRoutes(router, { fleetManagement });
 // Fleet Document Lifecycle (draft document upload & read-url)
 router.put("/fleets/:fleetId/documents/:slot", busOwnerFleetDocumentController.uploadDocument);
 router.get("/fleets/:fleetId/documents/:slot/read-url", busOwnerFleetDocumentController.getDocumentReadUrl);
+router.get("/fleets/:fleetId/documents/:slot/view", busOwnerFleetDocumentController.viewDocument);
 registerBusOwnerSeatLayoutV3Routes(router);
 
 // Owner-scoped operator brands (draft-safe)
@@ -93,6 +94,7 @@ router.post("/boarding-location-requests", boardingLocationAssignment.requestLoc
 
 // Amenities
 router.post("/createAmenity", amenityManagement.createAmenity);
+router.get("/amenities/available", amenityManagement.getAvailableAmenities);
 router.get("/getMyAmenities", amenityManagement.getMyAmenities);
 router.patch("/updateAmenity", amenityManagement.updateAmenity);
 router.delete("/deleteAmenity", amenityManagement.deleteAmenity);

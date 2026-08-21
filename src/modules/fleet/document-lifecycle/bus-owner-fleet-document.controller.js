@@ -1,6 +1,7 @@
 "use strict";
 
 const { mapErrorToResponse } = require("./fleet-document-error.mapper");
+const { streamFleetDocument } = require("./fleet-document-stream-response");
 
 function createBusOwnerFleetDocumentController({ uploadService, readService }) {
   async function uploadDocument(req, res) {
@@ -37,9 +38,25 @@ function createBusOwnerFleetDocumentController({ uploadService, readService }) {
     }
   }
 
+  async function viewDocument(req, res) {
+    try {
+      const result = await readService.getDocumentObject({
+        fleetId: req.params.fleetId,
+        slot: req.params.slot,
+        imageId: req.query.imageId,
+        imageIndex: req.query.imageIndex,
+        actorContext: { userInfo: req.userInfo },
+      });
+      return streamFleetDocument(result, res);
+    } catch (error) {
+      return mapErrorToResponse(error, res);
+    }
+  }
+
   return {
     uploadDocument,
     getDocumentReadUrl,
+    viewDocument,
   };
 }
 

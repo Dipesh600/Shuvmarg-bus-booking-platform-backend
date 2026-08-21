@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createFleetApprovalService } = require("../../../src/modules/admin/fleet-management/fleet-status.service");
+const { approvedFleetReviews, rejectedFleetReviews } = require("../../helpers/fleet-review-fixtures");
 
 test("fleet-approval-atomicity unit tests", async (t) => {
   const validAdminId = "64f000000000000000000099";
@@ -29,7 +30,7 @@ test("fleet-approval-atomicity unit tests", async (t) => {
 
   await t.test("atomic approval sets APPROVED/ACTIVE, records admin _id & timestamp, clears rejection, and pushes audit", async () => {
     const { service, getUpdate } = makeService();
-    await service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
+    await service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
 
     const update = getUpdate();
     assert.equal(update.$set.approvalStatus, "APPROVED");
@@ -42,6 +43,8 @@ test("fleet-approval-atomicity unit tests", async (t) => {
 
     assert.equal(update.$set.fleetDocuments, undefined, "Unrelated fields must not be included in $set");
     assert.equal(update.$set.documentReviews, undefined);
+    assert.equal(update.$set["documentReviews.insurance"].status, "approved");
+    assert.equal(update.$set["sectionReviews.routeSetup"].status, "approved");
 
     const audit = update.$push.approvalAuditHistory;
     assert.equal(audit.eventType, "FLEET_APPROVED");
@@ -51,7 +54,7 @@ test("fleet-approval-atomicity unit tests", async (t) => {
 
   await t.test("atomic rejection sets REJECTED/INACTIVE, records admin _id, timestamp & reason, clears approval, and pushes audit", async () => {
     const { service, getUpdate } = makeService();
-    await service.decideFleetApproval({ fleetId: validFleetId, status: "REJECTED", rejectionReason: "Invalid fitness certificate", actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
+    await service.decideFleetApproval({ fleetId: validFleetId, status: "REJECTED", rejectionReason: "Invalid fitness certificate", reviews: rejectedFleetReviews("fitnessCert", "Invalid fitness certificate"), actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
 
     const update = getUpdate();
     assert.equal(update.$set.approvalStatus, "REJECTED");
@@ -76,7 +79,7 @@ test("fleet-approval-atomicity unit tests", async (t) => {
     });
 
     await assert.rejects(
-      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
+      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
       (err) => err.statusCode === 404 && err.code === "FLEET_NOT_FOUND"
     );
   });
@@ -90,7 +93,7 @@ test("fleet-approval-atomicity unit tests", async (t) => {
     });
 
     await assert.rejects(
-      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
+      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
       (err) => err.statusCode === 409 && err.code === "FLEET_APPROVAL_CONFLICT" && err.message.includes("APPROVED")
     );
   });
@@ -104,7 +107,7 @@ test("fleet-approval-atomicity unit tests", async (t) => {
     });
 
     await assert.rejects(
-      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
+      async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: { adminId: validAdminId, tokenRole: "ADMIN" } }),
       (err) => err.statusCode === 409 && err.code === "FLEET_APPROVAL_CONFLICT" && err.message.includes("could not be committed")
     );
   });

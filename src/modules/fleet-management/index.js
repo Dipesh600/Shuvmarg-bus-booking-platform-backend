@@ -48,7 +48,7 @@ const updatePolicy = createFleetUpdatePolicy({
   getTripModel: () => require("../../../models/tripModel"),
 });
 const update = createFleetUpdateService({
-  Bus, repository, policy: updatePolicy, storage, mapper,
+  Bus, BusAmenities, repository, policy: updatePolicy, storage, mapper,
 });
 const queries = createFleetQueryService({ repository, mapper });
 const review = createFleetReviewService({ repository, storage, mapper });

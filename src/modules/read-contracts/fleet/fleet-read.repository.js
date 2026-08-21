@@ -61,6 +61,7 @@ function createFleetReadRepository({ FleetModel = Fleet,
         .select("+fleetImages.objectKey +fleetImages.mimeType +fleetDocuments.fitnessCert.objectKey +fleetDocuments.fitnessCert.mimeType +fleetDocuments.insurance.objectKey +fleetDocuments.insurance.mimeType +fleetDocuments.bluebook.objectKey +fleetDocuments.bluebook.mimeType +fleetDocuments.routePermit.objectKey +fleetDocuments.routePermit.mimeType")
         .populate({ path: "ownerId", select: "name email phone", options: { strictPopulate: false } })
         .populate({ path: "brandId", select: "brandName brandCode ownerId logo baseCity status", options: { strictPopulate: false } })
+        .populate({ path: "amenityIds", select: "name description icon type status", options: { strictPopulate: false } })
         .populate({ path: "corridorId",
           select: "code originId destinationId status",
           populate: [
@@ -83,6 +84,8 @@ function createFleetReadRepository({ FleetModel = Fleet,
         .populate({ path: "servedStops.stopId", select: "name city code", options: { strictPopulate: false } })
         .populate({ path: "originStopId", select: "name city", options: { strictPopulate: false } })
         .populate({ path: "destinationStopId", select: "name city", options: { strictPopulate: false } })
+        .populate({ path: "corridorId", select: "code name", options: { strictPopulate: false } })
+        .populate({ path: "variantId", select: "code name type direction distanceKm durationMinutes", options: { strictPopulate: false } })
         .lean();
     } catch (err) { console.warn("Could not load route setup for fleet:", err?.message);
     }
@@ -107,7 +110,9 @@ function createFleetReadRepository({ FleetModel = Fleet,
   async function findOwnerFleetDetailById({ fleetId, userId }) { const ownerIds = await resolveOwnerObjectIds(userId);
     const fleet = await FleetModel.findOne({ _id: fleetId,
       $or: [{ ownerId: { $in: ownerIds } }, { busOwnerId: { $in: ownerIds } }],
-    }).select("+fleetImages.objectKey +fleetImages.mimeType +fleetDocuments.fitnessCert.objectKey +fleetDocuments.fitnessCert.mimeType +fleetDocuments.insurance.objectKey +fleetDocuments.insurance.mimeType +fleetDocuments.bluebook.objectKey +fleetDocuments.bluebook.mimeType +fleetDocuments.routePermit.objectKey +fleetDocuments.routePermit.mimeType").lean();
+    }).select("+fleetImages.objectKey +fleetImages.mimeType +fleetDocuments.fitnessCert.objectKey +fleetDocuments.fitnessCert.mimeType +fleetDocuments.insurance.objectKey +fleetDocuments.insurance.mimeType +fleetDocuments.bluebook.objectKey +fleetDocuments.bluebook.mimeType +fleetDocuments.routePermit.objectKey +fleetDocuments.routePermit.mimeType")
+      .populate({ path: "amenityIds", select: "name description icon type status", options: { strictPopulate: false } })
+      .lean();
     if (!fleet) { throw new ReadContractNotFoundError("FLEET_NOT_FOUND", "Fleet record not found or not owned by user.");
     }
     let routeSetup = null;
@@ -115,6 +120,8 @@ function createFleetReadRepository({ FleetModel = Fleet,
         .populate({ path: "servedStops.stopId", select: "name city code", options: { strictPopulate: false } })
         .populate({ path: "originStopId", select: "name city", options: { strictPopulate: false } })
         .populate({ path: "destinationStopId", select: "name city", options: { strictPopulate: false } })
+        .populate({ path: "corridorId", select: "code name", options: { strictPopulate: false } })
+        .populate({ path: "variantId", select: "code name type direction distanceKm durationMinutes", options: { strictPopulate: false } })
         .lean();
     } catch (err) { console.warn("Could not load route setup for owner fleet detail:", err?.message);
     }

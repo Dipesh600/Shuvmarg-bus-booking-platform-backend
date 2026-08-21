@@ -52,28 +52,27 @@ function validateChangeReason(reason, isRequired) {
 
 function validateSlotMetadata(slot, body) {
   const metadata = {};
-  if (slot === "fitnessCert" && body.validTill) {
-    const d = new Date(body.validTill);
-    if (isNaN(d.getTime())) throw errors.invalidMetadata("fitnessCert.validTill must be a valid date.");
-    metadata.validTill = d;
+  const requireFutureDate = (value, field) => {
+    if (!value) throw errors.invalidMetadata(`${field} is required.`);
+    const date = new Date(value);
+    if (isNaN(date.getTime())) throw errors.invalidMetadata(`${field} must be a valid date.`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date < today) throw errors.invalidMetadata(`${field} cannot be in the past.`);
+    return date;
+  };
+  if (slot === "fitnessCert") {
+    metadata.validTill = requireFutureDate(body.validTill, "fitnessCert.validTill");
   }
   if (slot === "insurance") {
-    if (body.policyNumber) {
-      if (typeof body.policyNumber !== "string" || !body.policyNumber.trim()) {
-        throw errors.invalidMetadata("insurance.policyNumber must be a non-empty string.");
-      }
-      metadata.policyNumber = body.policyNumber.trim();
+    if (typeof body.policyNumber !== "string" || body.policyNumber.trim().length < 3) {
+      throw errors.invalidMetadata("insurance.policyNumber is required and must contain at least 3 characters.");
     }
-    if (body.validTill) {
-      const d = new Date(body.validTill);
-      if (isNaN(d.getTime())) throw errors.invalidMetadata("insurance.validTill must be a valid date.");
-      metadata.validTill = d;
-    }
+    metadata.policyNumber = body.policyNumber.trim();
+    metadata.validTill = requireFutureDate(body.validTill, "insurance.validTill");
   }
-  if (slot === "routePermit" && body.validTill) {
-    const d = new Date(body.validTill);
-    if (isNaN(d.getTime())) throw errors.invalidMetadata("routePermit.validTill must be a valid date.");
-    metadata.validTill = d;
+  if (slot === "routePermit") {
+    metadata.validTill = requireFutureDate(body.validTill, "routePermit.validTill");
   }
   return metadata;
 }

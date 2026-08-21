@@ -1,5 +1,4 @@
 "use strict";
-
 const Fleet = require("../../../models/fleetModel");
 const SeatLayoutTemplate = require("../../../models/seatLayoutTemplateModel");
 const SeatLayoutRevision = require("../../../models/seatLayoutRevisionModel");
@@ -7,19 +6,18 @@ const Assignment = require("../../../models/fleetSeatLayoutAssignmentModel");
 const ChangeRequest = require("../../../models/fleetSeatLayoutChangeRequestModel");
 const SeatLayoutAuditEvent = require("../../../models/seatLayoutAuditEventModel");
 const { SeatLayoutPersistenceError } = require("./seat-layout-persistence.error");
-
-const findFleet = (id) => Fleet.findById(id).select("ownerId approvalStatus").lean();
+const findFleet = (id) => Fleet.findById(id)
+  .select("ownerId approvalStatus documentReviews sectionReviews")
+  .lean();
 const findTemplate = (id) => SeatLayoutTemplate.findById(id).lean();
 const findRevision = (id) => SeatLayoutRevision.findById(id).lean();
 const findAssignment = (fleetId) => Assignment.findOne({ fleetId }).lean();
-
 async function createInitialAssignment({ fleet, template, revision, actor }) {
   return Assignment.create({
     fleetId: fleet._id, templateId: template._id, activeRevisionId: revision._id,
     assignedByType: actor.type, assignedById: actor.id,
   });
 }
-
 async function createInitialCustomLayout({ fleet, sourceTemplate, name, layout, totalPlaces, physicalFingerprint, actor }) {
   const session = await Assignment.startSession();
   let result;
@@ -55,15 +53,37 @@ async function createInitialCustomLayout({ fleet, sourceTemplate, name, layout, 
     return result;
   } finally { await session.endSession(); }
 }
-
 async function createChangeRequest({ fleet, assignment, revision, actor }) {
-  return ChangeRequest.create({
+  const request = await ChangeRequest.create({
     fleetId: fleet._id, assignmentId: assignment._id,
     fromRevisionId: assignment.activeRevisionId, proposedRevisionId: revision._id,
     requestedByType: actor.type, requestedById: actor.id,
   });
+  if (fleet.approvalStatus === "REJECTED") {
+    await Fleet.updateOne({ _id: fleet._id }, { $set: {
+      "sectionReviews.seatLayout": { status: "not_submitted", reason: null, reviewedBy: null, reviewedAt: null },
+    } });
+  }
+  return request;
 }
-
+async function replaceRejectedAssignment({ fleet, assignment, revision, template, actor }) {
+  const updated = await Assignment.findOneAndUpdate(
+    { _id: assignment._id, fleetId: fleet._id, activeRevisionId: assignment.activeRevisionId },
+    { $set: {
+      templateId: template._id,
+      activeRevisionId: revision._id,
+      assignedByType: actor.type,
+      assignedById: actor.id,
+      assignedAt: new Date(),
+    }, $inc: { assignmentVersion: 1 } },
+    { new: true, runValidators: true }
+  );
+  if (!updated) throw new SeatLayoutPersistenceError("FLEET_LAYOUT_ASSIGNMENT_CHANGED", "The fleet layout changed while the correction was being saved.", 409);
+  await Fleet.updateOne({ _id: fleet._id, approvalStatus: "REJECTED" }, { $set: {
+    "sectionReviews.seatLayout": { status: "not_submitted", reason: null, reviewedBy: null, reviewedAt: null },
+  } });
+  return updated;
+}
 async function approveChangeRequest(requestId, actor) {
   const session = await Assignment.startSession();
   let result;
@@ -105,7 +125,6 @@ async function approveChangeRequest(requestId, actor) {
     await session.endSession();
   }
 }
-
 async function rejectChangeRequest(requestId, note, actor) {
   const request = await ChangeRequest.findOneAndUpdate(
     { _id: requestId, status: "PENDING" },
@@ -117,8 +136,7 @@ async function rejectChangeRequest(requestId, note, actor) {
   }
   return request;
 }
-
 module.exports = {
   findFleet, findTemplate, findRevision, findAssignment,
-  createInitialAssignment, createInitialCustomLayout, createChangeRequest, approveChangeRequest, rejectChangeRequest,
+  createInitialAssignment, createInitialCustomLayout, createChangeRequest, replaceRejectedAssignment, approveChangeRequest, rejectChangeRequest,
 };
