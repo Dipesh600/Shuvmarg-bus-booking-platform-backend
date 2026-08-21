@@ -6,10 +6,8 @@ const SeatLayoutRevisionModel = require("../../../models/seatLayoutRevisionModel
 const { ApiError } = require("../../contracts");
 const { FLEET_APPROVAL_STATUS } = require("../../contracts/status/fleet-approval.status");
 const { evaluateFleetSubmissionReadiness } = require("./fleet-readiness.evaluator");
-const {
-  DOCUMENT_REVIEW_KEYS,
-  SECTION_REVIEW_KEYS,
-} = require("../admin/fleet-management/fleet-review-requirements");
+const { unresolvedCorrections, buildPendingReviewState } = require("./fleet-submission-review-state");
+const { createSeatLayoutLoader } = require("./fleet-submission-seat-layout.loader");
 function createFleetSubmissionService(deps = {}) {
   const Bus = deps.Bus || BusModel;
   const BusOwner = deps.BusOwner || BusOwnerModel;
@@ -17,21 +15,8 @@ function createFleetSubmissionService(deps = {}) {
   const SeatLayoutRevision = deps.SeatLayoutRevision || SeatLayoutRevisionModel;
   const FleetRouteSetup = deps.FleetRouteSetup || null;
   const readinessEvaluator = deps.readinessEvaluator || evaluateFleetSubmissionReadiness;
-  const loadSeatLayout = deps.loadSeatLayout || (async (fleetId) => {
-    const assignment = await FleetSeatLayoutAssignment.findOne({ fleetId })
-      .select("activeRevisionId")
-      .lean();
-    const revision = assignment
-      ? await SeatLayoutRevision.findById(assignment.activeRevisionId)
-        .select("status totalPlaces")
-        .lean()
-      : null;
-    return {
-      assigned: Boolean(assignment),
-      published: revision?.status === "PUBLISHED",
-      totalPlaces: revision?.totalPlaces,
-    };
-  });
+  const loadSeatLayout = deps.loadSeatLayout
+    || createSeatLayoutLoader(FleetSeatLayoutAssignment, SeatLayoutRevision);
   async function submitFleetForVerification({ fleetId, ownerId }) {
     if (!fleetId) {
       throw new ApiError("FLEET_INVALID_ID", "Fleet ID is required.");
@@ -68,16 +53,13 @@ function createFleetSubmissionService(deps = {}) {
       );
     }
     if (fleet.approvalStatus === FLEET_APPROVAL_STATUS.REJECTED) {
-      const unresolvedCorrections = [
-        ...DOCUMENT_REVIEW_KEYS.filter((key) => fleet.documentReviews?.[key]?.status === "rejected"),
-        ...SECTION_REVIEW_KEYS.filter((key) => fleet.sectionReviews?.[key]?.status === "rejected"),
-      ];
-      if (unresolvedCorrections.length > 0) {
+      const unresolved = unresolvedCorrections(fleet);
+      if (unresolved.length > 0) {
         throw new ApiError(
           "FLEET_CORRECTIONS_INCOMPLETE",
           "Complete every requested fleet correction before resubmitting.",
           422,
-          { requirements: unresolvedCorrections }
+          { requirements: unresolved }
         );
       }
     }
@@ -103,21 +85,7 @@ function createFleetSubmissionService(deps = {}) {
       );
     }
     const now = new Date();
-    const reviewStateUpdate = {};
-    for (const key of DOCUMENT_REVIEW_KEYS) {
-      if (fleet.documentReviews?.[key]?.status !== "approved") {
-        reviewStateUpdate[`documentReviews.${key}`] = {
-          status: "pending", reason: null, reviewedBy: null, reviewedAt: null,
-        };
-      }
-    }
-    for (const key of SECTION_REVIEW_KEYS) {
-      if (fleet.sectionReviews?.[key]?.status !== "approved") {
-        reviewStateUpdate[`sectionReviews.${key}`] = {
-          status: "pending", reason: null, reviewedBy: null, reviewedAt: null,
-        };
-      }
-    }
+    const reviewStateUpdate = buildPendingReviewState(fleet);
     const updated = await Bus.findOneAndUpdate(
       {
         _id: fleetId,

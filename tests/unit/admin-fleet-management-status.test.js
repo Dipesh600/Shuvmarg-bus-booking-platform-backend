@@ -1,15 +1,12 @@
 "use strict";
-
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   createFleetApprovalService,
 } = require("../../src/modules/admin/fleet-management/fleet-status.service");
 const { approvedFleetReviews, rejectedFleetReviews } = require("../helpers/fleet-review-fixtures");
-
 const validAdminId = "64f000000000000000000099";
 const validFleetId = "64f000000000000000000002";
-
 function makeService(overrides = {}) {
   const bus = {
     _id: validFleetId,
@@ -35,7 +32,6 @@ function makeService(overrides = {}) {
     service: createFleetApprovalService(deps),
   };
 }
-
 test("invalid status stops before fleet lookup", async () => {
   let queried = false;
   const { service } = makeService({
@@ -54,7 +50,6 @@ test("invalid status stops before fleet lookup", async () => {
   );
   assert.equal(queried, false);
 });
-
 test("missing fleet throws exact 404 FLEET_NOT_FOUND", async () => {
   const { service } = makeService({
     repository: {
@@ -67,7 +62,6 @@ test("missing fleet throws exact 404 FLEET_NOT_FOUND", async () => {
     (err) => err.statusCode === 404 && err.code === "FLEET_NOT_FOUND"
   );
 });
-
 test("approval saves before notification and preserves response DTO", async () => {
   const order = [];
   const { bus, service } = makeService({
@@ -93,7 +87,6 @@ test("approval saves before notification and preserves response DTO", async () =
   assert.equal(result.data.approvalStatus, "APPROVED");
   assert.equal(result.data.status, "ACTIVE");
 });
-
 test("notification failure is non-fatal post-save", async () => {
   const error = new Error("email failed");
   const { service, bus } = makeService({
@@ -107,7 +100,6 @@ test("notification failure is non-fatal post-save", async () => {
   assert.equal(result.success, true);
   assert.equal(result.data.approvalStatus, "REJECTED");
 });
-
 test("approval is blocked when the fleet route setup is missing", async () => {
   const FleetRouteSetup = {
     findOne: () => ({ select: () => ({ lean: async () => null }) }),
@@ -123,7 +115,6 @@ test("approval is blocked when the fleet route setup is missing", async () => {
     (error) => error.code === "FLEET_ROUTE_REVIEW_INCOMPLETE" && error.statusCode === 409
   );
 });
-
 test("an admin can persist and overwrite a pending item review", async () => {
   const saved = [];
   const { service } = makeService({
@@ -134,7 +125,6 @@ test("an admin can persist and overwrite a pending item review", async () => {
       },
     },
   });
-
   await service.saveFleetReviewItem({
     fleetId: validFleetId,
     key: "routeSetup",
@@ -148,7 +138,6 @@ test("an admin can persist and overwrite a pending item review", async () => {
     status: "APPROVED",
     actor: { adminId: validAdminId, tokenRole: "ADMIN" },
   });
-
   assert.equal(saved[0].path, "sectionReviews.routeSetup");
   assert.equal(saved[0].review.status, "rejected");
   assert.equal(saved[0].review.reason, "Add the missing destination stop.");

@@ -1,14 +1,11 @@
 "use strict";
-
 const policy = require("./seat-layout-persistence.policy");
 const { SeatLayoutPersistenceError } = require("./seat-layout-persistence.error");
 const { validateSeatLayoutV3, seatLayoutV3Fingerprint } = require("../../domain/seat-layout-v3");
 const { isLegacyOverallRejection } = require("../fleet-management/fleet-review-state");
-
 function sameId(first, second) {
   return String(first) === String(second);
 }
-
 function createFleetSeatLayoutService(repository) {
   async function loadPublishedRevision(revisionId) {
     const revision = policy.requireRecord(
@@ -21,7 +18,6 @@ function createFleetSeatLayoutService(repository) {
     }
     return revision;
   }
-
   async function assertFleetAccess(fleetId, actor) {
     policy.assertActor(actor);
     const fleet = policy.requireRecord(
@@ -32,7 +28,6 @@ function createFleetSeatLayoutService(repository) {
     }
     return fleet;
   }
-
   async function assertTemplateAccess(fleet, revision) {
     const template = policy.requireRecord(
       await repository.findTemplate(revision.templateId),
@@ -54,14 +49,12 @@ function createFleetSeatLayoutService(repository) {
     }
     return template;
   }
-
   async function assignInitial(fleetId, revisionId, actor) {
     const fleet = await assertFleetAccess(fleetId, actor);
     const revision = await loadPublishedRevision(revisionId);
     const template = await assertTemplateAccess(fleet, revision);
     return repository.createInitialAssignment({ fleet, template, revision, actor });
   }
-
   async function createInitialCustomLayout(fleetId, input, actor) {
     const fleet = await assertFleetAccess(fleetId, actor);
     if (!["DRAFT", "REJECTED"].includes(fleet.approvalStatus)) {
@@ -87,7 +80,6 @@ function createFleetSeatLayoutService(repository) {
       physicalFingerprint: seatLayoutV3Fingerprint(validated.layout), actor,
     });
   }
-
   async function requestChange(fleetId, proposedRevisionId, actor) {
     const fleet = await assertFleetAccess(fleetId, actor);
     if (
@@ -115,7 +107,6 @@ function createFleetSeatLayoutService(repository) {
     }
     return repository.createChangeRequest({ fleet, assignment, revision, actor });
   }
-
   async function correctRejectedLayout(fleetId, proposedRevisionId, actor) {
     const fleet = await assertFleetAccess(fleetId, actor);
     if (
@@ -132,7 +123,6 @@ function createFleetSeatLayoutService(repository) {
     }
     return repository.replaceRejectedAssignment({ fleet, assignment, revision, template, actor });
   }
-
   async function approveChange(requestId, actor) {
     policy.assertActor(actor);
     if (actor.type !== "SUPER_ADMIN") {
@@ -142,7 +132,6 @@ function createFleetSeatLayoutService(repository) {
     }
     return repository.approveChangeRequest(requestId, actor);
   }
-
   async function rejectChange(requestId, note, actor) {
     policy.assertActor(actor);
     if (actor.type !== "SUPER_ADMIN") {
@@ -152,8 +141,6 @@ function createFleetSeatLayoutService(repository) {
     }
     return repository.rejectChangeRequest(requestId, note, actor);
   }
-
   return { assignInitial, createInitialCustomLayout, requestChange, correctRejectedLayout, approveChange, rejectChange };
 }
-
 module.exports = { createFleetSeatLayoutService };
