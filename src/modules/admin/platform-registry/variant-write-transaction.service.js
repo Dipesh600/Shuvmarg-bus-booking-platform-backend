@@ -7,6 +7,15 @@ function transactionUnsupported(error) {
     .test(String(error?.message || ""));
 }
 
+function transientTransactionFailure(error) {
+  if (typeof error?.hasErrorLabel === "function" && error.hasErrorLabel("TransientTransactionError")) {
+    return true;
+  }
+  const labels = error?.errorLabels || error?.errorResponse?.errorLabels;
+  return error?.code === 251 ||
+    (Array.isArray(labels) && labels.includes("TransientTransactionError"));
+}
+
 function transactionsAvailable(mongooseImpl = mongoose) {
   return typeof mongooseImpl?.startSession === "function" &&
     mongooseImpl.connection?.readyState === 1;
@@ -28,11 +37,18 @@ async function runVariantWrite({ transactionWork, fallbackWork, mongooseImpl = m
     });
     return result;
   } catch (error) {
-    if (transactionUnsupported(error)) return fallbackWork();
+    if (transactionUnsupported(error) || transientTransactionFailure(error)) {
+      return fallbackWork();
+    }
     throw error;
   } finally {
     if (session) await session.endSession();
   }
 }
 
-module.exports = { runVariantWrite, transactionUnsupported, transactionsAvailable };
+module.exports = {
+  runVariantWrite,
+  transactionUnsupported,
+  transactionsAvailable,
+  transientTransactionFailure,
+};
