@@ -90,7 +90,7 @@ async function commitVariantDraft(req, res) { try { const data = await workflow.
   }
 }
 async function activateVariantDraft(req, res) { try { const data = await workflow.activateVariantDraft(req.params.variantId, actorId(req));
-    return res.status(200).json({ success: true, message: "Route variant activated.", data });
+    return res.status(200).json({ success: true, message: "Forward and return route variants activated together.", data });
   } catch (error) { return sendError(res, error);
   }
 }

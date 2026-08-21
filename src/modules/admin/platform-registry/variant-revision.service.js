@@ -45,6 +45,9 @@ async function createVariantRevision(id, adminId, { includeCompanion = true } = 
   const revision = await cloneOne(source, routeFamilyId, adminId);
   if (includeCompanion) {
     let companionSource = source.returnVariantId ? await RouteVariant.findById(source.returnVariantId) : null;
+    if (companionSource && !['ACTIVE', 'INACTIVE'].includes(companionSource.status)) {
+      companionSource = null;
+    }
     if (!companionSource) {
       const oppositeDir = source.direction === "FORWARD" ? "RETURN" : "FORWARD";
       companionSource = await RouteVariant.findOne({
@@ -141,9 +144,5 @@ async function deleteHistoricalRevision(revisionId) {
   };
 }
 
-module.exports = {
-  createVariantRevision,
-  getVariantDetails,
-  rollbackVariantRevision,
-  deleteHistoricalRevision,
-};
+module.exports = { createVariantRevision, getVariantDetails, rollbackVariantRevision,
+  deleteHistoricalRevision };
