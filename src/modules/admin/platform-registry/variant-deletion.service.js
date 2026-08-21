@@ -20,6 +20,7 @@ async function deleteVariant(id) {
     companion = await RouteVariant.findOne({
       corridorId: variant.corridorId,
       direction: oppositeDir,
+      ...(variant.routeFamilyId && { routeFamilyId: variant.routeFamilyId }),
       status: "DRAFT",
     });
   }

@@ -124,3 +124,27 @@ test("a transient transaction abort retries through the idempotent preserving pa
   assert.equal(fallbackCalls, 1);
   assert.equal(endCalls, 1);
 });
+
+test("a fail-closed write does not retry outside a transiently failed transaction", async () => {
+  let fallbackCalls = 0;
+  let endCalls = 0;
+  const transientAbort = Object.assign(new Error("transaction aborted"), {
+    code: 251,
+    errorLabels: ["TransientTransactionError"],
+  });
+
+  await assert.rejects(() => runVariantWrite({
+    mongooseImpl: {
+      connection: { readyState: 1 },
+      startSession: async () => ({
+        withTransaction: async () => { throw transientAbort; },
+        endSession: async () => { endCalls += 1; },
+      }),
+    },
+    transactionWork: async () => assert.fail("the simulated session owns the callback"),
+    fallbackWork: async () => { fallbackCalls += 1; },
+    fallbackOnTransient: false,
+  }), /transaction aborted/);
+  assert.equal(fallbackCalls, 0);
+  assert.equal(endCalls, 1);
+});

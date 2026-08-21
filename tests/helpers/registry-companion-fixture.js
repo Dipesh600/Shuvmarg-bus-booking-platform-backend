@@ -1,5 +1,6 @@
 "use strict";
 
+const mongoose = require("mongoose");
 const RouteCorridor = require("../../models/routeCorridorModel.js");
 const RouteVariant = require("../../models/routeVariantModel.js");
 const RouteStop = require("../../models/routeStopModel.js");
@@ -20,7 +21,14 @@ async function createCompanionFixture(suffix = "") {
     stopData(`Pokhara ${suffix}`, codes.PKR, "CITY"),
   ]);
   const corridor = await RouteCorridor.create({ code: `CR-${codes.KTM}-${codes.PKR}`, originId: ktm._id, destinationId: pkr._id, status: "ACTIVE" });
-  const common = { corridorId: corridor._id, type: "STANDARD", distanceKm: 200, durationMinutes: 360, status: "ACTIVE" };
+  const common = {
+    corridorId: corridor._id,
+    routeFamilyId: new mongoose.Types.ObjectId(),
+    type: "STANDARD",
+    distanceKm: 200,
+    durationMinutes: 360,
+    status: "ACTIVE",
+  };
   const forward = await RouteVariant.create({ ...common, name: `Kathmandu Pokhara ${suffix}`, direction: "FORWARD", originTerminalStopId: ktm._id, destinationTerminalStopId: pkr._id, code: `${codes.KTM}-${codes.PKR}-01` });
   const returning = await RouteVariant.create({ ...common, name: `Pokhara Kathmandu ${suffix}`, direction: "RETURN", originTerminalStopId: pkr._id, destinationTerminalStopId: ktm._id, code: `${codes.PKR}-${codes.KTM}-01`, returnVariantId: forward._id });
   forward.returnVariantId = returning._id;
