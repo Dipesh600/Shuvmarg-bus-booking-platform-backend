@@ -103,6 +103,7 @@ router.post(
   adminPushnotification.sendSingleUserToPushnotification
 );
 router.patch("/fleet/update-status",    adminMiddleware, busOwnerFleetController.updateFleetStatus);
+router.patch("/fleet/:fleetId/reviews/:key", adminMiddleware, busOwnerFleetController.saveFleetReviewItem);
 router.get('/fleet/fleetDashboard',     adminMiddleware, busOwnerFleetController.getFleetDashboard);
 router.get("/fleet/:id/workstation",                      adminMiddleware, fleetWorkstation.getFleetWorkstation);
 router.get("/fleet/:fleetId/trips/:tripId/manifest",      adminMiddleware, fleetWorkstation.getTripManifest);

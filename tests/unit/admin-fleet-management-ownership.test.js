@@ -32,12 +32,13 @@ test("fleet-management replaces and deletes the legacy controller", () => {
   assert.doesNotMatch(baseline, /adminBusOwnerFleetController/);
 });
 
-test("fleet-management exposes exactly the five retained handlers", () => {
+test("fleet-management exposes the retained handlers and item review action", () => {
   const api = require("../../src/modules/admin/fleet-management");
   assert.deepEqual(Object.keys(api), [
     "getAllFleet",
     "getFleetById",
     "updateFleetStatus",
+    "saveFleetReviewItem",
     "getFleetDashboard",
     "getFleetSetupStatus",
   ]);

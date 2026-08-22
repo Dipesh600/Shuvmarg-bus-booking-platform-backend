@@ -4,6 +4,7 @@ const { toIsoDate } = require("../common/read-date.mapper");
 const { mapFleetDocumentDescriptors, calculateFleetDocumentSummary } = require("../common/fleet-document-descriptor.mapper");
 const { mapRouteSetup } = require("./fleet-route-setup.dto");
 const { mapFleetSeatLayout } = require("./fleet-seat-layout.dto");
+const { mapFleetReviewRequirements } = require("../common/fleet-review-requirements.mapper");
 
 function mapAdminReviewer(reviewer) {
   if (!reviewer) return null;
@@ -42,7 +43,9 @@ function mapAdminFleetDetail(fleet, routeSetup, seatLayout = {}) {
       totalSeats: fleet.totalSeats || 0,
       registrationYear: fleet.registrationYear || null,
       seatConfig: fleet.seatConfig || null,
-      features: Array.isArray(fleet.features) ? fleet.features : [],
+      features: Array.isArray(fleet.amenityIds)
+        ? fleet.amenityIds.map((item) => ({ id: String(item?._id || item), name: item?.name || "Amenity", icon: item?.icon || null }))
+        : [],
     },
     assignment: {
       route: fleet.route ? `${fleet.route.from} - ${fleet.route.to}` : "Unassigned",
@@ -79,6 +82,7 @@ function mapAdminFleetDetail(fleet, routeSetup, seatLayout = {}) {
     route: mapRouteSetup(routeSetup),
     documents: docDescriptors,
     documentSummary: docSummary,
+    reviewRequirements: mapFleetReviewRequirements(fleet),
     seatLayout: mapFleetSeatLayout(seatLayout.assignment, seatLayout.revision),
     review: {
       approvedBy: mapAdminReviewer(fleet.approvedBy),

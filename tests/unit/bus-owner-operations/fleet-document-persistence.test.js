@@ -41,7 +41,7 @@ test("fleet-document-persistence unit tests", async (t) => {
       async () => service.uploadDocument({
         fleetId,
         slot: "fitnessCert",
-        body: {},
+        body: { validTill: "2099-12-31" },
         files: { fitnessCert: file },
         actorContext: { userInfo: { id: userId, role: "busOwner" } },
       }),
@@ -84,7 +84,7 @@ test("fleet-document-persistence unit tests", async (t) => {
       async () => service.uploadDocument({
         fleetId,
         slot: "fitnessCert",
-        body: {},
+        body: { validTill: "2099-12-31" },
         files: { fitnessCert: file },
         actorContext: { userInfo: { id: userId, role: "busOwner" } },
       }),

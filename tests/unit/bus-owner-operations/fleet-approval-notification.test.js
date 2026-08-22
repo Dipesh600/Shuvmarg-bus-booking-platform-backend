@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createFleetApprovalService } = require("../../../src/modules/admin/fleet-management/fleet-status.service");
+const { approvedFleetReviews } = require("../../helpers/fleet-review-fixtures");
 
 test("fleet-approval-notification unit tests", async (t) => {
   const validAdminId = "64f000000000000000000099";
@@ -37,7 +38,7 @@ test("fleet-approval-notification unit tests", async (t) => {
       clock: () => new Date("2026-08-05T12:00:00Z"),
     });
 
-    const result = await service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
+    const result = await service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
     assert.equal(result.success, true);
     assert.equal(notifiedState, "APPROVED");
     assert.equal(notifiedFleet.ownerId.email, "ram@example.com");
@@ -58,7 +59,7 @@ test("fleet-approval-notification unit tests", async (t) => {
       clock: () => new Date("2026-08-05T12:00:00Z"),
     });
 
-    const result = await service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
+    const result = await service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
     assert.equal(result.success, true);
     assert.equal(warnLogged, true);
   });
@@ -73,7 +74,7 @@ test("fleet-approval-notification unit tests", async (t) => {
       notify: async () => { notificationCalled = true; },
     });
 
-    await assert.rejects(async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: null }));
+    await assert.rejects(async () => service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: null }));
     assert.equal(notificationCalled, false);
   });
 });

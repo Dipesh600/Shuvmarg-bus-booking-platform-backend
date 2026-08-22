@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createFleetApprovalService } = require("../../../src/modules/admin/fleet-management/fleet-status.service");
 const { createFleetManagementController } = require("../../../src/modules/admin/fleet-management/fleet-management.controller");
+const { approvedFleetReviews } = require("../../helpers/fleet-review-fixtures");
 
 test("fleet-approval-response unit tests", async (t) => {
   const validAdminId = "64f000000000000000000099";
@@ -31,7 +32,7 @@ test("fleet-approval-response unit tests", async (t) => {
       clock: () => fixedDate,
     });
 
-    const result = await service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
+    const result = await service.decideFleetApproval({ fleetId: validFleetId, status: "APPROVED", reviews: approvedFleetReviews(), actor: { adminId: validAdminId, tokenRole: "ADMIN" } });
 
     assert.equal(result.success, true);
     assert.deepEqual(result.data, {

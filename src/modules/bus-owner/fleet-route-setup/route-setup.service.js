@@ -5,24 +5,33 @@ const Variant = require("../../../../models/routeVariantModel.js");
 const RouteStop = require("../../../../models/routeStopModel.js");
 const BoardingLocation = require("../../../../models/boardingLocationModel.js");
 const FleetRouteSetup = require("../../../../models/fleetRouteSetupModel.js");
-const Stop = require("../../../../models/stopModel.js");
 const { fleetRouteError } = require("./fleet-route-errors.js");
+const { validateUnresolvedPlaces } = require("./route-unresolved-places.validation.js");
+const { isLegacyOverallRejection } = require("../../fleet-management/fleet-review-state.js");
 const {
   validateServedStopInput,
   validateEndpoints,
-  validateCustomBoardingPoints,
   sanitizeText,
   validateCoordinates,
 } = require("./route-setup.validation.js");
 async function validateFleet(ownerId, fleetId, brandId) {
   if (!mongoose.isValidObjectId(fleetId)) throw fleetRouteError("INVALID_FLEET", "Select a valid fleet.");
-  const fleet = await Bus.findOne({ _id: fleetId, ownerId }).select("brandId approvalStatus").lean();
+  const fleet = await Bus.findOne({ _id: fleetId, ownerId })
+    .select("brandId approvalStatus documentReviews sectionReviews")
+    .lean();
   if (!fleet) throw fleetRouteError("FLEET_NOT_FOUND", "Fleet not found.", 404);
   if (String(fleet.brandId) !== String(brandId)) {
     throw fleetRouteError("FLEET_ROUTE_BRAND_MISMATCH", "This route does not belong to the fleet brand.", 403);
   }
-  if (["APPROVED", "REJECTED"].includes(fleet.approvalStatus)) {
+  if (fleet.approvalStatus === "APPROVED") {
     throw fleetRouteError("FLEET_ROUTE_NOT_EDITABLE", "Create a revision to change a reviewed fleet route.", 409);
+  }
+  if (
+    fleet.approvalStatus === "REJECTED"
+    && !isLegacyOverallRejection(fleet)
+    && fleet.sectionReviews?.routeSetup?.status !== "rejected"
+  ) {
+    throw fleetRouteError("FLEET_ROUTE_NOT_REJECTED", "The route setup was accepted and cannot be changed in this correction round.", 409);
   }
   return fleet;
 }
@@ -64,45 +73,8 @@ async function validateResolvedRoute(data) {
   }
   return { returnVariantId, allowedStopIds: new Set(allowed.keys()) };
 }
-async function validateUnresolvedPlaces(data, allowedStopIds) {
-  const places = Array.isArray(data.unresolvedPlaces) ? data.unresolvedPlaces : [];
-  const keys = new Set();
-  const existingIds = new Set();
-  const fallbackAnchors = new Set([
-    String(data.originStopId || ""), String(data.destinationStopId || ""),
-  ]);
-  for (const place of places) {
-    if (!place.clientKey || keys.has(place.clientKey) || !place.name?.trim()) {
-      throw fleetRouteError("INVALID_ADDED_ROUTE_PLACE", "Added route places must be unique and named.");
-    }
-    keys.add(place.clientKey);
-    if (place.insertAfterStopId) {
-      const anchorAllowed = allowedStopIds
-        ? allowedStopIds.has(String(place.insertAfterStopId))
-        : fallbackAnchors.has(String(place.insertAfterStopId));
-      if (!anchorAllowed && allowedStopIds) {
-        throw fleetRouteError("INVALID_ADDED_ROUTE_PLACE_ORDER", "Place added stops on the selected journey.");
-      }
-    }
-    if (place.existingStopId) {
-      if (existingIds.has(String(place.existingStopId))) {
-        throw fleetRouteError("DUPLICATE_ADDED_ROUTE_PLACE", "This route place was already added.");
-      }
-      existingIds.add(String(place.existingStopId));
-      const stop = await Stop.findOne({
-        _id: place.existingStopId, status: "ACTIVE", verificationStatus: "VERIFIED", isRouteStop: true,
-      }).select("_id").lean();
-      if (!stop) throw fleetRouteError("ADDED_ROUTE_PLACE_UNAVAILABLE", "An added route place is unavailable.", 409);
-    } else if (place.coordinates?.lat == null || place.coordinates?.lng == null) {
-      throw fleetRouteError("ADDED_ROUTE_PLACE_POSITION_REQUIRED", "Place added route locations on the map.");
-    }
-    if (place.customBoardingPoints) {
-      validateCustomBoardingPoints(place.customBoardingPoints);
-    }
-  }
-}
 async function saveRouteSetup(ownerId, fleetId, data) {
-  await validateFleet(ownerId, fleetId, data.brandId);
+  const fleet = await validateFleet(ownerId, fleetId, data.brandId);
   validateEndpoints(data);
   const isCanonicalOrigin = mongoose.isValidObjectId(data.originStopId);
   const isCanonicalDestination = mongoose.isValidObjectId(data.destinationStopId);
@@ -137,11 +109,17 @@ async function saveRouteSetup(ownerId, fleetId, data) {
     ...cleanData, ownerId, fleetId, returnVariantId,
     status: ready ? "READY" : "DRAFT",
   };
-  return FleetRouteSetup.findOneAndUpdate(
+  const saved = await FleetRouteSetup.findOneAndUpdate(
     { fleetId, ownerId },
     { $set: update, $inc: { revision: 1 } },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   ).lean();
+  if (fleet.approvalStatus === "REJECTED") {
+    await Bus.updateOne({ _id: fleetId, ownerId }, { $set: {
+      "sectionReviews.routeSetup": { status: "not_submitted", reason: null, reviewedBy: null, reviewedAt: null },
+    } });
+  }
+  return saved;
 }
 function getRouteSetup(ownerId, fleetId) {
   return FleetRouteSetup.findOne({ fleetId, ownerId }).lean();
