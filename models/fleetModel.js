@@ -190,6 +190,21 @@ const BusSchema = new mongoose.Schema(
         createdBy: {
             type: String,
             default: "BUS_OWNER"
+        },
+        adminCreationNotification: {
+            status: {
+                type: String,
+                enum: ["NOT_ATTEMPTED", "PROCESSING", "DELIVERED", "FAILED"],
+                default: "NOT_ATTEMPTED"
+            },
+            attempts: { type: Number, default: 0 },
+            lastAttemptAt: { type: Date, default: null },
+            deliveredAt: { type: Date, default: null },
+            initiatedBy: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "SuperAdmin",
+                default: null
+            }
         }
     },
     {

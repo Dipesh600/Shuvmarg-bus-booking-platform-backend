@@ -45,6 +45,7 @@ router.post("/refresh",            sessionController.refreshAccessToken);       
 router.post("/logout",             sessionController.logout);                            // ← No auth needed (uses refresh token)
 router.post(
   "/changeForcePassword",
+  passwordChangeLimiter,
   forcePasswordModule.changeForcePassword
 );
 

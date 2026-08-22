@@ -20,6 +20,8 @@ const createBusOwnerFull = async (req, res, deps = {}) => {
       message: "Bus Owner registered successfully with PENDING KYC status.",
       busOwnerId: result.busOwnerId,
       userId: result.userId,
+      credentialMode: result.credentialMode,
+      notification: result.notification,
     });
   } catch (error) {
     const { statusCode, payload } = mapAdminKycError(error);

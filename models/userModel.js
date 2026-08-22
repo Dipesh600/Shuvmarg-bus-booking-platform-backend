@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const accountRolePolicy = require('../src/shared/auth/account-role.policy');
-const userSchema = new mongoose.Schema(
-  {
+const temporaryCredentialFields = require('./schemaFields/userTemporaryCredentialFields');
+const userSchema = new mongoose.Schema({
     name: {
       type: String,
       // required: [true, "Name is required"],
@@ -175,6 +175,7 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,   // true = user must change temp password on first login
     },
+    ...temporaryCredentialFields,
   },
   { timestamps: true }
 );

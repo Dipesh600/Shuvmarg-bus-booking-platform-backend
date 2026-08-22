@@ -29,6 +29,9 @@ const adminAmenityController = require("../../controllers/adminController/amenit
 const adminBusRouteController = require("../../controllers/adminController/busOwnerController/busRouteController.js");
 const adminFleetController = require("../../controllers/adminController/busOwnerController/fleetController.js");
 const { adminFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
+const {
+  notifyAdminCreatedFleet,
+} = require("../../src/modules/admin/fleet-management/admin-fleet-created-notification.controller");
 const adminTemplateController = require("../../controllers/adminController/busOwnerController/templateController.js");
 const adminTripController = require("../../controllers/adminController/busOwnerController/tripController.js");
 const adminSettlementCon = require("../../controllers/busOwnerController/settlementController.js");
@@ -85,6 +88,12 @@ router.patch("/agentKycStatus", adminMiddleware, agentKycReview.updateAgentKyc);
 const { registerAdminFrontendReadRoutes } = require("./frontendReadRoutes.js");
 registerAdminFrontendReadRoutes(router);
 router.post("/busOwner/create", adminMiddleware, rejectOversizedKycRequest, parseKycSubmissionUpload, busOwnerController.createBusOwnerFull);
+router.post(
+  "/busOwner/:userId/access-notification/resend",
+  adminMiddleware,
+  require("../../middleware/adminOwnerAccessRateLimit"),
+  busOwnerController.resendOwnerAccess
+);
 router.post("/busOwner/reuploadKycDocument", adminMiddleware, rejectOversizedKycRequest, parseKycSubmissionUpload, busOwnerController.reuploadKycDocument);
 router.patch("/busOwnerKycStatus", adminMiddleware, busOwnerController.updateBusOwnerKyc);
 router.patch("/busOwner/update", adminMiddleware, busOwnerController.updateBusOwnerProfile);
@@ -179,6 +188,12 @@ router.get("/busRoutes/:id", adminMiddleware, adminBusRouteController.getRouteBy
 router.patch("/busRoutes/:id", adminMiddleware, adminBusRouteController.updateRouteByAdmin);
 router.delete("/busRoutes/:id", adminMiddleware, adminBusRouteController.deleteRouteByAdmin);
 router.post("/fleet/createForOwner", adminMiddleware, adminFleetController.createFleetForOwner);
+router.post(
+  "/fleet/:fleetId/notify-created",
+  adminMiddleware,
+  require("../../middleware/adminFleetNotificationRateLimit"),
+  notifyAdminCreatedFleet
+);
 router.get("/fleet/owner/:ownerId", adminMiddleware, adminFleetController.getFleetsByOwner);
 router.patch("/fleet/update/:id", adminMiddleware, adminFleetController.updateFleetByAdmin);
 router.delete("/fleet/delete/:id", adminMiddleware, adminFleetController.deleteFleetByAdmin);
