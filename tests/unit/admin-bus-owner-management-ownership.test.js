@@ -14,6 +14,7 @@ const expectedExports = [
   "getBusOwnerById",
   "getBusOwnerDashboard",
   "getBusOwnerKycById",
+  "resendOwnerAccess",
   "reuploadKycDocument",
   "updateBusOwnerKyc",
   "updateBusOwnerProfile",

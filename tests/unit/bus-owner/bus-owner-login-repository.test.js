@@ -14,7 +14,8 @@ const patch = (obj, key, fn, restore) => {
 };
 
 const EXPECTED_SELECTION = '+password failedLoginAttempts lockedUntil status roles role '
-  + 'forcePasswordChange suspensionReason suspendedAt';
+  + 'forcePasswordChange suspensionReason suspendedAt tokenVersion '
+  + '+temporaryCredentialExpiresAt +temporaryCredentialVersion';
 
 test('bus-owner-login repository unit tests', async (t) => {
   await t.test('findLoginUser uses correct $or query and exact selection', async () => {

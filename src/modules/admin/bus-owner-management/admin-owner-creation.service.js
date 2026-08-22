@@ -13,8 +13,9 @@ const { validateAdminOwnerCreationBody } = require("./admin-owner-creation-reque
 const { runCreationRollback } = require("./admin-owner-creation-rollback.helper");
 const {
   prepareOwnerIdentity, createUnnotifiedUser, addOwnerRoleToExistingUser,
-  rollbackUserIdentity, notifyNewOwnerCredentials,
+  rollbackUserIdentity,
 } = require("./admin-owner-identity.service");
+const { dispatchOwnerAccessNotification } = require("./admin-owner-access-notification.service");
 
 function createAdminOwnerCreationService(deps = {}) {
   const BusOwnerModel = deps.BusOwner || BusOwner;
@@ -25,7 +26,6 @@ function createAdminOwnerCreationService(deps = {}) {
   const createUser = deps.createUnnotifiedUser || createUnnotifiedUser;
   const addRole = deps.addOwnerRoleToExistingUser || addOwnerRoleToExistingUser;
   const rollbackUser = deps.rollbackUserIdentity || rollbackUserIdentity;
-  const notifyUser = deps.notifyNewOwnerCredentials || notifyNewOwnerCredentials;
   const malwareScanner = deps.malwareScanner || createKycMalwareScanner({ clock, logger: deps.logger || console });
 
   async function createAdminBusOwner({ body, files, actor }) {
@@ -35,7 +35,9 @@ function createAdminOwnerCreationService(deps = {}) {
     const admin = await resolveActor(actor, deps);
     const malwareScan = await malwareScanner.scanValidatedFiles(validatedFiles);
 
-    const preparedIdentity = await prepareIdentity(sanitizedBody, deps);
+    const preparedIdentity = await prepareIdentity(sanitizedBody, {
+      ...deps, issuedBy: admin._id, clock,
+    });
     let commitResult = null;
     let busOwner = null;
     const newlyUploadedKeys = [];
@@ -124,24 +126,20 @@ function createAdminOwnerCreationService(deps = {}) {
       throw originalError;
     }
 
-    if (preparedIdentity.isNew) {
-      try {
-        await notifyUser({
-          phone: sanitizedBody.phone,
-          email: sanitizedBody.email,
-          ownerName: sanitizedBody.ownerName,
-          password: preparedIdentity.password,
-        }, deps);
-      } catch (notificationError) {
-        if (deps.logger && typeof deps.logger.warn === "function") {
-          deps.logger.warn("Admin-created owner notification failed:", notificationError);
-        } else {
-          console.warn("Admin-created owner notification failed:", notificationError?.message || notificationError);
-        }
-      }
-    }
+    const notification = await dispatchOwnerAccessNotification({
+      isNew: preparedIdentity.isNew,
+      user: commitResult.user,
+      body: sanitizedBody,
+      password: preparedIdentity.password,
+      expiresAt: preparedIdentity.expiresAt,
+    }, deps);
 
-    return { busOwnerId: busOwner.busOwnerId || busOwner._id.toString(), userId: commitResult.user._id };
+    return {
+      busOwnerId: busOwner.busOwnerId || busOwner._id.toString(),
+      userId: commitResult.user._id,
+      credentialMode: preparedIdentity.isNew ? "TEMPORARY_PASSWORD" : "EXISTING_PASSWORD",
+      notification,
+    };
   }
 
   return { createAdminBusOwner };

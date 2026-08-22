@@ -41,8 +41,18 @@ const handleInvalidPassword = async (user) => {
 };
 
 const forcePasswordResult = (user) => {
+  if (user.temporaryCredentialExpiresAt
+    && new Date(user.temporaryCredentialExpiresAt).getTime() <= Date.now()) {
+    throw errors.temporaryCredentialExpiredError();
+  }
   const tempToken = jwt.sign(
-    { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'busOwner' },
+    {
+      id: user._id,
+      purpose: 'FORCE_PASSWORD_CHANGE',
+      activeRole: 'busOwner',
+      credentialVersion: Number(user.temporaryCredentialVersion || 0),
+      tokenVersion: Number(user.tokenVersion || 0),
+    },
     process.env.SECRET_KEY,
     { expiresIn: '15m' },
   );

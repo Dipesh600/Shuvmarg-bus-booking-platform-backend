@@ -3,7 +3,8 @@
 const User = require('../../../../../models/userModel');
 
 const LOGIN_SELECTION = '+password failedLoginAttempts lockedUntil status roles role '
-  + 'forcePasswordChange suspensionReason suspendedAt';
+  + 'forcePasswordChange suspensionReason suspendedAt tokenVersion '
+  + '+temporaryCredentialExpiresAt +temporaryCredentialVersion';
 
 const findLoginUser = (normalizedPhone, rawPhone) => User.findOne({
   $or: [

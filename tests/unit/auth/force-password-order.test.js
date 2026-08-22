@@ -57,20 +57,18 @@ test('force-password service preserves successful operation sequence', async () 
       assert.deepEqual([password, cost], ['Password1', 12]);
       return 'hashed';
     }, r);
-    patch(repository, 'saveForcedPasswordChange', async (savedUser, hash) => {
+    patch(repository, 'saveForcedPasswordChange', async (savedUser, hash, options) => {
       order.push('save');
       assert.equal(savedUser, user);
       assert.equal(hash, 'hashed');
+      assert.deepEqual(options, { credentialVersion: undefined, phoneVerified: true });
       savedUser.password = hash;
       savedUser.forcePasswordChange = false;
       savedUser.phoneVerified = true;
+      return savedUser;
     }, r);
     patch(tokenService, 'revokeAllUserTokens', async (id) => {
       order.push('revoke');
-      assert.equal(id, 'u1');
-    }, r);
-    patch(repository, 'incrementTokenVersion', async (id) => {
-      order.push('increment');
       assert.equal(id, 'u1');
     }, r);
     patch(repository, 'findFreshUser', async (id) => {
@@ -102,7 +100,6 @@ test('force-password service preserves successful operation sequence', async () 
       'hash',
       'save',
       'revoke',
-      'increment',
       'refetch',
       'generate',
       'toObject',

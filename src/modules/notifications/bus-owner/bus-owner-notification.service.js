@@ -23,11 +23,13 @@ function createBusOwnerNotificationService({
   }
 
   async function sendSms(phone, message, context) {
-    if (!phone) return;
+    if (!phone) return false;
     try {
       await sendOTP(phone, message);
+      return true;
     } catch (error) {
       logger.warn(`[busOwnerNotificationService] SMS notification failed for ${context}:`, error.message);
+      return false;
     }
   }
 
@@ -79,9 +81,19 @@ function createBusOwnerNotificationService({
     await sendPushAndLocal(owner._id, message.title, message.body, { fleetId: bus._id, status }, "FLEET_STATUS_UPDATE");
   }
 
-  /**
-   * Notifies the bus owner about KYC review results.
-   */
+  async function notifyAdminCreatedFleet(bus, loginUrl) {
+    const owner = bus.ownerId;
+    if (!owner) return { smsDelivered: false };
+    const title = "Fleet added by Shuvmarg";
+    const body = `Fleet ${bus.busName} (${bus.busNumber}) was added to your operator account. Sign in to review its setup: ${loginUrl}`;
+    const smsDelivered = await sendSms(owner.phone || owner.contactNumber, `${title}. ${body}`, "FLEET_ADMIN_CREATED");
+    await sendPushAndLocal(owner._id, title, body, {
+      fleetId: bus._id,
+      status: bus.approvalStatus,
+    }, "FLEET_ADMIN_CREATED");
+    return { smsDelivered };
+  }
+
   async function notifyKycResult({ owner, user, status, documents }) {
     if (!user) return;
 
@@ -126,6 +138,7 @@ function createBusOwnerNotificationService({
 
   return {
     notifyFleetStatus,
+    notifyAdminCreatedFleet,
     notifyKycResult,
     notifyDocumentExpiryAlert,
     notifyFleetSuspendedForDocs
