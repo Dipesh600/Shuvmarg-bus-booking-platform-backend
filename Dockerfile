@@ -16,8 +16,9 @@ WORKDIR /app
 # Copy lock files first to maximise Docker layer cache hits.
 COPY package.json package-lock.json ./
 
-# Production dependencies only — dev deps are not needed at runtime.
-RUN npm ci --omit=dev --omit=optional --ignore-scripts=false \
+# Production dependencies only. Keep optional dependencies because native
+# packages such as sharp select their ARM64 runtime binary through them.
+RUN npm ci --omit=dev --ignore-scripts=false \
  && npm cache clean --force
 
 # ── Copy application source ───────────────────────────────────────────────────
