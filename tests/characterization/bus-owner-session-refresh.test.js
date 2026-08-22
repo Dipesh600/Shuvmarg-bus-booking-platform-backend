@@ -1,9 +1,6 @@
 'use strict';
-
-const { createTestPassword, createTestSecret } =
-  require('../helpers/security-test-values');
-process.env.SECRET_KEY ||=
-  createTestSecret('bus-owner-session-refresh');
+const { createTestPassword, createTestSecret } = require('../helpers/security-test-values');
+process.env.SECRET_KEY ||= createTestSecret('bus-owner-session-refresh');
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -18,7 +15,7 @@ const service = require('../../src/modules/bus-owner/auth/session/bus-owner-sess
 
 const password = createTestPassword('bus-owner-session-refresh');
 const cookieToken = (res) => (res.headers['set-cookie'] || [])
-  .find((c) => c.startsWith('refreshToken='))
+  .find((c) => c.startsWith('busOwnerRefreshToken='))
   ?.split(';')[0]
   .split('=')[1];
 
@@ -39,13 +36,11 @@ const seed = async (phone = '9830000001', extra = {}) => {
   });
   return { user, refreshToken: pair.refreshToken };
 };
-
 const patchRotate = (fn) => {
   const orig = service.rotateSession;
   service.rotateSession = fn;
   return () => { service.rotateSession = orig; };
 };
-
 test('Bus-owner session refresh characterization', async (t) => {
   t.before(async () => db.connect());
   t.after(async () => db.disconnect());
@@ -86,7 +81,7 @@ test('Bus-owner session refresh characterization', async (t) => {
       .set('Cookie', [`refreshToken=${refreshToken}`]);
     assert.equal(res.status, 200);
     const refreshCookie = (res.headers['set-cookie'] || [])
-      .find((c) => c.startsWith('refreshToken='));
+      .find((c) => c.startsWith('busOwnerRefreshToken='));
     assert.ok(refreshCookie);
     assert.match(refreshCookie, /HttpOnly/i);
     assert.match(refreshCookie, /SameSite=Lax/i);
@@ -98,7 +93,7 @@ test('Bus-owner session refresh characterization', async (t) => {
     assert.equal(oldRes.status, 401);
     const newRes = await request(app)
       .post('/api/auth/busowner/refresh')
-      .set('Cookie', [`refreshToken=${cookieToken(res)}`]);
+      .set('Cookie', [`busOwnerRefreshToken=${cookieToken(res)}`]);
     assert.equal(newRes.status, 200);
   });
 
@@ -134,6 +129,7 @@ test('Bus-owner session refresh characterization', async (t) => {
       ['REFRESH_TOKEN_EXPIRED', 401, 'Session expired. Please sign in again.'],
       ['ACCOUNT_BANNED', 403, 'Your account has been suspended.'],
       ['ROLE_REVOKED', 403, 'Access revoked. Please contact support.'],
+      ['SESSION_ROLE_MISMATCH', 401, 'This session belongs to another portal. Please sign in again.'],
       ['OTHER', 401, 'Session could not be renewed. Please sign in again.'],
     ];
     for (const [message, status, bodyMessage] of cases) {
@@ -143,7 +139,11 @@ test('Bus-owner session refresh characterization', async (t) => {
           .post('/api/auth/busowner/refresh')
           .send({ refreshToken: 'tok' });
         assert.equal(res.status, status);
-        assert.deepEqual(res.body, { success: false, message: bodyMessage });
+        assert.deepEqual(res.body, {
+          success: false,
+          message: bodyMessage,
+          ...(['ROLE_REVOKED', 'SESSION_ROLE_MISMATCH'].includes(message) && { errorCode: message }),
+        });
       } finally { restore(); }
     }
   });

@@ -37,4 +37,16 @@ test("fleet-document-owner-authorization unit tests", async (t) => {
     assert.equal(String(actor.actorId), validOwnerId);
     assert.equal(actor.userId, validUserId);
   });
+
+  await t.test("active busOwner role overrides a legacy passenger role", async () => {
+    const repo = { findBusOwnerForActor: async () => ({ _id: validOwnerId }) };
+    const actor = await resolveBusOwnerActor({
+      id: validUserId,
+      role: "passenger",
+      activeRole: "busOwner",
+      roles: ["passenger", "busOwner"],
+    }, repo);
+    assert.equal(actor.actorType, "BUS_OWNER");
+    assert.equal(actor.userId, validUserId);
+  });
 });

@@ -82,7 +82,7 @@ test('Auth: Login Characterization', async (t) => {
 
     // refresh token delivered only via httpOnly cookie
     const cookies = res.headers['set-cookie'] || [];
-    const refreshCookie = cookies.find(c => c.includes('refreshToken='));
+    const refreshCookie = cookies.find(c => c.startsWith('passengerRefreshToken='));
     assert.ok(refreshCookie, 'refreshToken cookie must be set');
     assert.ok(refreshCookie.toLowerCase().includes('httponly'), 'cookie must be HttpOnly');
     assert.ok(refreshCookie.toLowerCase().includes('samesite=lax'), 'cookie must be SameSite=Lax');

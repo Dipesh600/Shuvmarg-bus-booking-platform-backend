@@ -49,7 +49,7 @@ test('agent-login controller preserves HTTP adaptation', async (t) => {
       assert.equal(out.statusCode, 201);
       assert.deepEqual(out.body, { success: true, accessToken: 'at' });
       assert.equal(out.body.refreshToken, undefined);
-      assert.deepEqual(out.cookies[0], ['refreshToken', 'rt', {
+      assert.deepEqual(out.cookies[0], ['agentRefreshToken', 'rt', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'Lax',

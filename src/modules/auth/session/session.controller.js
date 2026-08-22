@@ -1,9 +1,10 @@
 const asyncHandler = require('../../../shared/http/async-handler');
 const respond = require('../../../shared/http/respond');
 const sessionService = require('./session.service');
+const { readPortalRefreshToken, setPortalRefreshCookie, clearPortalRefreshCookies } = require('../../../../utils/portalSessionCookies');
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  const refreshToken = readPortalRefreshToken(req, 'passenger');
 
   const result = await sessionService.refreshSession({
     refreshToken,
@@ -12,26 +13,17 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   });
 
   if (result.refreshToken) {
-    res.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'Lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    setPortalRefreshCookie(res, 'passenger', result.refreshToken);
   }
 
   return respond(res, result.statusCode, result.responseBody);
 });
 
 const logout = asyncHandler(async (req, res) => {
-  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  const refreshToken = readPortalRefreshToken(req, 'passenger');
   const userId = req.userInfo?.id;
 
-  res.clearCookie('refreshToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'Lax',
-  });
+  clearPortalRefreshCookies(res, 'passenger');
 
   const result = await sessionService.logoutSession({
     refreshToken,

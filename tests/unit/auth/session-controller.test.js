@@ -51,7 +51,7 @@ test('Auth: Session Controller', async (t) => {
       ipAddress: '127.0.0.1',
     });
     assert.equal(res.cookie.mock.callCount(), 1);
-    assert.equal(res.cookie.mock.calls[0].arguments[0], 'refreshToken');
+    assert.equal(res.cookie.mock.calls[0].arguments[0], 'passengerRefreshToken');
     assert.equal(res.cookie.mock.calls[0].arguments[1], 'new-refresh-token');
     assert.equal(res.status.mock.callCount(), 1);
     assert.equal(res.status.mock.calls[0].arguments[0], 200);
@@ -85,8 +85,9 @@ test('Auth: Session Controller', async (t) => {
     await sessionController.logout(req, res, next);
 
     // clearCookie is called unconditionally (before service)
-    assert.equal(res.clearCookie.mock.callCount(), 1);
-    assert.equal(res.clearCookie.mock.calls[0].arguments[0], 'refreshToken');
+    assert.equal(res.clearCookie.mock.callCount(), 2);
+    assert.equal(res.clearCookie.mock.calls[0].arguments[0], 'passengerRefreshToken');
+    assert.equal(res.clearCookie.mock.calls[1].arguments[0], 'refreshToken');
 
     assert.equal(sessionService.logoutSession.mock.callCount(), 1);
     assert.deepEqual(sessionService.logoutSession.mock.calls[0].arguments[0], {
@@ -112,7 +113,7 @@ test('Auth: Session Controller', async (t) => {
 
     await sessionController.logout(req, res, next);
 
-    assert.deepEqual(callOrder, ['clearCookie', 'logoutSession'],
+    assert.deepEqual(callOrder, ['clearCookie', 'clearCookie', 'logoutSession'],
       'clearCookie must be called before logoutSession');
   });
 
@@ -124,7 +125,7 @@ test('Auth: Session Controller', async (t) => {
 
     await sessionController.logout(req, res, next);
 
-    assert.equal(res.clearCookie.mock.callCount(), 1);
-    assert.equal(res.clearCookie.mock.calls[0].arguments[0], 'refreshToken');
+    assert.equal(res.clearCookie.mock.callCount(), 2);
+    assert.equal(res.clearCookie.mock.calls[0].arguments[0], 'passengerRefreshToken');
   });
 });

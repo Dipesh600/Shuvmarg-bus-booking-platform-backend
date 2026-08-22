@@ -16,6 +16,7 @@ const refreshSession = async (input) => {
     const result = await tokenService.rotateRefreshToken(input.refreshToken, {
       deviceInfo: input.deviceInfo || null,
       ipAddress: input.ipAddress || null,
+      expectedActiveRole: 'passenger',
     });
 
     return {
