@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const app = require('../helpers/app');
+const createAuthTestApp = require('../helpers/auth-app');
 const db = require('../helpers/db');
 const User = require('../../models/userModel');
 const otpHelper = require('../../utils/otpHelper');
@@ -26,9 +26,10 @@ const user = (overrides = {}) => User.create({
 });
 
 test('Auth: changeForcePassword error contracts', async (t) => {
+  const { app, loginRateLimiters, teardown } = createAuthTestApp();
   await db.connect();
-  t.after(async () => db.disconnect());
-  t.beforeEach(async () => db.clearAll());
+  t.after(async () => { await teardown(); await db.disconnect(); });
+  t.beforeEach(async () => { await db.clearAll(); await loginRateLimiters.reset(); });
 
   await t.test('missing tempToken and missing newPassword', async () => {
     let res = await request(app).post('/api/changeForcePassword').send({ newPassword: 'Password1' });

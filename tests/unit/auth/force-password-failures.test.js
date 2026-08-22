@@ -50,14 +50,11 @@ const setup = (failAt) => {
   patch(repository, 'saveForcedPasswordChange', async () => {
     order.push('save');
     if (failAt === 'save') throw new Error('save failed');
+    return user;
   }, r);
   patch(tokenService, 'revokeAllUserTokens', async () => {
     order.push('revoke');
     if (failAt === 'revoke') throw new Error('revoke failed');
-  }, r);
-  patch(repository, 'incrementTokenVersion', async () => {
-    order.push('increment');
-    if (failAt === 'increment') throw new Error('increment failed');
   }, r);
   patch(repository, 'findFreshUser', async () => {
     order.push('refetch');
@@ -77,10 +74,9 @@ test('force-password service unexpected failures map to legacy 500 and stop down
     ['hash', ['hash']],
     ['save', ['hash', 'save']],
     ['revoke', ['hash', 'save', 'revoke']],
-    ['increment', ['hash', 'save', 'revoke', 'increment']],
-    ['refetch', ['hash', 'save', 'revoke', 'increment', 'refetch']],
-    ['generate', ['hash', 'save', 'revoke', 'increment', 'refetch', 'generate']],
-    ['toObject', ['hash', 'save', 'revoke', 'increment', 'refetch', 'generate', 'toObject']],
+    ['refetch', ['hash', 'save', 'revoke', 'refetch']],
+    ['generate', ['hash', 'save', 'revoke', 'refetch', 'generate']],
+    ['toObject', ['hash', 'save', 'revoke', 'refetch', 'generate', 'toObject']],
   ];
 
   for (const [stage, expected] of cases) {

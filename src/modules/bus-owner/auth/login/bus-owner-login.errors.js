@@ -52,6 +52,12 @@ const newlyLockedAccountError = () => error(
   401,
 );
 
+const temporaryCredentialExpiredError = () => error(
+  'Your one-time password has expired. Ask an administrator to resend operator access.',
+  410,
+  { errorCode: 'TEMPORARY_CREDENTIAL_EXPIRED' },
+);
+
 module.exports = {
   missingPhoneError,
   missingPasswordError,
@@ -63,4 +69,5 @@ module.exports = {
   missingBusOwnerRoleError,
   invalidPasswordAttemptsError,
   newlyLockedAccountError,
+  temporaryCredentialExpiredError,
 };

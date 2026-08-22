@@ -7,7 +7,7 @@
 # Health check: Node.js built-in fetch (Node 18+) — curl is not present
 # in node:20-slim and must not be assumed.
 
-FROM node:20-slim
+FROM node:22-slim
 
 # Create working directory owned by the built-in non-root 'node' user
 WORKDIR /app
@@ -17,7 +17,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # Production dependencies only — dev deps are not needed at runtime.
-RUN npm ci --omit=dev --ignore-scripts=false \
+RUN npm ci --omit=dev --omit=optional --ignore-scripts=false \
  && npm cache clean --force
 
 # ── Copy application source ───────────────────────────────────────────────────

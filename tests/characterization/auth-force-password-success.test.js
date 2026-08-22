@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const app = require('../helpers/app');
+const createAuthTestApp = require('../helpers/auth-app');
 const db = require('../helpers/db');
 const User = require('../../models/userModel');
 const RefreshToken = require('../../models/refreshTokenModel');
@@ -27,9 +27,10 @@ const makeUser = () => User.create({
 const sign = (id) => jwt.sign({ id, purpose: 'FORCE_PASSWORD_CHANGE' }, process.env.SECRET_KEY);
 
 test('Auth: changeForcePassword success and partial OTP legacy behavior', async (t) => {
+  const { app, loginRateLimiters, teardown } = createAuthTestApp();
   await db.connect();
-  t.after(async () => db.disconnect());
-  t.beforeEach(async () => db.clearAll());
+  t.after(async () => { await teardown(); await db.disconnect(); });
+  t.beforeEach(async () => { await db.clearAll(); await loginRateLimiters.reset(); });
 
   await t.test('success returns accessToken, cookie-only refreshToken, flags and token revocation', async () => {
     const u = await makeUser();
@@ -49,7 +50,7 @@ test('Auth: changeForcePassword success and partial OTP legacy behavior', async 
     assert.equal(res.body.user.password, undefined);
     const stored = await User.findById(u._id).select('+password');
     assert.equal(stored.forcePasswordChange, false);
-    assert.equal(stored.phoneVerified, true);
+    assert.equal(stored.phoneVerified, false);
     assert.equal(stored.tokenVersion, 3);
     assert.equal(await bcrypt.compare('NewPass1', stored.password), true);
     assert.equal(await RefreshToken.findOne({ tokenHash: oldHash }), null);

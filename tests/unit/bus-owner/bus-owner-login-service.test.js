@@ -122,7 +122,13 @@ test('bus-owner-login service orchestration tests', async (t) => {
       assert.deepEqual(order, [
         'lookup',
         'compare',
-        JSON.stringify({ payload: { id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'busOwner' }, secret: process.env.SECRET_KEY, opts: { expiresIn: '15m' } }),
+        JSON.stringify({ payload: {
+          id: 'u1',
+          purpose: 'FORCE_PASSWORD_CHANGE',
+          activeRole: 'busOwner',
+          credentialVersion: 0,
+          tokenVersion: 0,
+        }, secret: process.env.SECRET_KEY, opts: { expiresIn: '15m' } }),
       ]);
     } finally { restore.reverse().forEach((fn) => fn()); }
   });
