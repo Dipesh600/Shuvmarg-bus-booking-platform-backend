@@ -35,7 +35,7 @@ test('Auth: Logout Contract Characterization', async (t) => {
       password,
     });
     const cookies = loginRes.headers['set-cookie'] || [];
-    validRefreshToken = cookies.find(c => c.includes('refreshToken=')).split(';')[0].split('=')[1];
+    validRefreshToken = cookies.find(c => c.startsWith('passengerRefreshToken=')).split(';')[0].split('=')[1];
   });
 
   await t.test('POST /api/logout - Invalid token returns success response', async () => {
@@ -60,7 +60,7 @@ test('Auth: Logout Contract Characterization', async (t) => {
   await t.test('POST /api/logout - Cleared cookie includes Expires header', async () => {
     const res = await request(app).post('/api/logout');
     const cookies = res.headers['set-cookie'] || [];
-    const cleared = cookies.find(c => c.includes('refreshToken='));
+    const cleared = cookies.find(c => c.startsWith('passengerRefreshToken='));
     assert.ok(cleared, 'set-cookie header must be present');
     assert.ok(cleared.toLowerCase().includes('expires='),
       `cookie must include Expires; got: ${cleared}`);
@@ -69,7 +69,7 @@ test('Auth: Logout Contract Characterization', async (t) => {
   await t.test('POST /api/logout - Cleared cookie includes HttpOnly', async () => {
     const res = await request(app).post('/api/logout');
     const cookies = res.headers['set-cookie'] || [];
-    const cleared = cookies.find(c => c.includes('refreshToken='));
+    const cleared = cookies.find(c => c.startsWith('passengerRefreshToken='));
     assert.ok(cleared.toLowerCase().includes('httponly'),
       `cookie must include HttpOnly; got: ${cleared}`);
   });
@@ -77,7 +77,7 @@ test('Auth: Logout Contract Characterization', async (t) => {
   await t.test('POST /api/logout - Cleared cookie includes SameSite=Lax', async () => {
     const res = await request(app).post('/api/logout');
     const cookies = res.headers['set-cookie'] || [];
-    const cleared = cookies.find(c => c.includes('refreshToken='));
+    const cleared = cookies.find(c => c.startsWith('passengerRefreshToken='));
     assert.ok(cleared.toLowerCase().includes('samesite=lax'),
       `cookie must include SameSite=Lax; got: ${cleared}`);
   });

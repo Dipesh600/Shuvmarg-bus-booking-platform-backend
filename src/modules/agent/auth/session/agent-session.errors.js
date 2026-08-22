@@ -2,7 +2,7 @@
 
 const AppError = require('../../../../shared/errors/app-error');
 
-const body = (message) => ({ success: false, message });
+const body = (message, errorCode) => ({ success: false, message, ...(errorCode && { errorCode }) });
 
 const missingRefreshTokenError = () => new AppError(
   'Session expired. Please sign in again.',
@@ -29,7 +29,15 @@ const bannedAccountError = (cause) => new AppError(
 const revokedRoleError = (cause) => new AppError(
   'Access revoked. Please contact support.',
   403,
-  body('Access revoked. Please contact support.'),
+  body('Access revoked. Please contact support.', 'ROLE_REVOKED'),
+  null,
+  cause,
+);
+
+const wrongPortalSessionError = (cause) => new AppError(
+  'This session belongs to another portal. Please sign in again.',
+  401,
+  body('This session belongs to another portal. Please sign in again.', 'SESSION_ROLE_MISMATCH'),
   null,
   cause,
 );
@@ -52,6 +60,7 @@ const mapRefreshError = (error) => {
   }
   if (error.message === 'ACCOUNT_BANNED') return bannedAccountError(error);
   if (error.message === 'ROLE_REVOKED') return revokedRoleError(error);
+  if (error.message === 'SESSION_ROLE_MISMATCH') return wrongPortalSessionError(error);
   return unknownRefreshFailureError(error);
 };
 
@@ -60,6 +69,7 @@ module.exports = {
   expiredOrInvalidRefreshTokenError,
   bannedAccountError,
   revokedRoleError,
+  wrongPortalSessionError,
   unknownRefreshFailureError,
   mapRefreshError,
 };

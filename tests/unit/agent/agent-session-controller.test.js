@@ -64,7 +64,7 @@ test('agent-session controller preserves refresh and logout contracts', async (t
       assert.equal(r.state.statusCode, 200);
       assert.equal(r.state.body.refreshToken, undefined);
       assert.deepEqual(r.state.cookies[0], {
-        name: 'refreshToken',
+        name: 'agentRefreshToken',
         value: 'new-refresh',
         options: {
           httpOnly: true,
@@ -115,7 +115,11 @@ test('agent-session controller preserves refresh and logout contracts', async (t
         const r = res();
         await controller.refresh(req({ body: { refreshToken: 'tok' } }), r, assert.fail);
         assert.equal(r.state.statusCode, status);
-        assert.deepEqual(r.state.body, { success: false, message: bodyMessage });
+        assert.deepEqual(r.state.body, {
+          success: false,
+          message: bodyMessage,
+          ...(msg === 'ROLE_REVOKED' && { errorCode: msg }),
+        });
       } finally { restore(); }
     }
     const appErr = new AppError('custom', 418, { custom: true });

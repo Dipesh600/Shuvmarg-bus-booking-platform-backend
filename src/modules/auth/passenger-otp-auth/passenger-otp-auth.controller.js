@@ -15,13 +15,7 @@ const asyncHandler = require('../../../shared/http/async-handler');
 const respond = require('../../../shared/http/respond');
 const requestService = require('./request-passenger-otp.service');
 const verifyService = require('./verify-passenger-otp.service');
-
-const cookieOptions = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'Lax',
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-});
+const { setPortalRefreshCookie } = require('../../../../utils/portalSessionCookies');
 
 const handleError = (res, error, logPrefix) => {
   if (error instanceof AppError) return respond(res, error.statusCode, error.responseBody);
@@ -57,7 +51,7 @@ const verifyOTP = asyncHandler(async (req, res) => {
       now: new Date(),
     });
     if (result.refreshToken) {
-      res.cookie('refreshToken', result.refreshToken, cookieOptions());
+      setPortalRefreshCookie(res, 'passenger', result.refreshToken);
     }
     return respond(res, result.statusCode, result.responseBody);
   } catch (error) {

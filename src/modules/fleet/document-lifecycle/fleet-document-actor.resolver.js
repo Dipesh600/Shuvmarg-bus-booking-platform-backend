@@ -3,10 +3,11 @@
 const errors = require("./fleet-document.errors");
 
 async function resolveBusOwnerActor(userInfo, repository) {
-  if (!userInfo || !userInfo.id || !userInfo.role) {
+  const activeRole = userInfo?.activeRole || userInfo?.role;
+  if (!userInfo || !userInfo.id || !activeRole) {
     throw errors.forbidden("Authentication required.");
   }
-  if (userInfo.role !== "busOwner" && userInfo.role !== "BUS_OWNER") {
+  if (activeRole !== "busOwner" && activeRole !== "BUS_OWNER") {
     throw errors.forbidden("Role 'busOwner' is required.");
   }
 

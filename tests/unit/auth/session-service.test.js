@@ -14,6 +14,7 @@ const MAPPED_ERRORS = [
   { code: 'ACCOUNT_DEACTIVATED',    status: 403, msg: 'This account has been deactivated. Contact support.' },
   { code: 'ACCOUNT_BANNED',         status: 403, msg: 'Your account has been banned. Contact support.' },
   { code: 'ROLE_REVOKED',           status: 403, msg: 'Your role has been revoked. Please login again.' },
+  { code: 'SESSION_ROLE_MISMATCH',  status: 401, msg: 'This session belongs to another portal. Please sign in again.' },
 ];
 
 test('Auth: Session Service – refresh', async (t) => {
@@ -62,7 +63,7 @@ test('Auth: Session Service – refresh', async (t) => {
           assert.ok(err instanceof AppError, `expected AppError, got ${err.constructor.name}`);
           assert.equal(err.statusCode, status);
           assert.equal(err.message, msg);
-          assert.deepEqual(err.responseBody, { success: false, message: msg });
+          assert.deepEqual(err.responseBody, { success: false, message: msg, errorCode: code });
           return true;
         }
       );

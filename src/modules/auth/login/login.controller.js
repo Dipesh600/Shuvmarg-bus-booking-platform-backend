@@ -3,6 +3,7 @@
 const asyncHandler = require('../../../shared/http/async-handler');
 const respond = require('../../../shared/http/respond');
 const loginService = require('./login.service');
+const { setPortalRefreshCookie } = require('../../../../utils/portalSessionCookies');
 
 exports.login = asyncHandler(async (req, res) => {
   // Controller: read request metadata only — no validation, no policy logic
@@ -20,12 +21,7 @@ exports.login = asyncHandler(async (req, res) => {
   });
 
   if (result.refreshToken) {
-    res.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'Lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    setPortalRefreshCookie(res, 'passenger', result.refreshToken);
   }
 
   return respond(res, result.statusCode, result.responseBody);

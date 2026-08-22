@@ -81,7 +81,7 @@ test('force-password service preserves successful operation sequence', async () 
     patch(tokenService, 'generateTokenPair', async (fresh, meta) => {
       order.push('generate');
       assert.equal(fresh, freshUser);
-      assert.deepEqual(meta, { deviceInfo: 'UA', ipAddress: 'ip' });
+      assert.deepEqual(meta, { deviceInfo: 'UA', ipAddress: 'ip', activeRole: 'passenger' });
       return { accessToken: 'at', refreshToken: 'rt' };
     }, r);
 
@@ -107,6 +107,7 @@ test('force-password service preserves successful operation sequence', async () 
       'generate',
       'toObject',
     ]);
+    assert.equal(result.activeRole, 'passenger');
     assert.equal(user.forcePasswordChange, false);
     assert.equal(user.phoneVerified, true);
     assert.equal(result.refreshToken, 'rt');

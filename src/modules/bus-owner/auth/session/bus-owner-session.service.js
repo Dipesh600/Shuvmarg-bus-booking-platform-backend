@@ -7,6 +7,7 @@ const rotateSession = ({ refreshToken, deviceInfo, ipAddress }) => {
   return tokenService.rotateRefreshToken(refreshToken, {
     deviceInfo: deviceInfo || null,
     ipAddress: ipAddress || null,
+    expectedActiveRole: 'busOwner',
   });
 };
 

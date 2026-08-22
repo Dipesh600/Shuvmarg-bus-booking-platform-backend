@@ -53,11 +53,13 @@ const changeForcePassword = async (input) => {
     const { accessToken, refreshToken } = await tokenService.generateTokenPair(freshUser, {
       deviceInfo,
       ipAddress,
+      activeRole: decoded.activeRole || freshUser.role || 'passenger',
     });
 
     return {
       statusCode: 200,
       refreshToken,
+      activeRole: decoded.activeRole || freshUser.role || 'passenger',
       responseBody: {
         success: true,
         message: 'Password changed successfully. Welcome!',

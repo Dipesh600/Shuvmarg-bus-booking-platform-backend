@@ -34,7 +34,7 @@ test('Auth: Refresh Characterization', async (t) => {
     });
     
     const cookies = loginRes.headers['set-cookie'] || [];
-    validRefreshToken = cookies.find(c => c.includes('refreshToken=')).split(';')[0].split('=')[1];
+    validRefreshToken = cookies.find(c => c.startsWith('passengerRefreshToken=')).split(';')[0].split('=')[1];
   });
 
   await t.test('POST /api/refresh - Missing refresh token', async () => {
@@ -84,7 +84,7 @@ test('Auth: Refresh Characterization', async (t) => {
     assert.equal(res.body.refreshToken, undefined, 'refreshToken must not appear in body');
 
     const cookies = res.headers['set-cookie'] || [];
-    const rotatedCookie = cookies.find(c => c.includes('refreshToken='));
+    const rotatedCookie = cookies.find(c => c.startsWith('passengerRefreshToken='));
     assert.ok(rotatedCookie, 'rotated refreshToken cookie must be set');
     assert.ok(rotatedCookie.toLowerCase().includes('httponly'), 'rotated cookie must be HttpOnly');
     assert.ok(rotatedCookie.toLowerCase().includes('samesite=lax'), 'rotated cookie must be SameSite=Lax');

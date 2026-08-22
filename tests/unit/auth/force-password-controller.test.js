@@ -86,7 +86,7 @@ test('force-password controller', async (t) => {
       const r = res();
       await controller.changeForcePassword(req(), r, assert.fail);
       assert.deepEqual(r.state.cookies, [{
-        name: 'refreshToken',
+        name: 'passengerRefreshToken',
         value: 'rt',
         options: {
           httpOnly: true,

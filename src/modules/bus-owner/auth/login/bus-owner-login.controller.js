@@ -4,13 +4,7 @@ const AppError = require('../../../../shared/errors/app-error');
 const asyncHandler = require('../../../../shared/http/async-handler');
 const respond = require('../../../../shared/http/respond');
 const service = require('./bus-owner-login.service');
-
-const cookieOptions = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'Lax',
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-});
+const { setPortalRefreshCookie } = require('../../../../../utils/portalSessionCookies');
 
 const genericLoginFailure = () => ({
   success: false,
@@ -29,7 +23,7 @@ const login = asyncHandler(async (req, res) => {
     });
 
     if (result.refreshToken) {
-      res.cookie('refreshToken', result.refreshToken, cookieOptions());
+      setPortalRefreshCookie(res, 'busOwner', result.refreshToken);
     }
 
     return respond(res, result.statusCode, result.responseBody);

@@ -7,6 +7,7 @@ const REFRESH_ERRORS = {
   ACCOUNT_DEACTIVATED: { status: 403, message: 'This account has been deactivated. Contact support.' },
   ACCOUNT_BANNED: { status: 403, message: 'Your account has been banned. Contact support.' },
   ROLE_REVOKED: { status: 403, message: 'Your role has been revoked. Please login again.' },
+  SESSION_ROLE_MISMATCH: { status: 401, message: 'This session belongs to another portal. Please sign in again.' },
 };
 
 const mapTokenError = (error) => {
@@ -15,7 +16,7 @@ const mapTokenError = (error) => {
     return new AppError(
       mapped.message,
       mapped.status,
-      { success: false, message: mapped.message },
+      { success: false, message: mapped.message, errorCode: error.message },
       null,
       error
     );
