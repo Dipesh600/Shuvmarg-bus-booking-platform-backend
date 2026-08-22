@@ -53,9 +53,8 @@ test('force-password service validation, JWT, OTP and user state', async (t) => 
       patch(passwordValidator, 'validatePassword', () => ({ valid: true, errors: [] }), r);
       patch(repository, 'findByIdWithPassword', async (id) => { repoId = id; return user; }, r);
       patch(bcrypt, 'hash', async () => 'hash', r);
-      patch(repository, 'saveForcedPasswordChange', async () => {}, r);
+      patch(repository, 'saveForcedPasswordChange', async () => user, r);
       patch(tokenService, 'revokeAllUserTokens', async () => {}, r);
-      patch(repository, 'incrementTokenVersion', async () => {}, r);
       patch(repository, 'findFreshUser', async () => fresh, r);
       patch(tokenService, 'generateTokenPair', async () => ({ accessToken: 'at' }), r);
       await service.changeForcePassword({ tempToken: 'tt', newPassword: 'Password1' });

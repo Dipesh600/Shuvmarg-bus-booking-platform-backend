@@ -15,6 +15,7 @@ const profileController = createOwnerProfileController({
 module.exports = {
   ...require("./owner-query.controller.js"),
   ...require("./owner-creation.controller.js"),
+  ...require("./owner-access-resend.controller.js"),
   updateBusOwnerProfile: profileController.updateBusOwnerProfile,
   ...require("./owner-dashboard.controller.js"),
   ...require("./kyc-query.controller.js"),

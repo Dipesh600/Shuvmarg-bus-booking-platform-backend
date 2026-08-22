@@ -38,6 +38,20 @@ const passwordChangeNotRequiredError = () =>
     message: 'Password change is not required for this account.',
   });
 
+const credentialStateError = () =>
+  new AppError('Temporary credential unavailable', 401, {
+    success: false,
+    message: 'This one-time credential is expired or has already been used. Please login again.',
+    errorCode: 'TEMPORARY_CREDENTIAL_INVALID',
+  });
+
+const accountUnavailableError = () =>
+  new AppError('Account unavailable', 403, {
+    success: false,
+    message: 'This account cannot complete password setup. Please contact support.',
+    errorCode: 'ACCOUNT_UNAVAILABLE',
+  });
+
 const forcePasswordFailedError = (cause) =>
   new AppError('Force password change failed', 500, {
     success: false,
@@ -51,5 +65,7 @@ module.exports = {
   invalidOtpError,
   userNotFoundError,
   passwordChangeNotRequiredError,
+  credentialStateError,
+  accountUnavailableError,
   forcePasswordFailedError,
 };
