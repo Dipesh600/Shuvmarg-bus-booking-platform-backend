@@ -45,11 +45,12 @@ test('agent-session controller preserves logout ordering and fallback behavior',
         body: { refreshToken: 'body' },
         userInfo: { id: 'u1' },
       }), r, assert.fail);
-      assert.deepEqual(order, ['revoke:cookie', 'clear', 'increment:u1']);
+      assert.deepEqual(order, ['revoke:cookie', 'clear', 'clear', 'increment:u1']);
       assert.deepEqual(r.state.clears[0], {
-        name: 'refreshToken',
+        name: 'agentRefreshToken',
         options: { httpOnly: true, secure: false, sameSite: 'Lax' },
       });
+      assert.equal(r.state.clears[1].name, 'refreshToken');
       assert.equal(r.state.statusCode, 200);
       assert.deepEqual(r.state.body, { success: true, message: 'Logged out successfully.' });
     } finally { restoreRevoke(); restoreInc(); }
@@ -62,7 +63,7 @@ test('agent-session controller preserves logout ordering and fallback behavior',
     try {
       const r = res(order);
       await controller.logout(req(), r, assert.fail);
-      assert.deepEqual(order, ['clear']);
+      assert.deepEqual(order, ['clear', 'clear']);
       assert.deepEqual(r.state.body, { success: true, message: 'Logged out successfully.' });
     } finally { restoreRevoke(); restoreInc(); }
   });
@@ -77,7 +78,7 @@ test('agent-session controller preserves logout ordering and fallback behavior',
     try {
       const r = res(order);
       await controller.logout(req({ body: { refreshToken: 'tok' }, userInfo: { id: 'u' } }), r, assert.fail);
-      assert.deepEqual(order, ['revoke', 'clear']);
+      assert.deepEqual(order, ['revoke', 'clear', 'clear']);
       assert.equal(r.state.statusCode, 200);
       assert.deepEqual(r.state.body, { success: true, message: 'Logged out.' });
     } finally { restoreRevoke(); restoreInc(); }
@@ -93,7 +94,7 @@ test('agent-session controller preserves logout ordering and fallback behavior',
     try {
       const r = res(order);
       await controller.logout(req({ body: { refreshToken: 'tok' }, userInfo: { id: 'u' } }), r, assert.fail);
-      assert.deepEqual(order, ['revoke', 'clear', 'increment', 'clear']);
+      assert.deepEqual(order, ['revoke', 'clear', 'clear', 'increment', 'clear', 'clear']);
       assert.deepEqual(r.state.body, { success: true, message: 'Logged out.' });
     } finally { restoreRevoke(); restoreInc(); }
   });

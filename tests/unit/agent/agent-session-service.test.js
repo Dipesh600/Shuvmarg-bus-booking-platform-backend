@@ -27,10 +27,10 @@ test('agent-session service preserves token and repository boundaries', async (t
         deviceInfo: 'UA',
         ipAddress: '1.1.1.1',
       });
-      assert.deepEqual(args, ['tok', { deviceInfo: 'UA', ipAddress: '1.1.1.1' }]);
+      assert.deepEqual(args, ['tok', { deviceInfo: 'UA', ipAddress: '1.1.1.1', expectedActiveRole: 'agent' }]);
       assert.deepEqual(result, { accessToken: 'a', refreshToken: 'r', user: { id: 'u' } });
       await service.rotateSession({ refreshToken: 'tok2' });
-      assert.deepEqual(args, ['tok2', { deviceInfo: null, ipAddress: null }]);
+      assert.deepEqual(args, ['tok2', { deviceInfo: null, ipAddress: null, expectedActiveRole: 'agent' }]);
     } finally { restores.reverse().forEach((fn) => fn()); }
   });
 

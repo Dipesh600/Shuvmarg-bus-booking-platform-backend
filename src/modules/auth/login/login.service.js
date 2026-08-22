@@ -94,9 +94,11 @@ const runAuthentication = async ({ emailOrPhone, password, appSource, deviceInfo
     throw new AppError(message, 401, { success: false, message });
   }
 
+  const activeRole = loginPolicy.resolveActiveRole(user, appSource);
+
   if (user.forcePasswordChange) {
     const tempToken = jwt.sign(
-      { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE' },
+      { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE', activeRole },
       process.env.SECRET_KEY,
       { expiresIn: '15m' }
     );
@@ -110,8 +112,6 @@ const runAuthentication = async ({ emailOrPhone, password, appSource, deviceInfo
       },
     };
   }
-
-  const activeRole = loginPolicy.resolveActiveRole(user, appSource);
 
   const loginUpdate = {
     $set: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },

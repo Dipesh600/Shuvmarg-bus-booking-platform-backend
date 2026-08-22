@@ -4,21 +4,11 @@ const asyncHandler = require('../../../../shared/http/async-handler');
 const respond = require('../../../../shared/http/respond');
 const service = require('./bus-owner-session.service');
 const errors = require('./bus-owner-session.errors');
-
-const cookieOptions = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'Lax',
-});
-
-const refreshCookieOptions = () => ({
-  ...cookieOptions(),
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-});
+const { readPortalRefreshToken, setPortalRefreshCookie, clearPortalRefreshCookies } = require('../../../../../utils/portalSessionCookies');
 
 const refresh = asyncHandler(async (req, res) => {
   try {
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    const refreshToken = readPortalRefreshToken(req, 'busOwner');
     if (!refreshToken) throw errors.missingRefreshTokenError();
 
     const result = await service.rotateSession({
@@ -28,7 +18,7 @@ const refresh = asyncHandler(async (req, res) => {
     });
 
     if (result.refreshToken) {
-      res.cookie('refreshToken', result.refreshToken, refreshCookieOptions());
+      setPortalRefreshCookie(res, 'busOwner', result.refreshToken);
     }
 
     return respond(res, 200, {
@@ -45,11 +35,11 @@ const refresh = asyncHandler(async (req, res) => {
 
 const logout = asyncHandler(async (req, res) => {
   try {
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    const refreshToken = readPortalRefreshToken(req, 'busOwner');
 
     if (refreshToken) await service.revokeSessionToken(refreshToken);
 
-    res.clearCookie('refreshToken', cookieOptions());
+    clearPortalRefreshCookies(res, 'busOwner');
 
     const userId = req.userInfo?.id;
     if (userId) await service.invalidateAccessToken(userId);
@@ -60,7 +50,7 @@ const logout = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     console.error('[BusOwner logout] Error:', error.message);
-    res.clearCookie('refreshToken', cookieOptions());
+    clearPortalRefreshCookies(res, 'busOwner');
     return respond(res, 200, {
       success: true,
       message: 'Logged out successfully.',

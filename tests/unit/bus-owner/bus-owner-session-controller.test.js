@@ -61,7 +61,7 @@ test('bus-owner refresh controller preserves token, cookie and error contracts',
         ipAddress: '1.2.3.4',
       });
       assert.deepEqual(r.state.cookies[0], {
-        name: 'refreshToken',
+        name: 'busOwnerRefreshToken',
         value: 'r',
         options: {
           httpOnly: true,
@@ -108,7 +108,11 @@ test('bus-owner refresh controller preserves token, cookie and error contracts',
         const r = res();
         await controller.refresh(req({ body: { refreshToken: 'tok' } }), r, assert.fail);
         assert.equal(r.state.statusCode, status);
-        assert.deepEqual(r.state.body, { success: false, message: bodyMessage });
+        assert.deepEqual(r.state.body, {
+          success: false,
+          message: bodyMessage,
+          ...(msg === 'ROLE_REVOKED' && { errorCode: msg }),
+        });
       } finally { restoreCase(); }
     }
     const appErr = new AppError('custom', 418, { custom: true });

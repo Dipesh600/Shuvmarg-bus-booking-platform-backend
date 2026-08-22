@@ -6,13 +6,7 @@ const respond = require('../../../../shared/http/respond');
 const service = require('./bus-owner-registration.service');
 const errors = require('./bus-owner-registration.errors');
 const policy = require('./bus-owner-registration.policy');
-
-const cookieOptions = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'Lax',
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-});
+const { setPortalRefreshCookie } = require('../../../../../utils/portalSessionCookies');
 
 const handleError = (res, error, prefix, statusCode, body) => {
   if (error instanceof AppError) return respond(res, error.statusCode, error.responseBody);
@@ -61,7 +55,7 @@ const register = asyncHandler(async (req, res) => {
       deviceInfo: req.get('User-Agent') || null,
       ipAddress: req.ip || req.socket?.remoteAddress || null,
     });
-    if (result.refreshToken) res.cookie('refreshToken', result.refreshToken, cookieOptions());
+    setPortalRefreshCookie(res, 'busOwner', result.refreshToken);
     return respond(res, result.statusCode, result.responseBody);
   } catch (error) {
     if (error instanceof AppError) return respond(res, error.statusCode, error.responseBody);
