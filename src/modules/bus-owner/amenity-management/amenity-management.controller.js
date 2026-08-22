@@ -108,6 +108,17 @@ function createAmenityManagementController({ amenityService, logger = console })
   }
 
   return {
+    async getAvailableAmenities(req, res) {
+      const userId = req.userInfo?.id;
+      if (!userId) return unauthorized(res);
+      try {
+        const data = await amenityService.getAmenitiesForOwner(userId);
+        return res.status(200).json({ success: true, data });
+      } catch (error) {
+        logger.error("Error fetching available amenities:", error);
+        return res.status(500).json({ success: false, message: "Unable to load amenities." });
+      }
+    },
     createAmenity, getMyAmenities, updateAmenity, deleteAmenity, getAmenityById,
   };
 }

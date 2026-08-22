@@ -35,6 +35,7 @@ const busOwnerUploadService = createFleetDocumentUploadService({
 const busOwnerReadService = createFleetDocumentReadService({
   repository,
   getPresignedUrl: s3Service.getPresignedUrl,
+  fetchDocument: s3Service.getObjectFromS3,
   resolveActor: busOwnerActorResolver,
 });
 

@@ -35,7 +35,7 @@ test("bus-owner operations own the retired controller surface", () => {
     ["fleet-management", 6],
     ["boarding-point-management", 5],
     ["boarding-location-assignment", 7],
-    ["amenity-management", 5],
+    ["amenity-management", 6],
   ];
   for (const [name, count] of exportsByModule) {
     const moduleExports = require(

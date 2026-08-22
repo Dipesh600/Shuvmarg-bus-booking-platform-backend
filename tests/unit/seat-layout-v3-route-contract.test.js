@@ -63,7 +63,7 @@ test("owner V3 operational routes expose trip pricing and guarded place controls
 test("owner V3 routes expose catalog, adoption and reviewed fleet changes", () => {
   const methods = [
     "listCatalog", "listMyTemplates", "getTemplate", "adoptPlatformTemplate",
-    "createRevision", "submitRevision", "getFleetAssignment", "assignInitial", "createInitialCustomLayout", "requestChange",
+    "createRevision", "submitRevision", "getFleetAssignment", "assignInitial", "createInitialCustomLayout", "requestChange", "correctRejectedLayout",
   ];
   const value = recorder();
   const handlers = controller(methods);
@@ -72,4 +72,5 @@ test("owner V3 routes expose catalog, adoption and reviewed fleet changes", () =
   assert.ok(value.calls.every(([, path, stack]) => path.startsWith("/seat-layout-v3/") && stack.length >= 1));
   assert.ok(value.calls.filter(([method]) => method === "post").some(([, , stack]) => stack.length === 3));
   assert.ok(value.calls.some(([method, path]) => method === "post" && path.endsWith("/change-requests")));
+  assert.ok(value.calls.some(([method, path]) => method === "patch" && path.endsWith("/correction")));
 });

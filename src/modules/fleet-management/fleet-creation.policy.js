@@ -87,6 +87,8 @@ function createFleetCreationPolicy({
     if (input.amenityIds.length > 0) {
       const count = await BusAmenities.countDocuments({
         _id: { $in: input.amenityIds },
+        status: true,
+        $or: [{ type: "GLOBAL" }, { type: "CUSTOM", ownerId }],
       });
       if (count !== input.amenityIds.length) {
         throw new ApiError("FLEET_VALIDATION_FAILED", "One or more amenityIds are invalid.");

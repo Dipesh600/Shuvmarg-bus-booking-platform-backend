@@ -3,18 +3,21 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { validateFleetStatusRequest } = require("../../../src/modules/admin/fleet-management/fleet-status-request.policy");
+const { approvedFleetReviews, rejectedFleetReviews } = require("../../helpers/fleet-review-fixtures");
 
 test("fleet-approval-request-policy unit tests", async (t) => {
   const validObjectId = "64f000000000000000000002";
 
   await t.test("accepts valid APPROVED request without rejectionReason", () => {
-    const result = validateFleetStatusRequest({ fleetId: validObjectId, status: "APPROVED" });
-    assert.deepEqual(result, { fleetId: validObjectId, decision: "APPROVED", rejectionReason: null });
+    const reviews = approvedFleetReviews();
+    const result = validateFleetStatusRequest({ fleetId: validObjectId, status: "APPROVED", reviews });
+    assert.deepEqual(result, { fleetId: validObjectId, decision: "APPROVED", rejectionReason: null, reviews });
   });
 
   await t.test("accepts valid REJECTED request with trimmed rejectionReason", () => {
-    const result = validateFleetStatusRequest({ fleetId: validObjectId, status: "REJECTED", rejectionReason: "  Document signature missing  " });
-    assert.deepEqual(result, { fleetId: validObjectId, decision: "REJECTED", rejectionReason: "Document signature missing" });
+    const reviews = rejectedFleetReviews("insurance", "Document signature missing");
+    const result = validateFleetStatusRequest({ fleetId: validObjectId, status: "REJECTED", rejectionReason: "  Document signature missing  ", reviews });
+    assert.deepEqual(result, { fleetId: validObjectId, decision: "REJECTED", rejectionReason: "Document signature missing", reviews });
   });
 
   await t.test("rejects missing or invalid fleetId", () => {
@@ -44,5 +47,25 @@ test("fleet-approval-request-policy unit tests", async (t) => {
     assert.throws(() => validateFleetStatusRequest({ fleetId: validObjectId, status: "REJECTED", rejectionReason: "   " }), (err) => err.code === "FLEET_STATUS_INVALID_REJECTION_REASON");
     assert.throws(() => validateFleetStatusRequest({ fleetId: validObjectId, status: "REJECTED", rejectionReason: "Tiny" }), (err) => err.code === "FLEET_STATUS_INVALID_REJECTION_REASON");
     assert.throws(() => validateFleetStatusRequest({ fleetId: validObjectId, status: "REJECTED", rejectionReason: "A".repeat(501) }), (err) => err.code === "FLEET_STATUS_INVALID_REJECTION_REASON");
+  });
+
+  await t.test("requires a decision for every review item", () => {
+    const reviews = approvedFleetReviews();
+    delete reviews.routeSetup;
+    assert.throws(
+      () => validateFleetStatusRequest({ fleetId: validObjectId, status: "APPROVED", reviews }),
+      (err) => err.code === "FLEET_REVIEW_INCOMPLETE" && err.field === "reviews.routeSetup"
+    );
+  });
+
+  await t.test("cannot approve with a rejected item or request changes with none", () => {
+    assert.throws(
+      () => validateFleetStatusRequest({ fleetId: validObjectId, status: "APPROVED", reviews: rejectedFleetReviews() }),
+      (err) => err.code === "FLEET_REVIEW_HAS_REJECTIONS"
+    );
+    assert.throws(
+      () => validateFleetStatusRequest({ fleetId: validObjectId, status: "REJECTED", rejectionReason: "Please correct the submission", reviews: approvedFleetReviews() }),
+      (err) => err.code === "FLEET_REVIEW_REJECTION_REQUIRED"
+    );
   });
 });

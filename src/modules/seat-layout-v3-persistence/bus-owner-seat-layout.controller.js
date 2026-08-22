@@ -61,6 +61,11 @@ function createBusOwnerSeatLayoutController(services, logger = console) {
         req.params.fleetId, requiredBodyId(req, "proposedRevisionId"), ownerActor(req)
       )),
     })),
+    correctRejectedLayout: attempt(async (req, res) => res.json({
+      success: true, data: assignmentDto(await services.fleets.correctRejectedLayout(
+        req.params.fleetId, requiredBodyId(req, "proposedRevisionId"), ownerActor(req)
+      )),
+    })),
   };
 }
 

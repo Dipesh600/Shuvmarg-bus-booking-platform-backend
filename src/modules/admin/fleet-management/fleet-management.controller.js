@@ -13,6 +13,7 @@ function send(res, result) {
 
 function createFleetManagementController({
   updateFleetStatus,
+  saveFleetReviewItem,
   getFleetDashboard,
   readService = defaultReadService,
   console: logger = console,
@@ -47,6 +48,21 @@ function createFleetManagementController({
         return res.status(200).json(result);
       } catch (error) {
         logger.error("Error updating fleet status:", error);
+        const { statusCode, payload } = mapFleetApprovalError(error);
+        return res.status(statusCode).json(payload);
+      }
+    },
+
+    async saveFleetReviewItem(req, res) {
+      try {
+        const result = await saveFleetReviewItem({
+          ...(req.body || {}),
+          fleetId: req.params.fleetId,
+          key: req.params.key,
+          actor: getAdminActor(req),
+        });
+        return res.status(200).json(result);
+      } catch (error) {
         const { statusCode, payload } = mapFleetApprovalError(error);
         return res.status(statusCode).json(payload);
       }
