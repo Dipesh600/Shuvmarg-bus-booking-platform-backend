@@ -79,7 +79,7 @@ test('bus-owner registration controller adapts HTTP exactly', async (t) => {
       assert.equal(dto.deviceInfo, 'UA');
       assert.equal(dto.ipAddress, '1.1.1.1');
       assert.equal(dto.ignored, undefined);
-      assert.deepEqual(output.cookies, [['refreshToken', 'refresh', {
+      assert.deepEqual(output.cookies, [['busOwnerRefreshToken', 'refresh', {
         httpOnly: true,
         secure: false,
         sameSite: 'Lax',

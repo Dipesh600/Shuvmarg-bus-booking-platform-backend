@@ -14,7 +14,7 @@ const tokenService = require('../../utils/tokenService');
 
 const password = 'AgentPass123!';
 const cookieToken = (res) => (res.headers['set-cookie'] || [])
-  .find((c) => c.startsWith('refreshToken='))
+  .find((c) => c.startsWith('agentRefreshToken='))
   ?.split(';')[0]
   .split('=')[1];
 
@@ -68,7 +68,7 @@ test('Agent session refresh characterization', async (t) => {
       .set('Cookie', [`refreshToken=${refreshToken}`]);
     assert.equal(res.status, 200);
     const setCookie = res.headers['set-cookie'] || [];
-    const refreshCookie = setCookie.find((c) => c.startsWith('refreshToken='));
+    const refreshCookie = setCookie.find((c) => c.startsWith('agentRefreshToken='));
     assert.ok(refreshCookie);
     assert.match(refreshCookie, /HttpOnly/i);
     assert.match(refreshCookie, /SameSite=Lax/i);
@@ -86,7 +86,7 @@ test('Agent session refresh characterization', async (t) => {
     const newToken = cookieToken(res);
     const newRes = await request(app)
       .post('/api/auth/agent/refresh')
-      .set('Cookie', [`refreshToken=${newToken}`]);
+      .set('Cookie', [`agentRefreshToken=${newToken}`]);
     assert.equal(newRes.status, 200);
     assert.ok(newRes.body.accessToken);
   });

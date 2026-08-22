@@ -56,7 +56,7 @@ test('Auth: changeForcePassword success and partial OTP legacy behavior', async 
     const tokens = await RefreshToken.find({ userId: u._id });
     assert.equal(tokens.length, 1);
     assert.equal(tokens[0].deviceInfo, 'ForceBrowser/1.0');
-    const cookie = res.headers['set-cookie'].find((c) => c.startsWith('refreshToken='));
+    const cookie = res.headers['set-cookie'].find((c) => c.startsWith('passengerRefreshToken='));
     assert.ok(cookie.includes('HttpOnly'));
     assert.ok(cookie.includes('SameSite=Lax'));
     assert.ok(cookie.includes('Max-Age=604800'));

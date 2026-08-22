@@ -26,7 +26,7 @@ const seed = (fields = {}) => User.create({
   ...fields,
 });
 const login = (u) => request(app).post('/api/auth/agent/login').send({ phone: u.phone, password });
-const refreshCookie = (res) => (res.headers['set-cookie'] || []).find((c) => c.startsWith('refreshToken='));
+const refreshCookie = (res) => (res.headers['set-cookie'] || []).find((c) => c.startsWith('agentRefreshToken='));
 
 test('Agent login success and force-password characterization', async (t) => {
   t.before(async () => db.connect());
@@ -43,6 +43,7 @@ test('Agent login success and force-password characterization', async (t) => {
     const decoded = jwt.verify(res.body.tempToken, process.env.SECRET_KEY);
     assert.equal(String(decoded.id), String(u._id));
     assert.equal(decoded.purpose, 'FORCE_PASSWORD_CHANGE');
+    assert.equal(decoded.activeRole, 'agent');
     assert.ok(decoded.exp - decoded.iat <= 15 * 60);
     assert.equal(res.body.accessToken, undefined);
     assert.equal(refreshCookie(res), undefined);
@@ -70,7 +71,7 @@ test('Agent login success and force-password characterization', async (t) => {
     const token = cookie.split(';')[0].split('=')[1];
     const refresh = await request(app)
       .post('/api/auth/agent/refresh')
-      .set('Cookie', [`refreshToken=${token}`]);
+      .set('Cookie', [`agentRefreshToken=${token}`]);
     assert.equal(refresh.status, 200);
     const fresh = await User.findById(u._id);
     assert.equal(fresh.failedLoginAttempts, 0);

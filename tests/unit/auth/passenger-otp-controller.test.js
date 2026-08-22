@@ -85,9 +85,9 @@ test('passenger OTP controller', async (t) => {
     try {
       const res = mockRes();
       await verifyOTP(mockReq({ phone: '9800000013', otp: '123456' }), res, next);
-      assert.ok(res.cookies.refreshToken, 'cookie must be set');
-      assert.equal(res.cookies.refreshToken.val, 'rt123');
-      assert.equal(res.cookies.refreshToken.opts.httpOnly, true);
+      assert.ok(res.cookies.passengerRefreshToken, 'cookie must be set');
+      assert.equal(res.cookies.passengerRefreshToken.val, 'rt123');
+      assert.equal(res.cookies.passengerRefreshToken.opts.httpOnly, true);
       assert.equal(res.body.refreshToken, undefined, 'must not appear in response body');
     } finally { restore.reverse().forEach((fn) => fn()); }
   });
@@ -110,7 +110,7 @@ test('passenger OTP controller', async (t) => {
     try {
       const res = mockRes();
       await verifyOTP(mockReq({ phone: '9800000015', otp: '999999' }), res, next);
-      assert.equal(res.cookies.refreshToken, undefined);
+      assert.equal(res.cookies.passengerRefreshToken, undefined);
     } finally { restore.reverse().forEach((fn) => fn()); }
   });
 });

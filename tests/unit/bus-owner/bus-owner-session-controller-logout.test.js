@@ -45,11 +45,12 @@ test('bus-owner logout controller preserves ordering and fallback behavior', asy
         body: { refreshToken: 'body' },
         userInfo: { id: 'u1' },
       }), r, assert.fail);
-      assert.deepEqual(order, ['revoke:cookie', 'clear', 'increment:u1']);
+      assert.deepEqual(order, ['revoke:cookie', 'clear', 'clear', 'increment:u1']);
       assert.deepEqual(r.state.clears[0], {
-        name: 'refreshToken',
+        name: 'busOwnerRefreshToken',
         options: { httpOnly: true, secure: false, sameSite: 'Lax' },
       });
+      assert.equal(r.state.clears[1].name, 'refreshToken');
       assert.deepEqual(r.state.body, {
         success: true,
         message: 'Logged out successfully.',
@@ -63,7 +64,7 @@ test('bus-owner logout controller preserves ordering and fallback behavior', asy
     const ri = patch('invalidateAccessToken', async () => assert.fail('no increment'));
     try {
       await controller.logout(req(), res(order), assert.fail);
-      assert.deepEqual(order, ['clear']);
+      assert.deepEqual(order, ['clear', 'clear']);
     } finally { rr(); ri(); }
   });
 
@@ -77,7 +78,7 @@ test('bus-owner logout controller preserves ordering and fallback behavior', asy
     try {
       const r = res(order);
       await controller.logout(req({ body: { refreshToken: 'tok' }, userInfo: { id: 'u' } }), r, assert.fail);
-      assert.deepEqual(order, ['revoke', 'clear']);
+      assert.deepEqual(order, ['revoke', 'clear', 'clear']);
       assert.deepEqual(r.state.body, {
         success: true,
         message: 'Logged out successfully.',

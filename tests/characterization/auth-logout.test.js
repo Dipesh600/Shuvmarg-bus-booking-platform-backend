@@ -35,7 +35,7 @@ test('Auth: Logout Characterization', async (t) => {
     });
     
     const cookies = loginRes.headers['set-cookie'] || [];
-    validRefreshToken = cookies.find(c => c.includes('refreshToken=')).split(';')[0].split('=')[1];
+    validRefreshToken = cookies.find(c => c.startsWith('passengerRefreshToken=')).split(';')[0].split('=')[1];
   });
 
   await t.test('POST /api/logout - Success without token', async () => {
@@ -45,24 +45,24 @@ test('Auth: Logout Characterization', async (t) => {
     assert.equal(res.body.message, 'Logged out successfully.');
 
     const cookies = res.headers['set-cookie'] || [];
-    const clearedCookie = cookies.find(c => c.includes('refreshToken='));
+    const clearedCookie = cookies.find(c => c.startsWith('passengerRefreshToken='));
     assert.ok(clearedCookie, 'should set a cookie');
     assert.ok(clearedCookie.toLowerCase().includes('expires='), 'should expire the cookie');
   });
 
   await t.test('POST /api/logout - Success with valid token (revokes token)', async () => {
-    const res = await request(app).post('/api/logout').set('Cookie', [`refreshToken=${validRefreshToken}`]);
+    const res = await request(app).post('/api/logout').set('Cookie', [`passengerRefreshToken=${validRefreshToken}`]);
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
     assert.equal(res.body.message, 'Logged out successfully.');
 
     const cookies = res.headers['set-cookie'] || [];
-    const clearedCookie = cookies.find(c => c.includes('refreshToken='));
+    const clearedCookie = cookies.find(c => c.startsWith('passengerRefreshToken='));
     assert.ok(clearedCookie, 'should set a cookie');
     assert.ok(clearedCookie.toLowerCase().includes('expires='), 'should expire the cookie');
 
     // Token reuse should be prevented
-    const reuseRes = await request(app).post('/api/refresh').set('Cookie', [`refreshToken=${validRefreshToken}`]);
+    const reuseRes = await request(app).post('/api/refresh').set('Cookie', [`passengerRefreshToken=${validRefreshToken}`]);
     assert.equal(reuseRes.status, 401);
     assert.equal(reuseRes.body.success, false);
     assert.equal(reuseRes.body.message, 'Invalid or revoked refresh token. Please login again.');
@@ -72,7 +72,7 @@ test('Auth: Logout Characterization', async (t) => {
     const userBefore = await User.findById(user._id);
     const beforeTokenVersion = userBefore.tokenVersion || 0;
     
-    await request(app).post('/api/logout').set('Cookie', [`refreshToken=${validRefreshToken}`]);
+    await request(app).post('/api/logout').set('Cookie', [`passengerRefreshToken=${validRefreshToken}`]);
     
     const userAfter = await User.findById(user._id);
     assert.equal(userAfter.tokenVersion || 0, beforeTokenVersion);
@@ -89,7 +89,7 @@ test('Auth: Logout Characterization', async (t) => {
     // Prove the body token was consumed — it must no longer be refreshable
     const refreshRes = await request(app)
       .post('/api/refresh')
-      .set('Cookie', [`refreshToken=${validRefreshToken}`]);
+      .set('Cookie', [`passengerRefreshToken=${validRefreshToken}`]);
     assert.equal(refreshRes.status, 401);
     assert.equal(refreshRes.body.success, false);
     assert.equal(refreshRes.body.message, 'Invalid or revoked refresh token. Please login again.');
@@ -99,7 +99,7 @@ test('Auth: Logout Characterization', async (t) => {
     // Body has a bad token; cookie has the real one — both should still result in 200
     const res = await request(app)
       .post('/api/logout')
-      .set('Cookie', [`refreshToken=${validRefreshToken}`])
+      .set('Cookie', [`passengerRefreshToken=${validRefreshToken}`])
       .send({ refreshToken: 'bad-body-token' });
     assert.equal(res.status, 200);
     assert.equal(res.body.success, true);
@@ -107,7 +107,7 @@ test('Auth: Logout Characterization', async (t) => {
     // The real token from cookie should now be revoked
     const reuseRes = await request(app)
       .post('/api/refresh')
-      .set('Cookie', [`refreshToken=${validRefreshToken}`]);
+      .set('Cookie', [`passengerRefreshToken=${validRefreshToken}`]);
     assert.equal(reuseRes.status, 401);
   });
 });

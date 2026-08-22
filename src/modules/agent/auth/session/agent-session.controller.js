@@ -4,21 +4,11 @@ const asyncHandler = require('../../../../shared/http/async-handler');
 const respond = require('../../../../shared/http/respond');
 const service = require('./agent-session.service');
 const errors = require('./agent-session.errors');
-
-const cookieOptions = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'Lax',
-});
-
-const refreshCookieOptions = () => ({
-  ...cookieOptions(),
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-});
+const { readPortalRefreshToken, setPortalRefreshCookie, clearPortalRefreshCookies } = require('../../../../../utils/portalSessionCookies');
 
 const refresh = asyncHandler(async (req, res) => {
   try {
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    const refreshToken = readPortalRefreshToken(req, 'agent');
     if (!refreshToken) throw errors.missingRefreshTokenError();
 
     const result = await service.rotateSession({
@@ -28,7 +18,7 @@ const refresh = asyncHandler(async (req, res) => {
     });
 
     if (result.refreshToken) {
-      res.cookie('refreshToken', result.refreshToken, refreshCookieOptions());
+      setPortalRefreshCookie(res, 'agent', result.refreshToken);
     }
 
     return respond(res, 200, {
@@ -45,11 +35,11 @@ const refresh = asyncHandler(async (req, res) => {
 
 const logout = asyncHandler(async (req, res) => {
   try {
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+    const refreshToken = readPortalRefreshToken(req, 'agent');
 
     if (refreshToken) await service.revokeSessionToken(refreshToken);
 
-    res.clearCookie('refreshToken', cookieOptions());
+    clearPortalRefreshCookies(res, 'agent');
 
     const userId = req.userInfo?.id;
     if (userId) await service.invalidateAccessToken(userId);
@@ -61,7 +51,7 @@ const logout = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('[Agent logout] Error:', error.message);
     try {
-      res.clearCookie('refreshToken', cookieOptions());
+      clearPortalRefreshCookies(res, 'agent');
     } catch (clearError) {
       console.error('[Agent logout] Error:', clearError.message);
     }

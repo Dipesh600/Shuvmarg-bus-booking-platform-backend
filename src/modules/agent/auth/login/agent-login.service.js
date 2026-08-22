@@ -42,7 +42,7 @@ const handleInvalidPassword = async (user) => {
 
 const forcePasswordResult = (user) => {
   const tempToken = jwt.sign(
-    { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE' },
+    { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'agent' },
     process.env.SECRET_KEY,
     { expiresIn: '15m' },
   );

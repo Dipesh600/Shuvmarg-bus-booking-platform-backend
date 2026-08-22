@@ -151,7 +151,6 @@ const generateTokenPair = async (user, meta = {}) => {
 const rotateRefreshToken = async (oldRefreshToken, meta = {}) => {
     const oldHash = hashToken(oldRefreshToken);
 
-    // Find the stored refresh token
     const storedToken = await RefreshToken.findOne({ tokenHash: oldHash });
     if (!storedToken) {
         throw new Error("INVALID_REFRESH_TOKEN");
@@ -163,8 +162,9 @@ const rotateRefreshToken = async (oldRefreshToken, meta = {}) => {
         throw new Error("REFRESH_TOKEN_EXPIRED");
     }
 
-    // Preserve the activeRole from the original session
     const sessionActiveRole = storedToken.activeRole || "passenger";
+
+    if (meta.expectedActiveRole && sessionActiveRole !== meta.expectedActiveRole) throw new Error("SESSION_ROLE_MISMATCH");
 
     // Delete the old refresh token (single-use)
     await RefreshToken.deleteOne({ _id: storedToken._id });
