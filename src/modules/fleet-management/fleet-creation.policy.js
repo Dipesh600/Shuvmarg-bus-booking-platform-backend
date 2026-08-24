@@ -1,7 +1,5 @@
 "use strict";
-
 const { ApiError } = require("../../contracts");
-
 function parseJson(value, fallback, field = "value") {
   if (!value) return fallback;
   try {
@@ -10,7 +8,6 @@ function parseJson(value, fallback, field = "value") {
     throw new ApiError("FLEET_VALIDATION_FAILED", `${field} must be valid JSON.`);
   }
 }
-
 function parseStringArray(value, field) {
   const parsed = parseJson(value, [], field);
   if (!Array.isArray(parsed)) {
@@ -22,7 +19,6 @@ function parseStringArray(value, field) {
   }
   return normalized;
 }
-
 function parseCreationInput(data) {
   const required = [
     "busName", "busNumber", "busType", "totalSeats", "vehicleType",
@@ -81,7 +77,6 @@ function parseCreationInput(data) {
     requestViaStops: parseStringArray(data.requestViaStops, "requestViaStops"),
   };
 }
-
 function createFleetCreationPolicy({
   Bus,
   BusAmenities,
@@ -121,7 +116,6 @@ function createFleetCreationPolicy({
       throw new ApiError("FLEET_VALIDATION_FAILED", "Invalid boardingPointId provided.");
     }
   }
-
   async function validateBrand(brandId, ownerId) {
     if (!brandId) {
       throw new ApiError("FLEET_BRAND_REQUIRED", "Operator brand is required.");
@@ -148,8 +142,6 @@ function createFleetCreationPolicy({
     }
     return brand;
   }
-
   return { validateReferences, validateBrand };
 }
-
 module.exports = { createFleetCreationPolicy, parseCreationInput, parseJson };
