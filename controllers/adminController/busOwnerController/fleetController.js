@@ -48,9 +48,11 @@ const createFleetForOwner = async (req, res) => {
         });
     } catch (error) {
         console.error("createFleetForOwner error:", error);
-        return res.status(error.message.includes("exists") ? 409 : 400).json({
+        const status = error.statusCode || (error.message.includes("exists") ? 409 : 400);
+        return res.status(status).json({
             success: false,
             message: error.message || "Internal Server Error",
+            ...(error.code ? { errorCode: error.code } : {}),
         });
     }
 };
@@ -124,10 +126,11 @@ const updateFleetByAdmin = async (req, res) => {
         });
     } catch (error) {
         console.error("updateFleetByAdmin error:", error);
-        const status = error.message.includes("found") ? 404 : (error.message.includes("exists") ? 409 : 400);
+        const status = error.statusCode || (error.message.includes("found") ? 404 : (error.message.includes("exists") ? 409 : 400));
         return res.status(status).json({
             success: false,
             message: error.message || "Internal Server Error",
+            ...(error.code ? { errorCode: error.code } : {}),
         });
     }
 };

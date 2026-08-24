@@ -21,6 +21,7 @@ function mapBusOwnerFleetListItem(fleet) {
     isApproved: fleet.approvalStatus === "APPROVED" || fleet.isApproved || false,
     rejectionReason: fleet.rejectionReason || null,
     setupComplete: fleet.setupComplete || false,
+    createdBy: fleet.createdBy || "BUS_OWNER",
     documentSummary: docSummary,
     createdAt: toIsoDate(fleet.createdAt),
     updatedAt: toIsoDate(fleet.updatedAt),
