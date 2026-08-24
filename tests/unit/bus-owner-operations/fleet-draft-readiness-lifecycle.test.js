@@ -68,9 +68,13 @@ test("24. Empty document schema default objects do not satisfy submission readin
 
 test("27. Draft document reviews default to not_submitted", () => {
   const { mapBusOwnerFleetDetail } = require("../../../src/modules/read-contracts/fleet/bus-owner-fleet-detail.dto");
-  const draftFleet = createMockFleet({ approvalStatus: "DRAFT" });
+  const { mapBusOwnerFleetListItem } = require("../../../src/modules/read-contracts/fleet/bus-owner-fleet-list.dto");
+  const draftFleet = createMockFleet({ approvalStatus: "DRAFT", createdBy: "ADMIN" });
   const detail = mapBusOwnerFleetDetail(draftFleet);
+  const listItem = mapBusOwnerFleetListItem(draftFleet);
   assert.equal(detail.approvalStatus, "DRAFT");
+  assert.equal(detail.createdBy, "ADMIN");
+  assert.equal(listItem.createdBy, "ADMIN");
 });
 
 test("submission requires four named photo views and a matching published seat layout", () => {

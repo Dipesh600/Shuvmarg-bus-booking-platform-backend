@@ -49,6 +49,7 @@ const updatePolicy = createFleetUpdatePolicy({
 });
 const update = createFleetUpdateService({
   Bus, BusAmenities, repository, policy: updatePolicy, storage, mapper,
+  validateBrand: creationPolicy.validateBrand,
 });
 const queries = createFleetQueryService({ repository, mapper });
 const review = createFleetReviewService({ repository, storage, mapper });
