@@ -134,7 +134,7 @@ test("generic admin lifecycle mutation is rejected before storage or persistence
         throw error;
       },
     },
-    repository: { findDocument: async () => ({ _id: "f", approvalStatus: "PENDING" }) },
+    repository: { findDocument: async () => ({ _id: "f", approvalStatus: "DRAFT" }) },
     storage: { replaceFleetImages: async () => { storageCalled = true; } },
     mapper: { withPresignedUrls: async (fleet) => fleet },
   });

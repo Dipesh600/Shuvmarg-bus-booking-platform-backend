@@ -13,7 +13,7 @@ const data = {
   registrationYear: 2024,
 };
 
-function setup({ failUpload = false } = {}) {
+function setup({ failUpload = false, existingDraft = null } = {}) {
   const events = [];
   let skeleton;
   class Bus {
@@ -23,6 +23,7 @@ function setup({ failUpload = false } = {}) {
     }
     async save() { events.push("fleet.save"); return this; }
     static findByIdAndDelete(id) { events.push(`fleet.delete:${id}`); return Promise.resolve(); }
+    static async findOne() { return existingDraft; }
   }
   class RouteRequest {
     constructor(fields) { Object.assign(this, fields, { _id: "route-1" }); }
@@ -76,6 +77,23 @@ test("creation failure deletes uploaded keys and skeleton, then rethrows", async
   ]);
   assert.equal(h.logs.length, 1);
   assert.match(h.logs[0][0], /Cleaning up S3 orphans/);
+});
+
+test("retry upload failure preserves the existing resumable draft", async () => {
+  const existingDraft = {
+    _id: "fleet-existing",
+    ownerId: "owner",
+    approvalStatus: "DRAFT",
+    async save() { return this; },
+  };
+  const h = setup({ failUpload: true, existingDraft });
+  await assert.rejects(
+    h.service.createFleet("owner", data, {}), /upload failed/
+  );
+  assert.equal(h.events.some((event) => event.startsWith("fleet.delete:")), false);
+  assert.equal(existingDraft.busNumber, undefined);
+  assert.equal(existingDraft.busName, "Bus");
+  assert.deepEqual(existingDraft.amenityIds, []);
 });
 
 test("creation: invalid brand throws before creating route request or fleet skeleton (zero DB writes)", async () => {

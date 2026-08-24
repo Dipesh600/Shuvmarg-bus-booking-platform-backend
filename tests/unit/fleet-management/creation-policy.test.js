@@ -24,15 +24,26 @@ test("fleet creation input preserves legacy parsing contracts", () => {
   );
   const input = parseCreationInput({
     ...valid(), registrationYear: "2024", seatConfig: '{"deck":1}',
-    amenityIds: "invalid", requestViaStops: '["Pokhara"]',
+    amenityIds: '["wifi"]', requestViaStops: '["Pokhara"]',
   });
   assert.equal(input.busNumber, "BA 1 KHA 22");
   assert.equal(input.totalSeats, 40);
   assert.equal(input.registrationYear, 2024);
   assert.equal(input.vehicleType, "bus");
   assert.deepEqual(input.seatConfig, { deck: 1 });
-  assert.deepEqual(input.amenityIds, []);
+  assert.deepEqual(input.amenityIds, ["wifi"]);
   assert.deepEqual(input.requestViaStops, ["Pokhara"]);
+});
+
+test("fleet creation rejects malformed or non-array catalog payloads instead of silently dropping data", () => {
+  assert.throws(
+    () => parseCreationInput({ ...valid(), registrationYear: "2024", amenityIds: "invalid" }),
+    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
+  );
+  assert.throws(
+    () => parseCreationInput({ ...valid(), registrationYear: "2024", requestViaStops: '"Pokhara"' }),
+    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
+  );
 });
 
 test("fleet creation requires a bounded registration year and normalizes vehicle type", () => {

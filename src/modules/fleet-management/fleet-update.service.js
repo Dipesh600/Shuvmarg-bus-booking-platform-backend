@@ -10,6 +10,7 @@ function createFleetUpdateService({
   policy,
   storage,
   mapper,
+  validateBrand,
 }) {
   async function updateFleetDetails(
     fleetId,
@@ -26,6 +27,13 @@ function createFleetUpdateService({
         409
       );
     }
+    if (!ownerId && fleet.approvalStatus === "PENDING") {
+      throw new ApiError(
+        "FLEET_MUTATION_LOCKED",
+        "Fleet is currently under review and cannot be edited through the generic admin update endpoint.",
+        409
+      );
+    }
     const correctingRejectedFleet = ownerId && fleet.approvalStatus === "REJECTED";
     const granularCorrection = correctingRejectedFleet && hasGranularReviewDecision(fleet);
     const correctingVehicleDetails = correctingRejectedFleet && (
@@ -38,6 +46,7 @@ function createFleetUpdateService({
       policy.rejectLifecycleUpdate(updateData);
     }
     if (ownerId) policy.restrictOwnerUpdate(updateData);
+    else if (typeof policy.restrictAdminUpdate === "function") policy.restrictAdminUpdate(updateData);
     if (correctingVehicleDetails) {
       updateData["sectionReviews.vehicleDetails"] = {
         status: "not_submitted", reason: null, reviewedBy: null, reviewedAt: null,
@@ -46,6 +55,9 @@ function createFleetUpdateService({
     policy.lockApprovedIdentity(fleet, updateData, ownerId);
     if (typeof policy.validateIdentityUpdate === "function") {
       policy.validateIdentityUpdate(updateData);
+    }
+    if (updateData.brandId && typeof validateBrand === "function") {
+      await validateBrand(updateData.brandId, fleet.ownerId);
     }
     const images = await storage.replaceFleetImages(fleet, files);
     if (images) updateData.fleetImages = images;

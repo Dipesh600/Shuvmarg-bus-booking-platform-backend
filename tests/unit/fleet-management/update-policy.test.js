@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const { ApiError } = require("../../../src/contracts");
 const {
   createFleetUpdatePolicy,
+  restrictAdminUpdate,
   restrictOwnerUpdate,
   lockApprovedIdentity,
   rejectLifecycleUpdate,
@@ -13,6 +14,18 @@ const {
 test("owner updates discard fields outside the legacy allow-list", () => {
   const update = { busName: "Safe", approvalStatus: "APPROVED", ownerId: "evil" };
   restrictOwnerUpdate(update);
+  assert.deepEqual(update, { busName: "Safe" });
+});
+
+test("generic admin updates cannot reassign fleet ownership or write internal state", () => {
+  const update = {
+    busName: "Safe",
+    ownerId: "another-owner",
+    createdBy: "BUS_OWNER",
+    adminCreationNotification: { status: "DELIVERED" },
+    status: "ACTIVE",
+  };
+  restrictAdminUpdate(update);
   assert.deepEqual(update, { busName: "Safe" });
 });
 
@@ -28,7 +41,7 @@ test("approved fleets retain locked identity and layout fields", () => {
   const update = {
     busName: "Allowed", busNumber: "blocked", vehicleType: "blocked",
     registrationYear: 2025, seatConfig: {}, totalSeats: 50,
-    busType: "blocked", corridorId: "blocked",
+    busType: "blocked", corridorId: "blocked", brandId: "blocked",
   };
   lockApprovedIdentity({ approvalStatus: "APPROVED" }, update, "owner");
   assert.deepEqual(update, { busName: "Allowed" });
