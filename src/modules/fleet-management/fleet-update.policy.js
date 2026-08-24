@@ -50,6 +50,8 @@ const APPROVED_LOCKED_FIELDS = [
   "totalSeats",
   "busType",
   "corridorId",
+  "brandId",
+  "fleetGroupId",
 ];
 function sanitizeUpdatePayload(updateData, ownerId = null) { if (ownerId) { for (const field of FORBIDDEN_UPDATE_FIELDS) { delete updateData[field];
     }
@@ -67,10 +69,15 @@ function restrictOwnerUpdate(updateData) { const sanitized = {};
   Object.assign(updateData, sanitized);
   sanitizeUpdatePayload(updateData, "owner");
 }
+function restrictAdminUpdate(updateData) { const sanitized = {};
+  for (const key of Object.keys(updateData || {})) { if (OWNER_PERMITTED_FIELDS.has(key)) sanitized[key] = updateData[key];
+  }
+  for (const key of Object.keys(updateData || {})) delete updateData[key];
+  Object.assign(updateData, sanitized);
+}
 function lockApprovedIdentity(fleet, updateData, ownerId = null) { sanitizeUpdatePayload(updateData, ownerId);
   if (fleet.approvalStatus !== "APPROVED") return;
-  if (ownerId) { for (const field of APPROVED_LOCKED_FIELDS) delete updateData[field];
-  }
+  for (const field of APPROVED_LOCKED_FIELDS) delete updateData[field];
 }
 function parseJsonField(updateData, field) { if (!updateData[field] || typeof updateData[field] !== "string") return;
   try { updateData[field] = JSON.parse(updateData[field]);
@@ -122,6 +129,7 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) { asyn
   }
   return { rejectLifecycleUpdate,
     restrictOwnerUpdate,
+    restrictAdminUpdate,
     lockApprovedIdentity,
     normalizeBusNumber,
     verifySeatLayout,
@@ -131,6 +139,7 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) { asyn
 }
 module.exports = { createFleetUpdatePolicy,
   restrictOwnerUpdate,
+  restrictAdminUpdate,
   lockApprovedIdentity,
   OWNER_PERMITTED_FIELDS,
   validateIdentityUpdate,

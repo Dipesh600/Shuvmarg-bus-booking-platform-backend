@@ -36,8 +36,6 @@ function createFleetCreationService({
     const input = parseCreationInput(fleetData);
     await policy.validateReferences(input, ownerId);
     await policy.validateBrand(input.brandId, ownerId);
-    const routeRequest = await createRouteRequest(ownerId, input);
-
     const existingDraft = typeof Bus.findOne === "function"
       ? await Bus.findOne({
           ownerId,
@@ -46,7 +44,10 @@ function createFleetCreationService({
         })
       : null;
 
+    const routeRequest = await createRouteRequest(ownerId, input);
+
     let savedFleet;
+    const createdNewFleet = !existingDraft;
     if (existingDraft) {
       existingDraft.brandId = input.brandId;
       existingDraft.busName = input.busName;
@@ -55,7 +56,9 @@ function createFleetCreationService({
       existingDraft.seatConfig = input.seatConfig;
       existingDraft.vehicleType = input.vehicleType;
       existingDraft.registrationYear = input.registrationYear;
+      existingDraft.amenitiesId = input.amenitiesId || null;
       existingDraft.amenityIds = input.amenityIds;
+      existingDraft.boardingPointId = input.boardingPointId || null;
       existingDraft.corridorId = input.corridorId || null;
       if (routeRequest?._id) existingDraft.routeRequestId = routeRequest._id;
       savedFleet = await existingDraft.save();
@@ -113,7 +116,11 @@ function createFleetCreationService({
       if (uploadedKeys.length > 0) {
         await storage.deleteFromS3(uploadedKeys);
       }
-      await Bus.findByIdAndDelete(savedFleet._id).catch(() => {});
+      // Never destroy an existing resumable draft because a retry's storage
+      // operation failed. Only remove the skeleton created by this invocation.
+      if (createdNewFleet) {
+        await Bus.findByIdAndDelete(savedFleet._id).catch(() => {});
+      }
       throw error;
     }
   }

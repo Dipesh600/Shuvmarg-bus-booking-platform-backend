@@ -48,6 +48,7 @@ function mapBusOwnerFleetDetail(fleet, routeSetup, seatLayout = {}) {
     isApproved: fleet.approvalStatus === "APPROVED" || fleet.isApproved || false,
     rejectionReason: fleet.rejectionReason || null,
     setupComplete: fleet.setupComplete || false,
+    createdBy: fleet.createdBy || "BUS_OWNER",
     documents: docDescriptors,
     documentSummary: docSummary,
     reviewRequirements: mapFleetReviewRequirements(fleet),

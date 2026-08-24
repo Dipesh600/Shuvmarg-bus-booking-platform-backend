@@ -2,13 +2,25 @@
 
 const { ApiError } = require("../../contracts");
 
-function parseJson(value, fallback) {
+function parseJson(value, fallback, field = "value") {
   if (!value) return fallback;
   try {
     return typeof value === "string" ? JSON.parse(value) : value;
   } catch {
-    return fallback;
+    throw new ApiError("FLEET_VALIDATION_FAILED", `${field} must be valid JSON.`);
   }
+}
+
+function parseStringArray(value, field) {
+  const parsed = parseJson(value, [], field);
+  if (!Array.isArray(parsed)) {
+    throw new ApiError("FLEET_VALIDATION_FAILED", `${field} must be an array.`);
+  }
+  const normalized = parsed.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean);
+  if (normalized.length !== parsed.length || new Set(normalized).size !== normalized.length) {
+    throw new ApiError("FLEET_VALIDATION_FAILED", `${field} contains invalid or duplicate values.`);
+  }
+  return normalized;
 }
 
 function parseCreationInput(data) {
@@ -18,6 +30,12 @@ function parseCreationInput(data) {
   ];
   if (required.some((field) => !data[field])) {
     throw new ApiError("FLEET_VALIDATION_FAILED", "Missing required fleet fields.");
+  }
+  const busName = String(data.busName).trim();
+  const busNumber = String(data.busNumber).trim().toUpperCase();
+  const busType = String(data.busType).trim();
+  if (busName.length < 2 || busName.length > 100 || busNumber.length < 2 || busNumber.length > 32 || busType.length < 2 || busType.length > 40) {
+    throw new ApiError("FLEET_VALIDATION_FAILED", "Fleet name, plate number, or bus type is invalid.");
   }
   const forbidden = ["fleetDocuments", "fleetImages", "url", "objectKey", "storageKey"];
   for (const field of forbidden) {
@@ -52,13 +70,15 @@ function parseCreationInput(data) {
   }
   return {
     ...data,
-    busNumber: String(data.busNumber).trim().toUpperCase(),
+    busName,
+    busNumber,
+    busType,
     vehicleType,
     totalSeats,
     registrationYear,
     seatConfig,
-    amenityIds: parseJson(data.amenityIds, []),
-    requestViaStops: parseJson(data.requestViaStops, []),
+    amenityIds: parseStringArray(data.amenityIds, "amenityIds"),
+    requestViaStops: parseStringArray(data.requestViaStops, "requestViaStops"),
   };
 }
 
