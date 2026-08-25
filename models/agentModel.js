@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { applyAgentCodeHooks } = require("../src/shared/identity/agent-code.hooks.js");
 
 /**
  * AGENT MODEL
@@ -18,7 +19,19 @@ const mongoose = require("mongoose");
  */
 const agentSchema = new mongoose.Schema(
     {
-        // Human-readable Agent ID: SHV-AG-XXXX-NNN
+        // Human-facing agent code: SM-AG-XXXXXXX (see src/shared/identity).
+        // This is the code an agent shares with operators to be assigned.
+        // Sparse because agents created before the scheme carry only agentId.
+        code: {
+            type: String,
+            unique: true,
+            sparse: true,
+            index: true,
+        },
+
+        // Legacy human-readable Agent ID: SHV-AG-XXX-NNN.
+        // Superseded by `code`; still written and read during the transition.
+        // Resolve either form with src/shared/identity/agent-code-lookup.js.
         agentId: {
             type: String,
             unique: true,
@@ -304,48 +317,11 @@ agentSchema.index({ linkedOperatorId: 1, applicationStatus: 1 });
 agentSchema.index({ agentType: 1, applicationStatus: 1 });
 
 /* =======================
-   AUTO-GENERATE AGENT ID
-   Format: SHV-AG-XXX-NNN (e.g. SHV-AG-KRM-042)
+   AUTO-GENERATE IDENTIFIERS
+   code:    SM-AG-XXXXXXX  (current scheme)
+   agentId: SHV-AG-XXX-NNN (legacy, dual-written until readers migrate)
 ======================= */
 
-agentSchema.pre("save", async function (next) {
-    if (this.agentId) return next();
-
-    const prefix = "SHV-AG";
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-
-    const generateRandomPart = (length) => {
-        let result = "";
-        for (let i = 0; i < length; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return result;
-    };
-
-    try {
-        let uniqueIdFound = false;
-        let candidate;
-
-        while (!uniqueIdFound) {
-            const randomCode = generateRandomPart(3);
-            const randomNumber = String(Math.floor(Math.random() * 1000)).padStart(
-                3,
-                "0"
-            );
-
-            candidate = `${prefix}-${randomCode}-${randomNumber}`;
-
-            const existing = await mongoose.model("Agent").findOne({ agentId: candidate });
-            if (!existing) {
-                uniqueIdFound = true;
-            }
-        }
-
-        this.agentId = candidate;
-        next();
-    } catch (err) {
-        next(err);
-    }
-});
+applyAgentCodeHooks(agentSchema);
 
 module.exports = mongoose.model("Agent", agentSchema);
