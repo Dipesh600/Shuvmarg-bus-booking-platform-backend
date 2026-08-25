@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 const { applyAgentCodeHooks } = require("../src/shared/identity/agent-code.hooks.js");
+const { AGENT_SCOPES, KYC_STATUSES, OUTLET_TYPES } = require("../src/shared/identity/agent-enums.js");
+const agentKycDocumentSchema = require("./schemas/agent-kyc-document.schema.js");
 
 /**
  * AGENT MODEL
@@ -46,28 +48,60 @@ const agentSchema = new mongoose.Schema(
         },
 
         /* =======================
+           SCOPE, OUTLET & PROVENANCE
+           Vocabulary lives in src/shared/identity/agent-enums.js.
+        ======================= */
+
+        // Who owns the relationship. Supersedes `agentType`.
+        scope: {
+            type: String,
+            enum: Object.values(AGENT_SCOPES),
+            default: AGENT_SCOPES.PLATFORM,
+        },
+
+        // What kind of shopfront. Supersedes `operationType`.
+        outletType: {
+            type: String,
+            enum: Object.values(OUTLET_TYPES),
+            default: null,
+        },
+
+        // The bus owner who first created this agent, when an operator did.
+        // Provenance only — it grants no selling right. Rights come from
+        // AgentAssignment, and an agent created by one owner may be assigned by
+        // any number of others.
+        //
+        // Refs User, not BusOwner: every other `ownerId` in this codebase is the
+        // owner's User id (see OperatorBrand.ownerId), and req.userInfo.id is
+        // what handlers actually hold. Deviating here would be the surprise.
+        createdByOwnerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
+
+        /* =======================
            AGENT TYPE & LIFECYCLE
         ======================= */
 
+        // DEPRECATED — superseded by `scope`. Still written by the super admin
+        // 6-step wizard; dual-read via agent-enums.scopeOf(). Do not add readers.
         agentType: {
             type: String,
             enum: ["DEFAULT", "OPERATOR_LINKED"],
             default: "DEFAULT",
         },
 
-        // Unified application lifecycle status
-        // Replaces the old verificationStatus + accountStatus split
+        // Unified verification status, serving BOTH scope machines:
+        //   OPERATOR  DRAFT → PHONE_VERIFIED → VERIFIED_BASIC → SUSPENDED
+        //   PLATFORM  DRAFT → PENDING → MORE_INFO → APPROVED | REJECTED → SUSPENDED
+        // The enum below is the union; which values are legal for a given agent
+        // is decided by scope, in agent-enums.isKycStatusLegalForScope(). The
+        // schema cannot express that — one field, two machines.
         applicationStatus: {
             type: String,
-            enum: [
-                "DRAFT",        // Application started, not yet submitted
-                "PENDING",      // Submitted, awaiting admin review
-                "MORE_INFO",    // Admin requested additional info/documents
-                "APPROVED",     // Approved and active
-                "REJECTED",     // Rejected (can reapply after 24 hours unless permanent)
-                "SUSPENDED",    // Temporarily suspended by admin
-            ],
-            default: "DRAFT",
+            enum: Object.values(KYC_STATUSES),
+            default: KYC_STATUSES.DRAFT,
         },
 
         submittedAt: { type: Date, default: null },
@@ -79,11 +113,15 @@ const agentSchema = new mongoose.Schema(
         },
 
         /* =======================
-           OPERATOR LINK (OPERATOR_LINKED agents only)
+           OPERATOR LINK — ALL DEPRECATED
+           These describe the agent↔operator *relationship*, which is many-to-many:
+           one agent, one published code, assignable by several operators, owned
+           by none. A single ObjectId cannot hold that. They move to
+           AgentAssignment in slice 2. Kept because the super admin 6-step wizard
+           still writes them. Do not add readers.
         ======================= */
 
-        // Which bus operator introduced this agent
-        // null for DEFAULT agents
+        // DEPRECATED — becomes AgentAssignment.operatorId.
         linkedOperatorId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "OperatorBrand",
@@ -91,14 +129,14 @@ const agentSchema = new mongoose.Schema(
             index: true,
         },
 
-        // Whether agent can book any of the operator's buses, or only specific routes
+        // DEPRECATED — becomes AgentAssignment.accessScope.
         busAccessScope: {
             type: String,
             enum: ["ALL_OPERATOR_BUSES", "SPECIFIC_ROUTES"],
             default: "ALL_OPERATOR_BUSES",
         },
 
-        // Only populated when busAccessScope = SPECIFIC_ROUTES
+        // DEPRECATED — becomes AgentAssignment.allowedRouteIds.
         allowedRouteIds: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: "RouteVariant",
@@ -153,39 +191,10 @@ const agentSchema = new mongoose.Schema(
 
         /* =======================
            STEP 3: DOCUMENT UPLOAD
-           Uses S3 object keys (presigned URL generated on read).
-           Follows the same pattern as bus owner KYC in s3Service.js.
-           S3 path: agents/{agentId}/kyc/{documentType}/
+           Subdocument shape in models/schemas/agent-kyc-document.schema.js.
         ======================= */
 
-        documents: [
-            {
-                type: {
-                    type: String,
-                    enum: [
-                        "citizenship_front",
-                        "citizenship_back",
-                        "national_id_front",
-                        "national_id_back",
-                        "shop_photo",
-                        "pan_card",
-                        "business_registration",
-                    ],
-                    required: true,
-                },
-                // S3 object key — converted to presigned URL via getPresignedUrl()
-                fileKey: { type: String, required: true },
-                uploadedAt: { type: Date, default: Date.now },
-                verified: { type: Boolean, default: false },
-                verifiedBy: {
-                    type: mongoose.Schema.Types.ObjectId,
-                    ref: "SuperAdmin",
-                    default: null,
-                },
-                verifiedAt: { type: Date, default: null },
-                rejectionReason: { type: String, default: null },
-            },
-        ],
+        documents: [agentKycDocumentSchema],
 
         /* =======================
            STEP 4: SETTLEMENT DETAILS
@@ -235,10 +244,14 @@ const agentSchema = new mongoose.Schema(
         whatsappConsent:  { type: Boolean, default: false },
 
         /* =======================
-           COMMISSION CONFIGURATION
+           COMMISSION CONFIGURATION — DEPRECATED
+           Commission is a term of the agent↔operator relationship, not a
+           property of the agent. Both move to AgentAssignment.operatorCommission
+           in slice 2, where they can differ per operator. Still written by the
+           super admin wizard.
         ======================= */
 
-        // Commission rate for online bookings (percentage, e.g. 5 = 5%)
+        // DEPRECATED — becomes AgentAssignment.operatorCommission{mode,value}.
         commissionRate: {
             type: Number,
             default: 5,
@@ -246,7 +259,8 @@ const agentSchema = new mongoose.Schema(
             max: 100,
         },
 
-        // Minimum commission balance before withdrawal is allowed
+        // DEPRECATED — platform-scope only. Operator agents are paid by the
+        // operator; we never hold or settle their money.
         minSettlementThreshold: {
             type: Number,
             default: 500,  // NPR 500 at launch
@@ -310,10 +324,14 @@ const agentSchema = new mongoose.Schema(
 
 // Admin review queue: pending applications sorted by submission
 agentSchema.index({ applicationStatus: 1, submittedAt: 1 });
-// Operator dashboard: all agents linked to a brand
+// Operator dashboard: all agents linked to a brand — DEPRECATED with the field
 agentSchema.index({ linkedOperatorId: 1, applicationStatus: 1 });
-// Agent type filter
+// Agent type filter — DEPRECATED with the field
 agentSchema.index({ agentType: 1, applicationStatus: 1 });
+// Scope filter, replacing the agentType one above (admin directory, slice 5)
+agentSchema.index({ scope: 1, applicationStatus: 1 });
+// "Which agents did this owner create?" — provenance list on the owner's side
+agentSchema.index({ createdByOwnerId: 1, createdAt: -1 });
 
 /* =======================
    AUTO-GENERATE IDENTIFIERS
