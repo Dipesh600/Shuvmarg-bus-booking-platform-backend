@@ -89,7 +89,7 @@ const agentSettlementSchema = new mongoose.Schema(
         // Which admin processed this settlement
         processedBy: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Superadmin",
+            ref: "SuperAdmin",
             default: null,
         },
 

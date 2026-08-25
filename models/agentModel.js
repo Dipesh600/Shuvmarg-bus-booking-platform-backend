@@ -26,7 +26,6 @@ const agentSchema = new mongoose.Schema(
             type: String,
             unique: true,
             sparse: true,
-            index: true,
         },
 
         // Legacy human-readable Agent ID: SHV-AG-XXX-NNN.
@@ -75,7 +74,7 @@ const agentSchema = new mongoose.Schema(
         approvedAt: { type: Date, default: null },
         approvedBy: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Superadmin",
+            ref: "SuperAdmin",
             default: null,
         },
 
@@ -180,7 +179,7 @@ const agentSchema = new mongoose.Schema(
                 verified: { type: Boolean, default: false },
                 verifiedBy: {
                     type: mongoose.Schema.Types.ObjectId,
-                    ref: "Superadmin",
+                    ref: "SuperAdmin",
                     default: null,
                 },
                 verifiedAt: { type: Date, default: null },
@@ -297,7 +296,7 @@ const agentSchema = new mongoose.Schema(
         suspendedAt: { type: Date, default: null },
         suspendedBy: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Superadmin",
+            ref: "SuperAdmin",
             default: null,
         },
         suspensionReason: { type: String, default: null },
