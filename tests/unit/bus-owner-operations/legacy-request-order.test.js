@@ -58,7 +58,7 @@ test("legacy missing-body ordering remains unchanged", async () => {
         },
         logger,
       }),
-      [["updateAmenity", 400], ["deleteAmenity", 500], ["getAmenityById", 500]],
+      [["updateAmenity", 400], ["deleteAmenity", 400], ["getAmenityById", 400]],
     ],
   ];
   for (const [handlers, cases] of groups) {

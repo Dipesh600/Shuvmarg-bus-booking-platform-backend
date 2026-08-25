@@ -1,4 +1,13 @@
 const amenityService = require("../../../services/amenityService.js");
+const User = require("../../../models/userModel.js");
+const mongoose = require("mongoose");
+
+const sendError = (res, error) => res.status(error.statusCode || 500).json({
+    success: false,
+    message: error.message || "Internal Server Error",
+    ...(error.code ? { errorCode: error.code } : {}),
+    ...(error.details ? { details: error.details } : {}),
+});
 
 /**
  * List all GLOBAL amenities (platform catalog — no ownerId needed)
@@ -30,10 +39,7 @@ const createGlobalAmenity = async (req, res) => {
         });
     } catch (error) {
         console.error("createGlobalAmenity error:", error);
-        return res.status(500).json({
-            success: false,
-            message: error.message || "Internal Server Error",
-        });
+        return sendError(res, error);
     }
 };
 
@@ -42,7 +48,18 @@ const createGlobalAmenity = async (req, res) => {
  */
 const createAmenityForOwner = async (req, res) => {
     try {
-        const { ownerId } = req.body;
+        const { ownerId } = req.body || {};
+        if (!mongoose.Types.ObjectId.isValid(ownerId)) {
+            return res.status(400).json({ success: false, message: "Select a valid bus owner for this amenity.", errorCode: "AMENITY_OWNER_INVALID" });
+        }
+        const owner = await User.findById(ownerId).select("role").lean();
+        if (!owner || owner.role !== "busOwner") {
+            return res.status(400).json({
+                success: false,
+                message: "Select a valid bus owner for this amenity.",
+                errorCode: "AMENITY_OWNER_INVALID",
+            });
+        }
         const newAmenity = await amenityService.createAmenity(req.body, ownerId);
         return res.status(201).json({
             success: true,
@@ -51,10 +68,20 @@ const createAmenityForOwner = async (req, res) => {
         });
     } catch (error) {
         console.error("createAmenityForOwner error:", error);
-        return res.status(500).json({
-            success: false,
-            message: error.message || "Internal Server Error",
+        return sendError(res, error);
+    }
+};
+
+const getOwnerCustomAmenities = async (req, res) => {
+    try {
+        const amenities = await amenityService.getAmenitiesByUserId(req.params.ownerId);
+        return res.status(200).json({
+            success: true,
+            results: amenities.length,
+            data: amenities,
         });
+    } catch (error) {
+        return sendError(res, error);
     }
 };
 
@@ -73,10 +100,7 @@ const getAvailableAmenities = async (req, res) => {
         });
     } catch (error) {
         console.error("getAvailableAmenities error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal Server Error",
-        });
+        return sendError(res, error);
     }
 };
 
@@ -85,7 +109,7 @@ const getAmenityById = async (req, res) => {
         const amenity = await amenityService.getAmenityById(req.params.id);
         return res.status(200).json({ success: true, data: amenity });
     } catch (error) {
-        return res.status(404).json({ success: false, message: error.message });
+        return sendError(res, error);
     }
 };
 
@@ -98,7 +122,7 @@ const updateAmenity = async (req, res) => {
             data: updated,
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return sendError(res, error);
     }
 };
 
@@ -110,7 +134,7 @@ const deleteAmenity = async (req, res) => {
             message: "Amenity deleted successfully",
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return sendError(res, error);
     }
 };
 
@@ -118,6 +142,7 @@ module.exports = {
     getAllGlobalAmenities,
     createGlobalAmenity,
     createAmenityForOwner,
+    getOwnerCustomAmenities,
     getAvailableAmenities,
     getAmenityById,
     updateAmenity,

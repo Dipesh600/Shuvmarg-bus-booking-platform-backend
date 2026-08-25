@@ -57,6 +57,7 @@ describe("passenger-booking-history mapper", () => {
           busName: "Express",
           fleetImages: ["img1", "img2"],
           amenitiesId: { amenities: ["WIFI"] },
+          amenityIds: [{ _id: "amenity-1", name: "Charging", icon: "zap" }],
           boardingPointId: { city: "KTM" },
         },
         routeId: {
@@ -101,7 +102,9 @@ describe("passenger-booking-history mapper", () => {
     assert.deepStrictEqual(result.refund, refund);
     
     assert.deepStrictEqual(result.trip.busId.fleetImages, ["url1", "url2"]);
-    assert.deepStrictEqual(result.trip.busId.amenitiesDetail, { amenities: ["WIFI"] });
+    assert.deepStrictEqual(result.trip.busId.amenitiesDetail, [
+      { _id: "amenity-1", name: "Charging", icon: "zap" },
+    ]);
     assert.strictEqual(result.trip.busId.amenitiesId, undefined);
     assert.deepStrictEqual(result.trip.busId.boardingPointDetail, { city: "KTM" });
     assert.strictEqual(result.trip.busId.boardingPointId, undefined);

@@ -23,7 +23,6 @@ const refundController = require("../../controllers/adminController/refundContro
 const refundPolicyController = require("../../controllers/adminController/refundPolicyController/refundPolicycontroller.js");
 const kycVerificationController = require("../../controllers/adminController/kycVerificationController/kycVerificationcontroller.js");
 const ticketController = require("../../src/modules/admin/ticket-schedule-management");
-const amenitiesController = require("../../controllers/adminController/ticket-controller/adminamenitiesController.js");
 const boardingPointController = require("../../controllers/adminController/ticket-controller/adminBoardingPoinController.js");
 const adminAmenityController = require("../../controllers/adminController/amenity/amenityController.js");
 const adminBusRouteController = require("../../controllers/adminController/busOwnerController/busRouteController.js");
@@ -150,7 +149,11 @@ router.get("/ticket/getTicketById/:id", adminMiddleware, ticketController.getTic
 router.patch("/ticket/updateTicket/:id", adminMiddleware, ticketController.updateTicket);
 router.patch("/ticket/updateTicketStatus/:id", adminMiddleware, ticketController.updateTicketStatus);
 router.delete("/ticket/deleteTicket/:id", adminMiddleware, ticketController.deleteTicket);
-router.post("/ticket/amenities/create", adminMiddleware, amenitiesController.createAmenity);
+router.post("/ticket/amenities/create", adminMiddleware, (_req, res) => res.status(410).json({
+  success: false,
+  message: "Amenity groups are retired. Use the platform or operator amenity catalog.",
+  errorCode: "LEGACY_AMENITY_API_RETIRED",
+}));
 /* 
 170: router.get("/ticket/amenities/getAll", adminMiddleware, amenitiesController.getAllAmenities);
 171: router.get("/ticket/amenities/getById/:id", adminMiddleware, amenitiesController.getAmenityById);
@@ -176,6 +179,7 @@ router.delete("/boardingPoints/:id", adminMiddleware, boardingPointController.de
 router.get("/amenities/global", adminMiddleware, adminAmenityController.getAllGlobalAmenities);
 router.post("/amenities/createGlobal", adminMiddleware, adminAmenityController.createGlobalAmenity);
 router.post("/amenities/create", adminMiddleware, adminAmenityController.createAmenityForOwner);
+router.get("/amenities/owner/:ownerId/custom", adminMiddleware, adminAmenityController.getOwnerCustomAmenities);
 router.get("/amenities/owner/:ownerId", adminMiddleware, adminAmenityController.getAvailableAmenities);
 router.get("/amenities/:id", adminMiddleware, adminAmenityController.getAmenityById);
 router.patch("/amenities/:id", adminMiddleware, adminAmenityController.updateAmenity);

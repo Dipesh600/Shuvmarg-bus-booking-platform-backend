@@ -4,15 +4,21 @@ const busAmenitiesSchema = new mongoose.Schema(
     {
         name: {
             type: String,
-            required: true, // e.g., "WiFi"
+            required: true,
             trim: true,
             unique: true,
+            minlength: 2,
+            maxlength: 60,
         },
         description: {
-            type: String, // e.g., "Free high-speed internet"
+            type: String,
+            trim: true,
+            maxlength: 240,
         },
         icon: {
-            type: String, // URL or CSS class name
+            type: String,
+            trim: true,
+            maxlength: 50,
         },
         type: {
             type: String,

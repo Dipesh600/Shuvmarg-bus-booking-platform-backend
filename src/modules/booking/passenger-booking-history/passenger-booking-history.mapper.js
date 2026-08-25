@@ -7,7 +7,9 @@ const mapToPassengerHistory = (booking, transaction, refund, reviewedSet, presig
     trip.busId = {
       ...bus,
       fleetImages: presignedImages,
-      amenitiesDetail: bus.amenitiesId || null,
+      amenitiesDetail: Array.isArray(bus.amenityIds) && bus.amenityIds.length > 0
+        ? bus.amenityIds
+        : bus.amenitiesId || null,
       boardingPointDetail: bus.boardingPointId || null,
       amenitiesId: undefined,
       boardingPointId: undefined,
