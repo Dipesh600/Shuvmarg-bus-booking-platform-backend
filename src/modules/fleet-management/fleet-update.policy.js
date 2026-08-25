@@ -1,10 +1,8 @@
 "use strict";
 const { ApiError } = require("../../contracts");
 const OWNER_PERMITTED_FIELDS = new Set([
-  "busName",
-  "busNumber",
-  "busType",
-  "vehicleType",
+  "busName", "busNumber",
+  "busType", "vehicleType",
   "registrationYear",
   "totalSeats",
   "seatConfig",
@@ -79,9 +77,9 @@ function lockApprovedIdentity(fleet, updateData, ownerId = null) { sanitizeUpdat
   if (fleet.approvalStatus !== "APPROVED") return;
   for (const field of APPROVED_LOCKED_FIELDS) delete updateData[field];
 }
-function parseJsonField(updateData, field) { if (!updateData[field] || typeof updateData[field] !== "string") return;
-  try { updateData[field] = JSON.parse(updateData[field]);
-  } catch { delete updateData[field];
+function parseJsonField(updateData, field) { if (!updateData[field] || typeof updateData[field] !== "string") return true;
+  try { updateData[field] = JSON.parse(updateData[field]); return true;
+  } catch { delete updateData[field]; return false;
   }
 }
 function validateIdentityUpdate(updateData) { if (updateData.vehicleType !== undefined) { const normalized = String(updateData.vehicleType).trim().toLowerCase();
@@ -122,7 +120,11 @@ function createFleetUpdatePolicy({ Bus, getTripModel, logger = console }) { asyn
       logger.error("Trip verification failed during layout update:", error);
     }
   }
-  function parseCatalogAndReviews(updateData, ownerId = null) { parseJsonField(updateData, "amenityIds");
+  function parseCatalogAndReviews(updateData, ownerId = null) { const validAmenities = parseJsonField(updateData, "amenityIds");
+    if (!validAmenities) throw new ApiError("FLEET_VALIDATION_FAILED", "amenityIds must be valid JSON.");
+    if (updateData.amenityIds !== undefined && !Array.isArray(updateData.amenityIds)) {
+      throw new ApiError("FLEET_VALIDATION_FAILED", "amenityIds must be an array.");
+    }
     if (!ownerId) { parseJsonField(updateData, "documentReviews");
     }
     sanitizeUpdatePayload(updateData, ownerId);

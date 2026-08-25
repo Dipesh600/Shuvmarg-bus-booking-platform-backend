@@ -64,16 +64,23 @@ function createFleetUpdateService({
     await policy.normalizeBusNumber(fleet, updateData);
     await policy.verifySeatLayout(fleet, updateData);
     policy.parseCatalogAndReviews(updateData, ownerId);
-    if (Array.isArray(updateData.amenityIds) && updateData.amenityIds.length > 0) {
+    if (Array.isArray(updateData.amenityIds)) {
+      const requestedIds = updateData.amenityIds.map(String);
+      if (requestedIds.some((id) => !/^[0-9a-fA-F]{24}$/.test(id)) || new Set(requestedIds).size !== requestedIds.length) {
+        throw new ApiError("FLEET_VALIDATION_FAILED", "Amenities must contain unique valid IDs.", 400);
+      }
+      const currentIds = new Set((fleet.amenityIds || []).map((item) => String(item?._id || item)));
+      const addedIds = requestedIds.filter((id) => !currentIds.has(id));
       const effectiveOwnerId = ownerId || fleet.ownerId;
       const count = await BusAmenities.countDocuments({
-        _id: { $in: updateData.amenityIds },
+        _id: { $in: addedIds },
         status: true,
         $or: [{ type: "GLOBAL" }, { type: "CUSTOM", ownerId: effectiveOwnerId }],
       });
-      if (count !== updateData.amenityIds.length) {
+      if (count !== addedIds.length) {
         throw new ApiError("FLEET_VALIDATION_FAILED", "One or more amenities are unavailable for this operator.", 400);
       }
+      updateData.amenityIds = requestedIds;
     }
     const updatedFleet = await Bus.findByIdAndUpdate(
       fleetId,

@@ -96,9 +96,9 @@ test("bus-owner boarding-point and amenity contracts", async (t) => {
       assert.equal(res.result().status, status);
     }
     assert.deepEqual(calls, [
-      ["create", "owner", req.body],
+      ["create", req.body, "owner"],
       ["list", "owner"],
-      ["update", "amenity", "owner", req.body],
+      ["update", "amenity", req.body, "owner"],
       ["delete", "amenity", "owner"],
       ["get", "amenity", "owner"],
     ]);

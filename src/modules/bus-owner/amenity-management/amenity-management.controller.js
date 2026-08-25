@@ -8,9 +8,14 @@ function unauthorized(res) {
 }
 
 function requireId(req, res) {
-  if (req.body.amenityId) return true;
+  if (req.body?.amenityId) return true;
   res.status(400).json({ success: false, message: "Amenity ID is required." });
   return false;
+}
+
+function errorStatus(error) {
+  if (error.statusCode) return error.statusCode;
+  return /not found/i.test(error.message || "") ? 404 : 500;
 }
 
 function createAmenityManagementController({ amenityService, logger = console }) {
@@ -18,14 +23,16 @@ function createAmenityManagementController({ amenityService, logger = console })
     try {
       const userId = req.userInfo?.id;
       if (!userId) return unauthorized(res);
-      const data = await amenityService.createAmenity(userId, req.body);
+      const data = await amenityService.createAmenity(req.body, userId);
       return res.status(201).json({
         success: true, message: "Amenities created successfully!", data,
       });
     } catch (error) {
       logger.error("createAmenity error:", error);
-      return res.status(error.message.includes("provide") ? 400 : 500).json({
+      return res.status(errorStatus(error)).json({
         success: false, message: error.message || "Internal Server Error",
+        ...(error.code ? { errorCode: error.code } : {}),
+        ...(error.details ? { details: error.details } : {}),
       });
     }
   }
@@ -52,19 +59,19 @@ function createAmenityManagementController({ amenityService, logger = console })
   async function updateAmenity(req, res) {
     try {
       const userId = req.userInfo?.id;
-      const { amenityId } = req.body;
+      const { amenityId } = req.body || {};
       if (!userId) return unauthorized(res);
       if (!requireId(req, res)) return res;
-      const data = await amenityService.updateAmenity(
-        amenityId, userId, req.body
-      );
+      const data = await amenityService.updateAmenity(amenityId, req.body, userId);
       return res.status(200).json({
         success: true, message: "Amenities updated successfully!", data,
       });
     } catch (error) {
       logger.error("updateAmenity error:", error);
-      return res.status(error.message.includes("found") ? 404 : 400).json({
+      return res.status(errorStatus(error)).json({
         success: false, message: error.message || "Internal Server Error",
+        ...(error.code ? { errorCode: error.code } : {}),
+        ...(error.details ? { details: error.details } : {}),
       });
     }
   }
@@ -72,7 +79,7 @@ function createAmenityManagementController({ amenityService, logger = console })
   async function deleteAmenity(req, res) {
     try {
       const userId = req.userInfo?.id;
-      const { amenityId } = req.body;
+      const { amenityId } = req.body || {};
       if (!userId) return unauthorized(res);
       if (!requireId(req, res)) return res;
       await amenityService.deleteAmenity(amenityId, userId);
@@ -81,8 +88,10 @@ function createAmenityManagementController({ amenityService, logger = console })
       });
     } catch (error) {
       logger.error("deleteAmenity error:", error);
-      return res.status(error.message.includes("found") ? 404 : 500).json({
+      return res.status(errorStatus(error)).json({
         success: false, message: error.message || "Internal Server Error",
+        ...(error.code ? { errorCode: error.code } : {}),
+        ...(error.details ? { details: error.details } : {}),
       });
     }
   }
@@ -90,19 +99,19 @@ function createAmenityManagementController({ amenityService, logger = console })
   async function getAmenityById(req, res) {
     try {
       const userId = req.userInfo?.id;
-      const { amenityId } = req.body;
+      const { amenityId } = req.body || {};
       if (!userId) return unauthorized(res);
       if (!requireId(req, res)) return res;
-      const data = await amenityService.getAmenityById(
-        amenityId, userId
-      );
+      const data = await amenityService.getAmenityById(amenityId, userId);
       return res.status(200).json({
         success: true, message: "Amenity fetched successfully!", data,
       });
     } catch (error) {
       logger.error("getAmenityById error:", error);
-      return res.status(error.message.includes("found") ? 404 : 500).json({
+      return res.status(errorStatus(error)).json({
         success: false, message: error.message || "Internal Server Error",
+        ...(error.code ? { errorCode: error.code } : {}),
+        ...(error.details ? { details: error.details } : {}),
       });
     }
   }
