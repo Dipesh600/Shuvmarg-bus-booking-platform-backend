@@ -74,7 +74,7 @@ test("changed seat layouts are blocked while active trips exist", async () => {
   );
 });
 
-test("trip lookup failure remains non-fatal and malformed JSON is discarded", async () => {
+test("trip lookup failure remains non-fatal and malformed catalog input is rejected", async () => {
   const logs = [];
   const policy = createFleetUpdatePolicy({
     Bus: {}, getTripModel: () => { throw new Error("model unavailable"); },
@@ -85,6 +85,8 @@ test("trip lookup failure remains non-fatal and malformed JSON is discarded", as
   assert.deepEqual(update.seatConfig, { rows: 5 });
   assert.equal(logs.length, 1);
   const malformed = { amenityIds: "{", documentReviews: "{" };
-  policy.parseCatalogAndReviews(malformed);
-  assert.deepEqual(malformed, {});
+  assert.throws(
+    () => policy.parseCatalogAndReviews(malformed),
+    (err) => err instanceof ApiError && err.code === "FLEET_VALIDATION_FAILED"
+  );
 });

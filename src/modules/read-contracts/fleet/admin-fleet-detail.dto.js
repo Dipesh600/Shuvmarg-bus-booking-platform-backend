@@ -44,7 +44,7 @@ function mapAdminFleetDetail(fleet, routeSetup, seatLayout = {}) {
       registrationYear: fleet.registrationYear || null,
       seatConfig: fleet.seatConfig || null,
       features: Array.isArray(fleet.amenityIds)
-        ? fleet.amenityIds.map((item) => ({ id: String(item?._id || item), name: item?.name || "Amenity", icon: item?.icon || null }))
+        ? fleet.amenityIds.map((item) => ({ id: String(item?._id || item), name: item?.name || "Amenity", description: item?.description || null, icon: item?.icon || null, type: item?.type || null, status: item?.status !== false }))
         : [],
     },
     assignment: {
