@@ -111,7 +111,7 @@ test('operator agent create — happy path', async (t) => {
       assert.equal(phone, '9800000000');
       // The password in the SMS is the one that was hashed into the User, and it
       // appears nowhere in the HTTP response.
-      const tempPassword = message.match(/Temp Password: ([A-F0-9]+)/)[1]; // ggignore
+      const tempPassword = message.match(/Temp Password: ([A-F0-9]+)/)[1]; // ggignore // ggignore
       assert.equal(tempPassword.length, 10);
       assert.doesNotMatch(JSON.stringify(result.responseBody), new RegExp(tempPassword));
     } finally { h.restore(); }
@@ -122,7 +122,7 @@ test('operator agent create — happy path', async (t) => {
     try {
       await service.createAgent(OWNER_ID, validBody);
       const stored = h.calls.createUser[0][0].password;
-      const tempPassword = smsCalls[0][1].match(/Temp Password: ([A-F0-9]+)/)[1]; // ggignore
+      const tempPassword = smsCalls[0][1].match(/Temp Password: ([A-F0-9]+)/)[1]; // ggignore // ggignore
       assert.notEqual(stored, tempPassword);
       assert.match(stored, /^\$2[aby]\$12\$/);
     } finally { h.restore(); }
