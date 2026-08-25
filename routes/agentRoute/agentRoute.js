@@ -15,6 +15,34 @@ const agentApplicationSubmit = require('../../src/modules/agent/application-subm
 const agentApplicationDocumentUpload = require('../../src/modules/agent/application-document-upload');
 const agentProfile = require('../../src/modules/agent/profile');
 const agentDashboard = require('../../src/modules/agent/dashboard');
+const agentIdentity = require('../../src/modules/agent/identity');
+
+// ── Identity ──────────────────────────────────────────────────────────────────
+// Deliberately NOT behind requireApprovedAgent. An agent's code and KYC status
+// are exactly what they need to see *before* they are cleared — gating them on
+// approval would leave a new agent with a blank screen and no way to find out
+// why. Nothing sellable is exposed here.
+
+/**
+ * @route   GET /api/agent/me
+ * @desc    The agent's own identity: agentCode, scope, outlet, KYC status
+ * @access  Private (Agent role required, any status)
+ */
+router.get("/me", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.getIdentity);
+
+/**
+ * @route   PATCH /api/agent/me
+ * @desc    Update the agent's own basic profile (allowlisted fields only)
+ * @access  Private (Agent role required, any status)
+ */
+router.patch("/me", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.updateIdentity);
+
+/**
+ * @route   GET /api/agent/me/code
+ * @desc    The shareable agent code plus the canonical share text
+ * @access  Private (Agent role required, any status)
+ */
+router.get("/me/code", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.getCode);
 
 // ── Application Workflow ──────────────────────────────────────────────────────
 
