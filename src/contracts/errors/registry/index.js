@@ -7,6 +7,7 @@ const { BUS_OWNER_ERRORS } = require("./bus-owner-errors");
 const { FLEET_ERRORS } = require("./fleet-errors");
 const { DOCUMENT_ERRORS } = require("./document-errors");
 const { GENERAL_ERRORS } = require("./general-errors");
+const { AMENITY_ERRORS } = require("./amenity-errors");
 
 const combined = {
   ...AUTHENTICATION_ERRORS,
@@ -16,6 +17,7 @@ const combined = {
   ...FLEET_ERRORS,
   ...DOCUMENT_ERRORS,
   ...GENERAL_ERRORS,
+  ...AMENITY_ERRORS,
 };
 
 const keysCount =
@@ -25,7 +27,8 @@ const keysCount =
   Object.keys(BUS_OWNER_ERRORS).length +
   Object.keys(FLEET_ERRORS).length +
   Object.keys(DOCUMENT_ERRORS).length +
-  Object.keys(GENERAL_ERRORS).length;
+  Object.keys(GENERAL_ERRORS).length +
+  Object.keys(AMENITY_ERRORS).length;
 
 if (Object.keys(combined).length !== keysCount) {
   throw new Error("Duplicate error code detected in API error registries!");
