@@ -1,6 +1,7 @@
 'use strict';
 
 const AppError = require('../../../shared/errors/app-error');
+const { deriveOperatorKycStatus } = require('../../../shared/identity/agent-verification');
 const mapper = require('./agent-identity.mapper');
 const policy = require('./agent-identity.policy');
 const repository = require('./agent-identity.repository');
@@ -32,11 +33,43 @@ const backfillIdentifiers = async (agent) => {
   return agent;
 };
 
+/**
+ * Bring the OPERATOR KYC status up to date with the facts on file.
+ *
+ * Mutates the document and reports whether anything changed; the caller decides
+ * when to write, so a status advance can ride along with a save that was already
+ * happening.
+ *
+ * WHY THIS IS DERIVED ON READ RATHER THAN WRITTEN WHEN THE PHONE IS VERIFIED.
+ * There is no single place to hook. Two flows verify an invited agent's phone —
+ * POST /api/auth/activate and the forced-password-change repository — and both
+ * are shared with conductors, drivers and bus owners, so both would need an
+ * agent-shaped branch, and a third flow added later would need a third. One
+ * forgotten call leaves an agent stuck at DRAFT with no way to notice. Deriving
+ * from `user.phoneVerified` works no matter how the phone came to be verified,
+ * including for the agents who already verified theirs before this shipped.
+ *
+ * This is the pattern backfillIdentifiers above already uses: a read that repairs
+ * what it finds, idempotently.
+ *
+ * The accepted cost is that the write happens when the agent is next looked up.
+ * Anything that reads an agent's status without going through here — the operator
+ * code lookup in slice 2 — must call deriveOperatorKycStatus itself rather than
+ * trusting the stored value.
+ */
+const applyDerivedKycStatus = (agent, user) => {
+  const derived = deriveOperatorKycStatus(agent, { phoneVerified: user?.phoneVerified });
+  if (!derived || derived === agent.applicationStatus) return false;
+  agent.set('applicationStatus', derived);
+  return true;
+};
+
 const loadIdentity = async (userId) => {
   const agent = await repository.findAgentByUserId(userId);
   if (!agent) throw noAgentError();
   await backfillIdentifiers(agent);
   const user = await repository.findUserById(userId);
+  if (applyDerivedKycStatus(agent, user)) await repository.saveAgent(agent);
   return { agent, user };
 };
 
@@ -62,11 +95,17 @@ const updateIdentity = async (userId, body) => {
   for (const [field, value] of Object.entries(agentPatch)) {
     agent.set(field, value);
   }
-  if (Object.keys(agentPatch).length > 0) await repository.saveAgent(agent);
 
   const updatedUser = userPatch.name
     ? await repository.updateUserName(userId, userPatch.name)
     : user;
+
+  // Derived after the patch is on the document and before it is written, so an
+  // agent who has just supplied their outlet details reaches VERIFIED_BASIC in
+  // this response rather than on their next read. loadIdentity above ran before
+  // the patch existed, so it could not have seen them.
+  const advanced = applyDerivedKycStatus(agent, updatedUser);
+  if (advanced || Object.keys(agentPatch).length > 0) await repository.saveAgent(agent);
 
   return {
     statusCode: 200,

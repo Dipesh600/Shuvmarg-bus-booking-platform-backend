@@ -8,7 +8,13 @@ const AGENT_IDENTITY_FIELDS = [
   'district municipality placeName businessName shopAddress createdByOwnerId createdAt',
 ].join(' ');
 
-const USER_IDENTITY_FIELDS = 'name phone profilePicture';
+/**
+ * `phoneVerified` is here because the OPERATOR KYC status is derived from it. Do
+ * not drop it from this projection: deriveOperatorKycStatus reads a missing value
+ * as "no opinion" rather than false, so removing it would not corrupt anything —
+ * it would silently strand every operator agent at DRAFT.
+ */
+const USER_IDENTITY_FIELDS = 'name phone profilePicture phoneVerified';
 
 /**
  * Loaded as a document, not lean: an agent created before the SM-AG scheme has no

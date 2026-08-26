@@ -27,7 +27,22 @@ const user = (overrides = {}) => ({
   name: 'Ram Bahadur',
   phone: '9800000000',
   profilePicture: 'https://cdn.example/x.jpg',
+  // Part of USER_IDENTITY_FIELDS: the OPERATOR KYC status is derived from it.
+  phoneVerified: true,
   ...overrides,
 });
 
-module.exports = { agent, user };
+/**
+ * The same agent as a stand-in for the Mongoose document the repository returns.
+ *
+ * The service writes through `set()` and lets the repository decide when to save,
+ * so that is all a fake needs. `set()` really mutates, so a test can read the
+ * field back and see what would have been persisted.
+ */
+const agentDoc = (overrides = {}) => {
+  const doc = agent(overrides);
+  doc.set = (field, value) => { doc[field] = value; return doc; };
+  return doc;
+};
+
+module.exports = { agent, agentDoc, user };
