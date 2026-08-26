@@ -4,29 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const mapper = require('../../../src/modules/agent/identity/agent-identity.mapper');
-
-const agent = (overrides = {}) => ({
-  code: 'SM-AG-7K4QP2X',
-  agentId: 'SHV-AG-KTM-001',
-  scope: 'OPERATOR',
-  outletType: 'TICKET_COUNTER',
-  applicationStatus: 'VERIFIED_BASIC',
-  district: 'Kaski',
-  municipality: 'Pokhara',
-  placeName: 'Lakeside',
-  businessName: 'Lake View Travels',
-  shopAddress: 'Baidam Road 12',
-  createdByOwnerId: '507f1f77bcf86cd799439011',
-  createdAt: new Date('2026-01-01T00:00:00.000Z'),
-  ...overrides,
-});
-
-const user = (overrides = {}) => ({
-  name: 'Ram Bahadur',
-  phone: '9800000000',
-  profilePicture: 'https://cdn.example/x.jpg',
-  ...overrides,
-});
+const { agent, user } = require('../../helpers/agent-identity-fixtures');
 
 test('toIdentity wire shape', async (t) => {
   await t.test('exposes agentCode, never a bare "code"', () => {
@@ -111,44 +89,5 @@ test('KYC status presentation', async (t) => {
     assert.equal(cleared('PLATFORM', 'VERIFIED_BASIC'), false);
     assert.equal(cleared('OPERATOR', 'DRAFT'), false);
     assert.equal(cleared('OPERATOR', 'SUSPENDED'), false);
-  });
-});
-
-test('share payload', async (t) => {
-  await t.test('prefers the current code', () => {
-    assert.equal(mapper.sharePayloadFor(agent()), 'My Shuvmarg agent code is SM-AG-7K4QP2X');
-  });
-
-  await t.test('falls back to the legacy id so an old agent can still share', () => {
-    assert.equal(
-      mapper.sharePayloadFor(agent({ code: null })),
-      'My Shuvmarg agent code is SHV-AG-KTM-001',
-    );
-  });
-
-  await t.test('is null when there is nothing to share, never a broken sentence', () => {
-    assert.equal(mapper.sharePayloadFor(agent({ code: null, agentId: null })), null);
-  });
-});
-
-test('response envelopes', async (t) => {
-  await t.test('all three carry success:true and a data block', () => {
-    const envelopes = [
-      mapper.toIdentityResponse(agent(), user()),
-      mapper.toUpdatedIdentityResponse(agent(), user()),
-      mapper.toCodeResponse(agent()),
-    ];
-    for (const envelope of envelopes) {
-      assert.equal(envelope.success, true);
-      assert.equal(typeof envelope.message, 'string');
-      assert.equal(typeof envelope.data, 'object');
-    }
-  });
-
-  await t.test('the code response is narrow — code, share text, status only', () => {
-    const { data } = mapper.toCodeResponse(agent());
-    assert.deepEqual(Object.keys(data).sort(), [
-      'agentCode', 'kycStatus', 'legacyAgentId', 'scope', 'sharePayload',
-    ]);
   });
 });
