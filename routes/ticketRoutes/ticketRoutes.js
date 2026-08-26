@@ -25,6 +25,23 @@ const passengerBookingGuard = [auth, verifyRoleFromDB, role.requireRole("passeng
 
 
 
+/*
+ * Bus-owner schedule management.
+ *
+ * The four "*Ticket" paths are misnamed: every one of them handles a Schedule,
+ * not a ticket. They are kept because clients call them, but the "*Schedule"
+ * aliases below are the names to use — same guards, same handlers.
+ *
+ * These belong under /api/busowner rather than /api/ticket. Moving them is a
+ * client-visible contract change, so it is a decision of its own, not a
+ * drive-by rename.
+ */
+router.post("/createSchedule", busOwnerGuard, busOwnerScheduleManagement.createSchedule);
+router.patch("/updateSchedule", busOwnerGuard, busOwnerScheduleManagement.updateSchedule);
+router.delete("/deleteSchedule", busOwnerGuard, busOwnerScheduleManagement.deleteSchedule);
+router.post("/getScheduleById", busOwnerGuard, busOwnerScheduleManagement.getScheduleById);
+
+// Deprecated aliases — prefer the "*Schedule" paths above.
 router.post("/createTicket", busOwnerGuard, busOwnerScheduleManagement.createSchedule);
 router.patch("/updateTicket", busOwnerGuard, busOwnerScheduleManagement.updateSchedule);
 router.delete("/deleteTicket", busOwnerGuard, busOwnerScheduleManagement.deleteSchedule);

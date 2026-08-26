@@ -1,5 +1,6 @@
 'use strict';
 
+const { isAgentVerificationCleared } = require('../../../shared/identity/agent-verification');
 const repository = require('./agent-dashboard.repository');
 const mapper = require('./agent-dashboard.mapper');
 
@@ -12,12 +13,14 @@ const getDashboard = async ({ userId }) => {
   }
 
   const agent = await repository.findDashboardAgent(userId);
-  if (!agent || agent.applicationStatus !== 'APPROVED') {
+  // Duplicates requireVerifiedAgent on purpose — see agent-profile.service.js.
+  // Asks the shared predicate so the two cannot drift apart.
+  if (!agent || !isAgentVerificationCleared(agent)) {
     return {
       statusCode: 403,
       body: {
         success: false,
-        message: 'Dashboard available after application approval.',
+        message: 'Dashboard available once your verification is complete.',
       },
     };
   }

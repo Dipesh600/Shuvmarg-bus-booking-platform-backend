@@ -54,9 +54,19 @@ const persistNewUser = async ({ phone, name, password, email, now }) => {
   }));
 };
 
+/**
+ * The profile is created by upsert, and Mongoose does not run pre('save') for
+ * upserts — so a freshly upserted Agent has neither identifier. save() lets the
+ * hook allocate both.
+ *
+ * Both fields are checked, not just agentId: an agent registered before the
+ * SM-AG scheme landed has an agentId and no code, and testing agentId alone
+ * would leave them permanently without the code they are meant to share. The
+ * hook only ever fills a blank, so a published code is never re-minted.
+ */
 const ensureAgentProfile = async (userId) => {
   const agentDoc = await repository.upsertAgentProfile(userId);
-  if (!agentDoc.agentId) await agentDoc.save();
+  if (!agentDoc.agentId || !agentDoc.code) await agentDoc.save();
 };
 
 const issueTokens = async ({ savedUser, deviceInfo, ipAddress }) => tokenService.generateTokenPair(

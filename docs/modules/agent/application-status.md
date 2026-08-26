@@ -42,7 +42,7 @@ Middleware responses happen before this module:
 2. `verifyRoleFromDB` reloads the User and checks account state, role drift, token version and force-password state.
 3. `agentMiddleware` requires active role `agent`.
 
-`requireApprovedAgent` is not in this route chain.
+`requireVerifiedAgent` is not in this route chain.
 
 Defensive module responses:
 
@@ -130,7 +130,7 @@ The default is `canReapply: false` and `reapplyAvailableAt: null`. Eligibility i
 
 ## Security-sensitive behavior
 
-- Do not add `requireApprovedAgent`; every application status must be able to reach this endpoint.
+- Do not add `requireVerifiedAgent`; every application status must be able to reach this endpoint.
 - Keep the exact populated `.lean()` query.
 - Keep the 24-hour reapply window and missing-`rejectedAt` behavior.
 - Keep document URL resolution read-only and non-mutating.

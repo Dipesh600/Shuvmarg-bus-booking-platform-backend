@@ -25,7 +25,7 @@ test('agent profile service preserves defensive responses and mapping', async (t
     }
   });
 
-  await t.test('non-approved agent response preserves dynamic status data', async () => {
+  await t.test('uncleared agent response preserves dynamic status data', async () => {
     const original = repository.findProfileAgent;
     repository.findProfileAgent = async () => ({ applicationStatus: 'MORE_INFO' });
     try {
@@ -34,10 +34,26 @@ test('agent profile service preserves defensive responses and mapping', async (t
         statusCode: 403,
         body: {
           success: false,
-          message: 'Your application is "MORE_INFO". Profile is available after approval.',
+          message: 'Your application is "MORE_INFO". Profile is available once your verification is complete.',
           data: { applicationStatus: 'MORE_INFO' },
         },
       });
+    } finally {
+      repository.findProfileAgent = original;
+    }
+  });
+
+  await t.test('an operator agent at VERIFIED_BASIC is not refused here', async () => {
+    // The handler's defensive check used to be a second copy of
+    // `applicationStatus === "APPROVED"`, so fixing only the route gate would have
+    // let these agents through the door and refused them at the desk.
+    const original = repository.findProfileAgent;
+    repository.findProfileAgent = async () => ({
+      scope: 'OPERATOR', applicationStatus: 'VERIFIED_BASIC', agentType: 'OPERATOR_LINKED',
+    });
+    try {
+      const result = await service.getProfile({ userId: crypto.randomBytes(12).toString('hex') });
+      assert.equal(result.statusCode, 200);
     } finally {
       repository.findProfileAgent = original;
     }
