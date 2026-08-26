@@ -84,8 +84,13 @@ test('KYC status presentation', async (t) => {
       .toIdentity(agent({ scope, applicationStatus }), user()).kycCleared;
     assert.equal(cleared('OPERATOR', 'VERIFIED_BASIC'), true);
     assert.equal(cleared('PLATFORM', 'APPROVED'), true);
-    // Cross-scope values must not clear anyone.
-    assert.equal(cleared('OPERATOR', 'APPROVED'), false);
+    // APPROVED clears at either scope. Not a loose end: the admin setup wizard's
+    // legacy agents sit at APPROVED with no scope, and refusing them here would
+    // report kycCleared:false to agents who can still reach /profile — the API
+    // and the route gate disagreeing about the same agent.
+    assert.equal(cleared('OPERATOR', 'APPROVED'), true);
+    // VERIFIED_BASIC is not a legal status for PLATFORM, and a platform agent
+    // sells any operator's inventory: a proven phone is not enough for them.
     assert.equal(cleared('PLATFORM', 'VERIFIED_BASIC'), false);
     assert.equal(cleared('OPERATOR', 'DRAFT'), false);
     assert.equal(cleared('OPERATOR', 'SUSPENDED'), false);

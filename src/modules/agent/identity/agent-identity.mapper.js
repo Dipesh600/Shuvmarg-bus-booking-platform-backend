@@ -1,6 +1,7 @@
 'use strict';
 
-const { KYC_STATUSES, isKycSellable, outletTypeOf, scopeOf } = require('../../../shared/identity/agent-enums');
+const { KYC_STATUSES, outletTypeOf, scopeOf } = require('../../../shared/identity/agent-enums');
+const { isAgentVerificationCleared } = require('../../../shared/identity/agent-verification');
 
 /**
  * Wire naming: the schema field is `Agent.code`, the wire field is `agentCode`.
@@ -40,8 +41,10 @@ const toIdentity = (agent, user) => {
     kycStatus: agent.applicationStatus,
     kycStatusLabel: kycLabelFor(agent.applicationStatus),
     // Whether the agent's OWN verification clears them to sell. It is not
-    // permission to sell — that needs an ACTIVE AgentAssignment (slice 2).
-    kycCleared: isKycSellable(scope, agent.applicationStatus),
+    // permission to sell — that needs an ACTIVE AgentAssignment (slice 2). Asks
+    // the same predicate the route gate asks, so a client cannot be told
+    // `kycCleared: false` and still be let into /profile, or the reverse.
+    kycCleared: isAgentVerificationCleared(agent),
     name: user?.name || null,
     phone: user?.phone || null,
     photoUrl: user?.profilePicture || null,
