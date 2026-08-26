@@ -22,7 +22,7 @@ This module handles KYC document uploads for an agent's application. Files are p
 3.  `agentMiddleware`: Enforces that the user has the `agent` role.
 4.  `agentApplicationDocumentUpload.uploadDocument`: The core controller handling the request.
 
-*(Note: `requireApprovedAgent` is deliberately excluded because document upload occurs prior to approval.)*
+*(Note: `requireVerifiedAgent` is deliberately excluded because document upload occurs prior to verification.)*
 
 ### Request
 

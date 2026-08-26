@@ -8,7 +8,7 @@ const router = express.Router();
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { agentMiddleware } = require("../../middleware/checkRole.js");
-const requireApprovedAgent = require("../../middleware/requireApprovedAgent.js");
+const requireVerifiedAgent = require("../../middleware/requireVerifiedAgent.js");
 const agentApplicationStatus = require('../../src/modules/agent/application-status');
 const agentApplicationDraft = require('../../src/modules/agent/application-draft');
 const agentApplicationSubmit = require('../../src/modules/agent/application-submit');
@@ -18,7 +18,7 @@ const agentDashboard = require('../../src/modules/agent/dashboard');
 const agentIdentity = require('../../src/modules/agent/identity');
 
 // ── Identity ──────────────────────────────────────────────────────────────────
-// Deliberately NOT behind requireApprovedAgent. An agent's code and KYC status
+// Deliberately NOT behind requireVerifiedAgent. An agent's code and KYC status
 // are exactly what they need to see *before* they are cleared — gating them on
 // approval would leave a new agent with a blank screen and no way to find out
 // why. Nothing sellable is exposed here.
@@ -91,15 +91,15 @@ router.get("/documents/view", auth, verifyRoleFromDB, agentMiddleware, documentP
 /**
  * @route   GET /api/agent/profile
  * @desc    Retrieve the agent's profile details
- * @access  Private (APPROVED agents only). Enforced by requireApprovedAgent.
+ * @access  Private (verified agents only). Enforced by requireVerifiedAgent.
  */
-router.get("/profile", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentProfile.getProfile);
+router.get("/profile", auth, verifyRoleFromDB, agentMiddleware, requireVerifiedAgent, agentProfile.getProfile);
 
 /**
  * @route   GET /api/agent/dashboard
  * @desc    Retrieve metrics and data for the agent dashboard
- * @access  Private (APPROVED agents only). Enforced by requireApprovedAgent.
+ * @access  Private (verified agents only). Enforced by requireVerifiedAgent.
  */
-router.get("/dashboard", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentDashboard.getDashboard);
+router.get("/dashboard", auth, verifyRoleFromDB, agentMiddleware, requireVerifiedAgent, agentDashboard.getDashboard);
 
 module.exports = router;

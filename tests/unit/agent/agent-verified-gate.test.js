@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 
 const Agent = require('../../../models/agentModel.js');
 const { KYC_STATUSES } = require('../../../src/shared/identity/agent-enums');
-const requireApprovedAgent = require('../../../middleware/requireApprovedAgent.js');
+const requireVerifiedAgent = require('../../../middleware/requireVerifiedAgent.js');
 
 const findOne = Agent.findOne;
 
@@ -29,7 +29,7 @@ const run = async (doc, { userId = 'user-1', throws = false } = {}) => {
     json(payload) { body = payload; return this; },
   };
 
-  await requireApprovedAgent(req, res, () => { nextCalls += 1; });
+  await requireVerifiedAgent(req, res, () => { nextCalls += 1; });
   return { statusCode, body, nextCalls, selected };
 };
 

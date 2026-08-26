@@ -49,7 +49,7 @@ test('agent profile characterization', async (t) => {
 
   await t.test('route keeps middleware order and access protection', async () => {
     const routeFile = fs.readFileSync('routes/agentRoute/agentRoute.js', 'utf8');
-    assert.match(routeFile, /router\.get\("\/profile", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentProfile\.getProfile\)/);
+    assert.match(routeFile, /router\.get\("\/profile", auth, verifyRoleFromDB, agentMiddleware, requireVerifiedAgent, agentProfile\.getProfile\)/);
     assert.equal((await request(app).get('/api/agent/profile')).status, 401);
     const passenger = await seedUser('passenger');
     assert.equal((await getProfile(tokenFor(passenger, 'passenger'))).status, 403);

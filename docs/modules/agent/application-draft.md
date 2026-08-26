@@ -21,7 +21,7 @@ This module handles the saving of an agent's KYC application draft. The applicat
 3.  `agentMiddleware`: Enforces that the user has the 'agent' role.
 4.  `agentApplicationDraft.saveApplicationDraft`: The core controller handling the request.
 
-*(Note: `requireApprovedAgent` is deliberately excluded because drafting occurs prior to approval.)*
+*(Note: `requireVerifiedAgent` is deliberately excluded because drafting occurs prior to verification.)*
 
 ### Supported Fields
 

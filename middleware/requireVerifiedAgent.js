@@ -1,5 +1,5 @@
 /**
- * middleware/requireApprovedAgent.js
+ * middleware/requireVerifiedAgent.js
  *
  * DB-level authorization for agent routes that need the agent's own verification
  * to be complete before access is granted.
@@ -59,7 +59,7 @@ const STATUS_MESSAGES = new Map([
     ["SUSPENDED", "Your agent account has been suspended. Please contact support."],
 ]);
 
-const requireApprovedAgent = async (req, res, next) => {
+const requireVerifiedAgent = async (req, res, next) => {
     try {
         const userId = req.userInfo?.id;
         if (!userId) {
@@ -103,9 +103,9 @@ const requireApprovedAgent = async (req, res, next) => {
         // ✅ Verification cleared — allow through
         next();
     } catch (error) {
-        console.error("[requireApprovedAgent] Error:", error.message);
+        console.error("[requireVerifiedAgent] Error:", error.message);
         return res.status(500).json({ success: false, message: "Internal Server Error" });
     }
 };
 
-module.exports = requireApprovedAgent;
+module.exports = requireVerifiedAgent;
