@@ -41,9 +41,9 @@ const MAX_CODE_INPUT_LENGTH = 32;
  * `district` and `municipality` are needed twice over — shown to the operator,
  * and read by `hasRequiredOutletDetails` when the status is derived.
  *
- * Shared by the lookup and the assign endpoints, which must classify an agent
- * identically. A projection that drifts between them is a difference in who
- * counts as assignable.
+ * Shared by lookup, assign and the operator assignment list, which must classify
+ * an agent identically. A projection that drifts between them is a difference in
+ * who counts as assignable and a chance for the list to load private KYC fields.
  */
 const AGENT_PREVIEW_FIELDS = [
   "code",
@@ -108,6 +108,7 @@ const hasVerifiedBadge = (agent, kycStatus) => isAgentVerificationCleared({
 });
 
 module.exports = {
+  AGENT_PREVIEW_FIELDS,
   MAX_CODE_INPUT_LENGTH,
   agentFilterFromInput,
   effectiveKycStatus,

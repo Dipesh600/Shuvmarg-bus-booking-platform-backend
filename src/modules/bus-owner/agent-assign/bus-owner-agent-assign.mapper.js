@@ -70,5 +70,6 @@ const toCreatedResponse = ({ assignment, agent, brand, kycStatus, isVerified }) 
 });
 
 module.exports = {
+  toTerms,
   toCreatedResponse,
 };

@@ -61,6 +61,17 @@ test("AgentAssignment validation", async (t) => {
     const doc = new AgentAssignment({ ...minimal(), permissions: { cancelWindowMins: -5 } });
     assert.ok(doc.validateSync().errors["permissions.cancelWindowMins"]);
   });
+
+  await t.test("separates agent decline reasons from operator lifecycle notes", () => {
+    const doc = new AgentAssignment({
+      ...minimal(), statusReason: "agent-authored", operatorNote: "operator-authored",
+    });
+    assert.equal(doc.validateSync(), undefined);
+    assert.equal(doc.statusReason, "agent-authored");
+    assert.equal(doc.operatorNote, "operator-authored");
+    const tooLong = new AgentAssignment({ ...minimal(), operatorNote: "x".repeat(501) });
+    assert.ok(tooLong.validateSync().errors.operatorNote);
+  });
 });
 
 test("AgentAssignment indexes", async (t) => {

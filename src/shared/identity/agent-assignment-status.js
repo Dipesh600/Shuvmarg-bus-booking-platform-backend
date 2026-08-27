@@ -58,7 +58,12 @@ const LIVE_ASSIGNMENT_STATUSES = Object.freeze([
 const SELLABLE_ASSIGNMENT_STATUSES = Object.freeze([ASSIGNMENT_STATUSES.ACTIVE]);
 
 /**
- * Legal transitions. REVOKED, DECLINED and EXPIRED are terminal — they map to an
+ * Legal transitions, not actor authorization. This table says a move can exist;
+ * it never says who may perform it. Every endpoint must pin its actor-specific
+ * starting status literally in its atomic write. Using canTransition as a gate
+ * lets an agent self-reinstate or an operator accept an invite for the agent.
+ *
+ * REVOKED, DECLINED and EXPIRED are terminal — they map to an
  * empty list, which is deliberately not the same as being absent from the table.
  *
  * A Map, not a plain object: statuses arrive from request bodies, and on a plain
@@ -97,7 +102,8 @@ const isAssignmentLive = (status) => LIVE_ASSIGNMENT_STATUSES.includes(status);
 const isAssignmentSellable = (status) => SELLABLE_ASSIGNMENT_STATUSES.includes(status);
 
 /**
- * Whether `from → to` is a legal move.
+ * Whether `from → to` is a legal move. Never use this as an authorization gate;
+ * the caller still has to prove the actor and pin its permitted starting state.
  *
  * An unrecognised `from` returns false rather than throwing. This is asked of
  * stored rows, and a row written before this slice existed must fail closed

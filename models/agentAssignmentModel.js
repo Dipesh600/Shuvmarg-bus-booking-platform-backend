@@ -88,8 +88,12 @@ const agentAssignmentSchema = new mongoose.Schema({
     index: true,
   },
   // Why the status is where it is: shown to both sides, so it is user-visible
-  // text and length-capped rather than free-form.
+  // text authored by the agent when declining and length-capped.
   statusReason: { type: String, trim: true, maxlength: 500, default: null },
+  // Operator-authored suspend/revoke context is separate so an agent-facing
+  // mapper can never accidentally expose an internal note from the shared
+  // statusReason field. This is operational context, not agent PII.
+  operatorNote: { type: String, trim: true, maxlength: 500, default: null },
 
   invitedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   invitedAt: { type: Date, default: Date.now },
