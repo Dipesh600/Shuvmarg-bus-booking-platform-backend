@@ -36,7 +36,9 @@ const filterSellableSchedules = ({ assignment, schedules }) => {
 
     if (assignment.accessScope === ACCESS_SCOPES.ALL_BUSES) return true;
     if (assignment.accessScope === ACCESS_SCOPES.ROUTES) {
-      return allowedRoutes.has(idOf(schedule.routeId));
+      // Assignment and schedule both point to BusRoute. routeId is the nullable
+      // Google Route id and belongs to a different collection.
+      return allowedRoutes.has(idOf(schedule.busRouteId));
     }
     if (assignment.accessScope === ACCESS_SCOPES.SCHEDULES) {
       return allowedSchedules.has(idOf(schedule._id));

@@ -41,7 +41,7 @@ test("AgentAssignment refs", async (t) => {
   await t.test("point at the names those models actually register", () => {
     assert.equal(refOf("agentId"), "Agent");
     assert.equal(refOf("operatorId"), "OperatorBrand");
-    assert.equal(AgentAssignment.schema.path("allowedRouteIds").caster.options.ref, "RouteVariant");
+    assert.equal(AgentAssignment.schema.path("allowedRouteIds").caster.options.ref, "BusRoute");
     // Lowercase: busScheduleModel.js registers mongoose.model("busschedules").
     // "BusSchedule" would silently populate to null — the bug fixed in 24a9b9d.
     assert.equal(

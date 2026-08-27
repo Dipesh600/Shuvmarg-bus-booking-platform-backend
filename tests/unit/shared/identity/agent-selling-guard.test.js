@@ -2,6 +2,8 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const AgentAssignment = require("../../../../models/agentAssignmentModel");
+const BusSchedule = require("../../../../models/busScheduleModel");
 const { filterSellableSchedules } = require("../../../../src/shared/identity/agent-selling-guard");
 
 const OWNER = "507f1f77bcf86cd799439011";
@@ -21,6 +23,7 @@ const assignment = (over = {}) => ({
 const schedule = (id, brandId = BRAND_A, over = {}) => ({
   _id: id,
   routeId: `route-${id}`,
+  busRouteId: `service-${id}`,
   isActive: true,
   busId: {
     _id: `bus-${id}`,
@@ -33,6 +36,21 @@ const schedule = (id, brandId = BRAND_A, over = {}) => ({
 });
 
 test("shared agent selling guard", async (t) => {
+  await t.test("narrowing ids reference the schedule fields they are compared against", () => {
+    const refOf = (model, path) => {
+      const schemaType = model.schema.path(path);
+      return schemaType?.caster?.options?.ref || schemaType?.options?.ref;
+    };
+    assert.equal(
+      refOf(AgentAssignment, "allowedRouteIds"),
+      refOf(BusSchedule, "busRouteId"),
+    );
+    assert.equal(
+      refOf(AgentAssignment, "allowedScheduleIds"),
+      BusSchedule.modelName,
+    );
+  });
+
   await t.test("U1 same-owner sibling brand schedules are absent", () => {
     const brandA = schedule("a", BRAND_A);
     const brandB = schedule("b", BRAND_B);
@@ -61,10 +79,14 @@ test("shared agent selling guard", async (t) => {
   });
 
   await t.test("U4 narrowing scopes intersect and an empty list fails closed", () => {
-    const first = schedule("first", BRAND_A, { routeId: "route-1" });
-    const second = schedule("second", BRAND_A, { routeId: "route-2" });
+    const first = schedule("first", BRAND_A, {
+      routeId: "google-route-1", busRouteId: "service-1",
+    });
+    const second = schedule("second", BRAND_A, {
+      routeId: "google-route-2", busRouteId: "service-2",
+    });
     assert.deepEqual(filterSellableSchedules({
-      assignment: assignment({ accessScope: "ROUTES", allowedRouteIds: ["route-2"] }),
+      assignment: assignment({ accessScope: "ROUTES", allowedRouteIds: ["service-2"] }),
       schedules: [first, second],
     }), [second]);
     assert.deepEqual(filterSellableSchedules({

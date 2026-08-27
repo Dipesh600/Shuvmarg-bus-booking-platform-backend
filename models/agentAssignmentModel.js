@@ -116,7 +116,7 @@ const agentAssignmentSchema = new mongoose.Schema({
     enum: Object.values(ACCESS_SCOPES),
     default: ACCESS_SCOPES.ALL_BUSES,
   },
-  allowedRouteIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "RouteVariant" }],
+  allowedRouteIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "BusRoute" }],
   // "busschedules", lowercase, is the name busScheduleModel.js actually
   // registers. "BusSchedule" would resolve to nothing and populate would
   // silently return null — the same bug already fixed once in 24a9b9d.
