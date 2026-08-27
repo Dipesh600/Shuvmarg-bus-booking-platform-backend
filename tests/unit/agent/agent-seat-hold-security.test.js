@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { filterSellableTrips } = require('../../../src/shared/identity/agent-selling-guard');
+const { permitsCashSale } = require('../../../src/shared/identity/agent-assignment-terms');
 const { isAgentVerificationCleared } = require('../../../src/shared/identity/agent-verification');
 const errors = require('../../../src/modules/agent/seat-hold/agent-seat-hold.errors');
 const mapper = require('../../../src/modules/agent/seat-hold/agent-seat-hold.mapper');
@@ -20,7 +21,8 @@ const build = (over = {}) => {
   const calls = [];
   const trip = { _id: TRIP, brandId: BRAND, routeId: 'r1', scheduleId: 's1', status: 'scheduled', isActive: true,
     tripDate: new Date('2026-08-28'), bookingClosesAt: new Date('2026-08-28T06:00:00Z'), tripFare: 500 };
-  const assignment = { _id: 'assignment-1', agentId: 'agent-1', operatorId: BRAND, status: 'ACTIVE', accessScope: 'ALL_BUSES' };
+  const assignment = { _id: 'assignment-1', agentId: 'agent-1', operatorId: BRAND, status: 'ACTIVE',
+    accessScope: 'ALL_BUSES', permissions: { canSellCash: true, maxSeatsPerBooking: null } };
   const repository = {
     findAgentForUser: async (id) => (calls.push(['agent', id]), { _id: 'agent-1', scope: 'OPERATOR', applicationStatus: 'VERIFIED_BASIC' }),
     findTripCandidate: async () => (calls.push(['trip']), trip),
@@ -34,7 +36,7 @@ const build = (over = {}) => {
     createOrReusePassengerSeatHold: async (input) => (calls.push(['hold', input]), { _id: 'hold-1', ...input, status: 'held', expiresAt: new Date('2026-08-27T12:05:00Z') }),
   };
   const deps = { clock: () => NOW, errors, filterSellableTrips, isAgentVerificationCleared, mapper, parse,
-    passengerSeatHold, preparationPolicy: policy, repository, ...over };
+    passengerSeatHold, permitsCashSale, preparationPolicy: policy, repository, ...over };
   return { calls, repository, service: createAgentSeatHoldService(deps), trip };
 };
 
@@ -74,6 +76,26 @@ test('V2 VERIFIED_BASIC plus shared Trip guard creates an authorized passenger h
   assert.equal(result.statusCode, 200);
   assert.deepEqual(h.calls.find(([name]) => name === 'authorize').slice(1), ['hold-1', USER, 'assignment-1', BRAND]);
   assert.equal(h.calls.find(([name]) => name === 'hold')[1].originalAmount, 500);
+});
+
+test('cash permission denial fails before seat, pricing or hold work', async () => {
+  for (const permissions of [
+    { canSellCash: false, maxSeatsPerBooking: null },
+    { canSellCash: true, maxSeatsPerBooking: 1 },
+  ]) {
+    const h = build();
+    h.repository.findActiveAssignments = async () => [{
+      _id: 'assignment-1', operatorId: BRAND, status: 'ACTIVE',
+      accessScope: 'ALL_BUSES', permissions,
+    }];
+    const request = permissions.maxSeatsPerBooking === 1
+      ? { tripId: TRIP, seatNumbers: ['A1', 'A2'] }
+      : body;
+    await assert.rejects(() => h.service.createHold(USER, request), (error) =>
+      error.responseBody.errorCode === 'NOT_SELLABLE_INVENTORY');
+    assert.equal(h.calls.some(([name]) => name === 'hold'), false);
+    assert.equal(h.calls.some(([name]) => name === 'authorize'), false);
+  }
 });
 
 test('V10 hold data errors map ValidationError to 400 and duplicate key to 409', async () => {

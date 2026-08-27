@@ -16,8 +16,7 @@ const agentApplicationDocumentUpload = require('../../src/modules/agent/applicat
 const agentProfile = require('../../src/modules/agent/profile');
 const agentDashboard = require('../../src/modules/agent/dashboard');
 const agentIdentity = require('../../src/modules/agent/identity');
-const agentAssignmentResponse = require("../../src/modules/agent/assignment-response");
-const agentAssignmentRespondRateLimit = require("../../middleware/agentAssignmentRespondRateLimit.js");
+const registerAgentAssignmentRoutes = require("./agentAssignmentRoutes.js");
 const agentSellableInventory = require("../../src/modules/agent/sellable-inventory");
 const agentSellableInventoryRateLimit = require("../../middleware/agentSellableInventoryRateLimit.js");
 const registerAgentSaleRoutes = require("./agentSaleRoutes.js");
@@ -54,24 +53,7 @@ router.get("/me/code", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.ge
 // Deliberately NOT behind requireVerifiedAgent. An unfinished-KYC agent must be
 // able to answer the invite that motivates them to finish onboarding; selling is
 // gated later against both verification and an ACTIVE assignment.
-
-router.post(
-  "/assignments/:assignmentId/accept",
-  auth,
-  verifyRoleFromDB,
-  agentMiddleware,
-  agentAssignmentRespondRateLimit,
-  agentAssignmentResponse.acceptAssignment,
-);
-
-router.post(
-  "/assignments/:assignmentId/decline",
-  auth,
-  verifyRoleFromDB,
-  agentMiddleware,
-  agentAssignmentRespondRateLimit,
-  agentAssignmentResponse.declineAssignment,
-);
+registerAgentAssignmentRoutes(router, { auth, verifyRoleFromDB, agentMiddleware });
 
 // ── Sellable Inventory ───────────────────────────────────────────────────────
 // Deliberately NOT behind requireVerifiedAgent. KYC gates committing a sale, not

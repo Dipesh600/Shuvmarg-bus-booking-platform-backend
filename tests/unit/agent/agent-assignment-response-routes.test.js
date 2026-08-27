@@ -9,6 +9,7 @@ const auth = require('../../../middleware/authMiddleware');
 const verifyRoleFromDB = require('../../../middleware/verifyRoleFromDB');
 const { agentMiddleware } = require('../../../middleware/checkRole');
 const limiter = require('../../../middleware/agentAssignmentRespondRateLimit');
+const listLimiter = require('../../../middleware/agentAssignmentListRateLimit');
 const response = require('../../../src/modules/agent/assignment-response');
 
 const handlersFor = (path) => router.stack
@@ -16,6 +17,11 @@ const handlersFor = (path) => router.stack
   .route.stack.map((layer) => layer.handle);
 
 test('assignment response route security wiring', async (t) => {
+  await t.test('assignment inbox uses exact token chain and its read limiter', () => {
+    assert.deepEqual(handlersFor('/assignments'), [
+      auth, verifyRoleFromDB, agentMiddleware, listLimiter, response.listAssignments,
+    ]);
+  });
   await t.test('accept uses exact auth chain, limiter, then controller', () => {
     assert.deepEqual(handlersFor('/assignments/:assignmentId/accept'), [
       auth, verifyRoleFromDB, agentMiddleware, limiter, response.acceptAssignment,

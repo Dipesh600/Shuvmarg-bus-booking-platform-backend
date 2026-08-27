@@ -13,7 +13,7 @@ const createAuthorizedHold = async (deps, userId, input, seats) => {
     assignment: row,
     trips: [trip],
     now,
-  }).length === 1);
+  }).length === 1 && deps.permitsCashSale(row, seats.length));
   if (!assignment) throw deps.errors.notSellable();
 
   const [layout, seatDoc] = await Promise.all([

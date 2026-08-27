@@ -26,6 +26,35 @@ const brandOf = (assignment) => {
   };
 };
 
+const effectiveStatus = (assignment, now) => (
+  assignment.status === 'INVITED'
+  && assignment.expiresAt
+  && new Date(assignment.expiresAt).getTime() <= now.getTime()
+    ? 'EXPIRED'
+    : assignment.status
+);
+
+const toListItem = (assignment, now) => {
+  const item = {
+    assignmentId: assignment._id,
+    status: effectiveStatus(assignment, now),
+    brand: brandOf(assignment),
+    invitedAt: assignment.invitedAt || null,
+    expiresAt: assignment.expiresAt || null,
+    acceptedAt: assignment.acceptedAt || null,
+    declinedAt: assignment.declinedAt || null,
+    ...toTerms(assignment),
+  };
+  if (assignment.status === 'DECLINED') item.statusReason = assignment.statusReason || null;
+  return item;
+};
+
+const toListResponse = ({ rows, total, page, limit, now }) => ({
+  success: true,
+  data: rows.map((row) => toListItem(row, now)),
+  pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+});
+
 /** Explicit fields only: internal ownership and operator contact data stay out. */
 const toResponse = (assignment, action) => {
   const data = {
@@ -50,4 +79,4 @@ const toResponse = (assignment, action) => {
   };
 };
 
-module.exports = { toResponse };
+module.exports = { toListResponse, toResponse };

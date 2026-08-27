@@ -17,7 +17,7 @@ const findActiveAssignments = (agentId, operatorId) => AgentAssignment.find({
   agentId,
   operatorId,
   status: { $in: [...SELLABLE_ASSIGNMENT_STATUSES] },
-}).select('operatorId status accessScope allowedRouteIds allowedScheduleIds').lean();
+}).select('operatorId status accessScope allowedRouteIds allowedScheduleIds permissions').lean();
 
 const findTripCandidate = (tripId) => Trip.findOne({ _id: tripId })
   .select('_id brandId busId routeId scheduleId status tripDate bookingClosesAt isActive tripFare departureTime arrivalTime fromStopName toStopName')

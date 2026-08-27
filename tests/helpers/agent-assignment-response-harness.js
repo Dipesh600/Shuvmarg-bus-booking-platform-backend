@@ -38,6 +38,8 @@ const CALLS = [
   'transitionInvite',
   'findAssignmentState',
   'expireStaleInvite',
+  'listAssignments',
+  'countAssignments',
 ];
 
 const DEFAULTS = {
@@ -45,6 +47,8 @@ const DEFAULTS = {
   transitionInvite: (_filter, update) => assignment({ ...update }),
   findAssignmentState: () => null,
   expireStaleInvite: () => assignment({ status: 'EXPIRED' }),
+  listAssignments: () => [assignment()],
+  countAssignments: () => 1,
 };
 
 const harness = (overrides = {}) => {

@@ -89,6 +89,15 @@ const isCommissionValid = (mode, value) => {
   return mode !== COMMISSION_MODES.PERCENT || value <= MAX_COMMISSION_PERCENT;
 };
 
+/** Whether one assignment permits a cash hold for this exact seat count. Missing
+ * permissions fail closed; null is the schema's explicit uncapped value. */
+const permitsCashSale = (assignment, seatCount) => {
+  if (assignment?.permissions?.canSellCash !== true) return false;
+  if (!Number.isSafeInteger(seatCount) || seatCount < 1) return false;
+  const cap = assignment.permissions.maxSeatsPerBooking;
+  return cap === null || (Number.isSafeInteger(cap) && cap >= seatCount);
+};
+
 module.exports = {
   ACCESS_SCOPES,
   COMMISSION_MODES,
@@ -98,4 +107,5 @@ module.exports = {
   isAccessScope,
   isCommissionMode,
   isCommissionValid,
+  permitsCashSale,
 };

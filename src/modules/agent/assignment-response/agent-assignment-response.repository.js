@@ -32,9 +32,22 @@ const expireStaleInvite = (filter) => AgentAssignment.findOneAndUpdate(
   { new: true, runValidators: true, context: 'query' },
 ).lean();
 
+const listAssignments = (agentId, { page, limit }) => AgentAssignment
+  .find({ agentId })
+  .select('operatorId status statusReason invitedAt expiresAt acceptedAt declinedAt accessScope allowedRouteIds allowedScheduleIds permissions operatorCommission')
+  .populate({ path: 'operatorId', select: 'brandName' })
+  .sort({ createdAt: -1, _id: -1 })
+  .skip((page - 1) * limit)
+  .limit(limit)
+  .lean();
+
+const countAssignments = (agentId) => AgentAssignment.countDocuments({ agentId });
+
 module.exports = {
   expireStaleInvite,
+  countAssignments,
   findAgentIdForUser,
   findAssignmentState,
+  listAssignments,
   transitionInvite,
 };

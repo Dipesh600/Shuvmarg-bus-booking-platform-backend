@@ -1,6 +1,7 @@
 'use strict';
 
 const { filterSellableTrips } = require('../../../shared/identity/agent-selling-guard');
+const { permitsCashSale } = require('../../../shared/identity/agent-assignment-terms');
 const { isAgentVerificationCleared } = require('../../../shared/identity/agent-verification');
 const passengerSeatHold = require('../../booking/passenger-seat-hold');
 const preparationPolicy = require('../../booking/passenger-booking-preparation/passenger-booking-preparation.policy');
@@ -19,6 +20,7 @@ const service = createAgentSeatHoldService({
   mapper,
   parse,
   passengerSeatHold,
+  permitsCashSale,
   preparationPolicy,
   repository,
 });

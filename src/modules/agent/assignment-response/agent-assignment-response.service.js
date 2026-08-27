@@ -65,7 +65,25 @@ const declineAssignment = async (userId, assignmentId, body) => {
   return respond({ userId, assignmentId, action: 'decline', reason: input.reason });
 };
 
+const listAssignments = async (userId, query) => {
+  const parsed = parse.parseListQuery(query);
+  if (parsed.errors.length) throw errors.invalidInputError(parsed.errors);
+  const agent = await repository.findAgentIdForUser(userId);
+  if (!agent) throw errors.noApplicationError();
+  const [rows, total] = await Promise.all([
+    repository.listAssignments(agent._id, parsed.value),
+    repository.countAssignments(agent._id),
+  ]);
+  return {
+    statusCode: 200,
+    responseBody: mapper.toListResponse({
+      rows, total, ...parsed.value, now: new Date(),
+    }),
+  };
+};
+
 module.exports = {
   acceptAssignment,
   declineAssignment,
+  listAssignments,
 };
