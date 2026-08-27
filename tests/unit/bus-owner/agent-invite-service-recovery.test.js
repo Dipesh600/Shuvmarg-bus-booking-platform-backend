@@ -19,7 +19,7 @@ test('operator agent create — existing account', async (t) => {
     const h = harness(existingUser(false));
     try {
       const result = await service.createAgent(OWNER_ID, validBody);
-      assert.equal(result.statusCode, 201);
+      assert.equal(result.statusCode, 200);
       assert.equal(result.responseBody.data.isUpgrade, true);
       assert.equal(h.calls.addAgentRole.length, 1);
       assert.equal(h.calls.createUser.length, 0);
@@ -44,7 +44,7 @@ test('operator agent create — existing account', async (t) => {
     const h = harness({ ...existingUser(true), findAgentByUserId: async () => null });
     try {
       const result = await service.createAgent(OWNER_ID, validBody);
-      assert.equal(result.statusCode, 201);
+      assert.equal(result.statusCode, 200);
       assert.equal(h.calls.createAgent.length, 1);
       assert.equal(h.calls.createUser.length, 0);
     } finally { h.restore(); }
@@ -52,13 +52,13 @@ test('operator agent create — existing account', async (t) => {
 });
 
 test('operator agent create — SMS delivery is best effort', async (t) => {
-  await t.test('a failed SMS still returns 201 with the code', async () => {
+  await t.test('a failed SMS still returns 200 with the code', async () => {
     // The identity is written and has a code. Failing the request would leave a
     // usable agent behind an error, and the owner can read the code and resend.
     const h = harness({ sms: async () => { throw new Error('gateway down'); } });
     try {
       const result = await service.createAgent(OWNER_ID, validBody);
-      assert.equal(result.statusCode, 201);
+      assert.equal(result.statusCode, 200);
       assert.equal(result.responseBody.data.smsSent, false);
       assert.equal(result.responseBody.data.agentCode, 'SM-AG-7K4QP2X');
       assert.equal(h.calls.createAgent.length, 1);

@@ -17,6 +17,7 @@ const agent = (over = {}) => ({
   outletType: 'TRAVEL_AGENCY',
   district: 'Kathmandu',
   municipality: 'Kathmandu Metropolitan City',
+  placeName: 'Kalanki',
   user: { phoneVerified: true },
   ...over,
 });

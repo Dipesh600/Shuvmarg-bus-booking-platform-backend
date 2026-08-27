@@ -7,6 +7,8 @@ const auth = require("../../middleware/authMiddleware");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB");
 const { busOwnerMiddleware } = require("../../middleware/checkRole");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner");
+const agentCreateRateLimit = require("../../middleware/busOwnerAgentCreateRateLimit");
+const agentInvite = require("../../src/modules/bus-owner/agent-invite");
 const {
   rejectOversizedKycRequest,
   kycSubmissionRateLimiter,
@@ -56,6 +58,7 @@ test("bus-owner operations route and middleware contract", () => {
     ["patch", "/updateAmenity", amenities.updateAmenity],
     ["delete", "/deleteAmenity", amenities.deleteAmenity],
     ["post", "/getAmenitiesById", amenities.getAmenityById],
+    ["post", "/agents", agentInvite.createAgent, [agentCreateRateLimit, agentInvite.createAgent]],
   ];
   const layers = router.stack;
   assert.deepEqual(

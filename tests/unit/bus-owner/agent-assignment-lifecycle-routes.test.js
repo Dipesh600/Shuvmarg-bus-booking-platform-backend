@@ -6,6 +6,8 @@ const express = require('express');
 const lifecycle = require('../../../src/modules/bus-owner/agent-assignment-lifecycle');
 const listLimiter = require('../../../middleware/busOwnerAgentAssignmentListRateLimit');
 const writeLimiter = require('../../../middleware/busOwnerAgentAssignmentLifecycleRateLimit');
+const createLimiter = require('../../../middleware/busOwnerAgentCreateRateLimit');
+const invite = require('../../../src/modules/bus-owner/agent-invite');
 const { registerBusOwnerAgentRoutes } = require('../../../routes/busOwner/agentRoutes');
 
 const handlersFor = (router, path, method) => router.stack
@@ -15,6 +17,12 @@ const handlersFor = (router, path, method) => router.stack
 test('T9 operator assignment lifecycle route wiring and rate limits', async (t) => {
   const router = express.Router();
   registerBusOwnerAgentRoutes(router);
+
+  await t.test('X8 agent creation has its owner-keyed write limiter', () => {
+    assert.deepEqual(handlersFor(router, '/agents', 'post'), [
+      createLimiter, invite.createAgent,
+    ]);
+  });
 
   await t.test('list has its read limiter and controller', () => {
     assert.deepEqual(handlersFor(router, '/agents/assignments', 'get'), [

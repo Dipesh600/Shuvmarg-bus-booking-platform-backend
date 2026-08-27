@@ -8,6 +8,7 @@ const busOwnerAgentAssignRateLimit = require("../../middleware/busOwnerAgentAssi
 const busOwnerAgentLookupRateLimit = require("../../middleware/busOwnerAgentLookupRateLimit.js");
 const assignmentListRateLimit = require("../../middleware/busOwnerAgentAssignmentListRateLimit.js");
 const assignmentLifecycleRateLimit = require("../../middleware/busOwnerAgentAssignmentLifecycleRateLimit.js");
+const agentCreateRateLimit = require("../../middleware/busOwnerAgentCreateRateLimit.js");
 
 /**
  * Ticket-agent routes for an operator.
@@ -26,7 +27,7 @@ const assignmentLifecycleRateLimit = require("../../middleware/busOwnerAgentAssi
 function registerBusOwnerAgentRoutes(router) {
   // Create an agent identity from name + phone. The owner invites; the agent
   // activates themselves via /api/auth/activate.
-  router.post("/agents", busOwnerAgentInvite.createAgent);
+  router.post("/agents", agentCreateRateLimit, busOwnerAgentInvite.createAgent);
 
   // Look up an agent by the code they published, before inviting them.
   // Rate-limited because the code is the only thing standing between a caller and

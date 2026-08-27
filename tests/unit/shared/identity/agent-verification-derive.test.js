@@ -14,6 +14,7 @@ const operatorAgent = (overrides = {}) => ({
   outletType: 'SOLO',
   district: 'Kaski',
   municipality: 'Pokhara',
+  placeName: 'Lakeside',
   ...overrides,
 });
 
@@ -32,7 +33,7 @@ test('deriveOperatorKycStatus', async (t) => {
   });
 
   await t.test('every required outlet field is required', () => {
-    for (const field of ['outletType', 'district', 'municipality']) {
+    for (const field of ['outletType', 'district', 'municipality', 'placeName']) {
       assert.equal(
         deriveOperatorKycStatus(operatorAgent({ [field]: null }), { phoneVerified: true }),
         'PHONE_VERIFIED',

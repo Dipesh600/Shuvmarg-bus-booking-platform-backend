@@ -23,6 +23,7 @@ const assignment = (over = {}) => ({
     businessName: 'Himalaya Travels',
     district: 'Kathmandu',
     municipality: 'Kathmandu Metropolitan City',
+    placeName: 'Kalanki',
     user: { name: 'Ram Bahadur', phoneVerified: true },
   },
   status: 'ACTIVE',

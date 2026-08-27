@@ -80,12 +80,23 @@ test('operator agent create — refusals', async (t) => {
   await t.test('a missing name is refused with the field errors listed', async () => {
     const h = harness();
     try {
-      await assert.rejects(service.createAgent(OWNER_ID, { phone: '9800000000' }), (error) => {
+      await assert.rejects(service.createAgent(OWNER_ID, { ...validBody, name: undefined }), (error) => {
         assert.equal(error.statusCode, 400);
         assert.deepEqual(error.responseBody.errors, ['name is required.']);
         return true;
       });
     } finally { h.restore(); }
+  });
+
+  await t.test('X4 every missing place field is 400 before any write', async () => {
+    for (const field of ['outletType', 'district', 'municipality', 'placeName']) {
+      const h = harness();
+      try {
+        await rejects(service.createAgent(OWNER_ID, { ...validBody, [field]: undefined }), 400);
+        assert.equal(h.calls.createUser.length, 0, field);
+        assert.equal(h.calls.createAgent.length, 0, field);
+      } finally { h.restore(); }
+    }
   });
 
   await t.test('a duplicate key from the unique index becomes a 409, not a 500', async () => {
@@ -96,6 +107,17 @@ test('operator agent create — refusals', async (t) => {
     const h = harness({ createAgent: async () => { throw duplicate; } });
     try {
       await rejects(service.createAgent(OWNER_ID, validBody), 409);
+    } finally { h.restore(); }
+  });
+
+  await t.test('X8 a Mongoose ValidationError becomes 400, not a catch-all 500', async () => {
+    const validation = Object.assign(new Error('invalid Agent'), {
+      name: 'ValidationError',
+      errors: { placeName: { message: 'placeName is required.' } },
+    });
+    const h = harness({ createAgent: async () => { throw validation; } });
+    try {
+      await rejects(service.createAgent(OWNER_ID, validBody), 400);
     } finally { h.restore(); }
   });
 });

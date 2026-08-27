@@ -15,6 +15,7 @@ const operatorAgent = (over = {}) => ({
   outletType: "TRAVEL_AGENCY",
   district: "Kathmandu",
   municipality: "Kathmandu Metropolitan City",
+  placeName: "Kalanki",
   user: { name: "Ram Bahadur", phoneVerified: true },
   ...over,
 });
