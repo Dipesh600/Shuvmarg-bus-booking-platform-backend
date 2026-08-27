@@ -1,6 +1,10 @@
 'use strict';
 
-const { ASSIGNMENT_STATUSES } = require('../../../shared/identity/agent-assignment-status');
+const {
+  ASSIGNMENT_STATUSES,
+  LIVE_ASSIGNMENT_STATUSES,
+  TERMINAL_ASSIGNMENT_STATUSES,
+} = require('../../../shared/identity/agent-assignment-status');
 
 const REVOKABLE_STATUSES = Object.freeze([
   ASSIGNMENT_STATUSES.INVITED,
@@ -8,11 +12,35 @@ const REVOKABLE_STATUSES = Object.freeze([
   ASSIGNMENT_STATUSES.SUSPENDED,
 ]);
 
-const listFilter = ({ ownerId, brandId, status }) => ({
-  ownerId,
-  ...(brandId ? { operatorId: brandId } : {}),
-  ...(status ? { status } : {}),
-});
+const currentConditions = (now) => [
+  { status: { $in: LIVE_ASSIGNMENT_STATUSES.filter((status) => status !== ASSIGNMENT_STATUSES.INVITED) } },
+  { status: ASSIGNMENT_STATUSES.INVITED, expiresAt: null },
+  { status: ASSIGNMENT_STATUSES.INVITED, expiresAt: { $gt: now } },
+];
+
+const historyConditions = (now) => [
+  { status: { $in: TERMINAL_ASSIGNMENT_STATUSES } },
+  { status: ASSIGNMENT_STATUSES.INVITED, expiresAt: { $lte: now } },
+];
+
+const statusConditions = (status, now) => status === ASSIGNMENT_STATUSES.INVITED
+  ? currentConditions(now).slice(1)
+  : status === ASSIGNMENT_STATUSES.EXPIRED ? [
+    { status: ASSIGNMENT_STATUSES.EXPIRED },
+    { status: ASSIGNMENT_STATUSES.INVITED, expiresAt: { $lte: now } },
+  ] : null;
+
+const listFilter = ({ ownerId, brandId, status, view, now = new Date() }) => {
+  const conditions = status ? statusConditions(status, now)
+    : view === 'CURRENT' ? currentConditions(now)
+      : view === 'HISTORY' ? historyConditions(now) : null;
+  return {
+    ownerId,
+    ...(brandId ? { operatorId: brandId } : {}),
+    ...(status && !conditions ? { status } : {}),
+    ...(conditions ? { $or: conditions } : {}),
+  };
+};
 
 const transitionFilter = ({ ownerId, assignmentId, action }) => {
   return {

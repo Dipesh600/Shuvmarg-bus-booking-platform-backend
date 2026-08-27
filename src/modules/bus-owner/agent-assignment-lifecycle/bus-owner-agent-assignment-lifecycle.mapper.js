@@ -25,16 +25,21 @@ const toAgent = (agent) => {
 /** Explicit operator view: no agent contact, identity documents or other owners. */
 const idOf = (value) => String(value?._id || value || '');
 
-const toAssignment = (assignment, salesCount) => {
-  const stateContext = assignment.status === 'SUSPENDED'
+const effectiveStatus = (assignment, now) => assignment.status === 'INVITED'
+  && assignment.expiresAt && new Date(assignment.expiresAt).getTime() <= now.getTime()
+  ? 'EXPIRED' : assignment.status;
+
+const toAssignment = (assignment, salesCount, now = new Date()) => {
+  const status = effectiveStatus(assignment, now);
+  const stateContext = status === 'SUSPENDED'
     ? { suspendedAt: assignment.suspendedAt || null, operatorNote: assignment.operatorNote || null }
-    : assignment.status === 'REVOKED'
+    : status === 'REVOKED'
       ? { revokedAt: assignment.revokedAt || null, operatorNote: assignment.operatorNote || null }
       : {};
 
   return {
     assignmentId: assignment._id,
-    status: assignment.status,
+    status,
     invitedAt: assignment.invitedAt || null,
     expiresAt: assignment.expiresAt || null,
     acceptedAt: assignment.acceptedAt || null,
@@ -53,11 +58,11 @@ const toAssignment = (assignment, salesCount) => {
   };
 };
 
-const toListResponse = ({ rows, total, page, limit, salesCounts = new Map() }) => ({
+const toListResponse = ({ rows, total, page, limit, salesCounts = new Map(), now = new Date() }) => ({
   success: true,
   data: rows.map((row) => toAssignment(
     row,
-    salesCounts.get(`${idOf(row.agentId)}:${idOf(row.operatorId)}`) || 0,
+    salesCounts.get(`${idOf(row.agentId)}:${idOf(row.operatorId)}`) || 0, now,
   )),
   pagination: {
     page,
