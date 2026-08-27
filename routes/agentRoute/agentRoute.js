@@ -16,6 +16,11 @@ const agentApplicationDocumentUpload = require('../../src/modules/agent/applicat
 const agentProfile = require('../../src/modules/agent/profile');
 const agentDashboard = require('../../src/modules/agent/dashboard');
 const agentIdentity = require('../../src/modules/agent/identity');
+const registerAgentAssignmentRoutes = require("./agentAssignmentRoutes.js");
+const agentSellableInventory = require("../../src/modules/agent/sellable-inventory");
+const agentSellableInventoryRateLimit = require("../../middleware/agentSellableInventoryRateLimit.js");
+const registerAgentSaleRoutes = require("./agentSaleRoutes.js");
+const registerAgentSalesReadRoutes = require("./agentSalesReadRoutes.js");
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 // Deliberately NOT behind requireVerifiedAgent. An agent's code and KYC status
@@ -43,6 +48,28 @@ router.patch("/me", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.updat
  * @access  Private (Agent role required, any status)
  */
 router.get("/me/code", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.getCode);
+
+// ── Assignment Invitations ───────────────────────────────────────────────────
+// Deliberately NOT behind requireVerifiedAgent. An unfinished-KYC agent must be
+// able to answer the invite that motivates them to finish onboarding; selling is
+// gated later against both verification and an ACTIVE assignment.
+registerAgentAssignmentRoutes(router, { auth, verifyRoleFromDB, agentMiddleware });
+
+// ── Sellable Inventory ───────────────────────────────────────────────────────
+// Deliberately NOT behind requireVerifiedAgent. KYC gates committing a sale, not
+// reading the catalogue an agent could sell after verification; kycStatus in the
+// response lets the client keep its sell action disabled until then.
+router.get(
+  "/sellable-inventory",
+  auth,
+  verifyRoleFromDB,
+  agentMiddleware,
+  agentSellableInventoryRateLimit,
+  agentSellableInventory.listSellableInventory,
+);
+
+registerAgentSaleRoutes(router, { auth, verifyRoleFromDB, agentMiddleware });
+registerAgentSalesReadRoutes(router, { auth, verifyRoleFromDB, agentMiddleware });
 
 // ── Application Workflow ──────────────────────────────────────────────────────
 

@@ -15,22 +15,23 @@ const { scopeOf } = require('../../../shared/identity/agent-enums');
  * owner's browser history, logs and network tab, for an account the owner is not
  * meant to be able to operate.
  */
-const toCreatedResponse = ({ agent, userId, name, phone, brand, isUpgrade, smsSent }) => ({
+const toCreatedResponse = ({ agent, name, phone, brand, isUpgrade, smsSent }) => ({
   success: true,
   message: isUpgrade
     ? 'Agent role added to the existing account.'
     : 'Agent created. They will receive login details by SMS.',
   data: {
     agentCode: agent.code || null,
-    legacyAgentId: agent.agentId || null,
     agentId: agent._id,
-    userId,
     name,
     phone,
     scope: scopeOf(agent),
     outletType: agent.outletType || null,
-    kycStatus: agent.applicationStatus,
-    brand: brand ? { id: brand._id, name: brand.name } : null,
+    applicationStatus: agent.applicationStatus,
+    district: agent.district || null,
+    municipality: agent.municipality || null,
+    placeName: agent.placeName || null,
+    brand: brand ? { id: brand._id, name: brand.brandName || null } : null,
     isUpgrade,
     // False when no SMS was attempted (existing account) or delivery failed.
     // The owner can read the code off this response either way.

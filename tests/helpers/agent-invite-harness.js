@@ -34,7 +34,14 @@ const repository = require('../../src/modules/bus-owner/agent-invite/bus-owner-a
 const service = require('../../src/modules/bus-owner/agent-invite/bus-owner-agent-invite.service');
 
 const OWNER_ID = '507f1f77bcf86cd799439011';
-const validBody = { name: 'Ram Bahadur', phone: '9800000000' };
+const validBody = {
+  name: 'Ram Bahadur',
+  phone: '9800000000',
+  outletType: 'SOLO',
+  district: 'Kathmandu',
+  municipality: 'Kathmandu Metropolitan',
+  placeName: 'Kalanki',
+};
 
 const patch = (obj, name, fn, restores) => {
   const original = obj[name];

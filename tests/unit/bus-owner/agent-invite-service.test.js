@@ -17,7 +17,7 @@ test('operator agent create — happy path', async (t) => {
     const h = harness();
     try {
       const result = await service.createAgent(OWNER_ID, validBody);
-      assert.equal(result.statusCode, 201);
+      assert.equal(result.statusCode, 200);
       assert.equal(result.responseBody.data.agentCode, 'SM-AG-7K4QP2X');
       assert.equal(result.responseBody.data.isUpgrade, false);
       assert.equal(result.responseBody.data.smsSent, true);
@@ -26,7 +26,8 @@ test('operator agent create — happy path', async (t) => {
       assert.equal(h.calls.createUser[0][0].status, 'invited');
       assert.equal(h.calls.createAgent.length, 1);
       assert.equal(h.calls.createAgent[0][0].scope, 'OPERATOR');
-      assert.equal(h.calls.createAgent[0][0].applicationStatus, 'DRAFT');
+      assert.equal(h.calls.createAgent[0][0].applicationStatus, 'VERIFIED_BASIC');
+      assert.equal(h.calls.createAgent[0][0].placeName, 'Kalanki');
     } finally { h.restore(); }
   });
 

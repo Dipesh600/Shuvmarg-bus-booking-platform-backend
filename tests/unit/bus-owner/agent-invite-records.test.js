@@ -47,12 +47,15 @@ test('the new Agent identity', async (t) => {
     userId: '507f1f77bcf86cd799439013',
     ownerId: '507f1f77bcf86cd799439011',
     outletType: 'TICKET_COUNTER',
+    district: 'Kathmandu',
+    municipality: 'Kathmandu Metropolitan',
+    placeName: 'Kalanki',
   });
 
-  await t.test('is OPERATOR scope at DRAFT', () => {
+  await t.test('X2/X3 is OPERATOR scope at VERIFIED_BASIC', () => {
     assert.equal(built().scope, 'OPERATOR');
-    // DRAFT, not PHONE_VERIFIED: no proof of the phone has happened yet.
-    assert.equal(built().applicationStatus, 'DRAFT');
+    assert.equal(built().applicationStatus, 'VERIFIED_BASIC');
+    assert.equal(built().placeName, 'Kalanki');
   });
 
   await t.test('records provenance but no selling right', () => {

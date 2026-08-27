@@ -43,7 +43,7 @@ const DERIVABLE_STATUSES = Object.freeze([
  * phone has neither, and they are exactly who this scope exists for — requiring
  * a shopfront would lock out the population the redesign is for.
  */
-const REQUIRED_OUTLET_FIELDS = Object.freeze(["outletType", "district", "municipality"]);
+const REQUIRED_OUTLET_FIELDS = Object.freeze(["outletType", "district", "municipality", "placeName"]);
 
 const isFilled = (value) => typeof value === "string" && value.trim().length > 0;
 

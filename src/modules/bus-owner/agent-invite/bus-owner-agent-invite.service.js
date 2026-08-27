@@ -73,7 +73,8 @@ const notify = async ({ name, phone, tempPassword, brandName }) => {
 };
 
 const createAgent = async (ownerId, body) => {
-  const { name, phone, outletType, errors: inputErrors } = policy.validateCreateInput(body);
+  const input = policy.validateCreateInput(body);
+  const { name, phone, errors: inputErrors } = input;
   if (inputErrors.length > 0) throw errors.invalidInputError(inputErrors);
 
   const normalisedPhone = phoneGuard.normalizePhone(phone);
@@ -90,21 +91,27 @@ const createAgent = async (ownerId, body) => {
     });
 
     const agent = await repository.createAgent(
-      policy.newOperatorAgent({ userId, ownerId, outletType }),
+      policy.newOperatorAgent({
+        userId,
+        ownerId,
+        outletType: input.outletType,
+        district: input.district,
+        municipality: input.municipality,
+        placeName: input.placeName,
+      }),
     );
 
     const smsSent = await notify({
       name,
       phone: normalisedPhone,
       tempPassword,
-      brandName: brand?.name,
+      brandName: brand?.brandName,
     });
 
     return {
-      statusCode: 201,
+      statusCode: 200,
       responseBody: mapper.toCreatedResponse({
         agent,
-        userId,
         name,
         phone: normalisedPhone,
         brand,
@@ -113,6 +120,9 @@ const createAgent = async (ownerId, body) => {
       }),
     };
   } catch (error) {
+    if (error.name === 'ValidationError') {
+      throw errors.invalidInputError(Object.values(error.errors || {}).map((item) => item.message));
+    }
     if (error.code === 11000) throw errors.duplicateKeyError(error);
     throw error;
   }

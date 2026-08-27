@@ -6,56 +6,61 @@ const assert = require('node:assert/strict');
 const policy = require('../../../src/modules/bus-owner/agent-invite/bus-owner-agent-invite.policy');
 
 test('operator agent create input', async (t) => {
-  await t.test('name and phone are the whole required set', () => {
-    const result = policy.validateCreateInput({ name: 'Ram Bahadur', phone: '9800000000' });
+  const valid = {
+    name: 'Ram Bahadur', phone: '9800000000', outletType: 'SOLO',
+    district: 'Kathmandu', municipality: 'Kathmandu Metropolitan', placeName: 'Kalanki',
+  };
+
+  await t.test('X4 name, phone and complete place are the required set', () => {
+    const result = policy.validateCreateInput(valid);
     assert.deepEqual(result.errors, []);
     assert.equal(result.name, 'Ram Bahadur');
     assert.equal(result.phone, '9800000000');
-    assert.equal(result.outletType, null);
+    assert.equal(result.outletType, 'SOLO');
+    assert.equal(result.placeName, 'Kalanki');
   });
 
   await t.test('name is required', () => {
-    for (const body of [{}, { name: '' }, { name: '   ' }, { name: 42 }]) {
-      const result = policy.validateCreateInput({ ...body, phone: '9800000000' });
+    for (const body of [{ name: undefined }, { name: '' }, { name: '   ' }, { name: 42 }]) {
+      const result = policy.validateCreateInput({ ...valid, ...body });
       assert.ok(result.errors.includes('name is required.'), JSON.stringify(body));
     }
   });
 
   await t.test('phone is required', () => {
-    for (const body of [{}, { phone: '' }, { phone: '  ' }, { phone: null }]) {
-      const result = policy.validateCreateInput({ name: 'Ram Bahadur', ...body });
+    for (const body of [{ phone: undefined }, { phone: '' }, { phone: '  ' }, { phone: null }]) {
+      const result = policy.validateCreateInput({ ...valid, ...body });
       assert.ok(result.errors.includes('phone is required.'), JSON.stringify(body));
     }
   });
 
   await t.test('name has a minimum and a maximum length', () => {
     assert.match(
-      policy.validateCreateInput({ name: 'Ab', phone: '9800000000' }).errors[0],
+      policy.validateCreateInput({ ...valid, name: 'Ab' }).errors[0],
       /at least 3 characters/,
     );
     assert.match(
       policy.validateCreateInput({
-        name: 'x'.repeat(policy.MAX_NAME_LENGTH + 1),
-        phone: '9800000000',
+        ...valid, name: 'x'.repeat(policy.MAX_NAME_LENGTH + 1),
       }).errors[0],
       /200 characters or fewer/,
     );
   });
 
   await t.test('name and phone are trimmed', () => {
-    const result = policy.validateCreateInput({ name: '  Ram  ', phone: ' 9800000000 ' });
+    const result = policy.validateCreateInput({ ...valid, name: '  Ram  ', phone: ' 9800000000 ' });
     assert.equal(result.name, 'Ram');
     assert.equal(result.phone, '9800000000');
   });
 
-  await t.test('outletType is optional but must be recognised when present', () => {
-    assert.deepEqual(
-      policy.validateCreateInput({ name: 'Ram Bahadur', phone: '9800000000', outletType: 'HOTEL' }).errors,
-      [],
-    );
+  await t.test('X4 every place field is mandatory and outletType is recognised', () => {
+    for (const field of ['outletType', 'district', 'municipality', 'placeName']) {
+      const result = policy.validateCreateInput({ ...valid, [field]: '' });
+      assert.ok(result.errors.includes(`${field} is required.`), field);
+    }
     assert.deepEqual(
       policy.validateCreateInput({
-        name: 'Ram Bahadur', phone: '9800000000', outletType: 'ticket_counter',
+        ...valid, outletType: 'ticket_counter',
       }).errors,
       ['outletType is not a recognised outlet type.'],
     );
@@ -65,8 +70,7 @@ test('operator agent create input', async (t) => {
     // The owner supplies a name and a number. PAN, citizenship and bank details
     // belong to the agent, and we never need them: the operator pays them.
     const result = policy.validateCreateInput({
-      name: 'Ram Bahadur',
-      phone: '9800000000',
+      ...valid,
       panNumber: '123456789',
       citizenshipNumber: '12-34-56',
       bankAccountNumber: '0011002200',
@@ -75,20 +79,22 @@ test('operator agent create input', async (t) => {
       code: 'SM-AG-HACKED',
       commissionRate: 40,
     });
-    assert.deepEqual(Object.keys(result).sort(), ['errors', 'name', 'outletType', 'phone']);
+    assert.deepEqual(Object.keys(result).sort(), [
+      'district', 'errors', 'municipality', 'name', 'outletType', 'phone', 'placeName',
+    ]);
   });
 
   await t.test('a non-object body yields required-field errors, not a crash', () => {
     for (const body of [undefined, null, 'x', 42, []]) {
       const result = policy.validateCreateInput(body);
-      assert.equal(result.errors.length, 2, JSON.stringify(body));
+      assert.equal(result.errors.length, 6, JSON.stringify(body));
     }
   });
 
   await t.test('prototype keys do not satisfy required fields', () => {
     const hostile = JSON.parse('{"__proto__":{"name":"pwned","phone":"9800000000"}}');
     const result = policy.validateCreateInput(hostile);
-    assert.equal(result.errors.length, 2);
+    assert.equal(result.errors.length, 6);
   });
 });
 
