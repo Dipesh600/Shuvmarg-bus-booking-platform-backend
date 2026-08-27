@@ -27,20 +27,27 @@ const brandOf = (assignment) => {
 };
 
 /** Explicit fields only: internal ownership and operator contact data stay out. */
-const toResponse = (assignment, action) => ({
-  success: true,
-  message: action === 'accept'
-    ? 'Assignment invitation accepted.'
-    : 'Assignment invitation declined.',
-  data: {
+const toResponse = (assignment, action) => {
+  const data = {
     assignmentId: assignment._id,
     status: assignment.status,
     acceptedAt: assignment.acceptedAt || null,
     declinedAt: assignment.declinedAt || null,
-    statusReason: assignment.statusReason || null,
     brand: brandOf(assignment),
     ...toTerms(assignment),
-  },
-});
+  };
+
+  // statusReason belongs to the actor who wrote it. Accept can only expose an
+  // operator-authored value, while decline returns the agent's own text.
+  if (action === 'decline') data.statusReason = assignment.statusReason || null;
+
+  return {
+    success: true,
+    message: action === 'accept'
+      ? 'Assignment invitation accepted.'
+      : 'Assignment invitation declined.',
+    data,
+  };
+};
 
 module.exports = { toResponse };

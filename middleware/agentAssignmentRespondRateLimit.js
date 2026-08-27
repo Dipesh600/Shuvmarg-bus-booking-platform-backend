@@ -3,13 +3,13 @@
 const rateLimit = require("express-rate-limit");
 
 /**
- * Ten responses per hour per agent. Accept/decline are human decisions that are
- * normally made once; ten leaves room for retries across several invitations
- * while containing a stolen token that tries to churn assignment state.
+ * Thirty responses per hour per agent across every invitation and both actions.
+ * That leaves room for a travel agency being onboarded by many operators in one
+ * sitting while still containing a stolen token that churns assignment state.
  */
 module.exports = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 10,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => `agent-assignment-respond:${req.userInfo?.id || req.ip}`,

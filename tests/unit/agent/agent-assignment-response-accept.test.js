@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const controller = require('../../../src/modules/agent/assignment-response/agent-assignment-response.controller');
 const {
   AGENT_ID, ASSIGNMENT_ID, USER_ID, assignment, harness, rejects, service,
 } = require('../../helpers/agent-assignment-response-harness');
@@ -10,14 +11,29 @@ test('accept assignment invitation', async (t) => {
   await t.test('INVITED becomes ACTIVE with a server acceptedAt', async () => {
     const h = harness();
     try {
-      const result = await service.acceptAssignment(USER_ID, ASSIGNMENT_ID, {
-        acceptedAt: '2020-01-01T00:00:00.000Z',
-      });
+      const result = await service.acceptAssignment(USER_ID, ASSIGNMENT_ID);
       assert.equal(result.statusCode, 200);
       assert.equal(result.responseBody.data.status, 'ACTIVE');
       assert.ok(result.responseBody.data.acceptedAt instanceof Date);
-      assert.notEqual(result.responseBody.data.acceptedAt.toISOString(), '2020-01-01T00:00:00.000Z');
     } finally { h.restore(); }
+  });
+
+  await t.test('S8 accept controller never forwards the request body', async () => {
+    const original = service.acceptAssignment;
+    const calls = [];
+    service.acceptAssignment = async (...args) => {
+      calls.push(args);
+      return { statusCode: 200, responseBody: { success: true } };
+    };
+    const res = { status() { return this; }, json() { return this; } };
+    try {
+      await controller.acceptAssignment({
+        userInfo: { id: USER_ID },
+        params: { assignmentId: ASSIGNMENT_ID },
+        body: { acceptedAt: '2020-01-01T00:00:00.000Z', status: 'ACTIVE' },
+      }, res, assert.fail);
+      assert.deepEqual(calls, [[USER_ID, ASSIGNMENT_ID]]);
+    } finally { service.acceptAssignment = original; }
   });
 
   await t.test('S1/S2/S3 filter owns the id, agent, state and expiry', async () => {
@@ -35,12 +51,10 @@ test('accept assignment invitation', async (t) => {
     } finally { h.restore(); }
   });
 
-  await t.test('another agent and an unknown id return byte-identical 404 bodies', async () => {
+  await t.test('S1 diagnostic miss remains scoped to assignment id and acting agent', async () => {
     const h = harness({ transitionInvite: null, findAssignmentState: null });
     try {
-      const other = await rejects(service.acceptAssignment(USER_ID, ASSIGNMENT_ID), 404);
-      const unknown = await rejects(service.acceptAssignment(USER_ID, ASSIGNMENT_ID), 404);
-      assert.equal(JSON.stringify(other), JSON.stringify(unknown));
+      await rejects(service.acceptAssignment(USER_ID, ASSIGNMENT_ID), 404);
       assert.deepEqual(h.calls.findAssignmentState[0], [ASSIGNMENT_ID, AGENT_ID]);
     } finally { h.restore(); }
   });

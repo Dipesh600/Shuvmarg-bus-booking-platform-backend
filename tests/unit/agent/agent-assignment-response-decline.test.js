@@ -48,17 +48,14 @@ test('decline assignment invitation', async (t) => {
     } finally { h.restore(); }
   });
 
-  await t.test('reason over schema maximum maps ValidationError to 400', async () => {
-    const validation = Object.assign(new Error('validation'), {
-      name: 'ValidationError', errors: { statusReason: { message: 'statusReason exceeds 500 characters' } },
-    });
-    const h = harness({ transitionInvite: () => { throw validation; } });
+  await t.test('reason over schema maximum is 400 with zero repository calls', async () => {
+    const h = harness();
     try {
       await rejects(
         service.declineAssignment(USER_ID, ASSIGNMENT_ID, { reason: 'x'.repeat(501) }),
         400,
       );
-      assert.equal(h.calls.transitionInvite[0][1].statusReason.length, 501);
+      for (const calls of Object.values(h.calls)) assert.equal(calls.length, 0);
     } finally { h.restore(); }
   });
 

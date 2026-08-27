@@ -1,6 +1,7 @@
 'use strict';
 
 const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
+const MAX_REASON_LENGTH = 500;
 
 const isObjectId = (value) => typeof value === 'string' && OBJECT_ID_RE.test(value);
 
@@ -11,7 +12,11 @@ const parseDeclineReason = (body) => {
   if (typeof value !== 'string') {
     return { reason: null, errors: ['reason must be a string.'] };
   }
-  return { reason: value.trim() || null, errors: [] };
+  const reason = value.trim();
+  if (reason.length > MAX_REASON_LENGTH) {
+    return { reason: null, errors: [`reason must be at most ${MAX_REASON_LENGTH} characters.`] };
+  }
+  return { reason: reason || null, errors: [] };
 };
 
 module.exports = {

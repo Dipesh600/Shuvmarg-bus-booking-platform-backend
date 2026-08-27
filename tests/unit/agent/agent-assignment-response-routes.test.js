@@ -33,7 +33,7 @@ test('assignment response route security wiring', async (t) => {
       __dirname,
       '../../../middleware/agentAssignmentRespondRateLimit.js',
     ), 'utf8');
-    assert.match(source, /max: 10,/);
+    assert.match(source, /max: 30,/);
     assert.match(source, /`agent-assignment-respond:\$\{req\.userInfo\?\.id \|\| req\.ip\}`/);
     assert.equal(handlersFor('/assignments/:assignmentId/accept')[3], limiter);
     assert.equal(handlersFor('/assignments/:assignmentId/decline')[3], limiter);

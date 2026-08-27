@@ -7,7 +7,7 @@ const { assignment, BRAND_ID } = require('../../helpers/agent-assignment-respons
 
 test('assignment response mapper', async (t) => {
   await t.test('accept returns brandName and the complete terms allowlist', () => {
-    const { data } = mapper.toResponse(assignment(), 'accept');
+    const { data } = mapper.toResponse(assignment({ statusReason: 'operator-only' }), 'accept');
     assert.deepEqual(data.brand, { id: BRAND_ID, name: 'Kaski Yatayat' });
     assert.equal(data.accessScope, 'ALL_BUSES');
     assert.deepEqual(data.allowedRouteIds, []);
@@ -21,6 +21,12 @@ test('assignment response mapper', async (t) => {
       maxDiscountPct: 0,
     });
     assert.deepEqual(data.commission, { mode: 'PERCENT', value: 5 });
+    assert.equal(Object.hasOwn(data, 'statusReason'), false);
+  });
+
+  await t.test('decline keeps the agent-authored statusReason', () => {
+    const { data } = mapper.toResponse(assignment({ statusReason: 'Not now' }), 'decline');
+    assert.equal(data.statusReason, 'Not now');
   });
 
   await t.test('S9 PII and internal provenance are absent', () => {
