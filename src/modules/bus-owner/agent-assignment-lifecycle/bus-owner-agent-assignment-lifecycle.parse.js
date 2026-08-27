@@ -7,7 +7,7 @@ const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
 const MAX_PAGE = 1000;
 const MAX_NOTE_LENGTH = 500;
-const LIST_VIEWS = Object.freeze(['CURRENT', 'HISTORY']);
+const LIST_VIEWS = Object.freeze(['CURRENT', 'HISTORY', 'INVITATIONS', 'STOPPED']);
 
 const isObjectId = (value) => typeof value === 'string' && OBJECT_ID_RE.test(value);
 

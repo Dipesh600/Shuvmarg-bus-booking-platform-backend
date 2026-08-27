@@ -23,6 +23,17 @@ const historyConditions = (now) => [
   { status: ASSIGNMENT_STATUSES.INVITED, expiresAt: { $lte: now } },
 ];
 
+const invitationConditions = () => [{ status: { $in: [
+  ASSIGNMENT_STATUSES.INVITED,
+  ASSIGNMENT_STATUSES.DECLINED,
+  ASSIGNMENT_STATUSES.EXPIRED,
+] } }];
+
+const stoppedConditions = () => [{ status: { $in: [
+  ASSIGNMENT_STATUSES.SUSPENDED,
+  ASSIGNMENT_STATUSES.REVOKED,
+] } }];
+
 const statusConditions = (status, now) => status === ASSIGNMENT_STATUSES.INVITED
   ? currentConditions(now).slice(1)
   : status === ASSIGNMENT_STATUSES.EXPIRED ? [
@@ -33,7 +44,9 @@ const statusConditions = (status, now) => status === ASSIGNMENT_STATUSES.INVITED
 const listFilter = ({ ownerId, brandId, status, view, now = new Date() }) => {
   const conditions = status ? statusConditions(status, now)
     : view === 'CURRENT' ? currentConditions(now)
-      : view === 'HISTORY' ? historyConditions(now) : null;
+      : view === 'HISTORY' ? historyConditions(now)
+        : view === 'INVITATIONS' ? invitationConditions()
+          : view === 'STOPPED' ? stoppedConditions() : null;
   return {
     ownerId,
     ...(brandId ? { operatorId: brandId } : {}),

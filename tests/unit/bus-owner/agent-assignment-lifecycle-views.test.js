@@ -37,6 +37,15 @@ test('operator assignment views', async (t) => {
     ]);
   });
 
+  await t.test('three-screen groups preserve every exact backend status', () => {
+    const active = policy.listFilter({ ownerId: OWNER_ID, status: 'ACTIVE' });
+    const invitations = policy.listFilter({ ownerId: OWNER_ID, view: 'INVITATIONS' });
+    const stopped = policy.listFilter({ ownerId: OWNER_ID, view: 'STOPPED' });
+    assert.equal(active.status, 'ACTIVE');
+    assert.deepEqual(invitations.$or, [{ status: { $in: ['INVITED', 'DECLINED', 'EXPIRED'] } }]);
+    assert.deepEqual(stopped.$or, [{ status: { $in: ['SUSPENDED', 'REVOKED'] } }]);
+  });
+
   await t.test('stale persisted invitations are displayed as expired in history', async () => {
     const stale = assignment({ status: 'INVITED', expiresAt: new Date('2020-01-01T00:00:00.000Z') });
     const h = harness({ listAssignments: { rows: [stale], total: 1 } });
