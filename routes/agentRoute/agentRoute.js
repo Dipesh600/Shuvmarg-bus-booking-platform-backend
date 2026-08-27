@@ -18,6 +18,8 @@ const agentDashboard = require('../../src/modules/agent/dashboard');
 const agentIdentity = require('../../src/modules/agent/identity');
 const agentAssignmentResponse = require("../../src/modules/agent/assignment-response");
 const agentAssignmentRespondRateLimit = require("../../middleware/agentAssignmentRespondRateLimit.js");
+const agentSellableInventory = require("../../src/modules/agent/sellable-inventory");
+const agentSellableInventoryRateLimit = require("../../middleware/agentSellableInventoryRateLimit.js");
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 // Deliberately NOT behind requireVerifiedAgent. An agent's code and KYC status
@@ -67,6 +69,19 @@ router.post(
   agentMiddleware,
   agentAssignmentRespondRateLimit,
   agentAssignmentResponse.declineAssignment,
+);
+
+// ── Sellable Inventory ───────────────────────────────────────────────────────
+// Deliberately NOT behind requireVerifiedAgent. KYC gates committing a sale, not
+// reading the catalogue an agent could sell after verification; kycStatus in the
+// response lets the client keep its sell action disabled until then.
+router.get(
+  "/sellable-inventory",
+  auth,
+  verifyRoleFromDB,
+  agentMiddleware,
+  agentSellableInventoryRateLimit,
+  agentSellableInventory.listSellableInventory,
 );
 
 // ── Application Workflow ──────────────────────────────────────────────────────
