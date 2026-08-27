@@ -16,6 +16,8 @@ const agentApplicationDocumentUpload = require('../../src/modules/agent/applicat
 const agentProfile = require('../../src/modules/agent/profile');
 const agentDashboard = require('../../src/modules/agent/dashboard');
 const agentIdentity = require('../../src/modules/agent/identity');
+const agentAssignmentResponse = require("../../src/modules/agent/assignment-response");
+const agentAssignmentRespondRateLimit = require("../../middleware/agentAssignmentRespondRateLimit.js");
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 // Deliberately NOT behind requireVerifiedAgent. An agent's code and KYC status
@@ -43,6 +45,29 @@ router.patch("/me", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.updat
  * @access  Private (Agent role required, any status)
  */
 router.get("/me/code", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.getCode);
+
+// ── Assignment Invitations ───────────────────────────────────────────────────
+// Deliberately NOT behind requireVerifiedAgent. An unfinished-KYC agent must be
+// able to answer the invite that motivates them to finish onboarding; selling is
+// gated later against both verification and an ACTIVE assignment.
+
+router.post(
+  "/assignments/:assignmentId/accept",
+  auth,
+  verifyRoleFromDB,
+  agentMiddleware,
+  agentAssignmentRespondRateLimit,
+  agentAssignmentResponse.acceptAssignment,
+);
+
+router.post(
+  "/assignments/:assignmentId/decline",
+  auth,
+  verifyRoleFromDB,
+  agentMiddleware,
+  agentAssignmentRespondRateLimit,
+  agentAssignmentResponse.declineAssignment,
+);
 
 // ── Application Workflow ──────────────────────────────────────────────────────
 
