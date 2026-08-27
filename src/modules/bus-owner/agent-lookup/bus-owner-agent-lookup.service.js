@@ -1,8 +1,8 @@
 'use strict';
 
-const errors = require('./bus-owner-agent-lookup.errors');
+const policy = require('../../../shared/identity/agent-assignability');
+const errors = require('../../../shared/identity/agent-code-errors');
 const mapper = require('./bus-owner-agent-lookup.mapper');
-const policy = require('./bus-owner-agent-lookup.policy');
 const repository = require('./bus-owner-agent-lookup.repository');
 
 /**
@@ -14,7 +14,7 @@ const repository = require('./bus-owner-agent-lookup.repository');
  * "let me check this code" indistinguishable from hiring someone.
  */
 const lookupAgentByCode = async (rawCode) => {
-  const filter = policy.lookupFilterFor(rawCode);
+  const filter = policy.agentFilterFromInput(rawCode);
   // Malformed input never reaches the database. It cannot match, and the query
   // planner has no index for junk.
   if (!filter) throw errors.agentNotFoundError();

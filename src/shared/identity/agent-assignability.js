@@ -1,11 +1,22 @@
-'use strict';
+"use strict";
 
-const { agentCodeFilter } = require('../../../shared/identity/agent-code-lookup');
-const { AGENT_SCOPES, scopeOf } = require('../../../shared/identity/agent-enums');
+const { agentCodeFilter } = require("./agent-code-lookup.js");
+const { AGENT_SCOPES, scopeOf } = require("./agent-enums.js");
 const {
   deriveOperatorKycStatus,
   isAgentVerificationCleared,
-} = require('../../../shared/identity/agent-verification');
+} = require("./agent-verification.js");
+
+/**
+ * The questions an operator asks about an agent they are about to hire: is this
+ * a code at all, is this agent theirs to hire, and how far through verification
+ * are they really?
+ *
+ * These live here rather than in the lookup endpoint that first needed them
+ * because the assign endpoint asks the identical questions of the identical
+ * input. Two copies of "may an operator assign this agent?" is one copy that
+ * gets updated and one that quietly does not.
+ */
 
 /**
  * Longest input worth parsing. A canonical agent code is 13 characters and the
@@ -16,13 +27,47 @@ const {
 const MAX_CODE_INPUT_LENGTH = 32;
 
 /**
+ * The only Agent fields an operator-facing read may load.
+ *
+ * A projection, not a full document, because the Agent schema also holds
+ * citizenship and PAN numbers, bank details and admin notes. Selecting the whole
+ * document and trimming it in a mapper would put all of that one careless spread
+ * away from an operator's browser.
+ *
+ * `agentType` and `operationType` are here despite being deprecated:
+ * `isAssignableByOperator` reads through `scopeOf`, which falls back to them for
+ * rows written before the new fields existed. Omit `agentType` and every legacy
+ * OPERATOR_LINKED agent reads as PLATFORM and gets refused as unassignable.
+ * `district` and `municipality` are needed twice over — shown to the operator,
+ * and read by `hasRequiredOutletDetails` when the status is derived.
+ *
+ * Shared by the lookup and the assign endpoints, which must classify an agent
+ * identically. A projection that drifts between them is a difference in who
+ * counts as assignable.
+ */
+const AGENT_PREVIEW_FIELDS = [
+  "code",
+  "agentId",
+  "scope",
+  "agentType",
+  "applicationStatus",
+  "outletType",
+  "operationType",
+  "businessName",
+  "district",
+  "municipality",
+].join(" ");
+
+/**
  * The Mongo filter for a typed code, or null when the input can be no code at
  * all — in which case the caller must not touch the database. Both code forms
  * are accepted, because a code an agent handed out months ago is still the code
  * the operator will type today.
  */
-const lookupFilterFor = (rawCode) => {
-  if (typeof rawCode !== 'string' || rawCode.length > MAX_CODE_INPUT_LENGTH) return null;
+const agentFilterFromInput = (rawCode) => {
+  if (typeof rawCode !== "string" || rawCode.length > MAX_CODE_INPUT_LENGTH) {
+    return null;
+  }
   return agentCodeFilter(rawCode);
 };
 
@@ -31,8 +76,8 @@ const lookupFilterFor = (rawCode) => {
  *
  * OPERATOR scope only (master plan D7). Read through `scopeOf` rather than off
  * `agent.scope`, so a row written before the scope field existed is classified
- * by its legacy `agentType` instead of defaulting — which is also why the
- * repository projection has to include `agentType`.
+ * by its legacy `agentType` instead of defaulting — which is also why every
+ * projection feeding this function has to include `agentType`.
  */
 const isAssignableByOperator = (agent) => scopeOf(agent) === AGENT_SCOPES.OPERATOR;
 
@@ -64,8 +109,8 @@ const hasVerifiedBadge = (agent, kycStatus) => isAgentVerificationCleared({
 
 module.exports = {
   MAX_CODE_INPUT_LENGTH,
+  agentFilterFromInput,
   effectiveKycStatus,
   hasVerifiedBadge,
   isAssignableByOperator,
-  lookupFilterFor,
 };

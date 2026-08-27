@@ -1,12 +1,21 @@
-'use strict';
+"use strict";
 
-const AppError = require('../../../shared/errors/app-error');
+const AppError = require("../errors/app-error");
 
 const bodyError = (message, statusCode, extra = {}) => new AppError(
   message,
   statusCode,
   { success: false, message, ...extra },
 );
+
+/**
+ * The two ways resolving an agent by their published code can fail.
+ *
+ * Shared rather than per-endpoint because the operator lookup and the operator
+ * assign call answer the same question about the same input, and an operator who
+ * gets one message from the preview and a differently-worded one from the invite
+ * has to work out whether they are two problems. They are not.
+ */
 
 /**
  * No agent holds this code.
@@ -18,9 +27,9 @@ const bodyError = (message, statusCode, extra = {}) => new AppError(
  * paths from drifting apart into an oracle later.
  */
 const agentNotFoundError = () => bodyError(
-  'No agent found with that code. Check the code with your agent and try again.',
+  "No agent found with that code. Check the code with your agent and try again.",
   404,
-  { errorCode: 'AGENT_CODE_NOT_FOUND' },
+  { errorCode: "AGENT_CODE_NOT_FOUND" },
 );
 
 /**
@@ -31,19 +40,18 @@ const agentNotFoundError = () => bodyError(
  *
  * This is deliberately distinct from a 404, which does confirm the code exists.
  * That is an acceptable trade: codes are published by their holders, the space
- * is 32^6 behind a checksum, and the endpoint is rate-limited per owner — so
+ * is 32^6 behind a checksum, and the endpoints are rate-limited per owner — so
  * this is not the weak point in enumeration. Collapsing it into a 404 would
  * instead leave an operator retyping a code that will never work, with nothing
  * telling them why.
  */
 const agentNotAssignableError = () => bodyError(
-  'This agent sells for the platform directly and cannot be added to an operator.',
+  "This agent sells for the platform directly and cannot be added to an operator.",
   409,
-  { errorCode: 'AGENT_NOT_ASSIGNABLE' },
+  { errorCode: "AGENT_NOT_ASSIGNABLE" },
 );
 
 module.exports = {
   agentNotAssignableError,
   agentNotFoundError,
-  bodyError,
 };
