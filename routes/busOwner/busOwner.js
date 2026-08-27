@@ -140,4 +140,11 @@ router.delete("/removeDriver",    staffCon.removeDriver);
 const busOwnerAgentInvite = require("../../src/modules/bus-owner/agent-invite");
 router.post("/agents", busOwnerAgentInvite.createAgent);
 
+// Look up an agent by the code they published, before inviting them. Read-only,
+// and rate-limited because the code is the only thing standing between a caller
+// and someone else's agent preview.
+const busOwnerAgentLookup = require("../../src/modules/bus-owner/agent-lookup");
+const busOwnerAgentLookupRateLimit = require("../../middleware/busOwnerAgentLookupRateLimit.js");
+router.get("/agents/lookup/:code", busOwnerAgentLookupRateLimit, busOwnerAgentLookup.lookupAgent);
+
 module.exports = router;
