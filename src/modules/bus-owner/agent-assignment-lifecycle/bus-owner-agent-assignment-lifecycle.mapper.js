@@ -1,6 +1,6 @@
 'use strict';
 
-const { toTerms } = require('../agent-assign/bus-owner-agent-assign.mapper');
+const { toAssignmentTerms } = require('../../../shared/identity/agent-assignment-terms-mapper');
 const { displayAgentCode } = require('../../../shared/identity/agent-code-lookup');
 const { outletTypeOf } = require('../../../shared/identity/agent-enums');
 const {
@@ -23,24 +23,32 @@ const toAgent = (agent) => {
 };
 
 /** Explicit operator view: no agent contact, identity documents or other owners. */
-const toAssignment = (assignment) => ({
-  assignmentId: assignment._id,
-  status: assignment.status,
-  invitedAt: assignment.invitedAt || null,
-  expiresAt: assignment.expiresAt || null,
-  acceptedAt: assignment.acceptedAt || null,
-  declinedAt: assignment.declinedAt || null,
-  suspendedAt: assignment.suspendedAt || null,
-  revokedAt: assignment.revokedAt || null,
-  statusReason: assignment.statusReason || null,
-  operatorNote: assignment.operatorNote || null,
-  agent: toAgent(assignment.agentId),
-  brand: {
-    id: assignment.operatorId?._id || assignment.operatorId || null,
-    name: assignment.operatorId?.brandName || null,
-  },
-  ...toTerms(assignment),
-});
+const toAssignment = (assignment) => {
+  const stateContext = assignment.status === 'SUSPENDED'
+    ? { suspendedAt: assignment.suspendedAt || null, operatorNote: assignment.operatorNote || null }
+    : assignment.status === 'REVOKED'
+      ? { revokedAt: assignment.revokedAt || null, operatorNote: assignment.operatorNote || null }
+      : {};
+
+  return {
+    assignmentId: assignment._id,
+    status: assignment.status,
+    invitedAt: assignment.invitedAt || null,
+    expiresAt: assignment.expiresAt || null,
+    acceptedAt: assignment.acceptedAt || null,
+    declinedAt: assignment.declinedAt || null,
+    statusReason: assignment.statusReason || null,
+    // Suspension context remains stored for audit, but is current-state data. An
+    // ACTIVE row must not read as if its old suspension is still in force.
+    ...stateContext,
+    agent: toAgent(assignment.agentId),
+    brand: {
+      id: assignment.operatorId?._id || assignment.operatorId || null,
+      name: assignment.operatorId?.brandName || null,
+    },
+    ...toAssignmentTerms(assignment),
+  };
+};
 
 const toListResponse = ({ rows, total, page, limit }) => ({
   success: true,

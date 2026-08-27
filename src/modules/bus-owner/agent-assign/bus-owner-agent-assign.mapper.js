@@ -2,6 +2,7 @@
 
 const { displayAgentCode } = require('../../../shared/identity/agent-code-lookup');
 const { outletTypeOf } = require('../../../shared/identity/agent-enums');
+const { toAssignmentTerms } = require('../../../shared/identity/agent-assignment-terms-mapper');
 
 /**
  * Permissions and commission are read back off the saved document, not echoed
@@ -14,26 +15,6 @@ const { outletTypeOf } = require('../../../shared/identity/agent-enums');
  * operator-facing terms, and a spread would publish whatever the schema grows
  * next without anyone deciding to.
  */
-const toTerms = (assignment) => ({
-  access: {
-    accessScope: assignment.accessScope,
-    allowedRouteIds: (assignment.allowedRouteIds || []).map(String),
-    allowedScheduleIds: (assignment.allowedScheduleIds || []).map(String),
-  },
-  permissions: {
-    canSellCash: assignment.permissions?.canSellCash,
-    canSellOnline: assignment.permissions?.canSellOnline,
-    canCancel: assignment.permissions?.canCancel,
-    cancelWindowMins: assignment.permissions?.cancelWindowMins,
-    maxSeatsPerBooking: assignment.permissions?.maxSeatsPerBooking ?? null,
-    maxDiscountPct: assignment.permissions?.maxDiscountPct,
-  },
-  commission: {
-    mode: assignment.operatorCommission?.mode,
-    value: assignment.operatorCommission?.value,
-  },
-});
-
 /**
  * The wire shape for a freshly created assignment.
  *
@@ -64,12 +45,11 @@ const toCreatedResponse = ({ assignment, agent, brand, kycStatus, isVerified }) 
       isVerified,
     },
     brand: { id: brand._id, name: brand.brandName || null },
-    ...toTerms(assignment),
+    ...toAssignmentTerms(assignment),
     requiresAgentAcceptance: true,
   },
 });
 
 module.exports = {
-  toTerms,
   toCreatedResponse,
 };

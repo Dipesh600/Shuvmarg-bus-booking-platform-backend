@@ -15,15 +15,14 @@ const listFilter = ({ ownerId, brandId, status }) => ({
 });
 
 const transitionFilter = ({ ownerId, assignmentId, action }) => {
-  const status = action === 'suspend'
-    ? ASSIGNMENT_STATUSES.ACTIVE
-    : ASSIGNMENT_STATUSES.SUSPENDED;
   return {
     _id: assignmentId,
     ownerId,
     // T1: reinstate is SUSPENDED-only. The transition table also permits the
     // agent's INVITED→ACTIVE accept, so it is never an authorization gate here.
-    status: action === 'revoke' ? { $in: [...REVOKABLE_STATUSES] } : status,
+    status: action === 'revoke'
+      ? { $in: [...REVOKABLE_STATUSES] }
+      : action === 'suspend' ? ASSIGNMENT_STATUSES.ACTIVE : ASSIGNMENT_STATUSES.SUSPENDED,
   };
 };
 

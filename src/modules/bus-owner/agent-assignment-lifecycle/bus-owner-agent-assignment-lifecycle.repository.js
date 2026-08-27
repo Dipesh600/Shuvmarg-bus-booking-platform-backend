@@ -12,13 +12,17 @@ const withPublicRelations = (query) => query
   })
   .lean();
 
-const listAssignments = async (filter, { page, limit }) => {
-  const rowsQuery = AgentAssignment.find(filter)
+const buildListRowsQuery = (filter, { page, limit }) => withPublicRelations(
+  AgentAssignment.find(filter)
     .sort({ createdAt: -1, _id: -1 })
     .skip((page - 1) * limit)
-    .limit(limit);
+    .limit(limit),
+);
+
+const listAssignments = async (filter, pagination) => {
+  const rowsQuery = buildListRowsQuery(filter, pagination);
   const [rows, total] = await Promise.all([
-    withPublicRelations(rowsQuery),
+    rowsQuery,
     AgentAssignment.countDocuments(filter),
   ]);
   return { rows, total };
@@ -40,6 +44,7 @@ const findAssignmentState = (assignmentId, ownerId) => AgentAssignment
   .lean();
 
 module.exports = {
+  buildListRowsQuery,
   findAssignmentState,
   listAssignments,
   transitionAssignment,

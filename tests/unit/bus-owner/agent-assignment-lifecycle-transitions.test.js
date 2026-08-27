@@ -22,7 +22,13 @@ test('operator assignment suspend and reinstate', async (t) => {
   });
 
   await t.test('reinstate pins SUSPENDED and ignores a hostile body', async () => {
-    const h = harness();
+    const h = harness({
+      transitionAssignment: (_filter, update) => assignment({
+        suspendedAt: new Date('2026-08-22T10:00:00.000Z'),
+        operatorNote: 'cash shortfall',
+        ...update,
+      }),
+    });
     try {
       const result = await service.reinstateAssignment(OWNER_ID, ASSIGNMENT_ID, {
         status: 'REVOKED', revokedBy: 'other', operatorNote: 'replace',
@@ -31,6 +37,8 @@ test('operator assignment suspend and reinstate', async (t) => {
       const [filter, update] = h.calls.transitionAssignment[0];
       assert.deepEqual(filter, { _id: ASSIGNMENT_ID, ownerId: OWNER_ID, status: 'SUSPENDED' });
       assert.deepEqual(update, { status: 'ACTIVE' });
+      assert.equal(Object.hasOwn(result.responseBody.data, 'suspendedAt'), false);
+      assert.equal(Object.hasOwn(result.responseBody.data, 'operatorNote'), false);
     } finally { h.restore(); }
   });
 
