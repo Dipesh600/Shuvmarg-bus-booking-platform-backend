@@ -33,6 +33,8 @@ const filterSellableTrips = ({ assignment, trips, now = new Date() }) => {
     if (!sellableStatuses.has(trip.status)) return false;
     const tripTime = new Date(trip.tripDate).getTime();
     if (!Number.isFinite(tripTime) || tripTime < today) return false;
+    const bookingClosesAt = new Date(trip.bookingClosesAt).getTime();
+    if (!Number.isFinite(bookingClosesAt) || bookingClosesAt <= now.getTime()) return false;
 
     if (assignment.accessScope === ACCESS_SCOPES.ALL_BUSES) return true;
     if (assignment.accessScope === ACCESS_SCOPES.ROUTES) {

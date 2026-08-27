@@ -32,6 +32,7 @@ const trip = (id, brandId = BRAND_A, over = {}) => ({
   scheduleId: `schedule-${id}`,
   status: "scheduled",
   tripDate: new Date("2026-08-28T00:00:00.000Z"),
+  bookingClosesAt: new Date("2026-08-28T06:00:00.000Z"),
   isActive: true,
   ...over,
 });
@@ -98,6 +99,9 @@ test("shared agent Trip selling guard", async (t) => {
     assert.deepEqual(run(assignment(), [
       trip("past", BRAND_A, { tripDate: new Date("2026-08-26T00:00:00.000Z") }),
       trip("inactive", BRAND_A, { isActive: false }),
+      trip("closed", BRAND_A, { bookingClosesAt: new Date("2026-08-27T11:59:00.000Z") }),
+      trip("closes-now", BRAND_A, { bookingClosesAt: NOW }),
+      trip("missing-close", BRAND_A, { bookingClosesAt: null }),
     ]), []);
   });
 });

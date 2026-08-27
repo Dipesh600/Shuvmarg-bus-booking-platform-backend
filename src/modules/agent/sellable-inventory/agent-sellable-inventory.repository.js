@@ -43,6 +43,7 @@ const tripFilter = (assignment, now) => {
     brandId: assignment.operatorId?._id || assignment.operatorId,
     status: { $in: [...SELLABLE_TRIP_STATUSES] },
     tripDate: { $gte: startOfUtcDay(now) },
+    bookingClosesAt: { $gt: now },
     isActive: true,
   };
   if (assignment.accessScope === ACCESS_SCOPES.ROUTES) {
@@ -57,7 +58,7 @@ const tripFilter = (assignment, now) => {
 
 const buildSellableTripQuery = (assignment, { page, limit, now = new Date() }) => Trip
   .find(tripFilter(assignment, now))
-  .select('_id brandId busId routeId scheduleId tripDate departureTime arrivalTime shift status isActive tripFare directionLabel fromStopName toStopName')
+  .select('_id brandId busId routeId scheduleId tripDate departureTime arrivalTime bookingClosesAt shift status isActive tripFare directionLabel fromStopName toStopName')
   .populate({ path: 'busId', select: 'busName busNumber busType vehicleType' })
   .populate({ path: 'routeId', select: 'routeName from to via' })
   .sort({ tripDate: 1, departureTime: 1, _id: 1 })

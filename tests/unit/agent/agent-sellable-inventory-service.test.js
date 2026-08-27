@@ -35,6 +35,7 @@ test('agent sellable Trip inventory service', async (t) => {
       brandId: BRAND_A,
       status: { $in: ['scheduled', 'boarding'] },
       tripDate: { $gte: new Date('2026-08-27T00:00:00.000Z') },
+      bookingClosesAt: { $gt: new Date('2026-08-27T12:00:00.000Z') },
       isActive: true,
     });
     assert.equal(query.getFilter().ownerId, undefined);

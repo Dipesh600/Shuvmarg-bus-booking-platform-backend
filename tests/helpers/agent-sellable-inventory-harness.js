@@ -54,6 +54,7 @@ const trip = (brandId = BRAND_A, over = {}) => ({
   tripDate: new Date('2099-09-01T00:00:00.000Z'),
   departureTime: '07:00',
   arrivalTime: '14:00',
+  bookingClosesAt: new Date('2099-09-01T06:00:00.000Z'),
   shift: 'day',
   status: 'scheduled',
   isActive: true,

@@ -73,6 +73,7 @@ const toTrip = (trip, fareRules, availability) => ({
   tripDate: trip.tripDate,
   departureTime: trip.departureTime,
   arrivalTime: trip.arrivalTime,
+  bookingClosesAt: trip.bookingClosesAt,
   shift: trip.shift,
   status: trip.status,
   fare: toFare(trip, fareFor(trip, fareRules)),
