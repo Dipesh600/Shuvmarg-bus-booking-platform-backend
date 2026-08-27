@@ -68,7 +68,15 @@ const newAssignment = ({ agentId, brandId, ownerId, input, now }) => ({
   ...(input.commission ? { operatorCommission: input.commission } : {}),
 });
 
+const staleInviteFilter = ({ agentId, brandId, now }) => ({
+  agentId,
+  operatorId: brandId,
+  status: ASSIGNMENT_STATUSES.INVITED,
+  expiresAt: { $lte: now },
+});
+
 module.exports = {
   newAssignment,
+  staleInviteFilter,
   validateAssignInput,
 };

@@ -42,6 +42,14 @@ const assignAgent = async (ownerId, body) => {
   if (!policy.isAssignableByOperator(agent)) throw codeErrors.agentNotAssignableError();
 
   const now = new Date();
+  // A timed-out INVITED row still occupies the partial unique index until its
+  // stored state is closed. Do that atomically before inserting; concurrent
+  // re-invites still race safely on the same unique index and only one can win.
+  await repository.expireStaleInvites(assignPolicy.staleInviteFilter({
+    agentId: agent._id,
+    brandId: input.brandId,
+    now,
+  }));
   let assignment;
   try {
     assignment = await repository.createAssignment(assignPolicy.newAssignment({

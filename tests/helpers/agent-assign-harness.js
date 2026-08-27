@@ -51,6 +51,7 @@ const REPOSITORY_CALLS = [
   'findOwnedBrand',
   'findAgentByCodeFilter',
   'createAssignment',
+  'expireStaleInvites',
   'findLiveAssignmentStatus',
 ];
 
@@ -58,6 +59,7 @@ const DEFAULT_RESULTS = {
   findOwnedBrand: () => ownedBrand(),
   findAgentByCodeFilter: () => storedAgent(),
   createAssignment: () => savedAssignment(),
+  expireStaleInvites: () => ({ modifiedCount: 0 }),
   findLiveAssignmentStatus: () => 'ACTIVE',
 };
 
