@@ -37,10 +37,6 @@ const assignment = (brandId = BRAND_A, over = {}) => ({
 
 const bus = (brandId = BRAND_A, over = {}) => ({
   _id: `bus-${brandId}`,
-  brandId,
-  ownerId: OWNER_ID,
-  approvalStatus: 'APPROVED',
-  status: 'ACTIVE',
   busName: brandId === BRAND_A ? 'Kaski Express' : 'Gandaki Express',
   busNumber: brandId === BRAND_A ? 'GA-1-KHA-1000' : 'GA-1-KHA-2000',
   busType: 'DELUXE',
@@ -48,40 +44,53 @@ const bus = (brandId = BRAND_A, over = {}) => ({
   ...over,
 });
 
-const schedule = (brandId = BRAND_A, over = {}) => ({
-  _id: `schedule-${brandId}`,
-  busId: `bus-${brandId}`,
-  routeId: { _id: `route-${brandId}`, name: 'Kathmandu to Pokhara' },
-  busRouteId: { _id: `service-${brandId}`, routeName: 'KTM-PKR', from: 'Kathmandu', to: 'Pokhara' },
-  departureTime: '07:00 AM',
-  arrivalTime: '02:00 PM',
-  date: '2026-09-01',
-  totalTimeTaken: '7h',
+const trip = (brandId = BRAND_A, over = {}) => ({
+  _id: `trip-${brandId}`,
+  brandId,
+  ownerId: OWNER_ID,
+  busId: bus(brandId),
+  routeId: { _id: `route-${brandId}`, routeName: 'KTM-PKR', from: 'Kathmandu', to: 'Pokhara' },
+  scheduleId: `recurring-${brandId}`,
+  tripDate: new Date('2099-09-01T00:00:00.000Z'),
+  departureTime: '07:00',
+  arrivalTime: '14:00',
   shift: 'day',
-  yatrapoints: 100,
+  status: 'scheduled',
   isActive: true,
+  tripFare: null,
   ...over,
 });
 
 const fareRule = (brandId = BRAND_A) => ({
   fleetId: `bus-${brandId}`,
-  routeId: `service-${brandId}`,
+  routeId: `route-${brandId}`,
   baseFare: 1000,
   seatClassPremium: { window: 50, aisle: 0, sleeper: 100 },
   advanceDiscount: { enabled: false, daysBeforeTravel: 7, discountPercent: 0 },
   peakPricing: { enabled: false, surchargePercent: 0 },
 });
 
+const availability = (brandId = BRAND_A) => ({
+  seatDocs: [{
+    tripId: `trip-${brandId}`,
+    seata: [{ seatNo: 'A1', booked: false, blockedFor: 'none' }],
+    seatb: [{ seatNo: 'B1', booked: true, blockedFor: 'none' }],
+    seatc: [],
+  }],
+  holds: [],
+});
+
 const CALLS = [
-  'findAgentForUser', 'findSellableAssignments', 'findApprovedBusesForAssignment',
-  'findSchedulesForBuses', 'findFareRulesForSchedules',
+  'findAgentForUser', 'findSellableAssignments', 'countSellableAssignments',
+  'findTripsForAssignment', 'findFareRulesForTrips', 'findAvailabilityForTrips',
 ];
 const DEFAULTS = {
   findAgentForUser: () => agent(),
   findSellableAssignments: () => [assignment()],
-  findApprovedBusesForAssignment: () => [bus()],
-  findSchedulesForBuses: () => [schedule()],
-  findFareRulesForSchedules: () => [fareRule()],
+  countSellableAssignments: () => 1,
+  findTripsForAssignment: () => [trip()],
+  findFareRulesForTrips: () => [fareRule()],
+  findAvailabilityForTrips: () => availability(),
 };
 
 const harness = (overrides = {}) => {
@@ -107,5 +116,5 @@ const rejects = async (promise, statusCode, errorCode) => assert.rejects(promise
 
 module.exports = {
   AGENT_ID, BRAND_A, BRAND_B, OWNER_ID, USER_ID,
-  agent, assignment, bus, fareRule, harness, rejects, schedule, service,
+  agent, assignment, availability, bus, fareRule, harness, rejects, trip, service,
 };

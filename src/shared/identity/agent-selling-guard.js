@@ -1,50 +1,52 @@
 "use strict";
 
-const { FLEET_APPROVAL_STATUS } = require("../../contracts/status/fleet-approval.status");
-const { FLEET_OPERATIONAL_STATUS } = require("../../contracts/status/fleet-operational.status");
 const { isAssignmentSellable } = require("./agent-assignment-status");
 const { ACCESS_SCOPES } = require("./agent-assignment-terms");
 
+const SELLABLE_TRIP_STATUSES = Object.freeze(["scheduled", "boarding"]);
+const sellableStatuses = new Set(SELLABLE_TRIP_STATUSES);
 const idOf = (value) => String(value?._id || value || "");
 const idSet = (values) => new Set((values || []).map(idOf));
 
+const startOfUtcDay = (value = new Date()) => {
+  const date = new Date(value);
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+};
+
 /**
- * The single authorization predicate for agent inventory, intentionally pure so
- * the catalogue and the future seat-commit path can call the same decision.
- * Candidates must already carry their populated Buse in `busId`; restriction ids
- * only narrow rows that first prove brand ownership and fleet readiness.
+ * Inventory-scope half of agent sale authorization. The catalogue and the
+ * future hold writer share this pure Trip predicate; KYC is the separate gate.
  */
-const filterSellableSchedules = ({ assignment, schedules }) => {
+const filterSellableTrips = ({ assignment, trips, now = new Date() }) => {
   if (!isAssignmentSellable(assignment?.status)) return [];
 
   const brandId = idOf(assignment.operatorId);
-  const ownerId = idOf(assignment.ownerId);
   if (!brandId) return [];
-
   const allowedRoutes = idSet(assignment.allowedRouteIds);
   const allowedSchedules = idSet(assignment.allowedScheduleIds);
+  const today = startOfUtcDay(now).getTime();
 
-  return (schedules || []).filter((schedule) => {
-    const bus = schedule?.busId;
-    if (idOf(bus?.brandId) !== brandId) return false;
-    // Secondary denormalisation check only. Brand equality above is what grants
-    // scope; sharing an owner must never grant a sibling brand's inventory.
-    if (ownerId && idOf(bus?.ownerId) !== ownerId) return false;
-    if (bus?.approvalStatus !== FLEET_APPROVAL_STATUS.APPROVED) return false;
-    if (bus?.status !== FLEET_OPERATIONAL_STATUS.ACTIVE) return false;
-    if (schedule.isActive !== true) return false;
+  return (trips || []).filter((trip) => {
+    if (idOf(trip?.brandId) !== brandId) return false;
+    if (trip?.isActive !== true) return false;
+    if (!sellableStatuses.has(trip.status)) return false;
+    const tripTime = new Date(trip.tripDate).getTime();
+    if (!Number.isFinite(tripTime) || tripTime < today) return false;
 
     if (assignment.accessScope === ACCESS_SCOPES.ALL_BUSES) return true;
     if (assignment.accessScope === ACCESS_SCOPES.ROUTES) {
-      // Assignment and schedule both point to BusRoute. routeId is the nullable
-      // Google Route id and belongs to a different collection.
-      return allowedRoutes.has(idOf(schedule.busRouteId));
+      return allowedRoutes.has(idOf(trip.routeId));
     }
     if (assignment.accessScope === ACCESS_SCOPES.SCHEDULES) {
-      return allowedSchedules.has(idOf(schedule._id));
+      return allowedSchedules.has(idOf(trip.scheduleId));
     }
     return false;
   });
 };
 
-module.exports = { filterSellableSchedules };
+module.exports = {
+  SELLABLE_TRIP_STATUSES,
+  filterSellableTrips,
+  startOfUtcDay,
+};

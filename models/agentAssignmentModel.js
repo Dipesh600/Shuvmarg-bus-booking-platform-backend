@@ -117,10 +117,8 @@ const agentAssignmentSchema = new mongoose.Schema({
     default: ACCESS_SCOPES.ALL_BUSES,
   },
   allowedRouteIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "BusRoute" }],
-  // "busschedules", lowercase, is the name busScheduleModel.js actually
-  // registers. "BusSchedule" would resolve to nothing and populate would
-  // silently return null — the same bug already fixed once in 24a9b9d.
-  allowedScheduleIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "busschedules" }],
+  // Recurring Schedule grants automatically cover the dated Trips they generate.
+  allowedScheduleIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Schedule" }],
 
   permissions: { type: permissionsSchema, default: () => ({}) },
   operatorCommission: { type: commissionSchema, default: () => ({}) },

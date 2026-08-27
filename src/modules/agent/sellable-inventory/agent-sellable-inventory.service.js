@@ -1,7 +1,8 @@
 'use strict';
 
 const { effectiveKycStatus, hasVerifiedBadge } = require('../../../shared/identity/agent-assignability');
-const { filterSellableSchedules } = require('../../../shared/identity/agent-selling-guard');
+const { filterSellableTrips } = require('../../../shared/identity/agent-selling-guard');
+const logger = require('../../../../utils/logger');
 const errors = require('./agent-sellable-inventory.errors');
 const mapper = require('./agent-sellable-inventory.mapper');
 const parse = require('./agent-sellable-inventory.parse');
@@ -15,30 +16,36 @@ const mapDataError = (error) => {
   throw error;
 };
 
-const attachBuses = (schedules, buses) => {
-  const byId = new Map(buses.map((bus) => [String(bus._id), bus]));
-  return schedules.map((schedule) => ({
-    ...schedule,
-    busId: byId.get(String(schedule.busId)) || schedule.busId,
-  }));
-};
-
-const loadGroup = async (assignment, pagination) => {
-  const buses = await repository.findApprovedBusesForAssignment(assignment);
-  if (buses.length === 0) return { assignment, schedules: [], fareRules: [], hasMore: false };
-
-  const candidates = await repository.findSchedulesForBuses(
-    buses.map((bus) => bus._id),
-    pagination,
+const loadGroup = async (assignment, pagination, now) => {
+  const candidates = await repository.findTripsForAssignment(
+    assignment,
+    { ...pagination, now },
   );
   const hasMore = candidates.length > pagination.limit;
-  const populated = attachBuses(candidates.slice(0, pagination.limit), buses);
-  const schedules = filterSellableSchedules({ assignment, schedules: populated });
-  const fareRules = schedules.length === 0 ? [] : await repository.findFareRulesForSchedules(
-    assignment.ownerId,
-    schedules,
-  );
-  return { assignment, schedules, fareRules, hasMore };
+  const trips = filterSellableTrips({
+    assignment,
+    trips: candidates.slice(0, pagination.limit),
+    now,
+  });
+  if (trips.length === 0) {
+    return { assignment, trips, fareRules: [], availability: {}, hasMore };
+  }
+  const [fareRules, availability] = await Promise.all([
+    repository.findFareRulesForTrips(assignment.ownerId, trips),
+    repository.findAvailabilityForTrips(trips.map((trip) => trip._id), now),
+  ]);
+  return { assignment, trips, fareRules, availability, hasMore };
+};
+
+const boundedAssignments = async (agentId, rows) => {
+  if (rows.length <= repository.MAX_ACTIVE_ASSIGNMENTS) return rows;
+  const total = await repository.countSellableAssignments(agentId);
+  logger.warn('Agent inventory assignment fan-out capped', {
+    agentId: String(agentId),
+    kept: repository.MAX_ACTIVE_ASSIGNMENTS,
+    dropped: Math.max(0, total - repository.MAX_ACTIVE_ASSIGNMENTS),
+  });
+  return rows.slice(0, repository.MAX_ACTIVE_ASSIGNMENTS);
 };
 
 const listSellableInventory = async (userId, query) => {
@@ -48,10 +55,13 @@ const listSellableInventory = async (userId, query) => {
   try {
     const agent = await repository.findAgentForUser(userId);
     if (!agent) throw errors.noApplicationError();
-    const assignments = await repository.findSellableAssignments(agent._id);
+    const rows = await repository.findSellableAssignments(agent._id);
+    const assignments = await boundedAssignments(agent._id, rows);
+    const now = new Date();
     const groups = await Promise.all(assignments.map((assignment) => loadGroup(
       assignment,
       input.value,
+      now,
     )));
     const kycStatus = effectiveKycStatus(agent);
     return {

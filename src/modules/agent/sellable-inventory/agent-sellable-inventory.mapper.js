@@ -1,57 +1,82 @@
 'use strict';
 
 const idOf = (value) => String(value?._id || value || '');
+const nullableIdOf = (value) => (value ? idOf(value) : null);
 
-const fareFor = (schedule, fareRules) => fareRules.find((rule) => (
-  idOf(rule.fleetId) === idOf(schedule.busId)
-  && idOf(rule.routeId) === idOf(schedule.busRouteId)
+const fareFor = (trip, fareRules) => fareRules.find((rule) => (
+  idOf(rule.fleetId) === idOf(trip.busId)
+  && idOf(rule.routeId) === idOf(trip.routeId)
 )) || fareRules.find((rule) => (
-  idOf(rule.fleetId) === idOf(schedule.busId) && !rule.routeId
+  idOf(rule.fleetId) === idOf(trip.busId) && !rule.routeId
 ));
 
-const toFare = (rule) => (rule ? {
-  baseFare: rule.baseFare,
+const toFare = (trip, rule) => ({
+  baseFare: trip.tripFare ?? rule?.baseFare ?? null,
   seatClassPremium: {
-    window: rule.seatClassPremium?.window || 0,
-    aisle: rule.seatClassPremium?.aisle || 0,
-    sleeper: rule.seatClassPremium?.sleeper || 0,
+    window: rule?.seatClassPremium?.window || 0,
+    aisle: rule?.seatClassPremium?.aisle || 0,
+    sleeper: rule?.seatClassPremium?.sleeper || 0,
   },
   advanceDiscount: {
-    enabled: Boolean(rule.advanceDiscount?.enabled),
-    daysBeforeTravel: rule.advanceDiscount?.daysBeforeTravel || null,
-    discountPercent: rule.advanceDiscount?.discountPercent || 0,
+    enabled: Boolean(rule?.advanceDiscount?.enabled),
+    daysBeforeTravel: rule?.advanceDiscount?.daysBeforeTravel || null,
+    discountPercent: rule?.advanceDiscount?.discountPercent || 0,
   },
   peakPricing: {
-    enabled: Boolean(rule.peakPricing?.enabled),
-    surchargePercent: rule.peakPricing?.surchargePercent || 0,
+    enabled: Boolean(rule?.peakPricing?.enabled),
+    surchargePercent: rule?.peakPricing?.surchargePercent || 0,
   },
-} : null);
+});
 
-const toSchedule = (schedule, fareRules) => ({
-  scheduleId: idOf(schedule._id),
+const availabilityFor = (trip, availability = {}) => {
+  const seatDoc = (availability.seatDocs || []).find((row) => (
+    idOf(row.tripId) === idOf(trip._id)
+  ));
+  const held = new Set((availability.holds || [])
+    .filter((row) => idOf(row.tripId) === idOf(trip._id))
+    .flatMap((row) => row.seatNumbers || [])
+    .map((seatNo) => String(seatNo).toLowerCase()));
+  const seats = [
+    ...(seatDoc?.seata || []),
+    ...(seatDoc?.seatb || []),
+    ...(seatDoc?.seatc || []),
+  ];
+  const availableSeatNumbers = seats.filter((seat) => (
+    !seat.booked
+    && (!seat.blockedFor || seat.blockedFor === 'none')
+    && !held.has(String(seat.seatNo).toLowerCase())
+  )).map((seat) => seat.seatNo);
+  return {
+    totalSeats: seats.length,
+    availableCount: availableSeatNumbers.length,
+    availableSeatNumbers,
+  };
+};
+
+const toTrip = (trip, fareRules, availability) => ({
+  tripId: idOf(trip._id),
+  scheduleId: nullableIdOf(trip.scheduleId),
   bus: {
-    id: idOf(schedule.busId),
-    name: schedule.busId?.busName || null,
-    number: schedule.busId?.busNumber || null,
-    busType: schedule.busId?.busType || null,
-    vehicleType: schedule.busId?.vehicleType || null,
+    id: idOf(trip.busId),
+    name: trip.busId?.busName || null,
+    number: trip.busId?.busNumber || null,
+    busType: trip.busId?.busType || null,
+    vehicleType: trip.busId?.vehicleType || null,
   },
   route: {
-    id: idOf(schedule.routeId),
-    name: schedule.routeId?.name || null,
-    serviceId: idOf(schedule.busRouteId),
-    serviceName: schedule.busRouteId?.routeName || null,
-    from: schedule.busRouteId?.from || null,
-    to: schedule.busRouteId?.to || null,
-    via: schedule.busRouteId?.via || null,
+    id: nullableIdOf(trip.routeId),
+    name: trip.routeId?.routeName || trip.directionLabel || null,
+    from: trip.routeId?.from || trip.fromStopName || null,
+    to: trip.routeId?.to || trip.toStopName || null,
+    via: trip.routeId?.via || null,
   },
-  date: schedule.date,
-  departureTime: schedule.departureTime,
-  arrivalTime: schedule.arrivalTime,
-  totalTimeTaken: schedule.totalTimeTaken,
-  shift: schedule.shift,
-  yatraPoints: schedule.yatrapoints || 0,
-  fare: toFare(fareFor(schedule, fareRules)),
+  tripDate: trip.tripDate,
+  departureTime: trip.departureTime,
+  arrivalTime: trip.arrivalTime,
+  shift: trip.shift,
+  status: trip.status,
+  fare: toFare(trip, fareFor(trip, fareRules)),
+  availability: availabilityFor(trip, availability),
 });
 
 const toResponse = ({ groups, kycStatus, kycCleared, page, limit }) => ({
@@ -59,12 +84,12 @@ const toResponse = ({ groups, kycStatus, kycCleared, page, limit }) => ({
   data: {
     kycStatus,
     kycCleared,
-    inventory: groups.map(({ assignment, schedules, fareRules, hasMore }) => ({
+    inventory: groups.map(({ assignment, trips, fareRules, availability, hasMore }) => ({
       brand: {
         id: idOf(assignment.operatorId),
         brandName: assignment.operatorId?.brandName || null,
       },
-      schedules: schedules.map((schedule) => toSchedule(schedule, fareRules)),
+      trips: trips.map((trip) => toTrip(trip, fareRules, availability)),
       pagination: { page, limit, hasMore },
     })),
   },

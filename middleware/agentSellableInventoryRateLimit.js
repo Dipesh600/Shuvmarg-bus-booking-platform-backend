@@ -4,7 +4,7 @@ const rateLimit = require("express-rate-limit");
 
 /**
  * 240 catalogue reads per hour per agent. Each brand group is page-bounded to
- * fifty schedules and page depth is capped, so four refreshes a minute supports
+ * fifty trips and page depth is capped, so four refreshes a minute supports
  * an active sales screen without allowing an unbounded inventory poller.
  */
 module.exports = rateLimit({
