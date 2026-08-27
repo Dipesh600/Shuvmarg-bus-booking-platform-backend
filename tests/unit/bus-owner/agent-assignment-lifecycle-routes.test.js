@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const lifecycle = require('../../../src/modules/bus-owner/agent-assignment-lifecycle');
+const options = require('../../../src/modules/bus-owner/agent-assignment-options');
 const listLimiter = require('../../../middleware/busOwnerAgentAssignmentListRateLimit');
 const writeLimiter = require('../../../middleware/busOwnerAgentAssignmentLifecycleRateLimit');
 const createLimiter = require('../../../middleware/busOwnerAgentCreateRateLimit');
@@ -29,6 +30,12 @@ test('T9 operator assignment lifecycle route wiring and rate limits', async (t) 
   await t.test('list has its read limiter and controller', () => {
     assert.deepEqual(handlersFor(router, '/agents/assignments', 'get'), [
       listLimiter, lifecycle.listAssignments,
+    ]);
+  });
+
+  await t.test('assignment options use the owner-keyed read limiter', () => {
+    assert.deepEqual(handlersFor(router, '/agents/assignment-options', 'get'), [
+      listLimiter, options.listOptions,
     ]);
   });
 

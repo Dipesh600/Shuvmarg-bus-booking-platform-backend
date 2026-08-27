@@ -64,8 +64,9 @@ const toTrip = (trip, fareRules, availability) => ({
     vehicleType: trip.busId?.vehicleType || null,
   },
   route: {
-    id: nullableIdOf(trip.routeId),
-    name: trip.routeId?.routeName || trip.directionLabel || null,
+    id: nullableIdOf(trip.variantId || trip.routeId),
+    name: trip.variantId?.name || trip.routeId?.routeName || trip.directionLabel || null,
+    code: trip.variantId?.code || null,
     from: trip.routeId?.from || trip.fromStopName || null,
     to: trip.routeId?.to || trip.toStopName || null,
     via: trip.routeId?.via || null,

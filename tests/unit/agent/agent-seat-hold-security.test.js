@@ -19,7 +19,7 @@ const body = { tripId: TRIP, seatNumbers: ['A1'] };
 
 const build = (over = {}) => {
   const calls = [];
-  const trip = { _id: TRIP, brandId: BRAND, routeId: 'r1', scheduleId: 's1', status: 'scheduled', isActive: true,
+  const trip = { _id: TRIP, brandId: BRAND, variantId: 'r1', scheduleId: 's1', status: 'scheduled', isActive: true,
     tripDate: new Date('2026-08-28'), bookingClosesAt: new Date('2026-08-28T06:00:00Z'), tripFare: 500 };
   const assignment = { _id: 'assignment-1', agentId: 'agent-1', operatorId: BRAND, status: 'ACTIVE',
     accessScope: 'ALL_BUSES', permissions: { canSellCash: true, maxSeatsPerBooking: null } };

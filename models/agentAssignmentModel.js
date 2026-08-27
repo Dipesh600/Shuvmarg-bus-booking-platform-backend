@@ -116,7 +116,7 @@ const agentAssignmentSchema = new mongoose.Schema({
     enum: Object.values(ACCESS_SCOPES),
     default: ACCESS_SCOPES.ALL_BUSES,
   },
-  allowedRouteIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "BusRoute" }],
+  allowedRouteIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "RouteVariant" }],
   // Recurring Schedule grants automatically cover the dated Trips they generate.
   allowedScheduleIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Schedule" }],
 

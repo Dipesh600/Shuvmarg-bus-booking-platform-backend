@@ -2,6 +2,7 @@
 
 const busOwnerAgentAssign = require("../../src/modules/bus-owner/agent-assign");
 const busOwnerAgentAssignmentLifecycle = require("../../src/modules/bus-owner/agent-assignment-lifecycle");
+const agentAssignmentOptions = require("../../src/modules/bus-owner/agent-assignment-options");
 const busOwnerAgentInvite = require("../../src/modules/bus-owner/agent-invite");
 const busOwnerAgentLookup = require("../../src/modules/bus-owner/agent-lookup");
 const busOwnerAgentAssignRateLimit = require("../../middleware/busOwnerAgentAssignRateLimit.js");
@@ -44,6 +45,12 @@ function registerBusOwnerAgentRoutes(router) {
     "/agents/assignments",
     assignmentListRateLimit,
     busOwnerAgentAssignmentLifecycle.listAssignments,
+  );
+
+  router.get(
+    "/agents/assignment-options",
+    assignmentListRateLimit,
+    agentAssignmentOptions.listOptions,
   );
 
   router.get(

@@ -47,7 +47,7 @@ const tripFilter = (assignment, now) => {
     isActive: true,
   };
   if (assignment.accessScope === ACCESS_SCOPES.ROUTES) {
-    filter.routeId = { $in: assignment.allowedRouteIds || [] };
+    filter.variantId = { $in: assignment.allowedRouteIds || [] };
   } else if (assignment.accessScope === ACCESS_SCOPES.SCHEDULES) {
     filter.scheduleId = { $in: assignment.allowedScheduleIds || [] };
   } else if (assignment.accessScope !== ACCESS_SCOPES.ALL_BUSES) {
@@ -58,9 +58,10 @@ const tripFilter = (assignment, now) => {
 
 const buildSellableTripQuery = (assignment, { page, limit, now = new Date() }) => Trip
   .find(tripFilter(assignment, now))
-  .select('_id brandId busId routeId scheduleId tripDate departureTime arrivalTime bookingClosesAt shift status isActive tripFare directionLabel fromStopName toStopName')
+  .select('_id brandId busId routeId variantId scheduleId tripDate departureTime arrivalTime bookingClosesAt shift status isActive tripFare directionLabel fromStopName toStopName')
   .populate({ path: 'busId', select: 'busName busNumber busType vehicleType' })
   .populate({ path: 'routeId', select: 'routeName from to via' })
+  .populate({ path: 'variantId', select: 'code name direction' })
   .sort({ tripDate: 1, departureTime: 1, _id: 1 })
   .skip((page - 1) * limit)
   .limit(limit + 1);
