@@ -47,9 +47,18 @@ test('create response', async (t) => {
 
   await t.test('includes the brand only when one was verified', () => {
     assert.equal(built().data.brand, null);
+    // Reads `brandName`, the field OperatorBrand actually has. This assertion
+    // previously passed a `name` the schema never stores, which is how the
+    // repository's `.select('name')` went unnoticed.
     assert.deepEqual(
-      built({ brand: { _id: '507f1f77bcf86cd799439030', name: 'Kaski Yatayat' } }).data.brand,
+      built({ brand: { _id: '507f1f77bcf86cd799439030', brandName: 'Kaski Yatayat' } }).data.brand,
       { id: '507f1f77bcf86cd799439030', name: 'Kaski Yatayat' },
+    );
+    // A brand loaded without its name still yields a null rather than undefined,
+    // so the key is always present on the wire.
+    assert.deepEqual(
+      built({ brand: { _id: '507f1f77bcf86cd799439030' } }).data.brand,
+      { id: '507f1f77bcf86cd799439030', name: null },
     );
   });
 });

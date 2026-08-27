@@ -12,10 +12,14 @@ const User = require('../../../../models/userModel');
  *
  * `brandId` is optional on this endpoint; when absent no brand is checked and
  * nothing brand-scoped is written.
+ *
+ * `brandName` is the schema's field. There is no `name` on OperatorBrand — every
+ * other module reads `brandName`, and selecting `name` here silently produced an
+ * undefined brand name in both the invite SMS and the response body.
  */
 const findOwnedBrand = (ownerId, brandId) => OperatorBrand
   .findOne({ _id: brandId, ownerId })
-  .select('name')
+  .select('brandName')
   .lean();
 
 const createUser = (userData) => new User(userData).save();

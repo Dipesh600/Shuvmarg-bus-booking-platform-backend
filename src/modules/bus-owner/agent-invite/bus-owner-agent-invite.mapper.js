@@ -30,7 +30,7 @@ const toCreatedResponse = ({ agent, userId, name, phone, brand, isUpgrade, smsSe
     scope: scopeOf(agent),
     outletType: agent.outletType || null,
     kycStatus: agent.applicationStatus,
-    brand: brand ? { id: brand._id, name: brand.name } : null,
+    brand: brand ? { id: brand._id, name: brand.brandName || null } : null,
     isUpgrade,
     // False when no SMS was attempted (existing account) or delivery failed.
     // The owner can read the code off this response either way.

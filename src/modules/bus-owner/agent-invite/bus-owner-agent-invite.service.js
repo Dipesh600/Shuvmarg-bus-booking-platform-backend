@@ -97,7 +97,7 @@ const createAgent = async (ownerId, body) => {
       name,
       phone: normalisedPhone,
       tempPassword,
-      brandName: brand?.name,
+      brandName: brand?.brandName,
     });
 
     return {
