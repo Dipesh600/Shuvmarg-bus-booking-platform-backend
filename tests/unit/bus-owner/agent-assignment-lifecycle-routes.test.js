@@ -8,6 +8,8 @@ const listLimiter = require('../../../middleware/busOwnerAgentAssignmentListRate
 const writeLimiter = require('../../../middleware/busOwnerAgentAssignmentLifecycleRateLimit');
 const createLimiter = require('../../../middleware/busOwnerAgentCreateRateLimit');
 const invite = require('../../../src/modules/bus-owner/agent-invite');
+const salesLimiter = require('../../../middleware/agentSalesReadRateLimit');
+const ownerSales = require('../../../src/modules/bus-owner/agent-sales');
 const { registerBusOwnerAgentRoutes } = require('../../../routes/busOwner/agentRoutes');
 
 const handlersFor = (router, path, method) => router.stack
@@ -27,6 +29,12 @@ test('T9 operator assignment lifecycle route wiring and rate limits', async (t) 
   await t.test('list has its read limiter and controller', () => {
     assert.deepEqual(handlersFor(router, '/agents/assignments', 'get'), [
       listLimiter, lifecycle.listAssignments,
+    ]);
+  });
+
+  await t.test('Y2 owner agent sales uses owner-keyed read limiter and controller', () => {
+    assert.deepEqual(handlersFor(router, '/agents/:agentId/sales', 'get'), [
+      salesLimiter, ownerSales.listSales,
     ]);
   });
 

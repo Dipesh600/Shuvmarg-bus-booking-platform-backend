@@ -9,6 +9,8 @@ const busOwnerAgentLookupRateLimit = require("../../middleware/busOwnerAgentLook
 const assignmentListRateLimit = require("../../middleware/busOwnerAgentAssignmentListRateLimit.js");
 const assignmentLifecycleRateLimit = require("../../middleware/busOwnerAgentAssignmentLifecycleRateLimit.js");
 const agentCreateRateLimit = require("../../middleware/busOwnerAgentCreateRateLimit.js");
+const agentSalesReadRateLimit = require("../../middleware/agentSalesReadRateLimit.js");
+const ownerAgentSales = require("../../src/modules/bus-owner/agent-sales");
 
 /**
  * Ticket-agent routes for an operator.
@@ -42,6 +44,12 @@ function registerBusOwnerAgentRoutes(router) {
     "/agents/assignments",
     assignmentListRateLimit,
     busOwnerAgentAssignmentLifecycle.listAssignments,
+  );
+
+  router.get(
+    "/agents/:agentId/sales",
+    agentSalesReadRateLimit,
+    ownerAgentSales.listSales,
   );
 
   for (const action of ["suspend", "reinstate", "revoke"]) {
