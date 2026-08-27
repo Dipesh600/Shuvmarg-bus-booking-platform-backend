@@ -15,12 +15,13 @@ const productionFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true }).fl
 });
 
 test('agent sellable inventory architecture', async (t) => {
-  await t.test('W9 the shared Trip guard has the catalogue as its only caller today', () => {
+  await t.test('W9/V2 the catalogue and hold writer share the one Trip guard', () => {
     const roots = ['src', 'routes', 'controllers', 'middleware'].map((dir) => path.join(ROOT, dir));
     const callers = roots.flatMap(productionFiles).filter((file) => (
       fs.readFileSync(file, 'utf8').includes('filterSellableTrips({')
     ));
     assert.deepEqual(callers.map((file) => path.relative(ROOT, file)), [
+      'src/modules/agent/seat-hold/agent-seat-hold.service.js',
       'src/modules/agent/sellable-inventory/agent-sellable-inventory.service.js',
     ]);
   });

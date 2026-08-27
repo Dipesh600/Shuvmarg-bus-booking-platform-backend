@@ -20,6 +20,7 @@ const agentAssignmentResponse = require("../../src/modules/agent/assignment-resp
 const agentAssignmentRespondRateLimit = require("../../middleware/agentAssignmentRespondRateLimit.js");
 const agentSellableInventory = require("../../src/modules/agent/sellable-inventory");
 const agentSellableInventoryRateLimit = require("../../middleware/agentSellableInventoryRateLimit.js");
+const registerAgentSaleRoutes = require("./agentSaleRoutes.js");
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 // Deliberately NOT behind requireVerifiedAgent. An agent's code and KYC status
@@ -83,6 +84,8 @@ router.get(
   agentSellableInventoryRateLimit,
   agentSellableInventory.listSellableInventory,
 );
+
+registerAgentSaleRoutes(router, { auth, verifyRoleFromDB, agentMiddleware });
 
 // ── Application Workflow ──────────────────────────────────────────────────────
 
