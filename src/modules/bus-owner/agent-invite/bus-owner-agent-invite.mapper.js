@@ -15,11 +15,13 @@ const { scopeOf } = require('../../../shared/identity/agent-enums');
  * owner's browser history, logs and network tab, for an account the owner is not
  * meant to be able to operate.
  */
-const toCreatedResponse = ({ agent, name, phone, brand, isUpgrade, smsSent }) => ({
+const toCreatedResponse = ({ agent, name, phone, brand, isUpgrade, smsStatus }) => ({
   success: true,
   message: isUpgrade
     ? 'Agent role added to the existing account.'
-    : 'Agent created. They will receive login details by SMS.',
+    : smsStatus === 'QUEUED'
+      ? 'Agent created. Activation SMS accepted into the provider queue.'
+      : 'Agent created, but the activation SMS could not be queued.',
   data: {
     agentCode: agent.code || null,
     agentId: agent._id,
@@ -33,9 +35,10 @@ const toCreatedResponse = ({ agent, name, phone, brand, isUpgrade, smsSent }) =>
     placeName: agent.placeName || null,
     brand: brand ? { id: brand._id, name: brand.brandName || null } : null,
     isUpgrade,
-    // False when no SMS was attempted (existing account) or delivery failed.
-    // The owner can read the code off this response either way.
-    smsSent,
+    // Legacy compatibility: this means Sparrow accepted the message into its
+    // queue, not that the handset delivered it. New clients use smsStatus.
+    smsSent: smsStatus === 'QUEUED',
+    smsStatus,
     // Reminder for the client: the agent is not usable yet, and the owner is
     // not the one who makes them usable.
     requiresAgentActivation: !isUpgrade,

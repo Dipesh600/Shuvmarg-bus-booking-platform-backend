@@ -21,6 +21,7 @@ test('operator agent create — happy path', async (t) => {
       assert.equal(result.responseBody.data.agentCode, 'SM-AG-7K4QP2X');
       assert.equal(result.responseBody.data.isUpgrade, false);
       assert.equal(result.responseBody.data.smsSent, true);
+      assert.equal(result.responseBody.data.smsStatus, 'QUEUED');
 
       assert.equal(h.calls.createUser.length, 1);
       assert.equal(h.calls.createUser[0][0].status, 'invited');
