@@ -22,19 +22,31 @@ test('agent password reset repository preserves query contracts', async (t) => {
     } finally { restore(); }
   });
 
-  await t.test('saveUser delegates to document save', async () => {
-    let called = false;
-    const doc = { save: async () => { called = true; return 'saved'; } };
-    assert.equal(await repository.saveUser(doc), 'saved');
-    assert.equal(called, true);
-  });
-
-  await t.test('incrementTokenVersion uses exact update and no options', async () => {
+  await t.test('completion is one guarded credential and activation update', async () => {
     let args;
-    const restore = patch(User, 'findByIdAndUpdate', (...a) => { args = a; return 'ok'; });
+    const restore = patch(User, 'findOneAndUpdate', (...a) => { args = a; return 'ok'; });
     try {
-      assert.equal(await repository.incrementTokenVersion('u1'), 'ok');
-      assert.deepEqual(args, ['u1', { $inc: { tokenVersion: 1 } }]);
+      assert.equal(await repository.completePasswordReset({
+        userId: 'u1', expectedStatus: 'invited', hashedPassword: 'hash',
+      }), 'ok');
+      assert.deepEqual(args, [
+        {
+          _id: 'u1', status: 'invited', deletedAt: null,
+          $or: [{ roles: 'agent' }, { role: 'agent', roles: { $size: 0 } }],
+        },
+        {
+          $set: {
+            password: 'hash', status: 'active', isVerified: true,
+            phoneVerified: true, failedLoginAttempts: 0, lockedUntil: null,
+            forcePasswordChange: false,
+            temporaryCredentialIssuedAt: null,
+            temporaryCredentialExpiresAt: null,
+            temporaryCredentialIssuedBy: null,
+          },
+          $inc: { tokenVersion: 1, temporaryCredentialVersion: 1 },
+        },
+        { new: true, runValidators: true },
+      ]);
     } finally { restore(); }
   });
 });

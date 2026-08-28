@@ -20,11 +20,6 @@ const invalidPasswordError = (validation) => bodyError(
   validation.errors?.[0] || validation.message,
   400,
 );
-const suspendedAccountError = () => bodyError(
-  'This account has been suspended. Please contact support.',
-  403,
-  { errorCode: 'ACCOUNT_SUSPENDED' },
-);
 const otpBlockedError = (minutes) => bodyError(
   `Too many OTP requests. Please wait ${minutes} minute(s) before trying again.`,
   429,
@@ -36,15 +31,8 @@ const otpCooldownError = (seconds) => bodyError(
   { errorCode: 'OTP_COOLDOWN', retryAfterSeconds: seconds },
 );
 
-const accountNotFoundError = () => bodyError(
-  'No agent account found with this phone number.',
-  404,
-  { code: 'ACCOUNT_NOT_FOUND' },
-);
-
 module.exports = {
   missingPhoneError,
-  accountNotFoundError,
   missingVerifyInputError,
   missingResetInputError,
   invalidOtpLengthError,
@@ -52,7 +40,6 @@ module.exports = {
   invalidResetTargetError,
   invalidAgentOtpError,
   invalidPasswordError,
-  suspendedAccountError,
   otpBlockedError,
   otpCooldownError,
 };

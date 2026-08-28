@@ -21,7 +21,7 @@ const verifyOtpForReset = async ({ rawPhone, otp }) => {
     (p) => repository.findUserByPhone(p),
   );
   if (!valid) throw errors.invalidOtpError(error);
-  if (!policy.hasAgentRole(user)) throw errors.invalidAgentOtpError();
+  if (!policy.canRecoverPassword(user)) throw errors.invalidAgentOtpError();
   return {
     statusCode: 200,
     responseBody: {

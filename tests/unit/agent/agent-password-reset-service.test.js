@@ -32,23 +32,31 @@ const user = () => ({
   roles: ['agent'],
   status: 'active',
   isVerified: false,
+  phoneVerified: false,
+  tokenVersion: 0,
+  failedLoginAttempts: 2,
+  lockedUntil: new Date(),
+  forcePasswordChange: true,
   save: async () => {},
+  toObject() { return { ...this }; },
 });
 
 test('agent password reset service preserves orchestration', async (t) => {
-  await t.test('request normalizes, pads, looks up role and sends OTP purpose', async () => {
+  await t.test('request normalizes, pads and sends the recovery OTP without enumeration', async () => {
     const restores = [];
     const order = [];
     patch(phoneGuard, 'normalizePhone', (p) => { order.push(`normalize:${p}`); return '9818700001'; }, restores);
     patch(enumGuard, 'withMinimumLatency', async (fn, ms) => { order.push(`latency:${ms}`); return fn(); }, restores);
-    patch(repository, 'findUserByPhone', async (p) => { order.push(`find:${p}`); return { phone: p }; }, restores);
-    patch(phoneGuard, 'checkPhoneForRole', async (p, r) => { order.push(`role:${p}:${r}`); return { hasRole: true }; }, restores);
+    patch(repository, 'findUserByPhone', async (p) => {
+      order.push(`find:${p}`);
+      return { phone: p, roles: ['agent'], status: 'active' };
+    }, restores);
     patch(otpHelper, 'createAndSendOTP', async (p, purpose) => order.push(`otp:${p}:${purpose}`), restores);
     try {
       const result = await service.requestPasswordReset({ rawPhone: '+9779818700001' });
       assert.deepEqual(order, [
         'normalize:+9779818700001', 'latency:600', 'find:9818700001',
-        'role:9818700001:agent', 'otp:9818700001:AGENT_PASSWORD_RESET',
+        'otp:9818700001:AGENT_PASSWORD_RESET',
       ]);
       assert.equal(result.statusCode, 200);
     } finally { restores.reverse().forEach((fn) => fn()); }
@@ -62,7 +70,7 @@ test('agent password reset service preserves orchestration', async (t) => {
       assert.equal(purpose, 'AGENT_PASSWORD_RESET'); assert.equal(consume, false);
       assert.equal(verifyFn, otpHelper.verifyOTPCode);
       assert.equal(await lookup('x'), 'found');
-      return { valid: true, user: { roles: [], role: 'agent' } };
+      return { valid: true, user: { roles: [], role: 'agent', status: 'invited' } };
     }, restores);
     patch(repository, 'findUserByPhone', async () => 'found', restores);
     try {
@@ -71,33 +79,49 @@ test('agent password reset service preserves orchestration', async (t) => {
     } finally { restores.reverse().forEach((fn) => fn()); }
   });
 
-  await t.test('reset exact order: OTP consume, validate, salt/hash, save, revoke, increment', async () => {
+  await t.test('reset consumes OTP, activates invited state and creates a fresh session', async () => {
     const restores = [];
     const u = user();
     const order = [];
     patch(phoneGuard, 'normalizePhone', () => u.phone, restores);
-    patch(repository, 'findUserByPhone', async () => { order.push('find'); return u; }, restores);
-    patch(phoneGuard, 'checkPhoneForRole', async () => { order.push('role'); return { hasRole: true }; }, restores);
-    patch(otpHelper, 'verifyOTPCode', async (p, otp, purpose, consume) => {
-      order.push(`otp:${p}:${otp}:${purpose}:${consume}`); return { valid: true };
+    u.status = 'invited';
+    patch(repository, 'findUserByPhone', async () => u, restores);
+    patch(enumGuard, 'otpFirstVerify', async (p, otp, purpose, consume, verifyFn, lookup) => {
+      order.push(`otp:${p}:${otp}:${purpose}:${consume}`);
+      assert.equal(verifyFn, otpHelper.verifyOTPCode);
+      assert.equal(await lookup(p), u);
+      return { valid: true, user: u };
     }, restores);
     patch(passwordValidator, 'validatePassword', (pw) => { order.push(`validate:${pw}`); return { valid: true }; }, restores);
     patch(bcrypt, 'genSalt', async (cost) => { order.push(`salt:${cost}`); return 'salt'; }, restores);
     patch(bcrypt, 'hash', async (pw, salt) => { order.push(`hash:${pw}:${salt}`); return 'hash'; }, restores);
-    patch(repository, 'saveUser', async (doc) => { order.push(`save:${doc.password}:${doc.isVerified}`); }, restores);
+    patch(repository, 'completePasswordReset', async (input) => {
+      order.push(`complete:${input.expectedStatus}:${input.hashedPassword}`);
+      u.status = 'active'; u.phoneVerified = true; u.isVerified = true;
+      u.failedLoginAttempts = 0; u.lockedUntil = null;
+      u.forcePasswordChange = false; u.tokenVersion = 1;
+      return u;
+    }, restores);
     patch(tokenService, 'revokeAllUserTokens', async (id) => { order.push(`revoke:${id}`); }, restores);
-    patch(repository, 'incrementTokenVersion', async (id) => { order.push(`inc:${id}`); }, restores);
+    patch(tokenService, 'generateTokenPair', async (_, meta) => {
+      order.push(`session:${meta.activeRole}`);
+      return { accessToken: 'access', refreshToken: 'refresh' };
+    }, restores);
     try {
       const result = await service.resetPassword({ rawPhone: u.phone, otp: '123456', newPassword: 'NewPass123!' });
       assert.equal(result.statusCode, 200);
       assert.deepEqual(order, [
-        'find', 'role', 'otp:9818700001:123456:AGENT_PASSWORD_RESET:true',
-        'validate:NewPass123!', 'salt:10', 'hash:NewPass123!:salt',
-        'save:hash:true', 'revoke:u1', 'inc:u1',
+        'validate:NewPass123!', 'otp:9818700001:123456:AGENT_PASSWORD_RESET:true',
+        'salt:12', 'hash:NewPass123!:salt', 'complete:invited:hash',
+        'revoke:u1', 'session:agent',
       ]);
       assert.equal(u.failedLoginAttempts, 0);
       assert.equal(u.lockedUntil, null);
       assert.equal(u.forcePasswordChange, false);
+      assert.equal(u.phoneVerified, true);
+      assert.equal(u.status, 'active');
+      assert.equal(result.responseBody.accessToken, 'access');
+      assert.equal(result.refreshToken, 'refresh');
     } finally { restores.reverse().forEach((fn) => fn()); }
   });
 
