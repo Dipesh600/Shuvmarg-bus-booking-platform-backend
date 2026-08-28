@@ -68,6 +68,26 @@ test('operator assignment list', async (t) => {
     } finally { h.restore(); }
   });
 
+  await t.test('B3 sales count is scoped to the listed agent and brand pair', async () => {
+    const row = assignment();
+    const key = lifecycleRepository.salesKey(row.agentId, row.operatorId);
+    const h = harness({ listAssignments: {
+      rows: [row], total: 1, salesCounts: new Map([[key, 7]]),
+    } });
+    try {
+      const response = (await service.listAssignments(OWNER_ID, {})).responseBody;
+      assert.equal(response.data[0].salesCount, 7);
+    } finally { h.restore(); }
+
+    const pipeline = lifecycleRepository.salesCountPipeline([row]);
+    assert.equal(String(pipeline[0].$match.agentId.$in[0]), String(row.agentId._id));
+    assert.equal(
+      String(pipeline[1].$lookup.pipeline[0].$match.brandId.$in[0]),
+      String(row.operatorId._id),
+    );
+    assert.equal(pipeline[1].$lookup.pipeline[0].$match.bookedVia, 'AGENT');
+  });
+
   await t.test('A1/A2 all three real queries apply the safe shared projection', () => {
     const projections = [
       lookupRepository.findAgentByCodeFilter({ _id: 'agent' }).projection(),

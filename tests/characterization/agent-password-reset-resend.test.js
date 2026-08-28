@@ -49,21 +49,22 @@ test('agent password reset resend characterization', async (t) => {
     } finally { restore(); }
   });
 
-  await t.test('banned/inactive agents return suspended only after role check', async () => {
+  await t.test('banned/inactive agents stay neutral and receive no OTP', async () => {
+    const calls = [];
+    const restore = patch(otpHelper, 'createAndSendOTP', async (p) => calls.push(p));
+    try {
     for (const status of ['banned', 'inactive']) {
       const p = status === 'banned' ? phone(3) : phone(4);
       await user(p, { status });
       const res = await request(app).post('/api/auth/agent/resendOtpForReset').send({ phone: p });
-      assert.equal(res.status, 403);
-      assert.deepEqual(res.body, {
-        success: false,
-        message: 'This account has been suspended. Please contact support.',
-        errorCode: 'ACCOUNT_SUSPENDED',
-      });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.message, 'If an account exists, a new code has been sent.');
     }
+    assert.deepEqual(calls, []);
+    } finally { restore(); }
   });
 
-  await t.test('eligible agent receives AGENT_PASSWORD_RESET OTP and expiresIn', async () => {
+  await t.test('eligible agent receives the OTP without changing the neutral response', async () => {
     const calls = [];
     const restore = patch(otpHelper, 'createAndSendOTP', async (p, purpose) => {
       calls.push([p, purpose]);
@@ -75,8 +76,7 @@ test('agent password reset resend characterization', async (t) => {
       assert.equal(res.status, 200);
       assert.deepEqual(res.body, {
         success: true,
-        message: 'New verification code sent.',
-        data: { expiresIn: '5 minutes' },
+        message: 'If an account exists, a new code has been sent.',
       });
       assert.deepEqual(calls, [[phone(5), 'AGENT_PASSWORD_RESET']]);
     } finally { restore(); }

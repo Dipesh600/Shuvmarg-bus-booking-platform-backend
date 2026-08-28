@@ -28,7 +28,7 @@ const trip = (id, brandId = BRAND_A, over = {}) => ({
   _id: id,
   brandId,
   ownerId: OWNER,
-  routeId: `route-${id}`,
+  variantId: `route-${id}`,
   scheduleId: `schedule-${id}`,
   status: "scheduled",
   tripDate: new Date("2026-08-28T00:00:00.000Z"),
@@ -45,7 +45,7 @@ test("shared agent Trip selling guard", async (t) => {
       const schemaType = model.schema.path(path);
       return schemaType?.caster?.options?.ref || schemaType?.options?.ref;
     };
-    assert.equal(refOf(AgentAssignment, "allowedRouteIds"), refOf(Trip, "routeId"));
+    assert.equal(refOf(AgentAssignment, "allowedRouteIds"), refOf(Trip, "variantId"));
     assert.equal(refOf(AgentAssignment, "allowedScheduleIds"), refOf(Trip, "scheduleId"));
   });
 
@@ -75,8 +75,8 @@ test("shared agent Trip selling guard", async (t) => {
   });
 
   await t.test("W3 ROUTES and SCHEDULES compare matching Trip namespaces", () => {
-    const first = trip("first", BRAND_A, { routeId: "route-1", scheduleId: "schedule-1" });
-    const second = trip("second", BRAND_A, { routeId: "route-2", scheduleId: "schedule-2" });
+    const first = trip("first", BRAND_A, { variantId: "route-1", scheduleId: "schedule-1" });
+    const second = trip("second", BRAND_A, { variantId: "route-2", scheduleId: "schedule-2" });
     assert.deepEqual(run(assignment({
       accessScope: "ROUTES", allowedRouteIds: ["route-2"],
     }), [first, second]), [second]);

@@ -17,11 +17,12 @@ const mapWriteError = (error) => {
 const listAssignments = async (ownerId, query) => {
   const input = parse.parseListQuery(query);
   if (input.errors.length > 0) throw errors.invalidInputError(input.errors);
-  const filter = policy.listFilter({ ownerId, ...input.value });
+  const now = new Date();
+  const filter = policy.listFilter({ ownerId, ...input.value, now });
   const result = await repository.listAssignments(filter, input.value);
   return {
     statusCode: 200,
-    responseBody: mapper.toListResponse({ ...result, ...input.value }),
+    responseBody: mapper.toListResponse({ ...result, ...input.value, now }),
   };
 };
 

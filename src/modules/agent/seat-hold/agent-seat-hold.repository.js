@@ -20,7 +20,7 @@ const findActiveAssignments = (agentId, operatorId) => AgentAssignment.find({
 }).select('operatorId status accessScope allowedRouteIds allowedScheduleIds permissions').lean();
 
 const findTripCandidate = (tripId) => Trip.findOne({ _id: tripId })
-  .select('_id brandId busId routeId scheduleId status tripDate bookingClosesAt isActive tripFare departureTime arrivalTime fromStopName toStopName')
+  .select('_id brandId busId routeId variantId scheduleId status tripDate bookingClosesAt isActive tripFare departureTime arrivalTime fromStopName toStopName')
   .populate({ path: 'routeId', select: 'basePrice' })
   .lean();
 

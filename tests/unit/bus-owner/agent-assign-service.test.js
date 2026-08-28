@@ -99,4 +99,18 @@ test('operator agent assign — success', async (t) => {
       assert.equal(h.calls.findLiveAssignmentStatus.length, 0);
     } finally { h.restore(); }
   });
+
+  await t.test('closes a stale invite before creating its replacement', async () => {
+    const h = harness();
+    try {
+      await service.assignAgent(OWNER_ID, validBody());
+      const [filter] = h.calls.expireStaleInvites[0];
+      assert.equal(filter.agentId, AGENT_OBJECT_ID);
+      assert.equal(filter.operatorId, BRAND_ID);
+      assert.equal(filter.status, 'INVITED');
+      assert.ok(filter.expiresAt.$lte instanceof Date);
+      assert.equal(h.calls.createAssignment.length, 1);
+      assert.equal(filter.expiresAt.$lte, h.calls.createAssignment[0][0].invitedAt);
+    } finally { h.restore(); }
+  });
 });

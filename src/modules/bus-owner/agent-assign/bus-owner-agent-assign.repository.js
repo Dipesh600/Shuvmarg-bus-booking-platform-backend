@@ -1,7 +1,10 @@
 'use strict';
 
 const { AGENT_PREVIEW_FIELDS } = require('../../../shared/identity/agent-assignability');
-const { LIVE_ASSIGNMENT_STATUSES } = require('../../../shared/identity/agent-assignment-status');
+const {
+  ASSIGNMENT_STATUSES,
+  LIVE_ASSIGNMENT_STATUSES,
+} = require('../../../shared/identity/agent-assignment-status');
 const AgentAssignment = require('../../../../models/agentAssignmentModel');
 const Agent = require('../../../../models/agentModel');
 const OperatorBrand = require('../../../../models/operatorBrandModel');
@@ -37,6 +40,13 @@ const findAgentByCodeFilter = (filter) => Agent
  */
 const createAssignment = (data) => new AgentAssignment(data).save();
 
+/** Free the live-index slot once an unanswered invitation has timed out. */
+const expireStaleInvites = (filter) => AgentAssignment.updateMany(
+  filter,
+  { $set: { status: ASSIGNMENT_STATUSES.EXPIRED } },
+  { runValidators: true },
+);
+
 /**
  * The live row that blocked an insert. Read only after a duplicate-key error, to
  * tell the operator whether the agent is already invited, already working, or
@@ -54,6 +64,7 @@ const findLiveAssignmentStatus = async (agentId, operatorId) => {
 
 module.exports = {
   createAssignment,
+  expireStaleInvites,
   findAgentByCodeFilter,
   findLiveAssignmentStatus,
   findOwnedBrand,

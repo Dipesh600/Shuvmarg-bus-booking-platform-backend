@@ -22,7 +22,7 @@ test('create response', async (t) => {
     phone: '9800000000',
     brand: null,
     isUpgrade: false,
-    smsSent: true,
+    smsStatus: 'QUEUED',
     ...overrides,
   });
 
@@ -42,7 +42,7 @@ test('create response', async (t) => {
     assert.deepEqual(Object.keys(data).sort(), [
       'agentCode', 'agentId', 'applicationStatus', 'brand', 'district', 'isUpgrade',
       'municipality', 'name', 'outletType', 'phone', 'placeName',
-      'requiresAgentActivation', 'scope', 'smsSent',
+      'requiresAgentActivation', 'scope', 'smsSent', 'smsStatus',
     ]);
     const json = JSON.stringify(data);
     for (const secret of ['secret-pan', 'secret-citizenship', 'secret-bank', 'secret-note']) {
@@ -61,10 +61,15 @@ test('create response', async (t) => {
     assert.equal(built({ isUpgrade: true }).data.requiresAgentActivation, false);
   });
 
-  await t.test('reports SMS delivery honestly', () => {
-    assert.equal(built({ smsSent: false }).data.smsSent, false);
-    // The code is still returned, so a failed SMS is recoverable by the owner.
-    assert.equal(built({ smsSent: false }).data.agentCode, 'SM-AG-7K4QP2X');
+  await t.test('reports the provider queue result without claiming delivery', () => {
+    const queued = built({ smsStatus: 'QUEUED' });
+    const failed = built({ smsStatus: 'FAILED' });
+    assert.equal(queued.message, 'Agent created. Activation SMS accepted into the provider queue.');
+    assert.equal(failed.message, 'Agent created, but the activation SMS could not be queued.');
+    assert.equal(failed.data.smsSent, false);
+    assert.equal(failed.data.smsStatus, 'FAILED');
+    // Identity creation remains successful even when notification is best-effort.
+    assert.equal(failed.data.agentCode, 'SM-AG-7K4QP2X');
   });
 
   await t.test('includes the brand only when one was verified', () => {

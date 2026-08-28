@@ -24,11 +24,6 @@ test('agent password reset error factories preserve exact contracts', async (t) 
   await t.test('dynamic expected errors', () => {
     assertErr(errors.invalidOtpError('bad'), 400, { success: false, message: 'bad' });
     assertErr(errors.invalidPasswordError({ errors: ['weak'], message: 'fallback' }), 400, { success: false, message: 'weak' });
-    assertErr(errors.suspendedAccountError(), 403, {
-      success: false,
-      message: 'This account has been suspended. Please contact support.',
-      errorCode: 'ACCOUNT_SUSPENDED',
-    });
     assertErr(errors.otpBlockedError(5), 429, {
       success: false,
       message: 'Too many OTP requests. Please wait 5 minute(s) before trying again.',

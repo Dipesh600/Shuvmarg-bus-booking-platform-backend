@@ -50,6 +50,13 @@ const LIVE_ASSIGNMENT_STATUSES = Object.freeze([
   ASSIGNMENT_STATUSES.SUSPENDED,
 ]);
 
+/** Completed relationships retained only as history. */
+const TERMINAL_ASSIGNMENT_STATUSES = Object.freeze([
+  ASSIGNMENT_STATUSES.REVOKED,
+  ASSIGNMENT_STATUSES.DECLINED,
+  ASSIGNMENT_STATUSES.EXPIRED,
+]);
+
 /**
  * The only status that permits selling. Stated here rather than hardcoded in
  * the selling guard so "may this agent sell for this operator?" has one answer
@@ -122,6 +129,7 @@ module.exports = {
   INVITE_EXPIRY_DAYS,
   LIVE_ASSIGNMENT_STATUSES,
   SELLABLE_ASSIGNMENT_STATUSES,
+  TERMINAL_ASSIGNMENT_STATUSES,
   canTransition,
   inviteExpiryFrom,
   isAssignmentLive,

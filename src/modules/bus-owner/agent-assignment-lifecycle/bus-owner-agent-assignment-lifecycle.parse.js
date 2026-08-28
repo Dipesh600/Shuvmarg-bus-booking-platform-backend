@@ -7,6 +7,7 @@ const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
 const MAX_PAGE = 1000;
 const MAX_NOTE_LENGTH = 500;
+const LIST_VIEWS = Object.freeze(['CURRENT', 'HISTORY', 'INVITATIONS', 'STOPPED']);
 
 const isObjectId = (value) => typeof value === 'string' && OBJECT_ID_RE.test(value);
 
@@ -26,6 +27,8 @@ const parseListQuery = (query = {}) => {
   if (requestedLimit === null) errors.push('limit must be a positive integer.');
   if (query.brandId !== undefined && !isObjectId(query.brandId)) errors.push('brandId is invalid.');
   if (query.status !== undefined && !isAssignmentStatus(query.status)) errors.push('status is invalid.');
+  if (query.view !== undefined && !LIST_VIEWS.includes(query.view)) errors.push('view is invalid.');
+  if (query.status !== undefined && query.view !== undefined) errors.push('status and view cannot be combined.');
   return {
     errors,
     value: {
@@ -33,6 +36,7 @@ const parseListQuery = (query = {}) => {
       limit: Math.min(requestedLimit || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
       brandId: query.brandId,
       status: query.status,
+      ...(query.view ? { view: query.view } : {}),
     },
   };
 };

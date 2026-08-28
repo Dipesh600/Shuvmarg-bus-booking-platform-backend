@@ -62,13 +62,13 @@ const resolveUser = async ({ name, phone, now }) => {
  * accounts get no SMS because they have no new password to learn.
  */
 const notify = async ({ name, phone, tempPassword, brandName }) => {
-  if (!tempPassword) return false;
+  if (!tempPassword) return 'NOT_REQUIRED';
   try {
     await sendSMS(phone, policy.smsBody({ name, phone, tempPassword, brandName }));
-    return true;
+    return 'QUEUED';
   } catch (error) {
-    console.error('[BusOwner createAgent] SMS delivery failed:', error.message);
-    return false;
+    console.error('[BusOwner createAgent] SMS queue request failed:', error.message);
+    return 'FAILED';
   }
 };
 
@@ -101,7 +101,7 @@ const createAgent = async (ownerId, body) => {
       }),
     );
 
-    const smsSent = await notify({
+    const smsStatus = await notify({
       name,
       phone: normalisedPhone,
       tempPassword,
@@ -116,7 +116,7 @@ const createAgent = async (ownerId, body) => {
         phone: normalisedPhone,
         brand,
         isUpgrade,
-        smsSent,
+        smsStatus,
       }),
     };
   } catch (error) {

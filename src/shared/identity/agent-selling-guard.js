@@ -38,7 +38,7 @@ const filterSellableTrips = ({ assignment, trips, now = new Date() }) => {
 
     if (assignment.accessScope === ACCESS_SCOPES.ALL_BUSES) return true;
     if (assignment.accessScope === ACCESS_SCOPES.ROUTES) {
-      return allowedRoutes.has(idOf(trip.routeId));
+      return allowedRoutes.has(idOf(trip.variantId));
     }
     if (assignment.accessScope === ACCESS_SCOPES.SCHEDULES) {
       return allowedSchedules.has(idOf(trip.scheduleId));

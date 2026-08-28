@@ -35,15 +35,16 @@ test('agent password reset request characterization', async (t) => {
   t.after(async () => db.disconnect());
   t.beforeEach(async () => db.clearAll());
 
-  await t.test('missing phone and missing account preserve exact responses', async () => {
+  await t.test('missing phone is rejected and an unknown account is neutral', async () => {
     let res = await request(app).post('/api/auth/agent/requestPasswordReset').send({});
     assert.equal(res.status, 400);
     assert.deepEqual(res.body, { success: false, message: 'Phone number is required.' });
     res = await request(app).post('/api/auth/agent/requestPasswordReset').send({ phone: phone(1) });
-    assert.equal(res.status, 404);
-    assert.equal(res.body.success, false);
-    assert.equal(res.body.code, 'ACCOUNT_NOT_FOUND');
-    assert.equal(res.body.message, 'No agent account found with this phone number.');
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, {
+      success: true,
+      message: 'If an account exists, OTP has been sent.',
+    });
   });
 
   await t.test('normalizes phone and sends only eligible agent OTP with latency wrapper', async () => {
@@ -63,7 +64,7 @@ test('agent password reset request characterization', async (t) => {
     } finally { restores.reverse().forEach((fn) => fn()); }
   });
 
-  await t.test('non-agent and banned/inactive agents preserve anti-enumeration behavior', async () => {
+  await t.test('non-agent and blocked agents receive the same neutral response', async () => {
     const calls = [];
     const restore = patch(otpHelper, 'createAndSendOTP', async (p) => calls.push(p));
     try {
@@ -72,9 +73,10 @@ test('agent password reset request characterization', async (t) => {
       await user(phone(5), { status: 'inactive' });
       for (const p of [phone(3), phone(4), phone(5)]) {
         const res = await request(app).post('/api/auth/agent/requestPasswordReset').send({ phone: p });
-        assert.equal(res.status, p === phone(3) ? 404 : 200);
+        assert.equal(res.status, 200);
+        assert.equal(res.body.message, 'If an account exists, OTP has been sent.');
       }
-      assert.deepEqual(calls, [phone(4), phone(5)]);
+      assert.deepEqual(calls, []);
     } finally { restore(); }
   });
 
