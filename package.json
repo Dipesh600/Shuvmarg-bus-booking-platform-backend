@@ -6,7 +6,7 @@
     "test": "find tests -type f -name '*.test.js' -print0 | xargs -0 node --test --test-concurrency=1",
     "test:seat-layout-v3": "node --test tests/unit/seat-layout-v3-*.test.js",
     "seed:seat-layout-v3": "node scripts/seedPlatformSeatLayouts.js",
-    "preflight:admin-bootstrap": "node tools/preflight-admin-bootstrap.js",
+    "preflight:admin-bootstrap": "node scripts/preflightAdminBootstrap.js",
     "bootstrap:root-admin:renew": "node scripts/renewInitialRootEnrollment.js",
     "migrate:boarding-locations": "node tools/migrate-boarding-locations.js",
     "preflight:route-variant-code-allocation": "node tools/preflight-route-variant-code-allocation.js",
