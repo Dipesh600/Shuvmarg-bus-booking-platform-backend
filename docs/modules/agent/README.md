@@ -23,8 +23,8 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
 | Method | Full path | Middleware in order | Owning module |
 |---|---|---|---|
 | GET | `/api/agent/application/status` | `auth`, `verifyRoleFromDB`, `agentMiddleware` | `agentApplicationStatus.getApplicationStatus` |
-| GET | `/api/agent/profile` | `auth`, `verifyRoleFromDB`, `agentMiddleware`, `requireApprovedAgent` | `agentProfile.getProfile` |
-| GET | `/api/agent/dashboard` | `auth`, `verifyRoleFromDB`, `agentMiddleware`, `requireApprovedAgent` | `agentDashboard.getDashboard` |
+| GET | `/api/agent/profile` | `auth`, `verifyRoleFromDB`, `agentMiddleware`, `requireVerifiedAgent` | `agentProfile.getProfile` |
+| GET | `/api/agent/dashboard` | `auth`, `verifyRoleFromDB`, `agentMiddleware`, `requireVerifiedAgent` | `agentDashboard.getDashboard` |
 | POST | `/api/agent/application/save` | `auth`, `verifyRoleFromDB`, `agentMiddleware` | `agentApplicationDraft.saveApplicationDraft` |
 | POST | `/api/agent/application/document` | `auth`, `verifyRoleFromDB`, `agentMiddleware` | `agentApplicationDocumentUpload.uploadDocument` |
 
@@ -77,7 +77,7 @@ Do not assume these contracts match agent authentication or admin-agent routes. 
   - `middleware/authMiddleware.js`
   - `middleware/verifyRoleFromDB.js`
   - `middleware/checkRole.js`
-  - `middleware/requireApprovedAgent.js`
+  - `middleware/requireVerifiedAgent.js`
 - Models/utilities inspected:
   - `models/agentModel.js`
   - `models/userModel.js`

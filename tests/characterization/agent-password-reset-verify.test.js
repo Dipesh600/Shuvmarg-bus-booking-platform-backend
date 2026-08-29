@@ -49,7 +49,7 @@ test('agent password reset OTP verify characterization', async (t) => {
     const calls = [];
     const restore = patch(enumGuard, 'otpFirstVerify', async (p, otp, purpose, consume) => {
       calls.push([p, otp, purpose, consume]);
-      return { valid: true, user: { roles: ['agent'], role: 'passenger' } };
+      return { valid: true, user: { roles: ['agent'], role: 'passenger', status: 'active' } };
     });
     try {
       const res = await request(app)
@@ -83,7 +83,7 @@ test('agent password reset OTP verify characterization', async (t) => {
     let mode = 'role';
     const restore = patch(enumGuard, 'otpFirstVerify', async () => {
       if (mode === 'boom') throw new Error('boom');
-      return { valid: true, user: { roles: [], role: 'agent' } };
+      return { valid: true, user: { roles: [], role: 'agent', status: 'invited' } };
     });
     try {
       let res = await request(app).post('/api/auth/agent/verifyOtpForReset').send({ phone: phone(6), otp: '123456' });

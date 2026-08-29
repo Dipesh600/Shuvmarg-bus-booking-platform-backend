@@ -47,7 +47,7 @@ test('agent application submit characterization', async (t) => {
   t.after(async () => db.disconnect());
   t.beforeEach(async () => db.clearAll());
 
-  await t.test('route keeps middleware order without requireApprovedAgent', async () => {
+  await t.test('route keeps middleware order without requireVerifiedAgent', async () => {
     const routeFile = fs.readFileSync('routes/agentRoute/agentRoute.js', 'utf8');
     assert.match(routeFile, /router\.post\("\/application\/submit", auth, verifyRoleFromDB, agentMiddleware, agentApplicationSubmit\.submitApplication\)/);
     assert.equal((await request(app).post('/api/agent/application/submit')).status, 401);
@@ -56,7 +56,7 @@ test('agent application submit characterization', async (t) => {
     const wrongRole = await submitApp(tokenFor(passenger, 'passenger'), { termsAccepted: true });
     assert.equal(wrongRole.status, 403);
     assert.equal(wrongRole.body.errorCode, 'INSUFFICIENT_ROLE');
-    assert.equal(routeFile.includes('"/application/submit", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent'), false);
+    assert.equal(routeFile.includes('"/application/submit", auth, verifyRoleFromDB, agentMiddleware, requireVerifiedAgent'), false);
   });
 
   await t.test('returns 404 if agent not found', async () => {

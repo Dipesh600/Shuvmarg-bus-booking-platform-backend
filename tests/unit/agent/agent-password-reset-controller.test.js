@@ -16,9 +16,16 @@ const patch = (obj, key, fn) => {
 const res = () => ({
   code: null,
   body: null,
+  cookies: [],
   status(c) { this.code = c; return this; },
   json(b) { this.body = b; return this; },
-  cookie() { throw new Error('must not set cookie'); },
+  cookie(...args) { this.cookies.push(args); },
+});
+const req = (body) => ({
+  body,
+  ip: '127.0.0.1',
+  socket: {},
+  get: () => 'test-device',
 });
 
 test('agent password reset controller adapts HTTP only', async (t) => {
@@ -27,7 +34,7 @@ test('agent password reset controller adapts HTTP only', async (t) => {
     const restores = [
       patch(service, 'requestPasswordReset', async (x) => { seen.push(['request', x]); return { statusCode: 201, responseBody: { a: 1 } }; }),
       patch(service, 'verifyOtpForReset', async (x) => { seen.push(['verify', x]); return { statusCode: 202, responseBody: { b: 2 } }; }),
-      patch(service, 'resetPassword', async (x) => { seen.push(['reset', x]); return { statusCode: 203, responseBody: { c: 3 } }; }),
+      patch(service, 'resetPassword', async (x) => { seen.push(['reset', x]); return { statusCode: 203, refreshToken: 'refresh', responseBody: { c: 3 } }; }),
       patch(service, 'resendOtpForReset', async (x) => { seen.push(['resend', x]); return { statusCode: 204, responseBody: { d: 4 } }; }),
     ];
     try {
@@ -38,13 +45,16 @@ test('agent password reset controller adapts HTTP only', async (t) => {
         ['resendOtpForReset', { phone: '9818600004' }],
       ]) {
         const out = res();
-        await controller[fn]({ body }, out, assert.ifError);
+        await controller[fn](req(body), out, assert.ifError);
         assert.equal(out.code >= 201 && out.code <= 204, true);
       }
       assert.deepEqual(seen, [
         ['request', { rawPhone: '+9779818600001' }],
         ['verify', { rawPhone: '9818600002', otp: '1' }],
-        ['reset', { rawPhone: '9818600003', otp: '2', newPassword: 'p' }],
+        ['reset', {
+          rawPhone: '9818600003', otp: '2', newPassword: 'p',
+          deviceInfo: 'test-device', ipAddress: '127.0.0.1',
+        }],
         ['resend', { rawPhone: '9818600004' }],
       ]);
     } finally { restores.reverse().forEach((fn) => fn()); }
@@ -56,14 +66,14 @@ test('agent password reset controller adapts HTTP only', async (t) => {
     });
     try {
       const out = res();
-      await controller.requestPasswordReset({ body: { phone: 'x' } }, out, assert.ifError);
+      await controller.requestPasswordReset(req({ phone: 'x' }), out, assert.ifError);
       assert.equal(out.code, 418);
       assert.deepEqual(out.body, { success: false, message: 'teapot' });
     } finally { restore(); }
     restore = patch(service, 'resetPassword', async () => { throw new Error('boom'); });
     try {
       const out = res();
-      await controller.resetPassword({ body: { phone: 'x', otp: '1', newPassword: 'p' } }, out, assert.ifError);
+      await controller.resetPassword(req({ phone: 'x', otp: '1', newPassword: 'p' }), out, assert.ifError);
       assert.equal(out.code, 500);
       assert.deepEqual(out.body, { success: false, message: 'Internal Server Error' });
     } finally { restore(); }

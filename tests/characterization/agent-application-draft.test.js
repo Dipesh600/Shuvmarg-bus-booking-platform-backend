@@ -26,10 +26,10 @@ test('agent application draft characterization', async (t) => {
         return User.create({ name: `Agent Draft ${n}`, email: `agent-draft-${n}@example.test`, phone: `98777${n.padStart(5, '0')}`, password: pw, role, roles: [role], status: 'active' });
     };
 
-    await t.test('route keeps middleware order without requireApprovedAgent', async () => {
+    await t.test('route keeps middleware order without requireVerifiedAgent', async () => {
         const routeFile = fs.readFileSync('routes/agentRoute/agentRoute.js', 'utf8');
         assert.match(routeFile, /router\.post\("\/application\/save", auth, verifyRoleFromDB, agentMiddleware, agentApplicationDraft\.saveApplicationDraft\)/);
-        assert.equal(routeFile.includes('"/application/save", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent'), false);
+        assert.equal(routeFile.includes('"/application/save", auth, verifyRoleFromDB, agentMiddleware, requireVerifiedAgent'), false);
     });
 
     await t.test('should return 401 when no token is provided', async () => {

@@ -8,13 +8,68 @@ const router = express.Router();
 const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { agentMiddleware } = require("../../middleware/checkRole.js");
-const requireApprovedAgent = require("../../middleware/requireApprovedAgent.js");
+const requireVerifiedAgent = require("../../middleware/requireVerifiedAgent.js");
 const agentApplicationStatus = require('../../src/modules/agent/application-status');
 const agentApplicationDraft = require('../../src/modules/agent/application-draft');
 const agentApplicationSubmit = require('../../src/modules/agent/application-submit');
 const agentApplicationDocumentUpload = require('../../src/modules/agent/application-document-upload');
 const agentProfile = require('../../src/modules/agent/profile');
 const agentDashboard = require('../../src/modules/agent/dashboard');
+const agentIdentity = require('../../src/modules/agent/identity');
+const registerAgentAssignmentRoutes = require("./agentAssignmentRoutes.js");
+const agentSellableInventory = require("../../src/modules/agent/sellable-inventory");
+const agentSellableInventoryRateLimit = require("../../middleware/agentSellableInventoryRateLimit.js");
+const registerAgentSaleRoutes = require("./agentSaleRoutes.js");
+const registerAgentSalesReadRoutes = require("./agentSalesReadRoutes.js");
+
+// ── Identity ──────────────────────────────────────────────────────────────────
+// Deliberately NOT behind requireVerifiedAgent. An agent's code and KYC status
+// are exactly what they need to see *before* they are cleared — gating them on
+// approval would leave a new agent with a blank screen and no way to find out
+// why. Nothing sellable is exposed here.
+
+/**
+ * @route   GET /api/agent/me
+ * @desc    The agent's own identity: agentCode, scope, outlet, KYC status
+ * @access  Private (Agent role required, any status)
+ */
+router.get("/me", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.getIdentity);
+
+/**
+ * @route   PATCH /api/agent/me
+ * @desc    Update the agent's own basic profile (allowlisted fields only)
+ * @access  Private (Agent role required, any status)
+ */
+router.patch("/me", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.updateIdentity);
+
+/**
+ * @route   GET /api/agent/me/code
+ * @desc    The shareable agent code plus the canonical share text
+ * @access  Private (Agent role required, any status)
+ */
+router.get("/me/code", auth, verifyRoleFromDB, agentMiddleware, agentIdentity.getCode);
+
+// ── Assignment Invitations ───────────────────────────────────────────────────
+// Deliberately NOT behind requireVerifiedAgent. An unfinished-KYC agent must be
+// able to answer the invite that motivates them to finish onboarding; selling is
+// gated later against both verification and an ACTIVE assignment.
+registerAgentAssignmentRoutes(router, { auth, verifyRoleFromDB, agentMiddleware });
+
+// ── Sellable Inventory ───────────────────────────────────────────────────────
+// Deliberately NOT behind requireVerifiedAgent. KYC gates committing a sale, not
+// reading the catalogue an agent could sell after verification; kycStatus in the
+// response lets the client keep its sell action disabled until then.
+router.get(
+  "/sellable-inventory",
+  auth,
+  verifyRoleFromDB,
+  agentMiddleware,
+  agentSellableInventoryRateLimit,
+  agentSellableInventory.listSellableInventory,
+);
+
+registerAgentSaleRoutes(router, { auth, verifyRoleFromDB, agentMiddleware });
+registerAgentSalesReadRoutes(router, { auth, verifyRoleFromDB, agentMiddleware });
 
 // ── Application Workflow ──────────────────────────────────────────────────────
 
@@ -63,15 +118,15 @@ router.get("/documents/view", auth, verifyRoleFromDB, agentMiddleware, documentP
 /**
  * @route   GET /api/agent/profile
  * @desc    Retrieve the agent's profile details
- * @access  Private (APPROVED agents only). Enforced by requireApprovedAgent.
+ * @access  Private (verified agents only). Enforced by requireVerifiedAgent.
  */
-router.get("/profile", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentProfile.getProfile);
+router.get("/profile", auth, verifyRoleFromDB, agentMiddleware, requireVerifiedAgent, agentProfile.getProfile);
 
 /**
  * @route   GET /api/agent/dashboard
  * @desc    Retrieve metrics and data for the agent dashboard
- * @access  Private (APPROVED agents only). Enforced by requireApprovedAgent.
+ * @access  Private (verified agents only). Enforced by requireVerifiedAgent.
  */
-router.get("/dashboard", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentDashboard.getDashboard);
+router.get("/dashboard", auth, verifyRoleFromDB, agentMiddleware, requireVerifiedAgent, agentDashboard.getDashboard);
 
 module.exports = router;

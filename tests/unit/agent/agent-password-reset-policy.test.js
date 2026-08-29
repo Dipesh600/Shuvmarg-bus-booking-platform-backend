@@ -18,9 +18,10 @@ test('agent password reset policy is deterministic', async (t) => {
     assert.deepEqual(policy.rolesFor({ roles: [], role: 'agent' }), ['agent']);
     assert.equal(policy.hasAgentRole({ roles: ['passenger'], role: 'agent' }), false);
     assert.equal(policy.hasAgentRole({ roles: [], role: 'agent' }), true);
-    assert.equal(policy.isSuspended({ status: 'banned' }), true);
-    assert.equal(policy.isSuspended({ status: 'inactive' }), true);
-    assert.equal(policy.isSuspended({ status: 'active' }), false);
+    assert.equal(policy.canRecoverPassword({ roles: ['agent'], status: 'active' }), true);
+    assert.equal(policy.canRecoverPassword({ roles: ['agent'], status: 'invited' }), true);
+    assert.equal(policy.canRecoverPassword({ roles: ['agent'], status: 'inactive' }), false);
+    assert.equal(policy.canRecoverPassword({ roles: ['agent'], status: 'active', deletedAt: new Date() }), false);
   });
 
   await t.test('OTP blocked detection and retry parsing are exact', () => {

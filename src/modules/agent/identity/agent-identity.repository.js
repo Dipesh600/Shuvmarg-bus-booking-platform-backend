@@ -1,0 +1,43 @@
+'use strict';
+
+const Agent = require('../../../../models/agentModel');
+const User = require('../../../../models/userModel');
+
+const AGENT_IDENTITY_FIELDS = [
+  'code agentId scope outletType applicationStatus agentType operationType',
+  'district municipality placeName businessName shopAddress createdByOwnerId createdAt',
+].join(' ');
+
+/**
+ * `phoneVerified` is here because the OPERATOR KYC status is derived from it. Do
+ * not drop it from this projection: deriveOperatorKycStatus reads a missing value
+ * as "no opinion" rather than false, so removing it would not corrupt anything —
+ * it would silently strand every operator agent at DRAFT.
+ */
+const USER_IDENTITY_FIELDS = 'name phone profilePicture phoneVerified';
+
+/**
+ * Loaded as a document, not lean: an agent created before the SM-AG scheme has no
+ * `code`, and only a real document can run the pre('save') hook that allocates
+ * one. See backfillIdentifiers in the service.
+ */
+const findAgentByUserId = (userId) => Agent.findOne({ user: userId }).select(AGENT_IDENTITY_FIELDS);
+
+const findUserById = (userId) => User.findById(userId).select(USER_IDENTITY_FIELDS).lean();
+
+const saveAgent = (agent) => agent.save();
+
+const updateUserName = (userId, name) => User.findByIdAndUpdate(
+  userId,
+  { $set: { name } },
+  { new: true },
+).select(USER_IDENTITY_FIELDS).lean();
+
+module.exports = {
+  AGENT_IDENTITY_FIELDS,
+  USER_IDENTITY_FIELDS,
+  findAgentByUserId,
+  findUserById,
+  saveAgent,
+  updateUserName,
+};

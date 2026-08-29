@@ -18,13 +18,9 @@ const resendOtpForReset = async ({ rawPhone }) => {
   const phone = phoneGuard.normalizePhone(rawPhone);
   if (!phone) throw errors.missingPhoneError();
   const user = await repository.findUserByPhone(phone);
-  if (!user) return neutralResult();
-  const { hasRole } = await phoneGuard.checkPhoneForRole(phone, 'agent');
-  if (!hasRole) return neutralResult();
-  if (policy.isSuspended(user)) throw errors.suspendedAccountError();
-  let result;
+  if (!policy.canRecoverPassword(user)) return neutralResult();
   try {
-    result = await otpHelper.createAndSendOTP(phone, policy.OTP_PURPOSE);
+    await otpHelper.createAndSendOTP(phone, policy.OTP_PURPOSE);
   } catch (err) {
     if (policy.isOtpBlocked(err)) throw errors.otpBlockedError(policy.retryMinutes(err));
     if (err.message && err.message.startsWith('OTP_COOLDOWN:')) {
@@ -33,14 +29,7 @@ const resendOtpForReset = async ({ rawPhone }) => {
     }
     throw err;
   }
-  return {
-    statusCode: 200,
-    responseBody: {
-      success: true,
-      message: 'New verification code sent.',
-      data: { expiresIn: result.expiresIn },
-    },
-  };
+  return neutralResult();
 };
 
 module.exports = {

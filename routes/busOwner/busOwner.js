@@ -132,4 +132,10 @@ router.post("/assignDriver",      staffCon.assignDriver);
 router.delete("/removeConductor", staffCon.removeConductor);
 router.delete("/removeDriver",    staffCon.removeDriver);
 
+// Ticket Agents — identity creation, code lookup and brand assignment.
+// Registered here, below requireApprovedBusOwner (line 73), so every agent route
+// inherits it: only an approved operator may mint or hire an agent.
+const { registerBusOwnerAgentRoutes } = require("./agentRoutes.js");
+registerBusOwnerAgentRoutes(router);
+
 module.exports = router;

@@ -4,6 +4,7 @@ const AppError = require('../../../../shared/errors/app-error');
 const asyncHandler = require('../../../../shared/http/async-handler');
 const respond = require('../../../../shared/http/respond');
 const service = require('./agent-password-reset.service');
+const { setPortalRefreshCookie } = require('../../../../../utils/portalSessionCookies');
 
 const handleError = (res, error, prefix, body) => {
   if (error instanceof AppError) return respond(res, error.statusCode, error.responseBody);
@@ -45,7 +46,10 @@ const resetPassword = asyncHandler(async (req, res) => {
       rawPhone: req.body.phone,
       otp,
       newPassword,
+      deviceInfo: req.get('User-Agent') || null,
+      ipAddress: req.ip || req.socket?.remoteAddress || null,
     });
+    if (result.refreshToken) setPortalRefreshCookie(res, 'agent', result.refreshToken);
     return respond(res, result.statusCode, result.responseBody);
   } catch (error) {
     return handleError(res, error, '[Agent resetPassword] Error:', {
