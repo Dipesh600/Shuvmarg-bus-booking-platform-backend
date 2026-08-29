@@ -1,6 +1,12 @@
 const axios = require("axios");
 const qs = require("qs");
 
+const queuedMessageCount = (data) => {
+  const code = Number(data?.response_code);
+  const count = Number(data?.count);
+  return code === 200 && Number.isSafeInteger(count) && count > 0 ? count : 0;
+};
+
 /**
  * handlers/sparro-otp.js
  *
@@ -11,7 +17,8 @@ const qs = require("qs");
  *   SPARROW_SMS_FROM   — Sender name registered with Sparrow (default: "TheAlert")
  *
  * Errors are ALWAYS thrown regardless of environment.
- * If SMS delivery fails, the caller surfaces a real error to the user — never a fake success.
+ * A successful response confirms queue acceptance only; it does not prove handset delivery.
+ * Invalid provider responses always throw so callers cannot report a false queue success.
  */
 async function sendOTP(phone, message) {
   const token = process.env.SPARROW_SMS_TOKEN;
@@ -54,15 +61,18 @@ async function sendOTP(phone, message) {
 
   // Sparrow sometimes returns HTTP 200 but embeds a non-200 response_code in the body
   // (e.g. response_code 1001 = Invalid IP Address, 1003 = Invalid token).
-  // Treat these as real delivery failures — never silently ignore them.
-  const code = response.data?.response_code;
-  if (code !== undefined && code !== 200) {
-    const detail = `code ${code} — ${response.data?.response || "Delivery failed"}`;
+  // Treat these as queue request failures — never silently ignore them.
+  const count = queuedMessageCount(response.data);
+  if (count === 0) {
+    const code = response.data?.response_code ?? "missing";
+    const detail = `code ${code} — ${response.data?.response || "No messages were queued"}`;
     console.error("[Sparrow SMS Error]:", detail, response.data);
     throw new Error(`Sparrow SMS Gateway Error: ${detail}`);
   }
 
-  console.log("[Sparrow SMS] Sent to", cleanPhone, "| Response:", response.data);
+  console.log("[Sparrow SMS] Queued for", cleanPhone, "| Count:", count);
+  return { queued: true, count };
 }
 
 module.exports = sendOTP;
+module.exports.queuedMessageCount = queuedMessageCount;

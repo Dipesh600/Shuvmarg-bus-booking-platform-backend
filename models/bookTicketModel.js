@@ -3,6 +3,7 @@ const boardingSelectionSchema = require("./bookingBoardingSelectionSchema.js");
 
 const passengerSchema = new mongoose.Schema({
   name:     { type: String, required: true, trim: true },
+  phone:    { type: String, default: null, trim: true },
   age:      { type: Number, default: 0, min: 0, max: 120 },
   gender:   { type: String, enum: ["male", "female", "other"], default: "other" },
   idType:   { type: String, enum: ["citizenship", "passport", "driving_license", "voter_id"], default: null },

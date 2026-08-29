@@ -47,7 +47,7 @@ test('agent application status characterization', async (t) => {
   t.after(async () => db.disconnect());
   t.beforeEach(async () => db.clearAll());
 
-  await t.test('route keeps middleware order without requireApprovedAgent', async () => {
+  await t.test('route keeps middleware order without requireVerifiedAgent', async () => {
     const routeFile = fs.readFileSync('routes/agentRoute/agentRoute.js', 'utf8');
     assert.match(routeFile, /router\.get\("\/application\/status", auth, verifyRoleFromDB, agentMiddleware, agentApplicationStatus\.getApplicationStatus\)/);
     assert.equal((await request(app).get('/api/agent/application/status')).status, 401);
@@ -55,7 +55,7 @@ test('agent application status characterization', async (t) => {
     const wrongRole = await getStatus(tokenFor(passenger, 'passenger'));
     assert.equal(wrongRole.status, 403);
     assert.equal(wrongRole.body.errorCode, 'INSUFFICIENT_ROLE');
-    assert.equal(routeFile.includes('"/application/status", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent'), false);
+    assert.equal(routeFile.includes('"/application/status", auth, verifyRoleFromDB, agentMiddleware, requireVerifiedAgent'), false);
   });
 
   await t.test('no application response is exact and uses request user name', async () => {

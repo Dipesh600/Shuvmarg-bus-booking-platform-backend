@@ -48,7 +48,7 @@ test('agent self-service dashboard characterization', async (t) => {
 
   await t.test('route keeps the complete middleware order', () => {
     const routeFile = fs.readFileSync('routes/agentRoute/agentRoute.js', 'utf8');
-    assert.match(routeFile, /router\.get\("\/dashboard", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent, agentDashboard\.getDashboard\)/);
+    assert.match(routeFile, /router\.get\("\/dashboard", auth, verifyRoleFromDB, agentMiddleware, requireVerifiedAgent, agentDashboard\.getDashboard\)/);
   });
 
   await t.test('authentication, role and approval middleware protect the route', async () => {

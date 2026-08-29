@@ -48,11 +48,11 @@ test('agent password reset completion characterization', async (t) => {
     assert.deepEqual(res.body, { success: false, message: 'Verification code must be 6 digits.' });
     res = await request(app).post('/api/auth/agent/resetPassword').send({ phone: phone(3), otp: '123456', newPassword: 'NewPass123!' });
     assert.equal(res.status, 400);
-    assert.deepEqual(res.body, { success: false, message: 'Invalid OTP or phone number.' });
+    assert.deepEqual(res.body, { success: false, message: 'Invalid or expired verification code.' });
     await user(phone(4), { role: 'passenger', roles: ['passenger'] });
     res = await request(app).post('/api/auth/agent/resetPassword').send({ phone: phone(4), otp: '123456', newPassword: 'NewPass123!' });
     assert.equal(res.status, 400);
-    assert.deepEqual(res.body, { success: false, message: 'Invalid OTP or phone number.' });
+    assert.deepEqual(res.body, { success: false, message: 'Invalid or expired verification code.' });
   });
 
   await t.test('OTP consume, password validation, save, revoke and tokenVersion order are preserved', async () => {
@@ -71,10 +71,17 @@ test('agent password reset completion characterization', async (t) => {
         .post('/api/auth/agent/resetPassword')
         .send({ phone: p, otp: 'a123456', newPassword: 'NewPass123!' });
       assert.equal(res.status, 200);
-      assert.deepEqual(res.body, { success: true, message: 'Password reset successful. You can now sign in.' });
+      assert.equal(res.body.success, true);
+      assert.equal(res.body.message, 'Password updated. You are now signed in.');
+      assert.equal(res.body.activeRole, 'agent');
+      assert.equal(typeof res.body.accessToken, 'string');
+      assert.equal(res.body.user.phone, p);
+      assert.match(res.headers['set-cookie'][0], /^agentRefreshToken=/);
       const fresh = await User.findById(u._id).select('+password');
       assert.equal(await bcrypt.compare('NewPass123!', fresh.password), true);
       assert.equal(fresh.isVerified, true);
+      assert.equal(fresh.phoneVerified, true);
+      assert.equal(fresh.status, 'active');
       assert.equal(fresh.failedLoginAttempts, 0);
       assert.equal(fresh.lockedUntil, null);
       assert.equal(fresh.forcePasswordChange, false);
@@ -83,7 +90,7 @@ test('agent password reset completion characterization', async (t) => {
     } finally { restores.reverse().forEach((fn) => fn()); }
   });
 
-  await t.test('weak password fails after OTP consumption and before persistence', async () => {
+  await t.test('weak password costs no OTP and performs no persistence', async () => {
     const p = phone(6);
     await user(p);
     const weakPassword = 'weak';
@@ -100,9 +107,8 @@ test('agent password reset completion characterization', async (t) => {
       }),
       patch(bcrypt, 'genSalt', async () => order.push('salt')),
       patch(bcrypt, 'hash', async () => order.push('hash')),
-      patch(User.prototype, 'save', async () => order.push('save')),
+      patch(User, 'findOneAndUpdate', async () => order.push('save')),
       patch(tokenService, 'revokeAllUserTokens', async () => order.push('revoke')),
-      patch(User, 'findByIdAndUpdate', async () => order.push('increment')),
     ];
     try {
       const res = await request(app)
@@ -113,7 +119,7 @@ test('agent password reset completion characterization', async (t) => {
         success: false,
         message: expected.errors?.[0] || expected.message,
       });
-      assert.deepEqual(order, ['otp']);
+      assert.deepEqual(order, []);
     } finally { restores.reverse().forEach((fn) => fn()); }
   });
 
@@ -123,7 +129,7 @@ test('agent password reset completion characterization', async (t) => {
     try {
       let res = await request(app).post('/api/auth/agent/resetPassword').send({ phone: phone(6), otp: '123456', newPassword: 'NewPass123!' });
       assert.equal(res.status, 400);
-      assert.deepEqual(res.body, { success: false, message: 'bad otp' });
+      assert.deepEqual(res.body, { success: false, message: 'Invalid or expired verification code.' });
     } finally { restore(); }
     restore = patch(otpHelper, 'verifyOTPCode', async () => { throw new Error('boom'); });
     try {

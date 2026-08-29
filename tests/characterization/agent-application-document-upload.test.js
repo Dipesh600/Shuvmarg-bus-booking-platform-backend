@@ -38,14 +38,14 @@ test('agent application document upload: route, auth, status gate', async (t) =>
         });
     };
 
-    await t.test('route keeps middleware order without requireApprovedAgent', async () => {
+    await t.test('route keeps middleware order without requireVerifiedAgent', async () => {
         const routeFile = fs.readFileSync('routes/agentRoute/agentRoute.js', 'utf8');
         assert.match(
             routeFile,
             /router\.post\("\/application\/document", auth, verifyRoleFromDB, agentMiddleware, agentApplicationDocumentUpload\.uploadDocument\)/,
         );
         assert.equal(
-            routeFile.includes('"/application/document", auth, verifyRoleFromDB, agentMiddleware, requireApprovedAgent'),
+            routeFile.includes('"/application/document", auth, verifyRoleFromDB, agentMiddleware, requireVerifiedAgent'),
             false,
         );
     });

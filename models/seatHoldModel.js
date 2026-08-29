@@ -14,6 +14,18 @@ const seatHoldSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    agentAssignmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AgentAssignment",
+      default: null,
+      select: false,
+    },
+    authorizedBrandId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "OperatorBrand",
+      default: null,
+      select: false,
+    },
     seatNumbers: {
       type: [String],
       required: true,

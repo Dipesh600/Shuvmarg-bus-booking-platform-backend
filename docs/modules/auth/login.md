@@ -80,7 +80,13 @@ Characterization tests cover validation, failed-attempt tracking, lockout, accou
 
 ## Known limitations or inconsistencies
 
-`X-App-Source` is lowercased in the controller, but `VALID_APP_SOURCES` contains `busOwner` with uppercase `O`; the current code therefore falls back to the primary role for `busOwner` input instead of matching that source. This is documented in `src/modules/auth/login/login.policy.js` and characterized in `tests/characterization/auth-login-roles.test.js`.
+None outstanding for role selection. `X-App-Source` was previously matched against a
+case-sensitive list holding `busOwner`, while the controller lowercases the header —
+so `busOwner` never matched and the role gate fell open, returning a passenger session
+with 200 to a caller who did not hold the role. `APP_SOURCE_ROLES` in
+`src/modules/auth/login/login.policy.js` is now keyed on the lowercased form, and
+`tests/characterization/auth-login-roles.test.js` pins the 403 `ROLE_NOT_REGISTERED`
+response along with unknown-value fallback.
 
 ## Safe extension guidance
 

@@ -8,6 +8,7 @@
  */
 
 const mongoose = require("mongoose");
+const SeatHold = require("../models/seatHoldModel");
 
 const extractDatabaseName = (urlStr) => {
   try {

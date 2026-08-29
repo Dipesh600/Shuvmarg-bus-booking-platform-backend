@@ -15,7 +15,7 @@ test('agent dashboard service', async (t) => {
     });
   });
 
-  await t.test('missing and non-approved agents preserve defensive 403 response', async () => {
+  await t.test('missing and uncleared agents preserve defensive 403 response', async () => {
     const original = repository.findDashboardAgent;
     const seen = [];
     repository.findDashboardAgent = async (id) => {
@@ -27,11 +27,27 @@ test('agent dashboard service', async (t) => {
       const pending = await service.getDashboard({ userId: 'u2' });
       const body = {
         success: false,
-        message: 'Dashboard available after application approval.',
+        message: 'Dashboard available once your verification is complete.',
       };
       assert.deepEqual(missing, { statusCode: 403, body });
       assert.deepEqual(pending, { statusCode: 403, body });
       assert.deepEqual(seen, ['u1', 'u2']);
+    } finally {
+      repository.findDashboardAgent = original;
+    }
+  });
+
+  await t.test('an operator agent at VERIFIED_BASIC is not refused here', async () => {
+    // The handler's defensive check used to be a second copy of
+    // `applicationStatus === "APPROVED"`, so fixing only the route gate would have
+    // let these agents through the door and refused them at the desk.
+    const original = repository.findDashboardAgent;
+    repository.findDashboardAgent = async () => ({
+      scope: 'OPERATOR', applicationStatus: 'VERIFIED_BASIC', agentType: 'OPERATOR_LINKED',
+    });
+    try {
+      const result = await service.getDashboard({ userId: 'u1' });
+      assert.equal(result.statusCode, 200);
     } finally {
       repository.findDashboardAgent = original;
     }
