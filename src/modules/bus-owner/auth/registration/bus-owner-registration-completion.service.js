@@ -79,7 +79,7 @@ const convertLead = ({ savedUser, phone }) => {
 const register = async (input) => {
   validateBasics(input);
   await assertRecentOtp(input.phone);
-  const { exists, hasRole, user } = await phoneGuard.checkPhoneForRole(input.phone, 'busOwner');
+  const { exists, hasRole, user } = await phoneGuard.checkPhoneForRole(input.phone, 'busOwner', { includeDeleted: true });
   if (exists && hasRole) throw errors.roleAlreadyRegisteredError();
   const isUpgrade = Boolean(exists && user);
   await registrationProof.consume(input.verificationToken, input.phone, policy.BUS_OWNER_PURPOSE);

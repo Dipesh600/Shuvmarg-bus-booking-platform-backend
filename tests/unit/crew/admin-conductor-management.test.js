@@ -113,14 +113,14 @@ test("restoring a suspended invitation returns to INVITED, never assumed ACTIVE"
 
 test("admin staff routes retain authentication and invitation rate limiting", () => {
   const source = fs.readFileSync(path.join(__dirname, "../../../routes/adminRoutes/adminRoutes.js"), "utf8");
-  assert.match(source, /router\.post\("\/conductors", adminMiddleware, require\("\.\.\/\.\.\/middleware\/adminCrewInviteRateLimit"\), conductorController\.createConductor\)/);
+  assert.match(source, /router\.post\("\/conductors", adminMiddleware, requireAccountAdministration, require\("\.\.\/\.\.\/middleware\/adminCrewInviteRateLimit"\), conductorController\.createConductor\)/);
   assert.match(source, /router\.get\("\/brands\/:brandId\/conductors", adminMiddleware, conductorController\.getConductorsByBrand\)/);
   assert.match(source, /router\.patch\("\/conductors\/:id\/status", adminMiddleware, conductorController\.updateConductorStatus\)/);
 });
 
 test("admin-created conductor metadata is represented in the profile schema and assignment service", () => {
   const model = fs.readFileSync(path.join(__dirname, "../../../models/conductorProfileModel.js"), "utf8");
-  const service = fs.readFileSync(path.join(__dirname, "../../../src/modules/bus-owner/crew/crew-assignment.service.js"), "utf8");
+  const service = fs.readFileSync(path.join(__dirname, "../../../src/modules/bus-owner/crew/crew-profile-persistence.service.js"), "utf8");
   assert.match(model, /createdBy:[\s\S]*enum: \["ADMIN", "OPERATOR"\]/);
   assert.match(model, /adminCreatedBy:[\s\S]*ref: "SuperAdmin"/);
   assert.match(service, /source === "ADMIN" \? \{ adminCreatedBy: adminId \}/);

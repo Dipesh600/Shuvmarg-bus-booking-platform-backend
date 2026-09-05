@@ -114,7 +114,7 @@ const convertLead = async ({ savedUser, phone, name }) => {
 const register = async ({ phone, name, password, email, verificationToken, deviceInfo, ipAddress }) => {
   validateBasics({ phone, name, verificationToken });
   await assertRecentOtp(phone);
-  const { exists, hasRole, user: existingUser } = await phoneGuard.checkPhoneForRole(phone, 'agent');
+  const { exists, hasRole, user: existingUser } = await phoneGuard.checkPhoneForRole(phone, 'agent', { includeDeleted: true });
   if (exists && hasRole) {
     const agentDoc = await repository.findAgentIdByUser(existingUser._id);
     if (agentDoc) throw errors.existingAgentError();

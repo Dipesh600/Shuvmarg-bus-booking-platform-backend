@@ -1,6 +1,6 @@
 # Backend security changes — 5 September 2026
 
-These changes are local and have not been deployed. One phone continues to identify one User. Its explicit roles array controls membership; profiles and operator assignments control what that person can do. An empty roles array represents revoked access and does not fall back to the legacy role field.
+These changes are being integrated through a feature branch into dev and have not been promoted to staging. One phone continues to identify one User. Its explicit roles array controls membership; profiles and operator assignments control what that person can do. An empty roles array represents revoked access and does not fall back to the legacy role field.
 
 ## Implemented controls
 
@@ -51,7 +51,7 @@ The security cases cover:
 
 The final combined run passed all 775 tests with zero failures, skips or cancellations. It also covers existing registration, authentication, cancellation, booking confirmation, document upload and administrator route contracts. The installed dependency audit reported zero vulnerabilities (qs 6.16.0, busboy 1.6.0).
 
-The working-tree file-size check still reports 11 pre-existing violations in account activation, trip, crew/driver and OTP files. They are separate from these security changes. No new size violations were introduced. The diff whitespace check passes.
+The release integration clears all 11 file-size violations by extracting activation/profile persistence, schema fields and test fixtures without increasing the baseline. The file-size and whitespace checks pass. Registration completion now includes deleted identities in its lookup so a restricted account cannot be mistaken for a new signup; regression cases also assert that no duplicate identity is created. The full repository test suite is being rerun before the dev merge.
 
 ## Remaining release work
 
@@ -66,3 +66,7 @@ SEC-22 through SEC-25 remain open. Local tests are not production evidence.
 7. Review account-role preflight results, resolve CI blockers, coordinate the PIN request contract with clients, deploy to staging, and record the deployed revision plus negative smoke tests before production.
 
 Self-service registration still has separate identity/profile writes. Single-use proofs prevent replay, but a profile/storage failure can require fresh verification and support repair; the transaction change in SEC-18 covers administrator conversion and operator invitations specifically. Full registration recovery and provider failure testing belongs in SEC-24.
+
+## Staging compatibility gate — 6 September 2026
+
+The passenger Flutter checkout sends `walletPin` for wallet-only confirmation, but `verifyTransactionStatus` omits it for eSewa split payments. Update and test that flow before staging promotion, including cancelled/incorrect PIN entry and provider-success reconciliation. The owner, admin, agent web and partner Flutter changes have been merged into dev; this does not validate deployed infrastructure or provider behavior.

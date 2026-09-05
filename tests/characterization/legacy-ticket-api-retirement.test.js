@@ -95,7 +95,7 @@ test('Legacy Ticket API Retirement', async (t) => {
   await t.test('getMyTicketHistory handler identity', () => {
     const h = handles(find('/getMyTicketHistory', 'get'));
     assert.equal(h[0], auth);
-    assert.equal(h[1], passengerBookingHistory.getPassengerBookingHistory);
+    assert.deepEqual(h, [auth, verifyRoleFromDB, passengerBookingHistory.getPassengerBookingHistory]);
   });
 
   await t.test('cancelTicket and cancelEstimate handler identities', () => {

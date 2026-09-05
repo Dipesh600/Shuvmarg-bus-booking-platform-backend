@@ -60,6 +60,7 @@ for (const role of ['agent', 'busOwner']) {
       await assert.rejects(() => (role === 'agent' ? agent : owner).register(request));
       assert.equal((await User.findById(user._id)).roles.includes(role), false);
       assert.equal(await Agent.countDocuments({ user: user._id }), 0);
+      assert.equal(await User.countDocuments({ phone: user.phone }), 1);
     });
   }
   test(`${role} grant rechecks restrictions at the final database write`, async () => {

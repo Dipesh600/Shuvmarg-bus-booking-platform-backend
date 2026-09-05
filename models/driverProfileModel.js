@@ -1,18 +1,9 @@
 const mongoose = require("mongoose");
 const { crewAccessFields } = require("../src/shared/crew/crew-access-state");
 
-/**
- * DRIVER PROFILE MODEL
- *
- * Drivers are first-class entities in the Shuvmarg platform.
- * A DriverProfile belongs to an OperatorBrand and is approved by an admin.
- *
- * Separation from User model:
- *   - A driver may or may not have a passenger app account (userId is optional)
- *   - Driver-specific compliance (license, medical) lives here, not on User
- *   - Brand-scoped: driver can only be assigned to trips under their brand
- *
- * Chain: OperatorBrand → DriverProfile → Schedule (default) → Trip (instance)
+/** Brand-scoped driver compliance and operational state.
+ * User supplies optional shared login identity. Approval and trip eligibility
+ * remain separate from the account's role membership.
  */
 const driverProfileSchema = new mongoose.Schema(
     {
@@ -135,23 +126,7 @@ const driverProfileSchema = new mongoose.Schema(
             index: true,
         },
 
-        // ─── COMPLIANCE DOCUMENTS (structured) ───────────────────────────────
-        // Mirrors the fleetDocuments structure for consistent admin review
-        documents: {
-            license: {
-                url:       { type: String, default: null },
-                validTill: { type: Date,   default: null },
-            },
-            medical: {
-                url:       { type: String, default: null },
-                validTill: { type: Date,   default: null },
-            },
-            // Police clearance certificate — required for some intercity routes
-            policeReport: {
-                url:       { type: String, default: null },
-                validTill: { type: Date,   default: null },
-            },
-        },
+        ...require("./schemas/driver-compliance-fields"),
 
         // ─── APPROVAL WORKFLOW ────────────────────────────────────────────────
         approvalStatus: {

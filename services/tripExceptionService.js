@@ -1,18 +1,4 @@
-/**
- * tripExceptionService.js
- *
- * Trip-level exception management — the GTFS calendar_dates pattern.
- *
- * These operations affect INDIVIDUAL TRIPS on SPECIFIC DATES without
- * touching the master Schedule document. The master schedule continues
- * generating future trips normally.
- *
- * Edge cases covered:
- *   1. cancelTrip          — single trip cancelled (breakdown, emergency)
- *   2. rescheduleTrip      — single trip time-shifted (road work, delay)
- *   3. cancelDateRange     — bulk cancel trips in a window (maintenance, holiday)
- *   4. createExtraRun      — one-off trip on a date not in the regular schedule
- */
+/** Trip-specific cancellations, rescheduling and extra runs without changing the master schedule. */
 
 const Trip     = require("../models/tripModel");
 const Booking  = require("../models/bookTicketModel");

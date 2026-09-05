@@ -1,63 +1,11 @@
-/**
- * controllers/authControllers.js/activateAccountController.js
- *
- * Account activation for invited agents, conductors, and drivers.
- *
- * Flow:
- *   1. A genuinely new staff account is stored as invited.
- *   2. Staff verifies their phone with an activation OTP.
- *   3. Staff creates a password.
- *   4. User and linked role-access records become active atomically.
- *   5. Full access token + refresh token are issued.
- *
- * This is essentially the same as changeForcePassword but with OTP required.
- * Separated for clarity — this is the dedicated "invited user activation" flow.
- */
+/** Activate an invited account after OTP verification and password setup. */
 
-const User = require("../../models/userModel.js");
-const DriverProfile = require("../../models/driverProfileModel.js");
-const ConductorProfile = require("../../models/conductorProfileModel.js");
-const mongoose = require("mongoose");
+const { activateInvitedUser } = require("../../src/modules/auth/account-activation/account-activation-persistence.service");
 const bcrypt = require("bcryptjs");
 const { createAndSendOTP, verifyOTPCode } = require("../../utils/otpHelper.js");
 const { validatePassword } = require("../../utils/passwordValidator.js");
 const { generateTokenPair, revokeAllUserTokens } = require("../../utils/tokenService.js");
-const { buildPhoneQuery } = require("../../utils/phoneGuard.js");
-const {
-    requestedActivationRole,
-    activationEligibility,
-} = require("../../src/modules/auth/account-activation/account-activation.policy.js");
-
-const sendEligibilityFailure = (res, eligibility) => res
-    .status(eligibility.statusCode)
-    .json({
-        success: false,
-        message: eligibility.message,
-        errorCode: eligibility.errorCode,
-        activationState: eligibility.state,
-    });
-
-const activationContext = async (req) => {
-    const role = requestedActivationRole(req.get("X-App-Source"));
-    if (!role) return { role, user: null, eligibility: activationEligibility(null, role) };
-    const user = await User.findOne(buildPhoneQuery(req.body.phone, { includeDeleted: true }))
-        .select("+password");
-    let hasPendingInvitation = true;
-    if (user?.status === "invited" && role === "driver") {
-        hasPendingInvitation = await DriverProfile.exists({
-            userId: user._id, accessStatus: "INVITED", removedAt: null,
-        });
-    } else if (user?.status === "invited" && role === "conductor") {
-        hasPendingInvitation = await ConductorProfile.exists({
-            userId: user._id, accessStatus: "INVITED", removedAt: null,
-        });
-    }
-    return {
-        role,
-        user,
-        eligibility: activationEligibility(user, role, { hasPendingInvitation: Boolean(hasPendingInvitation) }),
-    };
-};
+const { activationContext, sendEligibilityFailure } = require("../../src/modules/auth/account-activation/account-activation-context");
 
 /**
  * POST /api/auth/activate/sendOTP
@@ -142,35 +90,7 @@ const activateAccount = async (req, res) => {
         // Update the shared account and every invited crew-role record in one
         // transaction so the UI can never show a stale inferred state.
         const hashedPassword = await bcrypt.hash(newPassword, 12);
-        const activatedAt = new Date();
-        const session = await mongoose.startSession();
-        try {
-            await session.withTransaction(async () => {
-                const current = await User.findOne({ _id: user._id, status: "invited" })
-                    .select("+password").session(session);
-                if (!current) throw new Error("Activation state changed. Restart account setup.");
-                current.password = hashedPassword;
-                current.status = "active";
-                current.forcePasswordChange = false;
-                current.phoneVerified = true;
-                current.isVerified = true;
-                await current.save({ session });
-                const accessUpdate = {
-                    $set: { accessStatus: "ACTIVE", activatedAt,
-                        invitationDeliveryStatus: "NOT_REQUIRED",
-                        accessStatusBeforeSuspension: null },
-                };
-                await Promise.all([
-                    DriverProfile.updateMany({ userId: current._id, accessStatus: "INVITED", removedAt: null },
-                        accessUpdate, { session, runValidators: true }),
-                    ConductorProfile.updateMany({ userId: current._id, accessStatus: "INVITED", removedAt: null },
-                        accessUpdate, { session, runValidators: true }),
-                ]);
-                user = current;
-            });
-        } finally {
-            await session.endSession();
-        }
+        user = await activateInvitedUser({ userId: user._id, hashedPassword });
 
         // Revoke all prior sessions before issuing new credentials (FINDING-07)
         await revokeAllUserTokens(user._id);

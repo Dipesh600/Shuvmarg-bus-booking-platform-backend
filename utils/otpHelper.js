@@ -1,16 +1,4 @@
-/**
- * utils/otpHelper.js
- *
- * Centralized OTP generation and verification logic.
- * All auth flows must use these functions — never inline OTP logic.
- *
- * Security measures:
- *  - 6-digit OTP (900,000 combinations) via crypto.randomInt (CSPRNG)
- *  - Constant-time comparison via crypto.timingSafeEqual
- *  - Mandatory `purpose` field prevents cross-flow OTP reuse
- *  - `blockedUntil` prevents SMS bombing after sendCount is exhausted
- *  - Attempts are tracked; brute-force exhaustion triggers blockedUntil
- */
+/** Central OTP issuance/verification with purpose isolation, keyed hashes and shared attempt/send limits. */
 
 const OTP = require("../models/otpModel.js");
 const sendSMS = require("../handlers/sparro-otp.js");

@@ -88,8 +88,8 @@ const buildPhoneQuery = (phone, options = {}) => {
  *   user: Object|null,      // User doc (lean) if exists — includes name for UX
  * }>}
  */
-const checkPhoneForRole = async (phone, targetRole) => {
-    const query = buildPhoneQuery(phone);
+const checkPhoneForRole = async (phone, targetRole, options = {}) => {
+    const query = buildPhoneQuery(phone, options);
     const user = await User.findOne(query)
         .select("name role roles status phone")
         .lean();

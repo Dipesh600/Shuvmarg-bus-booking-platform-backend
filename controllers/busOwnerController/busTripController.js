@@ -1,5 +1,4 @@
 const tripService = require("../../services/tripService.js");
-
 // Trip Management for Bus Owner
 const createTrip = async (req, res) => {
     try {
