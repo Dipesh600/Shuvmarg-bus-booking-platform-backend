@@ -13,6 +13,7 @@ test("portal refresh cookies remain isolated with legacy migration fallback", ()
   assert.equal(COOKIE_NAMES.passenger, "passengerRefreshToken");
   assert.equal(COOKIE_NAMES.busOwner, "busOwnerRefreshToken");
   assert.equal(COOKIE_NAMES.agent, "agentRefreshToken");
+  assert.equal(COOKIE_NAMES.driver, "driverRefreshToken");
   assert.equal(readPortalRefreshToken({ cookies: {
     refreshToken: "legacy", busOwnerRefreshToken: "owner",
   }, body: {} }, "busOwner"), "owner");

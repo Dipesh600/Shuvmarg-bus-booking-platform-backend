@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const request = require('supertest');
 const { createAdminToken } = require('../helpers/admin-token');
 
-const db = require('../helpers/db');
+const db = require('../helpers/transaction-db');
 const app = require('../helpers/app');
 const User = require('../../models/userModel');
 const Agent = require('../../models/agentModel');
@@ -69,7 +69,7 @@ test('agent admin conversion characterization', async (t) => {
     assert.deepEqual(res.body, { success: false, message: 'User is already an agent!' });
   });
 
-  await t.test('empty roles fall back to role, preserve primary role and create missing Agent', async () => {
+  await t.test('explicitly empty roles stay revoked while an administrator adds only agent', async () => {
     const token = await adminToken();
     let user = await seedUser({ roles: ['passenger'], role: 'passenger' });
     await User.collection.updateOne({ _id: user._id }, { $set: { roles: [] } });
@@ -77,7 +77,7 @@ test('agent admin conversion characterization', async (t) => {
     const res = await convert(token, { id: user._id });
     assert.equal(res.status, 200);
     assert.equal(res.body.message, 'Agent role added to user successfully!');
-    assert.deepEqual(res.body.data.roles, ['passenger', 'agent']);
+    assert.deepEqual(res.body.data.roles, ['agent']);
     const updated = await User.findById(user._id).lean();
     assert.equal(updated.role, 'passenger');
     assert.ok(updated.roles.includes('agent'));

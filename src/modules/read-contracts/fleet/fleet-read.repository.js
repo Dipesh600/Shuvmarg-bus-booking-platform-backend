@@ -93,8 +93,7 @@ function createFleetReadRepository({ FleetModel = Fleet,
     return mapAdminFleetDetail(fleet, routeSetup, seatLayout);
   }
   async function findOwnerPaginatedFleets({ userId, page, limit, skip }) { const ownerIds = await resolveOwnerObjectIds(userId);
-    const filter = { $or: [{ ownerId: { $in: ownerIds } }, { busOwnerId: { $in: ownerIds } }],
-    };
+    const filter = { $or: [{ ownerId: { $in: ownerIds } }, { busOwnerId: { $in: ownerIds } }] };
     const [rawFleets, totalItems] = await Promise.all([
       FleetModel.find(filter)
         .select("+fleetImages.objectKey +fleetImages.mimeType +fleetDocuments.fitnessCert.objectKey +fleetDocuments.fitnessCert.mimeType +fleetDocuments.insurance.objectKey +fleetDocuments.insurance.mimeType +fleetDocuments.bluebook.objectKey +fleetDocuments.bluebook.mimeType +fleetDocuments.routePermit.objectKey +fleetDocuments.routePermit.mimeType")
@@ -128,11 +127,24 @@ function createFleetReadRepository({ FleetModel = Fleet,
     const seatLayout = await loadSeatLayout(fleetId);
     return mapBusOwnerFleetDetail(fleet, routeSetup, seatLayout);
   }
+  async function ownerOwnsFleet({ fleetId, userId }) {
+    const ownerIds = await resolveOwnerObjectIds(userId);
+    const fleet = await FleetModel.findOne({
+      _id: fleetId,
+      $or: [
+        { ownerId: { $in: ownerIds } },
+        { busOwnerId: { $in: ownerIds } },
+      ],
+    })
+      .select("_id")
+      .lean();
+    return Boolean(fleet);
+  }
   return { findAdminPaginatedFleets,
     findAdminFleetDetailById,
     findOwnerPaginatedFleets,
     findOwnerFleetDetailById,
+    ownerOwnsFleet,
   };
 }
-module.exports = { createFleetReadRepository,
-};
+module.exports = { createFleetReadRepository };

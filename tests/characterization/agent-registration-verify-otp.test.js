@@ -26,7 +26,6 @@ const seed = (p, fields = {}) => User.create({
   phone: p,
   password: bcrypt.hashSync('AgentPass123!', 10),
   role: 'passenger',
-  roles: [],
   status: 'active',
   ...fields,
 });
@@ -109,8 +108,7 @@ test('Agent registration verifyOTP characterization', async (t) => {
       phone: p,
       password: bcrypt.hashSync('AgentPass123!', 10),
       role: 'busOwner',
-      roles: [],
-      status: 'active',
+          status: 'active',
     });
     const restoreOtp = patch(otpHelper, 'verifyOTPCode', async () => ({ valid: true }));
     const restoreLead = patch(PartnerLead, 'findOneAndUpdate', () => ({

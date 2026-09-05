@@ -5,6 +5,9 @@ process.env.VERIFICATION_TOKEN_SECRET ||= 'test-only-verification-secret!!';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const registrationProof = require('../../../src/shared/auth/registration-proof');
+test.beforeEach(() => test.mock.method(registrationProof, 'consume', async () => {}));
+test.afterEach(() => test.mock.restoreAll());
 const crypto = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const phoneGuard = require('../../../utils/phoneGuard');

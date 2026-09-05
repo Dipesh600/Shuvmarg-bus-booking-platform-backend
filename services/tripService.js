@@ -13,23 +13,13 @@ const logger           = require("../utils/logger.js");
 const { tripSeatLayoutDualWriteService } = require("../src/modules/seat-layout-v3-persistence");
 const { buildCompatibilitySeatsFromV3 } = require("./tripSeatCompatibilityService.js");
 
-// Industry-standard lifecycle: scheduled → boarding → in_transit → completed
-// cancelled can only be set from scheduled or boarding (never mid-transit)
-const VALID_TRANSITIONS = {
-    scheduled:  ["boarding", "cancelled"],
-    boarding:   ["in_transit", "cancelled"],
-    "in_transit": ["completed"],
-    completed:  [],   // terminal state
-    cancelled:  [],   // terminal state
-};
+const { assertDriverEligible, assertAssignableTrip } = require("../src/shared/crew/driver-eligibility.policy");
+const { normalizeTripStatus, canTransition } = require("../src/shared/crew/trip-status.policy");
+const AppError = require("../src/shared/errors/app-error");
 
 const validateStatusTransition = (currentStatus, newStatus) => {
-    const allowed = VALID_TRANSITIONS[currentStatus] || [];
-    if (!allowed.includes(newStatus)) {
-        throw new Error(
-            `Invalid status transition: "${currentStatus}" → "${newStatus}". ` +
-            `Allowed next states: [${allowed.join(", ") || "none — terminal state"}]`
-        );
+    if (!canTransition(currentStatus, newStatus)) {
+        throw new AppError(`Invalid status transition: "${currentStatus}" → "${newStatus}".`, 400);
     }
 };
 
@@ -220,66 +210,37 @@ const getTripDetails = async (tripId, ownerId = null) => {
 // ---------------------------------------------------------------------------
 // updateTripDetails — enforces state machine when status changes
 // ---------------------------------------------------------------------------
-const updateTripDetails = async (tripId, updateData, ownerId = null) => {
+const updateTripDetails = async (tripId, updateData, ownerId = null, adminId = null) => {
     const query = { _id: tripId };
     if (ownerId) query.ownerId = ownerId;
-
-    // Fetch current trip to validate any status transition
-    if (updateData.status) {
-        const current = await Trip.findOne(query).select("status driverId").lean();
-        if (!current) throw new Error("Trip not found or unauthorized.");
-
-        // Enforce the state machine — throws if transition is invalid
-        validateStatusTransition(current.status, updateData.status);
-
-        // ── DRIVER GATE ──────────────────────────────────────────────────────
-        // A trip cannot move to 'boarding' without an APPROVED DriverProfile.
-        // We actively query the DriverProfile to prevent a suspended/rejected
-        // driver from boarding a bus — a truthy field check alone is not enough.
-        if (updateData.status === "boarding") {
-            const assignedDriverId = current.driverId || updateData.driverId;
-            if (!assignedDriverId) {
-                throw new Error(
-                    "Cannot move trip to BOARDING: no driver is assigned. " +
-                    "Assign an approved driver first via PATCH /trips/:id/assign-driver."
-                );
-            }
-            const dp = await DriverProfile.findById(assignedDriverId)
-                .select("approvalStatus status fullName licenseExpiry")
-                .lean();
-            if (!dp) {
-                throw new Error(
-                    "Cannot move trip to BOARDING: assigned driver record not found. Re-assign a valid driver."
-                );
-            }
-            if (dp.approvalStatus !== "APPROVED") {
-                throw new Error(
-                    `Cannot move trip to BOARDING: driver "${dp.fullName}" is not APPROVED ` +
-                    `(current: ${dp.approvalStatus}). Admin must approve the driver first.`
-                );
-            }
-            if (dp.status === "SUSPENDED") {
-                throw new Error(
-                    `Cannot move trip to BOARDING: driver "${dp.fullName}" is SUSPENDED.`
-                );
-            }
-            if (dp.licenseExpiry && new Date(dp.licenseExpiry) < new Date()) {
-                throw new Error(
-                    `Cannot move trip to BOARDING: driver "${dp.fullName}" has an expired license. ` +
-                    `Update the license document before operating.`
-                );
-            }
-        }
-
-        logger.info("tripService: status transition", {
-            tripId,
-            from: current.status,
-            to:   updateData.status,
-        });
+    // Only documented editable fields are accepted, never Mongo update operators,
+    // ownership, brand or audit fields supplied by a client.
+    const allowed = ["tripDate", "departureTime", "arrivalTime", "shift", "tripFare",
+        "recurrence", "daysOfWeek", "autoGenerateUntil", "isActive", "status", "driverId"];
+    const updates = Object.fromEntries(Object.entries(updateData).filter(([key]) => allowed.includes(key)));
+    const current = await Trip.findOne(query).select("status driverId brandId tripDate").lean();
+    if (!current) throw new AppError("Trip not found or unauthorized.", 404);
+    if (updates.status !== undefined) {
+        updates.status = normalizeTripStatus(updates.status);
+        validateStatusTransition(current.status, updates.status);
     }
-
-    const trip = await Trip.findOneAndUpdate(query, updateData, { new: true });
-    if (!trip) throw new Error("Trip not found or unauthorized.");
+    if (updates.driverId !== undefined) assertAssignableTrip(current);
+    const startsOperating = ["boarding", "in-transit"].includes(updates.status);
+    const changesDriver = updates.driverId !== undefined;
+    if (changesDriver && !adminId) throw new AppError("Admin identity is required for driver assignment.", 403);
+    if (startsOperating || changesDriver || (updates.tripDate !== undefined && current.driverId)) {
+        const assignedDriverId = changesDriver ? updates.driverId : current.driverId;
+        const driver = assignedDriverId ? await DriverProfile.findById(assignedDriverId).lean() : null;
+        assertDriverEligible(driver, { brandId: current.brandId, at: updates.tripDate || current.tripDate });
+    }
+    // Do not overwrite a lifecycle or assignment change made since our checks.
+    const trip = await Trip.findOneAndUpdate(
+        { ...query, status: current.status, driverId: current.driverId || null },
+        { $set: updates, ...(changesDriver ? { $push: { driverAssignmentLog: {
+            driverId: updates.driverId, assignedBy: adminId, assignedAt: new Date(), reason: "Admin trip update",
+        } } } : {}) }, { new: true, runValidators: true }
+    );
+    if (!trip) throw new AppError("Trip changed. Refresh and retry.", 409);
     return trip;
 };
 
@@ -294,7 +255,7 @@ const removeTrip = async (tripId, ownerId = null) => {
     const trip = await Trip.findOne(query).lean();
     if (!trip) throw new Error("Trip not found or unauthorized.");
 
-    if (["in_transit", "completed"].includes(trip.status)) {
+    if (["in-transit", "completed"].includes(normalizeTripStatus(trip.status))) {
         throw new Error(`Cannot delete a trip with status "${trip.status}". Cancel it first.`);
     }
 
@@ -313,56 +274,20 @@ const removeTrip = async (tripId, ownerId = null) => {
 // assignDriver — assign an APPROVED DriverProfile to a trip
 // Enforces brand-scoping, approval status, and license validity.
 // ---------------------------------------------------------------------------
-const assignDriver = async (tripId, driverId) => {
-    const trip = await Trip.findById(tripId).select("status brandId").lean();
-    if (!trip) throw new Error("Trip not found.");
-
-    if (["completed", "cancelled"].includes(trip.status)) {
-        throw new Error(`Cannot assign a driver to a ${trip.status} trip.`);
-    }
-
-    // Validate against DriverProfile (NOT User) — drivers are brand-scoped entities
-    const driver = await DriverProfile.findById(driverId)
-        .select("fullName phone approvalStatus status brandId licenseExpiry")
-        .lean();
-    if (!driver) throw new Error("Driver profile not found.");
-
-    // Gate 1: Driver must be APPROVED
-    if (driver.approvalStatus !== "APPROVED") {
-        throw new Error(
-            `Driver "${driver.fullName}" is not APPROVED ` +
-            `(status: ${driver.approvalStatus}). Admin must approve the driver first.`
-        );
-    }
-
-    // Gate 2: Driver must not be SUSPENDED
-    if (driver.status === "SUSPENDED") {
-        throw new Error(`Driver "${driver.fullName}" is SUSPENDED and cannot be assigned.`);
-    }
-
-    // Gate 3: Brand-scope check — driver must belong to the same brand as the trip
-    if (driver.brandId?.toString() !== trip.brandId?.toString()) {
-        throw new Error(
-            `Driver "${driver.fullName}" does not belong to this trip's brand. ` +
-            `Drivers are brand-scoped and cannot be cross-assigned.`
-        );
-    }
-
-    // Gate 4: License must not be expired
-    if (driver.licenseExpiry && new Date(driver.licenseExpiry) < new Date()) {
-        throw new Error(
-            `Driver "${driver.fullName}" has an expired license. ` +
-            `Update the license document before assigning to a trip.`
-        );
-    }
-
-    const updated = await Trip.findByIdAndUpdate(
-        tripId,
-        { driverId },
-        { new: true }
+const assignDriver = async (tripId, driverId, adminId) => {
+    if (!adminId) throw new AppError("Admin identity is required for driver assignment.", 403);
+    const trip = await Trip.findById(tripId).select("status brandId tripDate").lean();
+    assertAssignableTrip(trip);
+    const driver = driverId ? await DriverProfile.findById(driverId).lean() : null;
+    assertDriverEligible(driver, { brandId: trip.brandId, at: trip.tripDate });
+    const updated = await Trip.findOneAndUpdate(
+        { _id: tripId, status: trip.status }, { $set: { driverId }, $push: { driverAssignmentLog: {
+            driverId, assignedBy: adminId, assignedAt: new Date(), reason: "Admin driver assignment",
+        } } },
+        { new: true, runValidators: true }
     ).populate("driverId", "fullName phone licenseType status");
-
-    logger.info("tripService: driver assigned", { tripId, driverId, driverName: driver.fullName });
+    if (!updated) throw new AppError("Trip changed. Refresh and retry.", 409);
+    logger.info("tripService: driver assigned", { tripId, driverId });
     return updated;
 };
 

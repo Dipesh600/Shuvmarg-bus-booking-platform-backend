@@ -6,7 +6,7 @@ const policy = require('../../../src/modules/agent/auth/login/agent-login.policy
 
 test('agent-login policy preserves pure legacy decisions', () => {
   assert.deepEqual(policy.resolveRoles({ roles: ['agent'], role: 'passenger' }), ['agent']);
-  assert.deepEqual(policy.resolveRoles({ roles: [], role: 'agent' }), ['agent']);
+  assert.deepEqual(policy.resolveRoles({ role: 'agent' }), ['agent']);
   assert.equal(policy.hasActiveLock({ lockedUntil: new Date(2000) }, new Date(3000)), false);
   assert.equal(policy.hasActiveLock({ lockedUntil: new Date(4000) }, new Date(3000)), true);
   assert.equal(policy.hasActiveLock({ lockedUntil: new Date(3000) }, new Date(3000)), false);

@@ -1,4 +1,5 @@
 'use strict';
+const registrationProof = require('../../../../shared/auth/registration-proof');
 
 const phoneGuard = require('../../../../../utils/phoneGuard');
 const tokenService = require('../../../../../utils/tokenService');
@@ -8,6 +9,7 @@ const leadRepository = require('./bus-owner-registration-lead.repository');
 const policy = require('./bus-owner-registration.policy');
 const errors = require('./bus-owner-registration.errors');
 const { persistUpgrade } = require('./bus-owner-registration-upgrade');
+const { requireRoleGrantResult } = require('../../../../shared/auth/role-grant-state');
 
 const validateBasics = ({ phone, name, companyName, verificationToken: token }) => {
   const missing = policy.missingRegistrationField({ phone, name, companyName });
@@ -80,10 +82,12 @@ const register = async (input) => {
   const { exists, hasRole, user } = await phoneGuard.checkPhoneForRole(input.phone, 'busOwner');
   if (exists && hasRole) throw errors.roleAlreadyRegisteredError();
   const isUpgrade = Boolean(exists && user);
+  await registrationProof.consume(input.verificationToken, input.phone, policy.BUS_OWNER_PURPOSE);
   const now = new Date();
   const savedUser = isUpgrade
     ? await persistUpgrade(user, input.password, now)
     : await persistNewUser({ ...input, now });
+  requireRoleGrantResult(savedUser);
   await ensureBusOwnerProfile({ userId: savedUser._id, companyName: input.companyName });
   const { accessToken, refreshToken } = await tokenService.generateTokenPair(savedUser, {
     deviceInfo: input.deviceInfo,

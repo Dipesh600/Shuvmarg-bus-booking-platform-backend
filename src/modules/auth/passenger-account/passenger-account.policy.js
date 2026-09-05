@@ -1,4 +1,5 @@
 'use strict';
+const { getEffectiveRoles } = require('../../../shared/auth/account-role.policy');
 
 /**
  * src/modules/auth/passenger-account/passenger-account.policy.js
@@ -47,7 +48,7 @@ const isAccountRestricted = (user) => {
 
 /**
  * Return true when the user already holds the passenger role.
- * Uses the effective-role rule: roles[] when non-empty, else [role].
+ * Uses the effective-role rule: roles[] when present, else legacy [role].
  *
  * An existing passenger must not have its activation timestamp rewritten.
  *
@@ -55,12 +56,7 @@ const isAccountRestricted = (user) => {
  * @returns {boolean}
  */
 const passengerRoleAlreadyGranted = (user) => {
-  if (!user) return false;
-  const rolesArr = user.roles;
-  if (Array.isArray(rolesArr) && rolesArr.length > 0) {
-    return rolesArr.includes('passenger');
-  }
-  return user.role === 'passenger';
+  return getEffectiveRoles(user).includes('passenger');
 };
 
 /**

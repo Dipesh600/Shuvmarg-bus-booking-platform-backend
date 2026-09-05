@@ -28,8 +28,8 @@ test('account-role policy — getEffectiveRoles', async (t) => {
     assert.deepEqual(result, ['agent', 'passenger']);
   });
 
-  await t.test('falls back to [role] when roles[] is empty', () => {
-    const result = policy.getEffectiveRoles({ roles: [], role: 'agent' });
+  await t.test('falls back to [role] when roles is missing', () => {
+    const result = policy.getEffectiveRoles({ role: 'agent' });
     assert.deepEqual(result, ['agent']);
   });
 
@@ -86,10 +86,10 @@ test('account-role policy — hasPrivilegedRole', async (t) => {
     assert.equal(policy.hasPrivilegedRole({ roles: ['agent'] }), true);
   });
 
-  // Critical: validator runs BEFORE pre-save hook — roles[] may be empty on a
+  // Critical: validator runs BEFORE pre-save hook — roles may be missing on a
   // legacy or newly constructed document; must fall back to role field.
-  await t.test('role:agent with empty roles[] still returns true (pre-save not yet run)', () => {
-    assert.equal(policy.hasPrivilegedRole({ role: 'agent', roles: [] }), true);
+  await t.test('role:agent with missing roles still returns true (pre-save not yet run)', () => {
+    assert.equal(policy.hasPrivilegedRole({ role: 'agent' }), true);
   });
 
   await t.test('no roles, no role — false', () => {
@@ -131,4 +131,13 @@ test('account-role policy — PRIVILEGED_ROLES is frozen', () => {
   assert.ok(policy.PRIVILEGED_ROLES.includes('conductor'));
   assert.ok(policy.PRIVILEGED_ROLES.includes('driver'));
   assert.ok(!policy.PRIVILEGED_ROLES.includes('passenger'));
+});
+
+
+test('explicitly empty or malformed role state never restores historical access', () => {
+  for (const roles of [[], null, 'agent', {}, ['passenger', 'unsupported']]) {
+    assert.deepEqual(policy.getEffectiveRoles({ role: 'agent', roles }), []);
+    assert.equal(policy.hasPrivilegedRole({ role: 'agent', roles }), false);
+  }
+  assert.deepEqual(policy.getEffectiveRoles({ role: 'agent', roles: ['passenger'] }), ['passenger']);
 });

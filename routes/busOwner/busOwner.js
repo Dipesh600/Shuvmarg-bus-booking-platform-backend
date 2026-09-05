@@ -4,6 +4,7 @@ const auth = require("../../middleware/authMiddleware.js");
 const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const { busOwnerMiddleware } = require("../../middleware/checkRole.js");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner.js");
+const { rejectOversizedDriverUpload, driverUploadRateLimiter, parseDriverLicenseUpload } = require("../../middleware/driverLicenseUpload");
 const {
   rejectOversizedKycRequest,
   kycSubmissionRateLimiter,
@@ -15,6 +16,7 @@ const fleetManagement = require("../../src/modules/bus-owner/fleet-management");
 const boardingPointManagement = require("../../src/modules/bus-owner/boarding-point-management");
 const boardingLocationAssignment = require("../../src/modules/bus-owner/boarding-location-assignment");
 const amenityManagement = require("../../src/modules/bus-owner/amenity-management");
+const operatorRouteConfig = require("../../src/modules/bus-owner/operator-route-configuration");
 const busOwnerRouteCon = require("../../controllers/busOwnerController/busOwnerRouteController.js");
 const tripCon = require("../../controllers/busOwnerController/busTripController.js");
 const settlementCon = require("../../controllers/busOwnerController/settlementController.js");
@@ -92,6 +94,14 @@ router.post("/boarding-assignments", boardingLocationAssignment.createAssignment
 router.patch("/boarding-assignments/:id", boardingLocationAssignment.updateAssignment);
 router.post("/boarding-location-requests", boardingLocationAssignment.requestLocation);
 
+router.get("/operator-config/variants", operatorRouteConfig.getAvailableVariants);
+router.get("/operator-config/:brandId", operatorRouteConfig.getOperatorConfigs);
+router.get("/operator-config/:brandId/variant/:variantId/stops", operatorRouteConfig.getVariantStopsWithConfig);
+router.get("/operator-config/:brandId/variant/:variantId/return-stops", operatorRouteConfig.getReturnVariantStops);
+router.get("/operator-config/:brandId/variant/:variantId/patterns", operatorRouteConfig.listPatternsForVariant);
+router.post("/operator-config", operatorRouteConfig.upsertOperatorConfig);
+router.patch("/operator-config/:configId", operatorRouteConfig.updateConfig);
+
 // Amenities
 router.post("/createAmenity", amenityManagement.createAmenity);
 router.get("/amenities/available", amenityManagement.getAvailableAmenities);
@@ -127,10 +137,15 @@ router.delete("/deleteFareRule", fareRuleCon.deleteFareRule);
 
 // Staff Assignment (Conductors & Drivers)
 const staffCon = require("../../controllers/busOwnerController/staffAssignmentController.js");
-router.post("/assignConductor",   staffCon.assignConductor);
-router.post("/assignDriver",      staffCon.assignDriver);
+const crewInviteRateLimit = require("../../middleware/busOwnerCrewInviteRateLimit");
+router.post("/assignConductor",   crewInviteRateLimit, staffCon.assignConductor);
+router.post("/assignDriver",      crewInviteRateLimit, driverUploadRateLimiter, rejectOversizedDriverUpload, parseDriverLicenseUpload, staffCon.assignDriver);
 router.delete("/removeConductor", staffCon.removeConductor);
 router.delete("/removeDriver",    staffCon.removeDriver);
+router.get("/crew", staffCon.listCrew);
+router.patch("/crew/:role/:profileId/status", staffCon.updateCrewStatus);
+router.put("/conductors/:profileId/trips/:tripId", staffCon.assignConductorTrip);
+router.delete("/conductors/:profileId/trips/:tripId", staffCon.removeConductorTrip);
 
 // Ticket Agents — identity creation, code lookup and brand assignment.
 // Registered here, below requireApprovedBusOwner (line 73), so every agent route

@@ -38,6 +38,29 @@ const PREFIX_MAP = {
   BUSOWNER_PASSWORD_RESET:"Your Shuv Marg Operator Password Reset code is",
   AGENT_REGISTRATION:     "Your Shuv Marg Agent Verification code is",
   AGENT_PASSWORD_RESET:   "Your Shuv Marg Agent Password Reset code is",
+  DRIVER_PASSWORD_RESET:  "Your Shuv Marg Driver Password Reset code is",
+};
+
+const otpSnapshot = (record) => record ? {
+  otp: record.otp,
+  otpExpiry: record.otpExpiry,
+  isUsed: record.isUsed,
+  attempts: record.attempts,
+  maxAttempts: record.maxAttempts,
+  sendCount: record.sendCount,
+  blockedUntil: record.blockedUntil,
+  lastSentAt: record.lastSentAt,
+} : null;
+
+const rollbackFailedDelivery = async ({ existing, previous, phone, purpose, hashedOtp }) => {
+  if (existing?._id && previous) {
+    await OTP.findOneAndUpdate(
+      { _id: existing._id, otp: hashedOtp },
+      { $set: previous },
+    );
+    return;
+  }
+  await OTP.deleteOne({ phone, purpose, otp: hashedOtp });
 };
 
 /**
@@ -51,11 +74,13 @@ const PREFIX_MAP = {
  * @param {string} phone
  * @param {string} purpose
  * @param {string|null} [customPrefix] - Override SMS prefix
+ * @param {Function} [send=sendSMS] - Injectable only for deterministic tests.
  * @returns {Promise<{ success: boolean, expiresIn: string }>}
  */
-const createAndSendOTP = async (phone, purpose, customPrefix = null) => {
+const createAndSendOTP = async (phone, purpose, customPrefix = null, send = sendSMS) => {
   // ── Check 1: Hard block (send-count exhausted) ─────────────────────────────
   const existing = await OTP.findOne({ phone, purpose });
+  const previous = otpSnapshot(existing);
   if (existing && existing.isBlocked()) {
     const unblockAt = new Date(existing.blockedUntil);
     const minutesLeft = Math.ceil((unblockAt - Date.now()) / 60000);
@@ -113,7 +138,21 @@ const createAndSendOTP = async (phone, purpose, customPrefix = null) => {
   const prefix = customPrefix || PREFIX_MAP[purpose] || "Your Shuv Marg code is";
   const message = `${prefix}: ${otpCode}. Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code.`;
 
-  await sendSMS(phone, message);
+  try {
+    await send(phone, message);
+  } catch (deliveryError) {
+    // The OTP is reserved before contacting the provider so a queued SMS can
+    // never contain a code that is absent from the database. If queueing fails,
+    // restore the prior OTP state (or delete a first-time reservation) with a
+    // compare-and-swap filter. A failed provider call must not consume a resend,
+    // create a cooldown, or leave an undelivered code valid.
+    try {
+      await rollbackFailedDelivery({ existing, previous, phone, purpose, hashedOtp });
+    } catch (rollbackError) {
+      console.error('[OTP rollback] Failed after SMS delivery error:', rollbackError.message);
+    }
+    throw deliveryError;
+  }
 
   return {
     success: true,

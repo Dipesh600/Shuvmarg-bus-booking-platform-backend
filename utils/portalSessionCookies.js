@@ -4,6 +4,7 @@ const COOKIE_NAMES = Object.freeze({
   passenger: "passengerRefreshToken",
   busOwner: "busOwnerRefreshToken",
   agent: "agentRefreshToken",
+  driver: "driverRefreshToken",
 });
 
 function cookieOptions(includeMaxAge = false) {

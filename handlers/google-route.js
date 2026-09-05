@@ -39,37 +39,7 @@ function decodePolyline(encoded) {
   return coordinates;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function geocodeAddress(lat, lng) {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
-  const { data } = await axios.get(url);
-  const first = data?.results?.[0];
-  return first ? first.formatted_address : null;
-}
-
-async function annotateAddresses(points, step) {
-  if (!Array.isArray(points) || points.length === 0) return points;
-  const n = points.length;
-  const safeStep = Math.max(1, Math.min(Number(step) || 20, 100));
-
-  const indices = new Set();
-  indices.add(0);
-  indices.add(n - 1);
-  for (let i = safeStep; i < n - 1; i += safeStep) indices.add(i);
-
-  for (const idx of Array.from(indices).sort((a, b) => a - b)) {
-    try {
-      const addr = await geocodeAddress(points[idx].lat, points[idx].lng);
-      points[idx] = { ...points[idx], address: addr };
-      await sleep(100);
-    } catch (_) {}
-  }
-  return points;
-}
+const { annotateAddresses } = require('../src/shared/maps/bounded-geocoding');
 
 async function buildAndStoreRoute({ origin, destination, name, addressStep = 1, createdBy }) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -87,6 +57,7 @@ async function buildAndStoreRoute({ origin, destination, name, addressStep = 1, 
   const url = "https://maps.googleapis.com/maps/api/directions/json";
   const { data } = await axios.get(url, {
     params: { origin, destination, mode: "driving", key: apiKey },
+    timeout: 8000, maxRedirects: 0, maxContentLength: 2 * 1024 * 1024,
   });
 
   if (data.status !== "OK" || !data.routes || data.routes.length === 0) {

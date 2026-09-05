@@ -34,6 +34,9 @@ const uploadDocument = async (req, res) => {
             data: result.data,
         });
     } catch (error) {
+        if (error.name === 'KycMalwareScanError') {
+            return res.status(error.statusCode || 503).json({ success: false, message: error.message, errorCode: error.code });
+        }
         if (error.message.includes('Invalid file type') || error.message.includes('File too large')) {
             return res.status(400).json({ success: false, message: error.message });
         }

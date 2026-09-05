@@ -12,8 +12,8 @@ const express      = require("express");
 const cors         = require("cors");
 const helmet       = require("helmet");
 const rateLimit    = require("express-rate-limit");
-const fileUpload   = require("express-fileupload");
-const mongoSanitize = require("express-mongo-sanitize");
+const defaultUploadParser = require("./middleware/boundedUpload");
+const rejectUnsafeInput = require("./middleware/rejectUnsafeInput");
 const cookieParser = require("cookie-parser");
 const fs           = require("fs");
 const path         = require("path");
@@ -32,6 +32,7 @@ const { setupReconciliationCron } = require("./services/reconcilePayments.js");
 const logsDir = path.join(__dirname, "logs");
 if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
 const app  = express();
+require("./src/shared/http/trust-proxy")(app);
 const PORT = process.env.PORT || 7012;
 
 // Never reveal the application framework, including on early middleware errors.
@@ -51,40 +52,9 @@ app.options("/{*splat}", cors(corsOptions));
 // ── Security Middlewares ──────────────────────────────────────────────────────
 app.use(helmet());
 app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
-// NoSQL Injection Protection — safe wrapper that avoids the
-// "Cannot set property query of #<IncomingMessage> which has only a getter"
-// error caused by express-mongo-sanitize trying to reassign req.query on
-// OPTIONS (CORS preflight) requests in Express 5 / standalone router.
-//
-// Strategy:
-//   1. Skip OPTIONS & HEAD requests entirely (they carry no body/query payload)
-//   2. Use mongoSanitize.sanitize() on body + params (writable)
-//   3. For query params: deep-clone, sanitize the clone, re-assign individual keys
-//      (avoids re-assigning req.query itself which is read-only)
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS" || req.method === "HEAD") return next();
-
-  try {
-    // Sanitize body and params in-place (both are writable plain objects)
-    if (req.body   && typeof req.body   === "object") req.body   = mongoSanitize.sanitize(req.body,   { replaceWith: "_" });
-    if (req.params && typeof req.params === "object") req.params = mongoSanitize.sanitize(req.params, { replaceWith: "_" });
-
-    // For query: sanitize a copy then patch individual keys (req.query is a getter)
-    if (req.query && typeof req.query === "object") {
-      const sanitizedQuery = mongoSanitize.sanitize({ ...req.query }, { replaceWith: "_" });
-      Object.keys(sanitizedQuery).forEach((k) => {
-        try { req.query[k] = sanitizedQuery[k]; } catch (_) { /* read-only key — skip */ }
-      });
-    }
-  } catch (sanitizeErr) {
-    logger.warn("mongoSanitize middleware error (skipped)", { error: sanitizeErr.message, path: req.path });
-  }
-
-  next();
-});
-
 // ── Rate Limiting ─────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
+  store: require('./src/shared/http/mongo-rate-limit-store').createRateLimitStore('api'),
   windowMs: 15 * 60 * 1000,  // 15 minutes
   max: 200,
   message: { success: false, message: "Too many requests from this IP. Try again in 15 minutes." },
@@ -94,6 +64,7 @@ const apiLimiter = rateLimit({
 
 // Stricter limiter for public search (prevents DB flooding by bots)
 const searchLimiter = rateLimit({
+  store: require('./src/shared/http/mongo-rate-limit-store').createRateLimitStore('search'),
   windowMs: 1 * 60 * 1000,  // 1 minute
   max: 30,                   // 30 searches/min per IP
   message: { success: false, message: "Search rate limit exceeded. Please slow down." },
@@ -102,6 +73,7 @@ const searchLimiter = rateLimit({
 });
 
 const seatAvailabilityLimiter = rateLimit({
+  store: require('./src/shared/http/mongo-rate-limit-store').createRateLimitStore('seat-availability'),
   windowMs: 1 * 60 * 1000,
   max: 60,
   message: {
@@ -122,20 +94,21 @@ app.use("/api/ticket/getSeats", seatAvailabilityLimiter);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
-const defaultUploadParser = fileUpload({
-  limits: { fileSize: 20 * 1024 * 1024 },  // 20 MB max per file
-  abortOnLimit: true,
-});
+app.use(require("./middleware/authorizeUpload"));
 app.use((req, res, next) => {
   // KYC is parsed inside the authenticated bus-owner router with stricter
   // per-file, file-count, field-count, request-size and rate limits.
-  if ([
+  const driverUploadRoute = req.path === "/api/busowner/assignDriver"
+    || (req.method === "POST" && req.path === "/api/admin/drivers")
+    || (req.method === "PATCH" && /^\/api\/admin\/drivers\/[^/]+$/.test(req.path));
+  if (driverUploadRoute || [
     "/api/busowner/submitBusOwnerKyc",
     "/api/admin/busOwner/create",
     "/api/admin/busOwner/reuploadKycDocument",
   ].includes(req.path)) return next();
   return defaultUploadParser(req, res, next);
 });
+app.use(rejectUnsafeInput);
 // ── Structured HTTP Logging ───────────────────────────────────────────────────
 app.use(requestLogger);
 

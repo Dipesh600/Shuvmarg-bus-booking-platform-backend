@@ -5,6 +5,9 @@ process.env.VERIFICATION_TOKEN_SECRET ||= 'test-only-verification-secret!!';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const registrationProof = require('../../../src/shared/auth/registration-proof');
+test.beforeEach(() => test.mock.method(registrationProof, 'consume', async () => {}));
+test.afterEach(() => test.mock.restoreAll());
 const bcrypt = require('bcryptjs');
 const phoneGuard = require('../../../utils/phoneGuard');
 const otpHelper = require('../../../utils/otpHelper');
@@ -60,7 +63,7 @@ test('agent-registration service preserves orchestration', async (t) => {
       order.push(`verify:${p}:${otp}:${purpose}`); return { valid: true };
     }, restore);
     patch(phoneGuard, 'checkPhoneForRole', async () => ({
-      exists: true, hasRole: false, user: user({ roles: [], role: 'busOwner' }),
+      exists: true, hasRole: false, user: user({ roles: ['busOwner'], role: 'busOwner' }),
     }), restore);
     patch(leadRepository, 'upsertOtpVerifiedLead', (p) => {
       order.push(`lead:${p}`); return { catch: () => {} };

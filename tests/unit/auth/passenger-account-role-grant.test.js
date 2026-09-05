@@ -96,9 +96,9 @@ test('passenger-account — Case C: existing passenger returned without modifica
     } finally { restores.reverse().forEach((fn) => fn()); }
   });
 
-  await t.test('legacy passenger (role:passenger, empty roles[]) returned without re-timestamping', async () => {
+  await t.test('legacy passenger (role:passenger, missing roles) returned without re-timestamping', async () => {
     const restores = [];
-    const legacy = { _id: 'legacy-uid', role: 'passenger', roles: [], roleActivatedAt: {}, status: 'active', deletedAt: null };
+    const legacy = { _id: 'legacy-uid', role: 'passenger', roleActivatedAt: {}, status: 'active', deletedAt: null };
     let grantCalled = false;
     patch(repository, 'findIdentityByPhone', async () => legacy, restores);
     patch(repository, 'addPassengerRoleIfMissing', async () => { grantCalled = true; }, restores);

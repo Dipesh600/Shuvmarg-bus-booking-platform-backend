@@ -40,7 +40,7 @@ const enforceSessionRestrictions = (user) => {
 };
 
 /**
- * Load session state and repair legacy passenger role if roles[] is empty
+ * Load session state and repair legacy passenger role if roles is missing
  * but effective roles include 'passenger' via the historical `role` field.
  * Reloads state after any repair to ensure the token carries current roles[].
  */
@@ -53,7 +53,7 @@ const loadRepaired = async (userId) => {
     throw errors.unexpectedPassengerStateError('passenger role missing from resolved account');
   }
 
-  // Repair: legacy account has role:'passenger' but roles:[] — add via $addToSet
+  // Repair: legacy account has role:'passenger' but roles is missing — add via $addToSet
   if (!Array.isArray(state.user.roles) || !state.user.roles.includes('passenger')) {
     await repository.materializeLegacyPassengerRole(userId);
     state = await repository.loadPassengerSessionState(userId);

@@ -27,15 +27,17 @@ test("bus-owner operations own the retired controller surface", () => {
     "src/modules/bus-owner/boarding-point-management",
     "src/modules/bus-owner/boarding-location-assignment",
     "src/modules/bus-owner/amenity-management",
+    "src/modules/bus-owner/operator-route-configuration",
   ]) {
     assert.match(router, new RegExp(modulePath));
   }
   const exportsByModule = [
     ["kyc-submission", 2],
-    ["fleet-management", 6],
+    ["fleet-management", 7],
     ["boarding-point-management", 5],
     ["boarding-location-assignment", 7],
     ["amenity-management", 6],
+    ["operator-route-configuration", 8],
   ];
   for (const [name, count] of exportsByModule) {
     const moduleExports = require(

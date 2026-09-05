@@ -86,7 +86,7 @@ test("upsert derives return direction and marks the first pattern default", asyn
     ],
   });
   assert.deepEqual(query, {
-    brandId: "b1", variantId: "v1", patternName: "Express",
+    brandId: "b1", variantId: "v1", fleetId: null, patternName: "Express",
   });
   assert.equal(update.isDefault, true);
   assert.deepEqual(update.returnActiveStops, ["s2", "s1"]);
@@ -104,6 +104,7 @@ test("explicit return timing remains operator-owned", async (t) => {
     ...activeForwardVariant(),
   }));
   patch(t, RouteStop, "countDocuments", async () => 2);
+  patch(t, RouteStop, "find", () => leanQuery([]));
   patch(t, Config, "countDocuments", async () => 1);
   patch(t, Config, "findOneAndUpdate", async (_query, data) => {
     update = data;
@@ -111,6 +112,7 @@ test("explicit return timing remains operator-owned", async (t) => {
   });
   await service.upsertOperatorConfig("b1", {
     variantId: "v1",
+    status: "DRAFT",
     returnActiveStops: ["r1"],
     returnBoardingConfig: [{ stopId: "r1" }],
     returnTimingConfig: [{ stopId: "r1", estimatedDeparture: "09:00 AM" }],

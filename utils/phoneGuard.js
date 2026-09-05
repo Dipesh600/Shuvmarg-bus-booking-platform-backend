@@ -1,3 +1,4 @@
+const { getEffectiveRoles } = require('../src/shared/auth/account-role.policy');
 /**
  * utils/phoneGuard.js
  *
@@ -95,7 +96,7 @@ const checkPhoneForRole = async (phone, targetRole) => {
 
     if (!user) return { exists: false, hasRole: false, user: null };
 
-    const roles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+    const roles = getEffectiveRoles(user);
 
     return {
         exists: true,

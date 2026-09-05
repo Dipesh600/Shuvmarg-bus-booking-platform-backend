@@ -1,7 +1,10 @@
 "use strict";
+const { assertDriverEligible } = require("../../../shared/crew/driver-eligibility.policy");
+const { normalizeTripStatus } = require("../../../shared/crew/trip-status.policy");
 
 const createTripStatusService = ({
   Trip,
+  DriverProfile,
   transitionPolicy,
   cancellationService,
   referralService,
@@ -16,11 +19,17 @@ const createTripStatusService = ({
   }) => {
     const trip = await Trip.findOne({ _id: tripId, busId: fleetId });
     if (!trip) return { statusCode: 404, message: "Trip not found." };
+    trip.$where = { status: trip.status, driverId: trip.driverId || null };
+    status = normalizeTripStatus(status);
     if (!transitionPolicy.canTransition(trip.status, status)) {
       return {
         statusCode: 400,
         message: `Invalid transition from ${trip.status} to ${status}`,
       };
+    }
+    if (["boarding", "in-transit"].includes(status)) {
+      const driver = trip.driverId ? await DriverProfile.findById(trip.driverId) : null;
+      assertDriverEligible(driver, { brandId: trip.brandId, at: trip.tripDate, now: clock() });
     }
     if (status === "in-transit") {
       trip.actualDepartureTime = clock();

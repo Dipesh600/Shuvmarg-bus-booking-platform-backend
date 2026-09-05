@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { crewAccessFields } = require("../src/shared/crew/crew-access-state");
 
 /**
  * DRIVER PROFILE MODEL
@@ -36,6 +37,7 @@ const driverProfileSchema = new mongoose.Schema(
             default: null,
             sparse: true,
         },
+        ...crewAccessFields(),
 
         // ─── IDENTITY ────────────────────────────────────────────────────────
         fullName: {
@@ -181,11 +183,26 @@ const driverProfileSchema = new mongoose.Schema(
             default: null,
         },
 
+        removedAt: { type: Date, default: null },
+        reviewHistory: [{
+            from: { type: String, enum: ["PENDING", "APPROVED", "REJECTED"] },
+            to: { type: String, enum: ["PENDING", "APPROVED", "REJECTED"] },
+            actorId: { type: mongoose.Schema.Types.ObjectId, ref: "SuperAdmin" },
+            at: { type: Date, default: Date.now },
+            reason: { type: String, default: null },
+        }],
+        removedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+
         // ─── AUDIT ────────────────────────────────────────────────────────────
         createdBy: {
             type: String,
             enum: ["ADMIN", "OPERATOR"],
             default: "ADMIN",
+        },
+        adminCreatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "SuperAdmin",
+            default: null,
         },
         notes: {
             type: String,
@@ -193,7 +210,7 @@ const driverProfileSchema = new mongoose.Schema(
             trim: true,
         },
     },
-    { timestamps: true }
+    { timestamps: true, optimisticConcurrency: true }
 );
 
 // ─── INDEXES ──────────────────────────────────────────────────────────────────
@@ -201,6 +218,7 @@ const driverProfileSchema = new mongoose.Schema(
 driverProfileSchema.index({ brandId: 1, approvalStatus: 1 });
 // Owner view: all drivers across all brands
 driverProfileSchema.index({ ownerId: 1, status: 1 });
+driverProfileSchema.index({ ownerId: 1, accessStatus: 1 });
 // Schedule dropdown: approved + available drivers for a brand
 driverProfileSchema.index({ brandId: 1, approvalStatus: 1, status: 1 });
 // Compliance expiry monitoring (platform-wide)

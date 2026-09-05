@@ -31,9 +31,11 @@ function registerBusOwnerApprovedFleetRoutes(router, options = {}) {
   // Approval-required fleet submission endpoints
   const submitHandler = fleetCtrl.submitFleetForVerification || fleetCtrl.createFleet;
   if (approvedMiddleware) {
+    router.get("/fleets/:fleetId/setup-status", approvedMiddleware, fleetCtrl.getFleetSetupStatus);
     router.post("/fleets/:fleetId/submit", approvedMiddleware, submitHandler);
     router.post("/submitFleetForVerification", approvedMiddleware, submitHandler);
   } else {
+    router.get("/fleets/:fleetId/setup-status", fleetCtrl.getFleetSetupStatus);
     router.post("/fleets/:fleetId/submit", submitHandler);
     router.post("/submitFleetForVerification", submitHandler);
   }

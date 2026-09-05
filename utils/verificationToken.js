@@ -24,11 +24,8 @@
  *   register (Step 3) validates the token before the OTP-record lookup.
  *   Without the token, or with a token for a different phone/purpose, registration fails.
  *
- * Why not a blocklist / session store:
- *   - Stateless JWT avoids an extra DB collection and read per request.
- *   - The existing OTP record (isUsed:true, 30-min window) acts as belt-and-suspenders.
- *   - The nonce prevents replay within the validity window: even if an attacker
- *     intercepts the token, they have the same 30-minute window the victim already has.
+ * Completion reserves each signed proof in ConsumedRegistrationProof before
+ * writes. A nonce makes tokens unique; the database prevents replay.
  *
  * Env variable:
  *   VERIFICATION_TOKEN_SECRET — required. The server refuses to boot without it.
@@ -106,7 +103,10 @@ const validateVerificationToken = (token, expectedPhone, expectedPurpose) => {
         return { valid: false, error: "Invalid verification token for this registration type." };
     }
 
-    return { valid: true };
+    if (!Number.isInteger(decoded.exp) || typeof decoded.nonce !== "string" || !decoded.nonce) {
+        return { valid: false, error: "Invalid verification token. Please verify your phone again." };
+    }
+    return { valid: true, expiresAt: decoded.exp };
 };
 
 module.exports = { issueVerificationToken, validateVerificationToken };

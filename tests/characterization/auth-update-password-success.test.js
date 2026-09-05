@@ -60,7 +60,7 @@ test('Auth: updatePassword success contract', async (t) => {
     assert.equal(await bcrypt.compare(oldPassword, stored.password), false);
     assert.equal(stored.failedLoginAttempts, 0);
     assert.equal(stored.lockedUntil, null);
-    assert.equal(stored.tokenVersion, 5);
+    assert.equal(stored.tokenVersion, 6);
     assert.equal(await RefreshToken.countDocuments({ userId: u._id }), 0);
   });
 });

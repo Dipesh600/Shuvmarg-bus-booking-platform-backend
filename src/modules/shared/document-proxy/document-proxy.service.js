@@ -13,6 +13,7 @@
 const policy  = require('./document-proxy.policy.js');
 const storage = require('./document-proxy.storage.js');
 const errors  = require('./document-proxy.errors.js');
+const authorization = require('./document-proxy.authorization.js');
 
 /**
  * Validate and normalise the raw key, check the prefix allowlist, then fetch
@@ -28,7 +29,7 @@ const errors  = require('./document-proxy.errors.js');
  *   resolvedKey?: string,
  * }>}
  */
-async function resolveDocument(rawKey) {
+async function resolveDocument(rawKey, context) {
     // ── 1. Validate the key parameter ────────────────────────────────────────
     if (!rawKey || typeof rawKey !== 'string') {
         return {
@@ -39,24 +40,13 @@ async function resolveDocument(rawKey) {
         };
     }
 
-    console.log('[documentProxy] raw key received:', JSON.stringify(rawKey.substring(0, 120)));
-
     // ── 2. Normalise legacy full-URL keys ─────────────────────────────────
-    const { resolvedKey, wasUrl, parseFailed } = policy.normaliseKey(rawKey);
-
-    if (wasUrl && !parseFailed) {
-        console.log('[documentProxy] legacy URL → resolved key:', resolvedKey.substring(0, 80));
-    }
-    if (parseFailed) {
-        console.warn('[documentProxy] Could not parse URL key:', rawKey.substring(0, 80));
-    }
+    const { resolvedKey } = policy.normaliseKey(rawKey);
 
     // ── 3. Prefix allowlist check ─────────────────────────────────────────
     const isAllowed = policy.isKeyAllowed(resolvedKey);
-    console.log('[documentProxy] resolvedKey:', resolvedKey.substring(0, 80), '| allowed:', isAllowed);
 
     if (!isAllowed) {
-        console.warn('[documentProxy] BLOCKED — resolvedKey does not match any prefix:', resolvedKey.substring(0, 100));
         return {
             ok: false,
             errorCode: errors.BLOCKED_PREFIX,
@@ -64,9 +54,13 @@ async function resolveDocument(rawKey) {
             body: {
                 success: false,
                 message: 'Access denied: key path is not permitted.',
-                debug_key_start: resolvedKey.substring(0, 80),
             },
         };
+    }
+
+    if (!await authorization.canReadDocument(resolvedKey, context)) {
+        return { ok: false, status: 403, errorCode: 'DOCUMENT_PROXY_FORBIDDEN',
+            body: { success: false, message: 'Access denied: document is not available to this account.' } };
     }
 
     // ── 4. Fetch from S3 ──────────────────────────────────────────────────
@@ -77,9 +71,7 @@ async function resolveDocument(rawKey) {
         console.error('[documentProxy] S3 error:', {
             name:       error.name,
             code:       error.Code,
-            message:    error.message,
             statusCode: error.$metadata?.httpStatusCode,
-            resolvedKey: rawKey.substring(0, 100),
         });
 
         if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
@@ -90,12 +82,10 @@ async function resolveDocument(rawKey) {
                 body: {
                     success: false,
                     message: 'Document not found. It may have been deleted or the key is incorrect.',
-                    debug_key: rawKey.substring(0, 100),
                 },
             };
         }
 
-        console.error('[documentProxy] viewDocument error:', error);
         return {
             ok: false,
             errorCode: errors.UNEXPECTED,

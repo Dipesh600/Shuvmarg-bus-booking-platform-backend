@@ -18,6 +18,8 @@ const Trip     = require("../models/tripModel");
 const Booking  = require("../models/bookTicketModel");
 const Schedule = require("../models/scheduleModel");
 const logger   = require("../utils/logger");
+const DriverProfile = require("../models/driverProfileModel");
+const { resolveDefaultDriver } = require("../src/shared/crew/default-driver.service");
 
 // ─── 1. CANCEL SINGLE TRIP ────────────────────────────────────────────────────
 /**
@@ -259,13 +261,16 @@ const createExtraRun = async (scheduleId, { tripDate, departureTime, arrivalTime
 
     const tripIdStr = `EXTRA-${schedule.busId?.toString().slice(-4).toUpperCase()}-${new Date(tripDate).toISOString().split("T")[0].replace(/-/g, "")}`;
 
+    const eligibleDriverId = await resolveDefaultDriver({
+        driverId: schedule.driverId, brandId: schedule.brandId, tripDate,
+    }, { DriverProfile, logger });
     const trip = new Trip({
         tripId:        tripIdStr,
         busId:         schedule.busId,
         variantId:     schedule.variantId,
         ownerId:       schedule.ownerId,
         brandId:       schedule.brandId,
-        driverId:      schedule.driverId,
+        driverId:      eligibleDriverId,
         seatTemplateId: schedule.seatTemplateId,
         scheduleId:    schedule._id,
         tripDate:      new Date(tripDate),

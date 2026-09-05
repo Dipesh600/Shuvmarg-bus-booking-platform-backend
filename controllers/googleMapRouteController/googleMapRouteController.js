@@ -1,48 +1,11 @@
-const axios = require("axios");
 const Route = require("../../models/googleRouteModel.js");
 const { buildAndStoreRoute } = require("../../handlers/google-route.js");
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function annotateAddresses(points, step) {
-  if (!Array.isArray(points) || points.length === 0) return points;
-  const n = points.length;
-  const safeStep = Math.max(1, Math.min(Number(step) || 20, 100));
-
-  const indices = new Set();
-  // Always include first and last
-  indices.add(0);
-  indices.add(n - 1);
-  for (let i = safeStep; i < n - 1; i += safeStep) indices.add(i);
-
-  // Geocode sequentially to avoid hitting rate limits
-  for (const idx of Array.from(indices).sort((a, b) => a - b)) {
-    try {
-      const addr = await geocodeAddress(points[idx].lat, points[idx].lng);
-      points[idx] = { ...points[idx], address: addr };
-      // Small delay between calls (adjust as needed)
-      await sleep(100);
-    } catch (_) {
-      // continue on failure
-    }
-  }
-  return points;
-}
-
-// Reverse geocode lat/lng to formatted address
-async function geocodeAddress(lat, lng) {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
-  const { data } = await axios.get(url);
-  const first = data?.results?.[0];
-  return first ? first.formatted_address : null;
-}
+const { annotateAddresses } = require('../../src/shared/maps/bounded-geocoding');
 
 const storeKathmanduToBiratnagar = async (req, res, next) => {
   try {
-    const createdBy = req.userInfo?.id;
+    const createdBy = req.adminInfo?.id;
     const doc = await buildAndStoreRoute({
       origin: "Kathmandu, Nepal",
       destination: "Biratnagar, Nepal",
@@ -74,7 +37,7 @@ const storeRouteByPlaces = async (req, res, next) => {
     const destination = destinationBody || destinationQuery || "Biratnagar, Nepal";
     const name = nameBody || nameQuery || null;
 
-    const createdBy = req.userInfo?.id || req.user?._id || req.body?.userId || req.query?.userId || null;
+    const createdBy = req.adminInfo?.id || null;
 
     const doc = await buildAndStoreRoute({
       origin,
@@ -112,7 +75,7 @@ const decodeRouteAddresses = async (req, res) => {
 
     const name = req.query?.name;
     const step = req.body?.addressStep || req.query?.addressStep || 1; 
-    if (!name) {
+    if (typeof name !== 'string' || !name.trim() || name.length > 200) {
       return res.status(400).json({ status: false, message: "name is required (query)" });
     }
 

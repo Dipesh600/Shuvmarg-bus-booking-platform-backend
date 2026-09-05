@@ -11,7 +11,7 @@ test('bus-owner password-reset policy is deterministic', () => {
   assert.equal(policy.isSixDigitOtp('12-34 ab56'), true);
   assert.equal(policy.isSixDigitOtp('12345'), false);
   assert.deepEqual(policy.rolesFor({ roles: ['driver'], role: 'busOwner' }), ['driver']);
-  assert.deepEqual(policy.rolesFor({ roles: [], role: 'busOwner' }), ['busOwner']);
+  assert.deepEqual(policy.rolesFor({ role: 'busOwner' }), ['busOwner']);
   assert.equal(policy.hasBusOwnerRole({ roles: ['busOwner'] }), true);
   assert.equal(policy.hasBusOwnerRole({ roles: ['agent'], role: 'busOwner' }), false);
   assert.equal(policy.isSuspended({ status: 'banned' }), true);

@@ -1,6 +1,7 @@
 const User = require("../../../models/userModel.js");
 const BusOwner = require("../../../models/busOwnerModel.js");
 const fleetService = require("../../../src/modules/fleet-management");
+const fleetRouteSetup = require("../../../src/modules/bus-owner/fleet-route-setup/route-setup.service.js");
 
 // Create Fleet for Owner by Admin
 const createFleetForOwner = async (req, res) => {
@@ -83,6 +84,27 @@ const getFleetsByOwner = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Internal Server Error",
+        });
+    }
+};
+
+const saveFleetRouteSetup = async (req, res) => {
+    try {
+        const fleet = await fleetService.getFleetDetailsRaw(req.params.fleetId);
+        if (!fleet?.ownerId) {
+            return res.status(404).json({ success: false, message: "Fleet not found." });
+        }
+        const data = await fleetRouteSetup.saveRouteSetup(
+            String(fleet.ownerId?._id || fleet.ownerId),
+            req.params.fleetId,
+            req.body
+        );
+        return res.status(200).json({ success: true, message: "Fleet route setup saved.", data });
+    } catch (error) {
+        return res.status(error.statusCode || 400).json({
+            success: false,
+            message: error.message || "Unable to save fleet route setup.",
+            ...(error.code ? { errorCode: error.code } : {}),
         });
     }
 };
@@ -173,6 +195,7 @@ const deleteFleetByAdmin = async (req, res) => {
 
 module.exports = {
     createFleetForOwner,
+    saveFleetRouteSetup,
     getFleetsByOwner,
     getFleetById,
     updateFleetByAdmin,

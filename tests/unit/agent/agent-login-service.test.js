@@ -126,7 +126,7 @@ test('agent-login service preserves orchestration branches', async (t) => {
         'lookup',
         'compare',
         JSON.stringify({
-          payload: { id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'agent' },
+          payload: { id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'agent', credentialVersion: 0, tokenVersion: 0 },
           secret: process.env.SECRET_KEY,
           opts: { expiresIn: '15m' },
         }),

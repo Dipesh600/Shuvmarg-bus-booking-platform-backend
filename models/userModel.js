@@ -30,7 +30,7 @@ const userSchema = new mongoose.Schema({
     password: {
       type: String,
       // NOTE: validators run BEFORE pre-save hooks — resolve effective roles
-      // independently using roles[] when non-empty, else fall back to role.
+      // independently using the canonical role policy.
       required: [
         function requirePasswordForOperationalRoles() {
           return accountRolePolicy.hasPrivilegedRole(this);
@@ -63,9 +63,9 @@ const userSchema = new mongoose.Schema({
     roles: {
       type: [String],
       enum: ["passenger", "agent", "busOwner", "conductor", "driver"],
-      default: [],
+      default: undefined,
       validate: {
-        validator: (v) => v.length > 0,
+        validator: (v) => Array.isArray(v) && v.length > 0,
         message: "User must have at least one role",
       },
       index: true,
@@ -180,10 +180,9 @@ const userSchema = new mongoose.Schema({
   { timestamps: true }
 );
 
-// === PRE-SAVE HOOK: Normalize phone + sync roles ===
-// 1. Normalizes phone to consistent local format (strips +977, 977, leading 0)
-// 2. Guarantees `roles` always includes the primary `role`.
-// 3. Backfills roleActivatedAt for roles missing timestamps.
+require("./schemas/user-role-hooks")(userSchema);
+
+// Normalize phone to a consistent local format (strips +977, 977, leading 0).
 userSchema.pre("save", function (next) {
   // Phone normalization — single canonical form in the DB
   if (this.isModified("phone") && this.phone) {
@@ -194,24 +193,6 @@ userSchema.pre("save", function (next) {
     this.phone = p;
   }
 
-  if (this.role) {
-    if (!this.roles || this.roles.length === 0) {
-      this.roles = [this.role];
-    } else if (!this.roles.includes(this.role)) {
-      this.roles.push(this.role);
-    }
-  }
-
-  // Backfill roleActivatedAt for any roles without a timestamp
-  if (this.roles && this.roles.length > 0) {
-    const now = new Date();
-    for (const r of this.roles) {
-      if (!this.roleActivatedAt || !this.roleActivatedAt.get(r)) {
-        if (!this.roleActivatedAt) this.roleActivatedAt = new Map();
-        this.roleActivatedAt.set(r, now);
-      }
-    }
-  }
 
   next();
 });

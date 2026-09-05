@@ -1,0 +1,14 @@
+"use strict";
+const express = require('express');
+const auth = require('../../middleware/authMiddleware');
+const verify = require('../../middleware/verifyRoleFromDB');
+const { requireRole } = require('../../middleware/checkRole');
+const app = express();
+app.use(express.json());
+app.use('/notifications', require('../../routes/pushNotification/pushNotification'));
+app.use('/tickets', require('../../routes/ticketRoutes/ticketRoutes'));
+app.use('/reviews', require('../../routes/reviewRoutes/reviewRoutes'));
+app.use('/referrals', require('../../routes/referralRoutes/referralRoutes'));
+app.get('/owner', auth, verify, requireRole('busOwner'), (req, res) => res.json({ ok: true }));
+app.get('/passenger', auth, verify, requireRole('passenger'), (req, res) => res.json({ ok: true }));
+module.exports = app;

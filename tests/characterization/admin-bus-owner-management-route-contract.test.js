@@ -40,6 +40,7 @@ test("admin bus-owner management Express route contract", () => {
       path === "/busOwner/create" || path === "/busOwner/reuploadKycDocument"
         ? [
             adminMiddleware,
+            ...(path === "/busOwner/create" ? [require("../../middleware/requireAccountAdministration")] : []),
             rejectOversizedKycRequest,
             parseKycSubmissionUpload,
             handler,

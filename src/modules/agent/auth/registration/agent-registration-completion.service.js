@@ -1,4 +1,5 @@
 'use strict';
+const registrationProof = require('../../../../shared/auth/registration-proof');
 
 const bcrypt = require('bcryptjs');
 const phoneGuard = require('../../../../../utils/phoneGuard');
@@ -9,6 +10,7 @@ const repository = require('./agent-registration.repository');
 const leadRepository = require('./agent-registration-lead.repository');
 const policy = require('./agent-registration.policy');
 const errors = require('./agent-registration.errors');
+const { requireRoleGrantResult } = require('../../../../shared/auth/role-grant-state');
 
 const validateBasics = ({ phone, name, verificationToken: token }) => {
   if (!phone) throw errors.missingPhoneError('Phone is required.');
@@ -33,9 +35,14 @@ const validatePassword = (password, isUpgrade) => {
 };
 
 const persistUpgrade = async ({ user, password, now }) => {
+  if (await repository.hasUsablePassword(user._id)) {
+    return requireRoleGrantResult(await repository.upgradeUserToAgent(user._id, null, now));
+  }
   validatePassword(password, true);
   const hashedPassword = await bcrypt.hash(password, 12);
-  return repository.upgradeUserToAgent(user._id, hashedPassword, now);
+  const upgraded = await repository.upgradeUserToAgent(user._id, hashedPassword, now);
+  // A concurrent request may have established a password. Preserve it.
+  return requireRoleGrantResult(upgraded || await repository.upgradeUserToAgent(user._id, null, now));
 };
 
 const persistNewUser = async ({ phone, name, password, email, now }) => {
@@ -84,7 +91,7 @@ const buildResponse = ({ savedUser, accessToken, isUpgradePath }) => {
   return {
     success: true,
     message: isUpgradePath
-      ? 'Agent access added to your account. Your new password has been set.'
+      ? 'Agent access added to your account. Sign in with your account password.'
       : 'Account created successfully. Complete your setup to start using Shuv Marg.',
     user: userObj,
     accessToken,
@@ -114,6 +121,7 @@ const register = async ({ phone, name, password, email, verificationToken, devic
     console.warn(`[Agent register] Repairing orphaned agent role for user ${existingUser._id}`);
   }
   const isUpgradePath = Boolean(exists && existingUser);
+  await registrationProof.consume(verificationToken, phone, policy.AGENT_PURPOSE);
   const now = new Date();
   const savedUser = isUpgradePath
     ? await persistUpgrade({ user: existingUser, password, now })

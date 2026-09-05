@@ -64,7 +64,7 @@ const getTripById = async (req, res) => {
         });
     } catch (error) {
         console.error("getTripById error:", error);
-        const status = error.message.includes("found") ? 404 : 500;
+        const status = error.statusCode || (error.message.includes("found") ? 404 : 500);
         return res.status(status).json({
             success: false,
             message: error.message || "Internal Server Error",
@@ -90,7 +90,7 @@ const updateTripStatus = async (req, res) => {
         });
     } catch (error) {
         console.error("updateTripStatus error:", error);
-        const status = error.message.includes("found") ? 404 : 500;
+        const status = error.statusCode || (error.message.includes("found") ? 404 : 500);
         return res.status(status).json({
             success: false,
             message: error.message || "Internal Server Error",
@@ -120,7 +120,7 @@ const toggleTripStatus = async (req, res) => {
         });
     } catch (error) {
         console.error("toggleTripStatus error:", error);
-        const status = error.message.includes("found") ? 404 : 500;
+        const status = error.statusCode || (error.message.includes("found") ? 404 : 500);
         return res.status(status).json({
             success: false,
             message: error.message || "Internal Server Error",
@@ -145,7 +145,7 @@ const deleteTrip = async (req, res) => {
         });
     } catch (error) {
         console.error("deleteTrip error:", error);
-        const status = error.message.includes("found") ? 404 : 500;
+        const status = error.statusCode || (error.message.includes("found") ? 404 : 500);
         return res.status(status).json({
             success: false,
             message: error.message || "Internal Server Error",

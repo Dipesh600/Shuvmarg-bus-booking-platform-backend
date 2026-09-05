@@ -58,6 +58,9 @@ const mapRefreshError = (error) => {
   ) {
     return expiredOrInvalidRefreshTokenError(error);
   }
+  if (['ACCOUNT_INACTIVE', 'ACCOUNT_NOT_ACTIVATED', 'FORCE_PASSWORD_CHANGE', 'ACCOUNT_DEACTIVATED'].includes(error.message)) {
+    return require('../../../auth/session/session.errors').mapTokenError(error);
+  }
   if (error.message === 'ACCOUNT_BANNED') return bannedAccountError(error);
   if (error.message === 'ROLE_REVOKED') return revokedRoleError(error);
   if (error.message === 'SESSION_ROLE_MISMATCH') return wrongPortalSessionError(error);

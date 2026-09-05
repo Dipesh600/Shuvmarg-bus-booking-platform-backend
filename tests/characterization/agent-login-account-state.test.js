@@ -67,14 +67,13 @@ test('Agent login account-state characterization', async (t) => {
     assert.equal((await login(inactiveReason.phone)).body.message, 'Your account has been deactivated. Reason: docs');
   });
 
-  await t.test('agent role fallback works and roles array wins over legacy role', async () => {
+  await t.test('legacy role applies only when roles is absent; explicit arrays win', async () => {
     const fallbackPhone = `98132${String(++n).padStart(5, '0')}`;
     await User.collection.insertOne({
       name: 'Legacy Agent',
       phone: fallbackPhone,
       password: bcrypt.hashSync(password, 10),
       role: 'agent',
-      roles: [],
       status: 'active',
       deletedAt: null,
     });
