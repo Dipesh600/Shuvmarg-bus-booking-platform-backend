@@ -98,7 +98,9 @@ const runAuthentication = async ({ emailOrPhone, password, appSource, deviceInfo
 
   if (user.forcePasswordChange) {
     const tempToken = jwt.sign(
-      { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE', activeRole },
+      { id: user._id, purpose: 'FORCE_PASSWORD_CHANGE', activeRole,
+        credentialVersion: Number(user.temporaryCredentialVersion || 0),
+        tokenVersion: Number(user.tokenVersion || 0) },
       process.env.SECRET_KEY,
       { expiresIn: '15m' }
     );
@@ -116,9 +118,6 @@ const runAuthentication = async ({ emailOrPhone, password, appSource, deviceInfo
   const loginUpdate = {
     $set: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
   };
-  if (!user.roles || user.roles.length === 0) {
-    loginUpdate.$set.roles = [user.role];
-  }
   await loginRepository.recordSuccessfulLogin(user._id, loginUpdate);
 
   const { accessToken, refreshToken } = await generateTokenPair(user, {

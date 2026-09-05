@@ -21,6 +21,9 @@ services:
     # Never bake secrets into Compose or images.
     env_file:
       - .env
+    environment:
+      # Exactly one Caddy hop. Backend port is private and Caddy replaces XFF.
+      TRUSTED_PROXY_HOPS: "1"
 
     # Drop the ability to write to the root filesystem.
     # Winston log files: /app/logs tmpfs

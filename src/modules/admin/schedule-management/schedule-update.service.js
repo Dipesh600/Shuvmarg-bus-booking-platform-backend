@@ -2,6 +2,7 @@
 
 const Schedule = require("../../../../models/scheduleModel.js");
 const logger = require("../../../../utils/logger.js");
+const { assertScheduleDriverEligible } = require("./schedule-driver-gate.service");
 const {
   isValidTime,
   validateRecurrence,
@@ -50,6 +51,7 @@ const updateSchedule = async (scheduleId, data) => {
   if (data.recurrence || data.daysOfWeek) {
     validateRecurrence(schedule.recurrence, schedule.daysOfWeek);
   }
+  await assertScheduleDriverEligible(schedule);
   await schedule.save();
   logger.info("scheduleService: schedule updated", { scheduleId });
   return schedule;

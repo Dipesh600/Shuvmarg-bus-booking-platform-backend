@@ -24,7 +24,7 @@ test('agent-registration repository preserves exact query contracts', async () =
     }),
     patch(OTP, 'findOne', (filter) => { calls.push(['otp', filter]); return 'otp'; }),
     patch(User, 'findOne', (filter) => { calls.push(['email', filter]); return 'user'; }),
-    patch(User, 'findByIdAndUpdate', (...args) => { calls.push(['upgrade', ...args]); return 'up'; }),
+    patch(User, 'findOneAndUpdate', (...args) => { calls.push(['upgrade', ...args]); return 'up'; }),
     patch(Agent, 'findOneAndUpdate', (...args) => { calls.push(['agent-upsert', ...args]); return 'doc'; }),
     patch(PartnerLead, 'findOneAndUpdate', (...args) => { calls.push(['lead-upsert', ...args]); return 'lead'; }),
     patch(PartnerLead, 'updateMany', (...args) => { calls.push(['lead-convert', ...args]); return 'lead2'; }),
@@ -42,8 +42,9 @@ test('agent-registration repository preserves exact query contracts', async () =
     assert.deepEqual(calls[1], ['select-lean', '_id']);
     assert.deepEqual(calls[2], ['otp', { phone: 'p', purpose: 'AGENT_REGISTRATION', isUsed: true }]);
     assert.deepEqual(calls[3], ['email', { email: 'e' }]);
-    assert.deepEqual(calls[4], ['upgrade', 'u2', {
+    assert.deepEqual(calls[4], ['upgrade', { _id: 'u2', status: 'active', deletedAt: null, forcePasswordChange: { $ne: true }, $or: [{ password: null }, { password: '' }] }, {
       $addToSet: { roles: 'agent' },
+      $inc: { tokenVersion: 1 },
       $set: { 'roleActivatedAt.agent': d, password: 'hash' },
     }, { new: true }]);
     assert.deepEqual(calls[5], ['agent-upsert', { user: 'u3' }, {

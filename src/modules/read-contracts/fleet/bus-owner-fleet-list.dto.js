@@ -11,6 +11,7 @@ function mapBusOwnerFleetListItem(fleet) {
   return {
     fleetId: String(fleet._id || fleet.id),
     fleetCode: fleet.fleetId || null,
+    brandId: fleet.brandId ? String(fleet.brandId._id || fleet.brandId) : null,
     busName: fleet.busName || "N/A",
     busNumber: fleet.busNumber || "N/A",
     busType: fleet.busType || "N/A",

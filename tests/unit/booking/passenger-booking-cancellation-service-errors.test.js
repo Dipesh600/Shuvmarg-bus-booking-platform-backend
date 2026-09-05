@@ -14,7 +14,7 @@ test("cancelPassengerBooking - missing ticketId", async () => {
 
 test("cancelPassengerBooking - booking not found", async () => {
   const repo = { findBookingByTicketId: async () => null };
-  const service = createPassengerBookingCancellationService(repo, {}, {}, {});
+  const service = createPassengerBookingCancellationService({ withTransaction: work => work(null), claimBooking: async () => true, ...repo }, {}, {}, {});
   try {
     await service.cancelPassengerBooking("T1", "u1");
     assert.fail();
@@ -25,7 +25,7 @@ test("cancelPassengerBooking - booking not found", async () => {
 
 test("cancelPassengerBooking - unauthorized", async () => {
   const repo = { findBookingByTicketId: async () => ({ userId: "other" }) };
-  const service = createPassengerBookingCancellationService(repo, {}, {}, {});
+  const service = createPassengerBookingCancellationService({ withTransaction: work => work(null), claimBooking: async () => true, ...repo }, {}, {}, {});
   try {
     await service.cancelPassengerBooking("T1", "u1");
     assert.fail();
@@ -36,7 +36,7 @@ test("cancelPassengerBooking - unauthorized", async () => {
 
 test("cancelPassengerBooking - wrong status", async () => {
   const repo = { findBookingByTicketId: async () => ({ userId: "u1", status: "cancelled" }) };
-  const service = createPassengerBookingCancellationService(repo, {}, {}, {});
+  const service = createPassengerBookingCancellationService({ withTransaction: work => work(null), claimBooking: async () => true, ...repo }, {}, {}, {});
   try {
     await service.cancelPassengerBooking("T1", "u1");
     assert.fail();
@@ -50,7 +50,7 @@ test("cancelPassengerBooking - trip not found", async () => {
     findBookingByTicketId: async () => ({ userId: "u1", status: "booked" }),
     findTripById: async () => null
   };
-  const service = createPassengerBookingCancellationService(repo, {}, {}, {});
+  const service = createPassengerBookingCancellationService({ withTransaction: work => work(null), claimBooking: async () => true, ...repo }, {}, {}, {});
   try {
     await service.cancelPassengerBooking("T1", "u1");
     assert.fail();

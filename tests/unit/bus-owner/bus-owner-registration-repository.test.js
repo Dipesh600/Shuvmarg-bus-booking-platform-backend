@@ -21,7 +21,7 @@ test('bus-owner registration repositories preserve exact query contracts', async
     const calls = [];
     patch(OTP, 'findOne', (q) => calls.push(['otp', q]), restores);
     patch(User, 'findOne', (q) => calls.push(['email', q]), restores);
-    patch(User, 'findByIdAndUpdate', (...args) => calls.push(['upgrade', args]), restores);
+    patch(User, 'findOneAndUpdate', (...args) => calls.push(['upgrade', args]), restores);
     patch(BusOwner, 'findOne', (q) => calls.push(['profile', q]), restores);
     try {
       repository.findConsumedOtp('p');
@@ -31,7 +31,7 @@ test('bus-owner registration repositories preserve exact query contracts', async
       assert.deepEqual(calls, [
         ['otp', { phone: 'p', purpose: 'BUSOWNER_REGISTRATION', isUsed: true }],
         ['email', { email: 'e' }],
-        ['upgrade', ['id', {
+        ['upgrade', [{ _id: 'id', status: 'active', deletedAt: null, forcePasswordChange: { $ne: true }, password: { $exists: true, $type: 'string', $ne: '' } }, {
           $addToSet: { roles: 'busOwner' },
           $set: { 'roleActivatedAt.busOwner': 'now' },
         }, { new: true }]],

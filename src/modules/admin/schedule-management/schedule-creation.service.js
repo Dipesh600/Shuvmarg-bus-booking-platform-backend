@@ -9,6 +9,7 @@ const {
   validateSeatTemplate,
 } = require("./schedule-creation-gates.service.js");
 const { resolveRoutePattern } = require("./schedule-route-pattern.service.js");
+const { assertScheduleDriverEligible } = require("./schedule-driver-gate.service");
 
 const scheduleDocument = (data, ownerId, patternId, createdBy) => ({
   brandId: data.brandId,
@@ -43,6 +44,7 @@ const createSchedule = async (data, createdBy = "ADMIN") => {
   const fleet = await validateFleet(data.busId, data.brandId, brand);
   await validateSeatTemplate(data.seatTemplateId);
   const patternId = await resolveRoutePattern(data);
+  await assertScheduleDriverEligible(data);
   const conflict = await Schedule.findOne({
     busId: data.busId,
     departureTime: data.departureTime,

@@ -52,6 +52,7 @@ const patch = (obj, name, fn, restores) => {
 /** Wires up every collaborator with a benign default; each test overrides one. */
 const harness = (overrides = {}) => {
   const restores = [];
+  patch(repository, 'withTransaction', async work => work(null), restores);
   const calls = { createUser: [], createAgent: [], addAgentRole: [], findOwnedBrand: [] };
   smsCalls.length = 0;
   smsBehaviour = overrides.sms || (async () => ({ ok: true }));

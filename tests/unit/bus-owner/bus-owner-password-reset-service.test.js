@@ -54,7 +54,7 @@ test('bus-owner password-reset service preserves orchestration', async (t) => {
     patch(enumGuard, 'otpFirstVerify', async (phone, otp, purpose, consume, verifyFn, lookup) => {
       order.push(`${phone}:${otp}:${purpose}:${consume}:${verifyFn === otpHelper.verifyOTPCode}`);
       await lookup(phone);
-      return { valid: true, user: user({ roles: [], role: 'busOwner' }) };
+      return { valid: true, user: user({ roles: ['busOwner'], role: 'busOwner' }) };
     }, restore);
     patch(repository, 'findUserByPhone', async (p) => { order.push(`lookup:${p}`); return user(); }, restore);
     try {

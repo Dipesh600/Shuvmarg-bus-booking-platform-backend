@@ -1,7 +1,8 @@
 'use strict';
+const { getEffectiveRoles } = require('../../../../shared/auth/account-role.policy');
 
 const resolveRoles = (user) => (
-  user.roles && user.roles.length > 0 ? user.roles : [user.role]
+  getEffectiveRoles(user)
 );
 
 const hasAgentRole = (roles) => roles.includes('agent');

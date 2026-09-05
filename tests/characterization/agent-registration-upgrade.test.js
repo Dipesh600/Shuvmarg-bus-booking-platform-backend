@@ -57,10 +57,10 @@ test('Agent registration upgrade characterization', async (t) => {
     });
   });
 
-  await t.test('existing-user path requires and validates password', async () => {
+  await t.test('passwordless existing-user path requires and validates password', async () => {
     const p = phone(2);
     await usedOtp(p);
-    await user(p);
+    await user(p, { password: null });
     let res = await register({ phone: p, name: 'Upgrade User', verificationToken: tokenFor(p) });
     assert.equal(res.status, 400);
     assert.deepEqual(res.body, { success: false, message: 'Password is required.' });
@@ -70,22 +70,22 @@ test('Agent registration upgrade characterization', async (t) => {
     assert.ok(Array.isArray(res.body.errors));
   });
 
-  await t.test('existing-user upgrade replaces password and preserves primary role/status', async () => {
+  await t.test('existing-user upgrade preserves the shared password and primary role', async () => {
     const p = phone(3);
     await usedOtp(p);
-    const u = await user(p, { status: 'inactive' });
+    const u = await user(p);
     const res = await register({
       phone: p, name: 'Upgrade User', password: 'AgentPass123!', verificationToken: tokenFor(p),
     });
     assert.equal(res.status, 201);
-    assert.equal(res.body.message, 'Agent access added to your account. Your new password has been set.');
+    assert.equal(res.body.message, 'Agent access added to your account. Sign in with your account password.');
     assert.equal(res.body.isUpgrade, true);
     const fresh = await User.findById(u._id).select('+password');
     assert.equal(fresh.role, 'passenger');
-    assert.equal(fresh.status, 'inactive');
+    assert.equal(fresh.status, 'active');
     assert.equal(fresh.roles.includes('agent'), true);
-    assert.equal(await bcrypt.compare('AgentPass123!', fresh.password), true);
-    assert.equal(await bcrypt.compare('OldPass123!', fresh.password), false);
+    assert.equal(await bcrypt.compare('AgentPass123!', fresh.password), false);
+    assert.equal(await bcrypt.compare('OldPass123!', fresh.password), true);
     const agent = await Agent.findOne({ user: u._id });
     assert.equal(agent.applicationStatus, 'DRAFT');
   });

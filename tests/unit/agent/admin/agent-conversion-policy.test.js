@@ -8,7 +8,8 @@ const policy = require('../../../../src/modules/agent/admin/conversion/agent-con
 test('agent conversion policy preserves role fallback and response mapping', async (t) => {
   await t.test('roles array wins when populated and legacy role is fallback', () => {
     assert.deepEqual(policy.resolveRoles({ roles: ['busOwner'], role: 'passenger' }), ['busOwner']);
-    assert.deepEqual(policy.resolveRoles({ roles: [], role: 'passenger' }), ['passenger']);
+    assert.deepEqual(policy.resolveRoles({ roles: [], role: 'passenger' }), []);
+    assert.deepEqual(policy.resolveRoles({ role: 'passenger' }), ['passenger']);
     assert.equal(policy.hasAgentRole(['passenger', 'agent']), true);
     assert.equal(policy.hasAgentRole(['passenger']), false);
   });

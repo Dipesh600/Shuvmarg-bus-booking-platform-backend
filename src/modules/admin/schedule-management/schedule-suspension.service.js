@@ -9,6 +9,7 @@ const {
   assertScheduleRouteChainReady,
 } = require("./schedule-route-chain.policy.js");
 const logger = require("../../../../utils/logger.js");
+const { assertScheduleDriverEligible } = require("./schedule-driver-gate.service");
 
 const setSuspended = async (schedule, adminId, reason, until) => {
   schedule.status = "SUSPENDED";
@@ -79,11 +80,16 @@ const resumeSchedule = async (scheduleId, adminId) => {
     );
   }
   await assertScheduleRouteChainReady(schedule);
+  await assertScheduleDriverEligible(schedule);
+  const linkedSchedule = schedule.returnScheduleId ? await Schedule.findById(schedule.returnScheduleId) : null;
+  if (linkedSchedule?.status === "SUSPENDED") {
+    await assertScheduleRouteChainReady(linkedSchedule);
+    await assertScheduleDriverEligible(linkedSchedule);
+  }
   await resumeDocument(schedule, adminId);
-  if (schedule.returnScheduleId) {
-    const linked = await Schedule.findById(schedule.returnScheduleId);
+  if (linkedSchedule) {
+    const linked = linkedSchedule;
     if (linked?.status === "SUSPENDED") {
-      await assertScheduleRouteChainReady(linked);
       await resumeDocument(linked, adminId);
     }
   }

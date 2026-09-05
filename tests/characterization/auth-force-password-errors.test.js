@@ -11,7 +11,7 @@ const User = require('../../models/userModel');
 const otpHelper = require('../../utils/otpHelper');
 
 const sign = (id, purpose = 'FORCE_PASSWORD_CHANGE', opts = {}) =>
-  jwt.sign({ id, purpose }, process.env.SECRET_KEY, opts);
+  jwt.sign({ id, purpose, activeRole: 'passenger', credentialVersion: 0, tokenVersion: 0 }, process.env.SECRET_KEY, opts);
 
 const user = (overrides = {}) => User.create({
   name: 'Force User',

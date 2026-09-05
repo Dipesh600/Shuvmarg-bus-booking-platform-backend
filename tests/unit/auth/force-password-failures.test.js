@@ -33,13 +33,13 @@ const assert500 = async (fn) => {
 const setup = (failAt) => {
   const r = [];
   const order = [];
-  const user = { _id: 'u1', forcePasswordChange: true };
+  const user = { _id: 'u1', forcePasswordChange: true, roles: ['passenger'] };
   const fresh = { _id: 'u1', toObject: () => {
     order.push('toObject');
     if (failAt === 'toObject') throw new Error('toObject failed');
     return { _id: 'u1' };
   } };
-  patch(jwt, 'verify', () => ({ id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE' }), r);
+  patch(jwt, 'verify', () => ({ id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'passenger', credentialVersion: 0, tokenVersion: 0 }), r);
   patch(passwordValidator, 'validatePassword', () => ({ valid: true, errors: [] }), r);
   patch(repository, 'findByIdWithPassword', async () => user, r);
   patch(bcrypt, 'hash', async () => {

@@ -9,6 +9,7 @@ const { recomputeTimingArray } = require("./timing.policy.js");
 const {
   assertVariantReadyForOperatorConfig,
 } = require("./variant-readiness.policy.js");
+const { assertValidRouteConfigPayload } = require("./route-config-payload.policy.js");
 
 function deriveReturn(data) {
   const {
@@ -62,6 +63,11 @@ async function upsertOperatorConfig(brandId, data) {
     variantId, patternName = "Standard",
     activeStops, boardingConfig, timingConfig,
   } = data;
+  if (data.status !== undefined && !["ACTIVE", "DRAFT"].includes(data.status)) {
+    throw new Error("Route config status must be ACTIVE or DRAFT.");
+  }
+  const status = data.status || "ACTIVE";
+  const fleetId = data.fleetId || null;
   if (!variantId) throw new Error("variantId is required.");
   if (!patternName || patternName.trim() === "") {
     throw new Error("patternName is required.");
@@ -72,24 +78,40 @@ async function upsertOperatorConfig(brandId, data) {
   });
   await validateVariantStops(variantId, activeStops);
   const returnConfig = deriveReturn(data);
-  const count = await OperatorConfig.countDocuments({ brandId, variantId });
+  await assertValidRouteConfigPayload({
+    variantId,
+    status,
+    activeStops: activeStops || [],
+    boardingConfig: boardingConfig || [],
+    timingConfig: timingConfig || [],
+    returnActiveStops: returnConfig.activeStops,
+    returnBoardingConfig: returnConfig.boardingConfig,
+    returnTimingConfig: returnConfig.timingConfig,
+  });
+  const count = await OperatorConfig.countDocuments({ brandId, variantId, fleetId });
   return OperatorConfig.findOneAndUpdate(
-    { brandId, variantId, patternName: patternName.trim() },
+    { brandId, variantId, fleetId, patternName: patternName.trim() },
     {
-      brandId, variantId, patternName: patternName.trim(),
+      brandId, variantId, fleetId, patternName: patternName.trim(),
       isDefault: count === 0, activeStops, boardingConfig,
       timingConfig: recomputeTimingArray(timingConfig || []),
       returnActiveStops: returnConfig.activeStops,
       returnBoardingConfig: returnConfig.boardingConfig,
       returnTimingConfig: recomputeTimingArray(returnConfig.timingConfig || []),
       returnOverridden: returnConfig.overridden,
+      status,
     },
     { upsert: true, new: true, runValidators: true }
   );
 }
 
-function getOperatorConfigs(brandId) {
-  return OperatorConfig.find({ brandId, status: "ACTIVE" })
+function getOperatorConfigs(brandId, options = {}) {
+  const statuses = Array.isArray(options.statuses) && options.statuses.length
+    ? options.statuses
+    : ["ACTIVE"];
+  const filter = { brandId, status: { $in: statuses } };
+  if (options.fleetId) filter.fleetId = options.fleetId;
+  return OperatorConfig.find(filter)
     .populate({
       path: "variantId",
       populate: {

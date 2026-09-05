@@ -58,7 +58,7 @@ test('update-password repository preserves query contracts', async (t) => {
       });
       assert.deepEqual(repository.updatePasswordHash('u4', 'hash'), {
         id: 'u4',
-        update: { password: 'hash' },
+        update: { $set: { password: 'hash' }, $inc: { tokenVersion: 1, temporaryCredentialVersion: 1 } },
       });
     } finally {
       User.findById = origFind;

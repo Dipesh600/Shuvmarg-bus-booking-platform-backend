@@ -20,7 +20,7 @@ test('X3 owner creation has no KYC-review, wallet, settlement or commission writ
 
 test('X5 the existing create repository uses save so code hooks run', () => {
   const repository = fs.readFileSync(path.join(moduleDir, 'bus-owner-agent-invite.repository.js'), 'utf8');
-  assert.match(repository, /new Agent\(agentData\)\.save\(\)/);
+  assert.match(repository, /new Agent\(agentData\)\.save\(\{ session \}\)/);
   assert.equal(repository.includes('insertMany'), false);
 });
 

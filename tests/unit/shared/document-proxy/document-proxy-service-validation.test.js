@@ -20,6 +20,8 @@ const storage = require('../../../../src/modules/shared/document-proxy/document-
 const errors  = require('../../../../src/modules/shared/document-proxy/document-proxy.errors.js');
 const service = require('../../../../src/modules/shared/document-proxy/document-proxy.service.js');
 
+const resolve = key => service.resolveDocument(key, { admin: { id: 'admin1', role: 'ADMIN' } });
+
 const fakeS3Response = (overrides = {}) => ({
     ContentType:   'application/pdf',
     ContentLength: 1000,
@@ -28,12 +30,13 @@ const fakeS3Response = (overrides = {}) => ({
 });
 
 test('document-proxy service — validation', async (t) => {
+    t.beforeEach(() => mock.method(require('../../../../src/modules/shared/document-proxy/document-proxy.authorization'), 'canReadDocument', async () => true));
     t.afterEach(() => mock.restoreAll());
 
     // ── 1. Missing / invalid key ───────────────────────────────────────────────
 
     await t.test('1. undefined key → 400 MISSING_KEY', async () => {
-        const result = await service.resolveDocument(undefined);
+        const result = await resolve(undefined);
         assert.equal(result.ok, false);
         assert.equal(result.status, 400);
         assert.equal(result.errorCode, errors.MISSING_KEY);
@@ -42,20 +45,20 @@ test('document-proxy service — validation', async (t) => {
     });
 
     await t.test('2a. empty string key → 400 MISSING_KEY', async () => {
-        const result = await service.resolveDocument('');
+        const result = await resolve('');
         assert.equal(result.ok, false);
         assert.equal(result.status, 400);
         assert.equal(result.errorCode, errors.MISSING_KEY);
     });
 
     await t.test('2b. numeric key (non-string) → 400 MISSING_KEY', async () => {
-        const result = await service.resolveDocument(42);
+        const result = await resolve(42);
         assert.equal(result.ok, false);
         assert.equal(result.errorCode, errors.MISSING_KEY);
     });
 
     await t.test('2c. null key → 400 MISSING_KEY', async () => {
-        const result = await service.resolveDocument(null);
+        const result = await resolve(null);
         assert.equal(result.ok, false);
         assert.equal(result.errorCode, errors.MISSING_KEY);
     });
@@ -70,7 +73,7 @@ test('document-proxy service — validation', async (t) => {
         });
 
         const url = 'https://bucket.s3.ap-south-1.amazonaws.com/owners/abc/doc.pdf?sig=xxx';
-        const result = await service.resolveDocument(url);
+        const result = await resolve(url);
         assert.equal(result.ok, true);
         assert.equal(capturedKey, 'owners/abc/doc.pdf');
     });
@@ -81,7 +84,7 @@ test('document-proxy service — validation', async (t) => {
         // 'https://not valid url' will fail URL parse → parseFailed=true
         // raw value has no valid prefix → blocked
         const raw = 'https://not a valid url with spaces';
-        const result = await service.resolveDocument(raw);
+        const result = await resolve(raw);
         assert.equal(result.ok, false);
         // Either blocked or missing-key — the important thing is it doesn't crash
         assert.ok([400, 403].includes(result.status));
@@ -91,24 +94,24 @@ test('document-proxy service — validation', async (t) => {
 
     await t.test('5a. owners/ prefix → ok:true', async () => {
         mock.method(storage, 'fetchS3Object', async () => fakeS3Response());
-        const result = await service.resolveDocument('owners/x/doc.pdf');
+        const result = await resolve('owners/x/doc.pdf');
         assert.equal(result.ok, true);
     });
 
     await t.test('5b. misc/ prefix → ok:true', async () => {
         mock.method(storage, 'fetchS3Object', async () => fakeS3Response());
-        const result = await service.resolveDocument('misc/old.pdf');
+        const result = await resolve('misc/old.pdf');
         assert.equal(result.ok, true);
     });
 
     await t.test('5c. agent_kyc/ prefix → ok:true', async () => {
         mock.method(storage, 'fetchS3Object', async () => fakeS3Response());
-        const result = await service.resolveDocument('agent_kyc/doc.pdf');
+        const result = await resolve('agent_kyc/doc.pdf');
         assert.equal(result.ok, true);
     });
 
     await t.test('5d. bus_owner_docs/ prefix is blocked', async () => {
-        const result = await service.resolveDocument('bus_owner_docs/old.pdf');
+        const result = await resolve('bus_owner_docs/old.pdf');
         assert.equal(result.ok, false);
         assert.equal(result.status, 403);
     });
@@ -116,12 +119,12 @@ test('document-proxy service — validation', async (t) => {
     // ── 6. Disallowed prefix ───────────────────────────────────────────────────
 
     await t.test('6. disallowed prefix → 403 BLOCKED_PREFIX with debug_key_start', async () => {
-        const result = await service.resolveDocument('private/secret.pdf');
+        const result = await resolve('private/secret.pdf');
         assert.equal(result.ok, false);
         assert.equal(result.status, 403);
         assert.equal(result.errorCode, errors.BLOCKED_PREFIX);
         assert.equal(result.body.success, false);
         assert.equal(result.body.message, 'Access denied: key path is not permitted.');
-        assert.ok('debug_key_start' in result.body);
+        assert.ok(!('debug_key_start' in result.body));
     });
 });

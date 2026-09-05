@@ -9,9 +9,15 @@ const refundCalculatorService = require("../../services/refundCalculatorService"
 const notificationManagerApi = require("../../controllers/notificationController/notification_manager.js");
 const smLedgerService = require("../../src/modules/wallet/sm-ledger");
 const walletService = require("../../services/walletService");
+const repositoryModule = require('../../src/modules/booking/passenger-booking-cancellation/passenger-booking-cancellation.repository');
 
 function setupHarness() {
+  const createRepository = repositoryModule.createPassengerBookingCancellationRepository;
   const mocks = {
+    repositoryFactory: mock.method(repositoryModule, 'createPassengerBookingCancellationRepository', () => ({
+      ...createRepository(), withTransaction: work => work(null),
+    })),
+    bookingUpdateOne: mock.method(Booking, 'updateOne', async () => ({ modifiedCount: 1 })),
     bookingFindOne: mock.method(Booking, "findOne", () => Promise.resolve(null)),
     tripFindById: mock.method(Trip, "findById", () => ({ populate: () => Promise.resolve(null) })),
     seatFindOne: mock.method(Seat, "findOne", () => Promise.resolve(null)),
@@ -27,6 +33,8 @@ function setupHarness() {
   const passengerBookingCancellation = require("../../src/modules/booking/passenger-booking-cancellation");
 
   function restore() {
+    mocks.repositoryFactory.mock.restore();
+    mocks.bookingUpdateOne.mock.restore();
     mocks.bookingFindOne.mock.restore();
     mocks.tripFindById.mock.restore();
     mocks.seatFindOne.mock.restore();

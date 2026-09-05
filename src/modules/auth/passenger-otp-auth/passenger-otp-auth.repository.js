@@ -64,14 +64,18 @@ const recordPassengerLogin = (userId, now) =>
 
 /**
  * Atomically add 'passenger' to roles[] for legacy accounts where
- * role:'passenger' but roles:[] is empty (pre-multi-role documents).
+ * role:'passenger' but roles is missing (pre-multi-role documents).
  *
  * Does NOT touch roleActivatedAt.passenger or the historical `role` field.
  *
  * @param {string} userId
  */
 const materializeLegacyPassengerRole = (userId) =>
-  User.findByIdAndUpdate(userId, { $addToSet: { roles: 'passenger' } });
+  User.findOneAndUpdate(
+    { _id: userId, roles: { $exists: false }, role: 'passenger', deletedAt: null,
+      status: { $nin: ['banned', 'inactive', 'invited'] } },
+    { $addToSet: { roles: 'passenger' } },
+  );
 
 module.exports = {
   findPassengerOtpEligibilityByPhone,

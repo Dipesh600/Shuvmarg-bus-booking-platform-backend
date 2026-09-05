@@ -1,7 +1,7 @@
 /**
  * routes/authRoutes/activateAuthRoutes.js
  *
- * Account activation endpoints for invited users (conductors, drivers, admin-created bus owners).
+ * Account activation endpoints for invited agents, conductors, and drivers.
  * Mounted at /api/auth/activate
  */
 
@@ -11,12 +11,13 @@ const otpLimiters = require("../../middleware/otpRateLimiter.js");
 
 const createActivateAuthRouter = ({
   otpSendLimiter = otpLimiters.otpSendLimiter,
+  otpVerifyLimiter = otpLimiters.otpVerifyLimiter,
   otpPresenceLimiter = otpLimiters.validatePhonePresent,
 } = {}) => {
   const router = express.Router();
 
   router.post("/sendOTP", otpSendLimiter, otpPresenceLimiter, activateController.sendActivationOTP);
-  router.post("/", activateController.activateAccount);
+  router.post("/", otpVerifyLimiter, otpPresenceLimiter, activateController.activateAccount);
   return router;
 };
 

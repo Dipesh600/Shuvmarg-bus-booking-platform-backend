@@ -1,4 +1,5 @@
 'use strict';
+const pinService = require('../../wallet/payment-authorization/wallet-pin.service');
 
 function createPassengerBookingConfirmationPaymentStage(deps) {
   return async function runPassengerBookingConfirmationPaymentStage({ req, state }) {
@@ -50,6 +51,12 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
     if (!confirmationQuoteResult.ok) return confirmationQuoteResult;
 
     Object.assign(state, confirmationQuoteResult.quote);
+
+    if (state.smMoneyApplied > 0) {
+      const authorize = deps.verifyWalletPaymentPin || pinService.verifyPaymentPin;
+      const authorization = await authorize({ userId: state.userId, pin: req.body.walletPin });
+      if (!authorization.ok) return authorization;
+    }
 
     state.holdClaimed = await deps.claimPassengerHoldForConfirmation({
       holdId: state.holdId,

@@ -80,13 +80,14 @@ router.post("/getSeats", optionalAuth, tripSeatAvailability.getTripSeatAvailabil
 router.get(
   "/getMyTicketHistory",
   auth,
+  verifyRoleFromDB,
   passengerBookingHistory.getPassengerBookingHistory
 );
 const passengerBookingCancellation = require("../../src/modules/booking/passenger-booking-cancellation");
 
 // Cancel Ticket
-router.post("/cancelTicket", auth, passengerBookingCancellation.cancelPassengerBooking);
+router.post("/cancelTicket", auth, verifyRoleFromDB, passengerBookingCancellation.cancelPassengerBooking);
 // Cancel Estimate (preview refund breakdown)
-router.post("/cancelEstimate", auth, passengerBookingCancellation.estimatePassengerBookingCancellation);
+router.post("/cancelEstimate", auth, verifyRoleFromDB, passengerBookingCancellation.estimatePassengerBookingCancellation);
 
 module.exports = router;

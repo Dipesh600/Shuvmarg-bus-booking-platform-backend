@@ -71,6 +71,7 @@ const referralService = createReferralUnlockService({
 });
 const tripStatusService = createTripStatusService({
   Trip,
+  DriverProfile,
   transitionPolicy,
   cancellationService,
   referralService,

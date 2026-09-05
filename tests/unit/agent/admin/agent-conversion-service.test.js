@@ -7,6 +7,7 @@ const repository = require('../../../../src/modules/agent/admin/conversion/agent
 const service = require('../../../../src/modules/agent/admin/conversion/agent-conversion.service');
 
 const patch = (methods) => {
+  methods = { withTransaction: async work => work(null), ...methods };
   const originals = {};
   for (const [name, fn] of Object.entries(methods)) {
     originals[name] = repository[name];
@@ -22,7 +23,7 @@ test('agent conversion service preserves operation order', async (t) => {
     const restore = patch({
       isValidObjectId: () => true,
       findUserById: async () => { order.push('findUser'); return user; },
-      addAgentRoleToUser: async () => { order.push('updateUser'); },
+      addAgentRoleToUser: async () => { order.push('updateUser'); return user; },
       findAgentByUserId: async () => { order.push('findAgent'); return { _id: 'a1', agentId: 'AG1' }; },
       createAgentForUser: async () => { order.push('createAgent'); },
     });
@@ -41,7 +42,7 @@ test('agent conversion service preserves operation order', async (t) => {
     const restore = patch({
       isValidObjectId: () => true,
       findUserById: async () => { order.push('findUser'); return user; },
-      addAgentRoleToUser: async () => { order.push('updateUser'); },
+      addAgentRoleToUser: async () => { order.push('updateUser'); return user; },
       findAgentByUserId: async () => { order.push('findAgent'); return null; },
       createAgentForUser: async () => { order.push('createAgent'); return { _id: 'a1', agentId: 'AG1' }; },
     });
@@ -59,7 +60,7 @@ test('agent conversion service preserves operation order', async (t) => {
     const restore = patch({
       isValidObjectId: () => false,
       findUserById: async () => { order.push('findUser'); },
-      addAgentRoleToUser: async () => { order.push('updateUser'); },
+      addAgentRoleToUser: async () => { order.push('updateUser'); return user; },
       findAgentByUserId: async () => { order.push('findAgent'); },
     });
     try {

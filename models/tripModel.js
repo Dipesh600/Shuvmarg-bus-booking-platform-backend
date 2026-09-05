@@ -47,7 +47,7 @@ const tripSchema = new mongoose.Schema(
     driverAssignmentLog: [{
       driverId: { type: mongoose.Schema.Types.ObjectId, ref: "DriverProfile" },
       assignedAt: { type: Date, default: Date.now },
-      assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "SuperAdmin" },
       reason: { type: String }
     }],
     tripDate: {
@@ -253,4 +253,3 @@ tripSchema.pre("save", async function (next) {
 });
 
 module.exports = mongoose.models.Trip || mongoose.model("Trip", tripSchema);
-

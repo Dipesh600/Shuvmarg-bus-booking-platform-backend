@@ -3,6 +3,7 @@ const {
   generateReferralCode,
   validateReferralCode,
 } = require("../../handlers/referralCodeGenerator.js");
+const { applyReferralCode } = require('../../src/modules/referral/reward-lifecycle/referral-apply.controller');
 const referralRewardService = require("../../src/modules/referral/reward-lifecycle");
 
 /**
@@ -187,88 +188,6 @@ const validateReferralCodeEndpoint = async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 // V2: APPLY REFERRAL CODE (Progressive Unlock)
 // ═══════════════════════════════════════════════════════════════════════
-
-/**
- * POST /api/referral/applyCode
- *
- * Apply a referral code during or after registration.
- * Delegates to the referral reward lifecycle module which:
- *   1. Validates all rules (self-refer, 24h window, first journey, etc.)
- *   2. Creates ReferralV2 document
- *   3. Creates REFERRAL_LOCKED ledger entry (NPR 100)
- *   4. Tags the referred user with referredBy
- *   5. Runs fraud detection (async)
- *   6. Sends notification to referrer (async)
- */
-const applyReferralCode = async (req, res) => {
-  try {
-    const { referralCode, userId } = req.body;
-
-    if (!referralCode || !userId) {
-      return res.status(400).json({
-        status: false,
-        message: "Referral code and user ID are required",
-      });
-    }
-
-    // Validate format
-    if (!validateReferralCode(referralCode)) {
-      return res.status(400).json({
-        status: false,
-        message: "Invalid referral code format",
-      });
-    }
-
-    // Find referrer by code
-    const referrer = await User.findOne({
-      referralCode: referralCode.trim().toUpperCase(),
-    });
-    if (!referrer) {
-      return res.status(404).json({
-        status: false,
-        message: "Invalid referral code",
-      });
-    }
-
-    // Delegate to V2 service — all validation happens inside
-    const referral = await referralRewardService.createReferral({
-      referrerId: referrer._id,
-      referredUserId: userId,
-      referralCode: referralCode.trim().toUpperCase(),
-      ipAddress: req.ip || req.headers["x-forwarded-for"] || null,
-      deviceInfo: req.headers["user-agent"] || null,
-    });
-
-    return res.status(200).json({
-      status: true,
-      message: "Referral code applied successfully",
-      data: {
-        referrerName: referrer.name,
-        lockedReward: referralRewardService.TOTAL_REFERRAL_REWARD,
-        referralStatus: referral.status,
-      },
-    });
-  } catch (error) {
-    console.error("Apply Referral Code Error:", error);
-
-    // Map service errors to HTTP status codes
-    const clientErrors = [
-      "You cannot refer yourself",
-      "This user already has a referral code applied",
-      "Referral code can only be applied within 24 hours",
-      "Referral code can't be applied after your first trip",
-    ];
-
-    const isClientError = clientErrors.some((msg) =>
-      error.message.includes(msg)
-    );
-
-    return res.status(isClientError ? 400 : 500).json({
-      status: false,
-      message: isClientError ? error.message : "Internal server error",
-    });
-  }
-};
 
 // ═══════════════════════════════════════════════════════════════════════
 // V2: DASHBOARD & HISTORY

@@ -32,7 +32,7 @@ test('agent password reset repository preserves query contracts', async (t) => {
       assert.deepEqual(args, [
         {
           _id: 'u1', status: 'invited', deletedAt: null,
-          $or: [{ roles: 'agent' }, { role: 'agent', roles: { $size: 0 } }],
+          $or: [{ roles: 'agent' }, { role: 'agent', roles: { $exists: false } }],
         },
         {
           $set: {

@@ -6,6 +6,9 @@ const REFRESH_ERRORS = {
   USER_NOT_FOUND: { status: 401, message: 'User not found. Please login again.' },
   ACCOUNT_DEACTIVATED: { status: 403, message: 'This account has been deactivated. Contact support.' },
   ACCOUNT_BANNED: { status: 403, message: 'Your account has been banned. Contact support.' },
+  ACCOUNT_INACTIVE: { status: 403, message: 'Your account is inactive. Contact support.' },
+  ACCOUNT_NOT_ACTIVATED: { status: 403, message: 'Your account has not been activated yet.' },
+  FORCE_PASSWORD_CHANGE: { status: 403, message: 'You must change your password before accessing this resource.' },
   ROLE_REVOKED: { status: 403, message: 'Your role has been revoked. Please login again.' },
   SESSION_ROLE_MISMATCH: { status: 401, message: 'This session belongs to another portal. Please sign in again.' },
 };

@@ -115,4 +115,31 @@ test("bus owner read endpoint contract integration tests", async (t) => {
     assert.equal(res.result().body.data.fleetId, "f-20");
     assert.equal(res.result().body.data.fleetCode, "FLEET-020");
   });
+
+  await t.test("13. GET /api/busowner/fleets/:fleetId/setup-status uses the shared setup contract", async () => {
+    const controller = createFleetManagementController({
+      readService: {
+        getFleetSetupStatusForOwner: async () => ({
+          success: true,
+          data: {
+            fleetId: "f-20",
+            setupComplete: false,
+            nextStep: "routeConfigured",
+            progress: { completedSteps: 1, totalSteps: 5, percentage: 20 },
+          },
+        }),
+      },
+    });
+
+    const res = mockRes();
+    await controller.getFleetSetupStatus({
+      ...ownerReq,
+      params: { fleetId: "507f1f77bcf86cd799439011" },
+    }, res);
+
+    assert.equal(res.result().status, 200);
+    assert.equal(res.result().body.success, true);
+    assert.equal(res.result().body.data.nextStep, "routeConfigured");
+    assert.equal(res.result().body.data.progress.percentage, 20);
+  });
 });

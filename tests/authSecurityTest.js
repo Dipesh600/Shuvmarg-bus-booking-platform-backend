@@ -273,7 +273,7 @@ async function runIntegrationTests() {
     // ── Test: Activation sendOTP for non-invited phone → 404 ─────────────
     const activateNonExistent = await request("POST", "/api/auth/activate/sendOTP", {
         phone: "9800000099",
-    });
+    }, { "X-App-Source": "driver" });
     assert(
         "Activate: non-invited phone → 404",
         activateNonExistent.status === 404,

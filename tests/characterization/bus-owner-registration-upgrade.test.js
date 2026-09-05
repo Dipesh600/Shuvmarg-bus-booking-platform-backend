@@ -47,7 +47,7 @@ test('bus-owner registration upgrade characterization', async (t) => {
       password: originalHash,
       role: 'passenger',
       roles: ['passenger'],
-      status: 'inactive',
+      status: 'active',
     });
     await BusOwner.create({
       user: user._id,
@@ -71,7 +71,7 @@ test('bus-owner registration upgrade characterization', async (t) => {
     assert.equal(fresh.email, 'existing@example.com');
     assert.equal(fresh.address, 'Old Address');
     assert.equal(fresh.role, 'passenger');
-    assert.equal(fresh.status, 'inactive');
+    assert.equal(fresh.status, 'active');
     assert.equal(fresh.roles.includes('busOwner'), true);
     assert.ok(fresh.roleActivatedAt.get('busOwner'));
     const profile = await BusOwner.findOne({ user: user._id });

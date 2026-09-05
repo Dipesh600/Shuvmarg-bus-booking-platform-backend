@@ -1,3 +1,4 @@
+const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB.js");
 const express = require("express");
 const router = express.Router();
 const referralController = require("../../controllers/referralController/referralController.js");
@@ -10,10 +11,10 @@ const autoGenerateReferralCode = require("../../middleware/autoGenerateReferralC
 // ═══════════════════════════════════════════════════════════════════════
 
 // Generate referral code for authenticated user
-router.post("/generateCode", auth, autoGenerateReferralCode, referralController.generateMyReferralCode);
+router.post("/generateCode", auth, verifyRoleFromDB, autoGenerateReferralCode, referralController.generateMyReferralCode);
 
 // Ensure user has referral code (check and generate if needed)
-router.get("/ensureCode", auth, autoGenerateReferralCode, referralController.ensureReferralCode);
+router.get("/ensureCode", auth, verifyRoleFromDB, autoGenerateReferralCode, referralController.ensureReferralCode);
 
 // Validate referral code format and existence (public endpoint)
 router.post("/validateCode", referralController.validateReferralCodeEndpoint);
@@ -23,17 +24,17 @@ router.post("/validateCode", referralController.validateReferralCodeEndpoint);
 // ═══════════════════════════════════════════════════════════════════════
 
 // Apply referral code during or after registration
-router.post("/applyCode", referralController.applyReferralCode);
+router.post("/applyCode", auth, verifyRoleFromDB, referralController.applyReferralCode);
 
 // ═══════════════════════════════════════════════════════════════════════
 // V2: DASHBOARD & HISTORY
 // ═══════════════════════════════════════════════════════════════════════
 
 // Referral dashboard with progressive unlock stats
-router.get("/dashboard", auth, autoGenerateReferralCode, referralController.getReferralDashboard);
+router.get("/dashboard", auth, verifyRoleFromDB, autoGenerateReferralCode, referralController.getReferralDashboard);
 
 // Referral history with per-referral unlock timeline
-router.get("/history", auth, referralController.getReferralHistory);
+router.get("/history", auth, verifyRoleFromDB, referralController.getReferralHistory);
 
 // ═══════════════════════════════════════════════════════════════════════
 // ADMIN (SuperAdmin JWT — not User JWT)
@@ -44,6 +45,6 @@ router.get("/allCodes", adminMiddleware, referralController.getAllReferralCodes)
 
 // Legacy routes — kept for backward compatibility, redirect to dashboard
 // /myStats → now served by /dashboard
-router.get("/myStats", auth, autoGenerateReferralCode, referralController.getReferralDashboard);
+router.get("/myStats", auth, verifyRoleFromDB, autoGenerateReferralCode, referralController.getReferralDashboard);
 
 module.exports = router;

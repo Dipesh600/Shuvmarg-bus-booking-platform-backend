@@ -24,7 +24,7 @@ test("cancelPassengerBooking - success path", async (t) => {
   const refundService = { processRefundAndClawback: async () => ({ refundId: "r1" }) };
   const notificationService = { sendCancellationNotifications: mock.fn() };
 
-  const service = createPassengerBookingCancellationService(repository, seatService, refundService, notificationService);
+  const service = createPassengerBookingCancellationService({ withTransaction: work => work(null), claimBooking: async () => true, ...repository }, seatService, refundService, notificationService);
 
   const result = await service.cancelPassengerBooking("T1", "u1", "reason", "original");
   assert.strictEqual(result.status, "cancelled");
@@ -41,7 +41,7 @@ test("cancelPassengerBooking - ineligible", async (t) => {
     findBookingByTicketId: async () => ({ userId: "u1", status: "booked", tripId: "trip1" }),
     findTripById: async () => ({ tripDate: new Date(), departureTime: "10:00" }),
   };
-  const service = createPassengerBookingCancellationService(repo, {}, {}, {});
+  const service = createPassengerBookingCancellationService({ withTransaction: work => work(null), claimBooking: async () => true, ...repo }, {}, {}, {});
   try {
     await service.cancelPassengerBooking("T1", "u1");
     assert.fail();
@@ -58,7 +58,7 @@ test("cancelPassengerBooking - seat doc missing", async (t) => {
     findTripById: async () => ({ tripDate: new Date(), departureTime: "10:00" }),
     findSeatByTripId: async () => null
   };
-  const service = createPassengerBookingCancellationService(repo, {}, {}, {});
+  const service = createPassengerBookingCancellationService({ withTransaction: work => work(null), claimBooking: async () => true, ...repo }, {}, {}, {});
   try {
     await service.cancelPassengerBooking("T1", "u1");
     assert.fail();

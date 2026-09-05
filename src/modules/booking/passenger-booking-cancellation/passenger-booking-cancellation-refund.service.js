@@ -3,16 +3,17 @@ const createPassengerBookingCancellationRefundService = (
   loadClawbackCashback,
   loadCreditWallet
 ) => {
-  const processRefundAndClawback = async (booking, userId, estimate, cancelReason, requestBody) => {
+  const processRefundAndClawback = async (booking, userId, estimate, cancelReason, requestBody, session) => {
     // Invoke loader outside try/catch, failure propagates
     const clawbackCashback = loadClawbackCashback();
 
     try {
-      const clawbackResult = await clawbackCashback(booking._id);
+      const clawbackResult = await clawbackCashback(booking._id, { session });
       if (clawbackResult.clawedBack > 0) {
         console.log(`Clawed back Rs. ${clawbackResult.clawedBack} cashback for cancelled booking ${booking._id}`);
       }
     } catch (cbErr) {
+      if (session) throw cbErr;
       console.error("Cashback clawback failed during cancellation:", cbErr);
     }
 
@@ -25,7 +26,7 @@ const createPassengerBookingCancellationRefundService = (
     let processedAt = null;
     let completedAt = null;
 
-    if (isWalletRefund) {
+    if (isWalletRefund && estimate.refundAmount > 0) {
       refundStatus = "completed";
       refundGateway = "yatra_balance";
       remarks = "Refunded instantly to Shuvmarg Money";
@@ -43,8 +44,10 @@ const createPassengerBookingCancellationRefundService = (
           referenceType: "refund",
           referenceId: booking._id,
           remarks: `Instant refund for cancelled ticket ${booking.ticketId}`,
+          ...(session ? { session } : {}),
         });
       } catch (walletErr) {
+        if (session) throw walletErr;
         console.error("Instant Yatra Balance credit failed:", walletErr);
         refundStatus = "pending";
         refundGateway = null;
@@ -67,7 +70,7 @@ const createPassengerBookingCancellationRefundService = (
       remarks,
       refundGateway,
       reason: cancelReason || "User cancelled",
-    });
+    }, session);
 
     return refund;
   };

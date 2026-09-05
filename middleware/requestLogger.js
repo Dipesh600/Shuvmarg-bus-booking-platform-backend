@@ -25,7 +25,7 @@ const requestLogger = (req, res, next) => {
         const logData = {
             requestId,
             method:   req.method,
-            path:     req.originalUrl,
+            path:     (req.originalUrl || req.path || '').split('?')[0],
             status:   res.statusCode,
             duration: `${duration}ms`,
             ip:       req.ip || req.connection?.remoteAddress,

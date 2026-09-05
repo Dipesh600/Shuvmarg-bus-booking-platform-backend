@@ -1,7 +1,7 @@
 'use strict';
 
 const rateLimit = require('express-rate-limit');
-const { MemoryStore } = rateLimit;
+const { createRateLimitStore } = require('../src/shared/http/mongo-rate-limit-store');
 
 const accountKey = (req) => {
   const identifier = req.body?.phone || req.body?.emailOrPhone || req.ip;
@@ -21,10 +21,10 @@ const loginOptions = (store, message, errorCode) => ({
 
 const createLoginRateLimiters = ({ stores = {} } = {}) => {
   const ownedStores = {
-    passengerLoginStore: stores.passengerLoginStore || new MemoryStore(),
-    busOwnerLoginStore: stores.busOwnerLoginStore || new MemoryStore(),
-    agentLoginStore: stores.agentLoginStore || new MemoryStore(),
-    passwordChangeStore: stores.passwordChangeStore || new MemoryStore(),
+    passengerLoginStore: stores.passengerLoginStore || createRateLimitStore('login-passenger'),
+    busOwnerLoginStore: stores.busOwnerLoginStore || createRateLimitStore('login-owner'),
+    agentLoginStore: stores.agentLoginStore || createRateLimitStore('login-agent'),
+    passwordChangeStore: stores.passwordChangeStore || createRateLimitStore('password-change'),
   };
 
   const loginRateLimiter = rateLimit(loginOptions(

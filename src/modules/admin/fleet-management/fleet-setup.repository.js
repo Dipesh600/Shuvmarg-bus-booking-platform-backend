@@ -10,7 +10,7 @@ function createFleetSetupRepository({
   async function findFleet(id) {
     return Bus.findById(id)
       .select(
-        "busName busNumber approvalStatus status setupComplete corridorId routeRequestId brandId"
+        "busName busNumber approvalStatus status setupComplete corridorId routeRequestId brandId createdBy"
       )
       .populate({
         path: "corridorId",
@@ -32,9 +32,20 @@ function createFleetSetupRepository({
       .lean();
     const variantIds = variants.map((variant) => variant._id);
     if (variantIds.length === 0) return [];
+    const fleetConfigs = await OperatorRouteConfig.find({
+      brandId: fleet.brandId,
+      status: "ACTIVE",
+      fleetId: fleet._id,
+      variantId: { $in: variantIds },
+    })
+      .populate({ path: "variantId", select: "name direction" })
+      .select("_id activeStops status variantId")
+      .lean();
+    if (fleetConfigs.length || fleet.createdBy !== "ADMIN") return fleetConfigs;
     return OperatorRouteConfig.find({
       brandId: fleet.brandId,
       status: "ACTIVE",
+      fleetId: null,
       variantId: { $in: variantIds },
     })
       .populate({ path: "variantId", select: "name direction" })

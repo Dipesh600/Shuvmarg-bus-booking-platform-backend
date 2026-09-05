@@ -95,12 +95,12 @@ test('Bus-owner login account-state characterization', async (t) => {
     });
   });
 
-  await t.test('legacy role field fallback works when roles is empty', async () => {
+  await t.test('legacy role field fallback works when roles is absent', async () => {
     const phone = `98142${String(++n).padStart(5, '0')}`;
     await User.collection.insertOne({
       name: 'Legacy Operator', phone,
       password: bcrypt.hashSync(credential, 10),
-      role: 'busOwner', roles: [], status: 'active', deletedAt: null,
+      role: 'busOwner', status: 'active', deletedAt: null,
     });
     assert.equal((await login(phone)).status, 200);
   });

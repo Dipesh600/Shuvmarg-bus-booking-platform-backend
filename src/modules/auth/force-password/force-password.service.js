@@ -1,4 +1,5 @@
 'use strict';
+const { getEffectiveRoles } = require('../../../shared/auth/account-role.policy');
 
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -44,21 +45,22 @@ const changeForcePassword = async (input) => {
     const user = await repository.findByIdWithPassword(decoded.id);
     if (!user) throw errors.userNotFoundError();
     if (!user.forcePasswordChange) throw errors.passwordChangeNotRequiredError();
-    const roles = Array.isArray(user.roles) && user.roles.length ? user.roles : [user.role];
+    const roles = getEffectiveRoles(user);
     if (
       user.deletedAt
       || (user.status && user.status !== 'active')
-      || (decoded.activeRole && !roles.includes(decoded.activeRole))
+      || !roles.includes(decoded.activeRole)
     ) {
       throw errors.accountUnavailableError();
     }
     if (
-      decoded.credentialVersion !== undefined
-      && (
-        Number(decoded.credentialVersion) !== Number(user.temporaryCredentialVersion)
+      !Number.isInteger(decoded.credentialVersion) || decoded.credentialVersion < 0
+      || !Number.isInteger(decoded.tokenVersion) || decoded.tokenVersion < 0
+      || (
+        decoded.credentialVersion !== Number(user.temporaryCredentialVersion || 0)
         || (user.temporaryCredentialExpiresAt
           && new Date(user.temporaryCredentialExpiresAt).getTime() <= Date.now())
-        || Number(decoded.tokenVersion || 0) !== Number(user.tokenVersion || 0)
+        || decoded.tokenVersion !== Number(user.tokenVersion || 0)
       )
     ) {
       throw errors.credentialStateError();
@@ -67,6 +69,8 @@ const changeForcePassword = async (input) => {
     const hashedPassword = await bcrypt.hash(newPassword, 12);
     const consumed = await repository.saveForcedPasswordChange(user, hashedPassword, {
       credentialVersion: decoded.credentialVersion,
+      tokenVersion: decoded.tokenVersion,
+      activeRole: decoded.activeRole,
       phoneVerified: Boolean(phone && otp),
     });
     if (!consumed) throw errors.credentialStateError();

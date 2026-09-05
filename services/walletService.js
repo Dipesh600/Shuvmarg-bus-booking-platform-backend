@@ -1,20 +1,15 @@
 const Wallet = require("../models/walletModel");
-const WalletTransaction = require("../models/walletTransactionModel");
 const smLedgerService = require("../src/modules/wallet/sm-ledger");
 
 /**
  * Wallet Service — Bridge layer between old Wallet model and new SM Ledger.
  *
- * POST-MIGRATION ARCHITECTURE:
  *   - Balance is always computed from sm_ledger (never from Wallet.balance)
  *   - PIN management still lives on the Wallet model
  *   - Wallet.balance is kept in sync as a CACHE for performance on
  *     non-critical reads (e.g., push notification text), but the ledger
  *     aggregation is the authoritative source.
- *   - WalletTransaction receives no new writes — replaced by sm_ledger.
- *
- * All credit/debit operations go through smLedgerService.
- * This file wraps them for backward compatibility with existing callers.
+ * All credit/debit operations go through smLedgerService for legacy callers.
  */
 
 /**
@@ -22,15 +17,17 @@ const smLedgerService = require("../src/modules/wallet/sm-ledger");
  * Auto-creates a wallet with zero balance on first access.
  * Still needed: PIN storage lives on the Wallet document.
  */
-const getOrCreateWallet = async (userId) => {
-  let wallet = await Wallet.findOne({ userId });
+const getOrCreateWallet = async (userId, session = null) => {
+  const query = Wallet.findOne({ userId });
+  let wallet = await (session ? query.session(session) : query);
   if (!wallet) {
-    wallet = await Wallet.create({
+    const data = {
       userId,
       balance: 0,
       currency: "NPR",
       status: "active",
-    });
+    };
+    wallet = session ? (await Wallet.create([data], { session }))[0] : await Wallet.create(data);
   }
   return wallet;
 };
@@ -99,11 +96,12 @@ const creditWallet = async ({
   referenceType,
   referenceId,
   remarks,
+  session = null,
 }) => {
   if (amount <= 0) throw new Error("Credit amount must be greater than zero");
 
   // Ensure wallet exists (for PIN and status check)
-  const wallet = await getOrCreateWallet(userId);
+  const wallet = await getOrCreateWallet(userId, session);
 
   if (wallet.status !== "active") {
     throw new Error("Wallet is frozen. Contact support.");
@@ -129,13 +127,14 @@ const creditWallet = async ({
     amount,
     bookingId: referenceType === "booking" || referenceType === "refund" ? referenceId : null,
     note: remarks || `SM Money credited: Rs. ${amount} (${purpose})`,
+    session,
   });
 
   // Sync Wallet.balance cache (not authoritative, but keeps old reads working)
   await Wallet.findOneAndUpdate(
     { userId },
     { $inc: { balance: amount } },
-    { new: true }
+    { new: true, ...(session ? { session } : {}) }
   );
 
   return { ledgerEntry, wallet };

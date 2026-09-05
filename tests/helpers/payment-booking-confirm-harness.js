@@ -1,5 +1,4 @@
 'use strict';
-// Harness for confirmPassengerBooking characterization tests.
 const notifModulePath = require.resolve('../../controllers/notificationController/notification_manager.js');
 const userDeviceInfoPath = require.resolve('../../models/userDeviceInfoModel.js');
 const esewaPath = require.resolve('../../services/esewaVerificationService.js');
@@ -78,6 +77,7 @@ function setupConfirmHarness() {
       else obj[key] = orig;
     });
   }
+  mockMethod(require('../../src/modules/wallet/payment-authorization/wallet-pin.service'), 'verifyPaymentPin', async () => ({ ok: true }));
   esewaStub._impl = async () => ({ verified: true });
   mockMethod(bookingConfirmation, 'sendBookingConfirmedNotification', (...args) => {
     if (defaults.onNotifSent) defaults.onNotifSent(...args);

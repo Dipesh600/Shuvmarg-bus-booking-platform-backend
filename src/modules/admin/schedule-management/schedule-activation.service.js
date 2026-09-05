@@ -9,6 +9,7 @@ const {
   assertScheduleRouteChainReady,
 } = require("./schedule-route-chain.policy.js");
 const logger = require("../../../../utils/logger.js");
+const { assertScheduleDriverEligible } = require("./schedule-driver-gate.service");
 
 const activateSchedule = async (scheduleId, adminId) => {
   const schedule = await Schedule.findById(scheduleId);
@@ -32,14 +33,19 @@ const activateSchedule = async (scheduleId, adminId) => {
     );
   }
   await assertScheduleRouteChainReady(schedule);
+  await assertScheduleDriverEligible(schedule);
+  const linkedSchedule = schedule.returnScheduleId ? await Schedule.findById(schedule.returnScheduleId) : null;
+  if (linkedSchedule && ["DRAFT", "SUSPENDED"].includes(linkedSchedule.status)) {
+    await assertScheduleRouteChainReady(linkedSchedule);
+    await assertScheduleDriverEligible(linkedSchedule);
+  }
   schedule.status = "ACTIVE";
   schedule.activatedBy = adminId;
   schedule.activatedAt = new Date();
   await schedule.save();
-  if (schedule.returnScheduleId) {
-    const linked = await Schedule.findById(schedule.returnScheduleId);
+  if (linkedSchedule) {
+    const linked = linkedSchedule;
     if (linked && ["DRAFT", "SUSPENDED"].includes(linked.status)) {
-      await assertScheduleRouteChainReady(linked);
       linked.status = "ACTIVE";
       linked.activatedBy = adminId;
       linked.activatedAt = new Date();
@@ -54,6 +60,11 @@ const activateSchedule = async (scheduleId, adminId) => {
 };
 
 const generateWindow = async (schedule, mode = "go-live") => {
+  await assertScheduleDriverEligible(schedule);
+  if (schedule.returnScheduleId) {
+    const linked = await Schedule.findById(schedule.returnScheduleId);
+    if (linked) await assertScheduleDriverEligible(linked);
+  }
   const days = schedule.advanceGenerationDays || 60;
   const result = await generateTripsForDateRange(schedule._id, new Date(), days);
   const primaryMessage =

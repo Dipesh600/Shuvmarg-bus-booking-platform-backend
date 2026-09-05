@@ -29,6 +29,16 @@ function createBusOwnerFleetReadController({
         return res.status(statusCode).json(payload);
       }
     },
+
+    async getFleetSetupStatus(req, res) {
+      try {
+        const result = await readService.getFleetSetupStatusForOwner(req);
+        return res.status(200).json(result);
+      } catch (error) {
+        const { statusCode, payload } = mapReadError(error, logger);
+        return res.status(statusCode).json(payload);
+      }
+    },
   };
 }
 

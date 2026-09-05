@@ -4,7 +4,7 @@
  * tests/unit/auth/verification-token.test.js
  *
  * Unit tests for utils/verificationToken.js
- * Verifies signed JWT issuance, validation, rejection rules, and documented reuse behavior.
+ * Verifies signed JWT issuance, validation, rejection rules, and stateless signature validation.
  */
 
 const { createTestSecret } = require('../../helpers/security-test-values');
@@ -74,7 +74,7 @@ test('verificationToken.validateVerificationToken — acceptance & reuse', async
     assert.equal(res.valid, true);
   });
 
-  await t.test('token is time-limited but replayable within TTL window', () => {
+  await t.test('signature validation is repeatable; registration-proof service enforces single use', () => {
     const token = verificationToken.issueVerificationToken(PHONE, AGENT_PURPOSE);
     assert.equal(verificationToken.validateVerificationToken(token, PHONE, AGENT_PURPOSE).valid, true);
     assert.equal(verificationToken.validateVerificationToken(token, PHONE, AGENT_PURPOSE).valid, true);

@@ -1,3 +1,4 @@
+const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB");
 const { describe, it } = require("node:test");
 const assert = require("node:assert");
 const routes = require("../../routes/ticketRoutes/ticketRoutes");
@@ -19,8 +20,9 @@ describe("passenger-booking-history route characterization", () => {
     assert.ok(route.methods.get);
     
     const handlers = route.stack.map((layer) => layer.handle);
-    assert.strictEqual(handlers.length, 2);
+    assert.strictEqual(handlers.length, 3);
     assert.strictEqual(handlers[0], auth);
-    assert.strictEqual(handlers[1], passengerBookingHistory.getPassengerBookingHistory);
+    assert.strictEqual(handlers[1], verifyRoleFromDB);
+    assert.strictEqual(handlers[2], passengerBookingHistory.getPassengerBookingHistory);
   });
 });

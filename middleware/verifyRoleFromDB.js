@@ -26,6 +26,8 @@
  *   For read-heavy public routes, authMiddleware alone is sufficient.
  */
 
+const { getEffectiveRoles } = require("../src/shared/auth/account-role.policy");
+
 const User = require("../models/userModel.js");
 
 const verifyRoleFromDB = async (req, res, next) => {
@@ -87,7 +89,7 @@ const verifyRoleFromDB = async (req, res, next) => {
         // Verify the activeRole in this JWT is still in the user's roles array.
         // This catches: role revoked by admin, stale JWTs after role removal.
         const activeRole = req.userInfo.activeRole || req.userInfo.role;
-        if (activeRole && user.roles && !user.roles.includes(activeRole)) {
+        if (!activeRole || !getEffectiveRoles(user).includes(activeRole)) {
             return res.status(403).json({
                 success: false,
                 message: "Your role has been revoked. Please login again.",

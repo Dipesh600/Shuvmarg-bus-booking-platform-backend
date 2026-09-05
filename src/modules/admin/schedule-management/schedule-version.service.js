@@ -5,6 +5,7 @@ const {
   generateTripsForDateRange,
 } = require("../../../../services/tripGeneratorCron.js");
 const logger = require("../../../../utils/logger.js");
+const { assertScheduleDriverEligible } = require("./schedule-driver-gate.service");
 const { isValidTime } = require("./schedule-validation.policy.js");
 const {
   assertScheduleRouteChainReady,
@@ -89,6 +90,7 @@ const createScheduleVersion = async (scheduleId, changes, adminId) => {
     versionDocument(current, changes, start, adminId, sealDate)
   );
   await assertScheduleRouteChainReady(newVersion);
+  await assertScheduleDriverEligible(newVersion);
   await newVersion.save();
   current.pendingVersionId = newVersion._id;
   await current.save();

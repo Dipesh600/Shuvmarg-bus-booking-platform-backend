@@ -53,12 +53,17 @@
  */
 const withMinimumLatency = async (fn, minMs = 600) => {
   const start = Date.now();
-  const result = await fn();
-  const elapsed = Date.now() - start;
-  if (elapsed < minMs) {
-    await new Promise((r) => setTimeout(r, minMs - elapsed));
+  try {
+    return await fn();
+  } finally {
+    // Error responses must be padded too. Padding only successful returns makes
+    // an explicit not-found state distinguishable by timing before the caller
+    // even reads the response body.
+    const elapsed = Date.now() - start;
+    if (elapsed < minMs) {
+      await new Promise((r) => setTimeout(r, minMs - elapsed));
+    }
   }
-  return result;
 };
 
 /**

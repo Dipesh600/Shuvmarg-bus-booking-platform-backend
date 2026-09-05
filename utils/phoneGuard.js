@@ -1,3 +1,4 @@
+const { getEffectiveRoles } = require('../src/shared/auth/account-role.policy');
 /**
  * utils/phoneGuard.js
  *
@@ -87,15 +88,15 @@ const buildPhoneQuery = (phone, options = {}) => {
  *   user: Object|null,      // User doc (lean) if exists — includes name for UX
  * }>}
  */
-const checkPhoneForRole = async (phone, targetRole) => {
-    const query = buildPhoneQuery(phone);
+const checkPhoneForRole = async (phone, targetRole, options = {}) => {
+    const query = buildPhoneQuery(phone, options);
     const user = await User.findOne(query)
         .select("name role roles status phone")
         .lean();
 
     if (!user) return { exists: false, hasRole: false, user: null };
 
-    const roles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+    const roles = getEffectiveRoles(user);
 
     return {
         exists: true,

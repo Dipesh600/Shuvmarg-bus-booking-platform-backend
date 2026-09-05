@@ -6,9 +6,9 @@ function createSmLedgerClawbackService({
   ScratchCard,
   debitLedgerSimple,
 }) {
-  return async function clawbackCashback(bookingId) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+  return async function clawbackCashback(bookingId, { session: parentSession } = {}) {
+    const session = parentSession || await mongoose.startSession();
+    if (!parentSession) session.startTransaction();
     try {
       const credits = await SMLedger.find({
         bookingId,
@@ -39,13 +39,13 @@ function createSmLedgerClawbackService({
         { $set: { status: "CLAWED_BACK" } },
         { session }
       );
-      await session.commitTransaction();
+      if (!parentSession) await session.commitTransaction();
       return { clawedBack, entriesCreated };
     } catch (error) {
-      await session.abortTransaction();
+      if (!parentSession) await session.abortTransaction();
       throw error;
     } finally {
-      session.endSession();
+      if (!parentSession) await session.endSession();
     }
   };
 }
