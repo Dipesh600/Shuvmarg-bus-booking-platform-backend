@@ -1,19 +1,11 @@
 const mongoose = require("mongoose");
 
 /**
- * SM Ledger — Append-Only Financial Ledger for Shuvmarg Money
- *
- * DESIGN PRINCIPLES (from spec §1.3, §1.4):
- *   1. APPEND-ONLY: Records are never updated or deleted.
- *      Corrections are new entries (e.g. CLAWBACK reverses a CASHBACK).
- *   2. AMOUNT IS ALWAYS POSITIVE: Direction is a separate field.
- *      Never infer direction from sign.
- *   3. BALANCE IS COMPUTED: Spendable balance = sum(ACTIVE credits) − sum(debits).
- *      Never stored as a single mutable number.
- *
- * This collection replaces `WalletTransaction` as the authoritative record.
- * WalletTransaction is kept for historical audit but receives no new writes
- * after migration.
+ * SM Ledger is the authoritative record for Shuvmarg Money.
+ * Amounts are positive; direction is explicit. Corrections use new entries.
+ * Credit consumption and lifecycle fields are mutable allocation state.
+ * Spendable balance sums unexpired ACTIVE credit remainingAmount; FIFO debits
+ * already reduce that amount and must not be subtracted a second time.
  */
 
 const consumedBySchema = new mongoose.Schema(
@@ -54,8 +46,15 @@ const smLedgerSchema = new mongoose.Schema(
       default: null,
     },
 
-    // For CLAWBACK/REVERSAL entries — points to the original CREDIT being reversed
+    // Original credit for a clawback, or original debit for a reversal.
     relatedLedgerEntryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SMLedger",
+      default: null,
+    },
+
+    // Set atomically with compensation. Serializes retries on the original debit.
+    reversalEntryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "SMLedger",
       default: null,
@@ -158,6 +157,7 @@ smLedgerSchema.index({ userId: 1, direction: 1, type: 1, createdAt: -1 });
 
 // Booking-level lookup: find all entries for a specific booking (for clawback)
 smLedgerSchema.index({ bookingId: 1 });
+smLedgerSchema.index({ relatedLedgerEntryId: 1, type: 1 });
 
 // Referral unlock dedup: ensure we don't double-credit the same booking number
 smLedgerSchema.index({ referralId: 1, bookingNumber: 1 });

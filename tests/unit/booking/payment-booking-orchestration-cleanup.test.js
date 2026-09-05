@@ -21,11 +21,14 @@ const {
 } = require('../../helpers/passenger-booking-confirmation-orchestrator-source');
 
 test('payment booking orchestration cleanup modules', async (t) => {
-  await t.test('1. compensation clears split debit after attempt and wallet debit after success', async () => {
+  await t.test('1. compensation clears split and wallet debits after successful reversal', async () => {
     const calls = [];
     const service = createPassengerInternalMoneyCompensationService({
       smLedgerService: { reverseDebit: async (id) => calls.push(['wallet', id]) },
-      splitPayment: { reversePassengerSplitPaymentDebit: async ({ debitEntryId }) => calls.push(['split', debitEntryId]) },
+      splitPayment: { reversePassengerSplitPaymentDebit: async ({ debitEntryId }) => {
+        calls.push(['split', debitEntryId]);
+        return { reversed: true, skipped: false };
+      } },
       logger: { info: () => {}, error: () => {} },
     });
 

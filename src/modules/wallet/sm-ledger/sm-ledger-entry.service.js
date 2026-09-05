@@ -13,6 +13,7 @@ function createSmLedgerEntryService({ SMLedger, PlatformConfig, now = () => new 
     bookingNumber = null,
     note = null,
     session = null,
+    entryId = null,
   }) {
     if (amount <= 0) throw new Error("Credit amount must be greater than zero");
     let expiryMonths = expiresInMonths;
@@ -25,6 +26,7 @@ function createSmLedgerEntryService({ SMLedger, PlatformConfig, now = () => new 
     const entries = await SMLedger.create(
       [
         {
+          ...(entryId ? { _id: entryId } : {}),
           userId,
           bookingId,
           referralId,
