@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-
 /**
  * SM Ledger is the authoritative record for Shuvmarg Money.
  * Amounts are positive; direction is explicit. Corrections use new entries.
@@ -7,7 +6,6 @@ const mongoose = require("mongoose");
  * Spendable balance sums unexpired ACTIVE credit remainingAmount; FIFO debits
  * already reduce that amount and must not be subtracted a second time.
  */
-
 const consumedBySchema = new mongoose.Schema(
   {
     debitLedgerEntryId: {
@@ -23,7 +21,6 @@ const consumedBySchema = new mongoose.Schema(
   },
   { _id: false }
 );
-
 const smLedgerSchema = new mongoose.Schema(
   {
     userId: {
@@ -31,7 +28,6 @@ const smLedgerSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-
     // Booking that triggered this entry (null for referral locked, admin actions)
     bookingId: {
       type: mongoose.Schema.Types.ObjectId,

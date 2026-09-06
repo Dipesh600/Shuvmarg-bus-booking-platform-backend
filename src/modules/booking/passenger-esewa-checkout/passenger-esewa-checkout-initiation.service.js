@@ -1,5 +1,4 @@
 'use strict';
-
 function createPassengerEsewaCheckoutInitiationService(deps) {
   return async function initiatePassengerEsewaCheckout({
     userId,
@@ -36,7 +35,6 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
       walletAuthorizedAt = new Date();
     }
     const refundPolicySnapshot = await deps.captureRefundPolicySnapshot?.();
-
     const passengerDetails = deps.policy.normalizePassengerDetails(
       body.passengerDetails,
       hold.seatNumbers
@@ -132,11 +130,9 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
       formFields: fields,
       holdExpiresAt: hold.expiresAt,
     });
-
     return initiationResponse(attempt, config);
   };
 }
-
 function initiationResponse(attempt, config) {
     return {
       statusCode: 201,
@@ -151,5 +147,4 @@ function initiationResponse(attempt, config) {
       },
     };
 }
-
 module.exports = { createPassengerEsewaCheckoutInitiationService };

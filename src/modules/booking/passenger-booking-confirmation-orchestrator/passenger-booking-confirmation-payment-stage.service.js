@@ -1,6 +1,5 @@
 'use strict';
 const pinService = require('../../wallet/payment-authorization/wallet-pin.service');
-
 function createPassengerBookingConfirmationPaymentStage(deps) {
   return async function runPassengerBookingConfirmationPaymentStage({ req, state }) {
     const restoreClaim = async () => {
@@ -17,20 +16,17 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
       couponCode, boardingPoint, droppingPoint, bookedFrom, bookedTo,
       bookedDepartureTime, bookedArrivalTime, passengerDetails, smMoneyToUse,
     } = req.body;
-
     Object.assign(state, {
       tempBookingId, paymentId, paymentAmount, gateway,
       couponCode, boardingPoint, droppingPoint, bookedFrom, bookedTo,
       bookedDepartureTime, bookedArrivalTime, passengerDetails,
     });
-
     const requestValidationResult =
       deps.validatePassengerBookingConfirmationRequest({
       gateway,
       tempBookingId,
     });
     if (!requestValidationResult.ok) return requestValidationResult;
-
     state.userId = req.dbUser._id;
     // A client-supplied wallet reference is not a unique payment identity.
     if (gateway === 'wallet') state.paymentId = `sm_wallet_${state.userId}_${tempBookingId}`;
@@ -41,7 +37,6 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
     state.originalAmount = req.bookingHold.originalAmount;
     state.lockUserId = state.userId;
     state.lockTripId = state.scheduleId;
-
     const confirmationQuoteResult = req.paymentAttemptQuote
       ? { ok: true, quote: req.paymentAttemptQuote }
       : await deps.buildPassengerBookingConfirmationQuote({
@@ -51,12 +46,10 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
         activeRole: req.userInfo.activeRole,
       });
     if (!confirmationQuoteResult.ok) return confirmationQuoteResult;
-
     Object.assign(state, confirmationQuoteResult.quote);
     state.paymentAttemptId = req.paymentAttemptId;
     state.paymentProcessingToken = req.paymentProcessingToken;
     state.refundPolicySnapshot = req.refundPolicySnapshot;
-
     if (state.smMoneyApplied > 0) {
       const authorization = req.paymentAttemptId
         ? await deps.authorizeReservedPayment({ attemptId: req.paymentAttemptId, processingToken: req.paymentProcessingToken,
