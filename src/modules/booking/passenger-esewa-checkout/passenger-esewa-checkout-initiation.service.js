@@ -8,6 +8,15 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
     body = {},
   }) {
     const config = deps.readConfig();
+    const requestFingerprint = deps.checkoutFingerprint?.(body);
+    const existing = await deps.repository.findAttemptForHold?.(hold.tempBookingId, userId);
+    if (existing) {
+      if (existing.status !== 'INITIATED' || existing.requestFingerprint !== requestFingerprint
+        || new Date(existing.holdExpiresAt).getTime() <= Date.now()) {
+        throw Object.assign(new Error('This seat hold already has a different or closed payment attempt'), { statusCode: 409 });
+      }
+      return initiationResponse(existing, config);
+    }
     const quoteResult = await deps.buildQuote({
       gateway: 'esewa',
       tempBookingId: hold.tempBookingId,
@@ -20,6 +29,13 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
       activeRole,
     });
     if (!quoteResult.ok) return quoteResult;
+    let walletAuthorizedAt = null;
+    if (quoteResult.quote.smMoneyApplied > 0) {
+      const authorization = await deps.verifyWalletPin({ userId, pin: body.walletPin });
+      if (!authorization.ok) return authorization;
+      walletAuthorizedAt = new Date();
+    }
+    const refundPolicySnapshot = await deps.captureRefundPolicySnapshot?.();
 
     const passengerDetails = deps.policy.normalizePassengerDetails(
       body.passengerDetails,
@@ -101,6 +117,7 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
     };
     const attempt = await deps.repository.createAttempt({
       userId,
+      requestFingerprint, walletAuthorizedAt, refundPolicySnapshot,
       holdId: hold._id,
       tempBookingId: hold.tempBookingId,
       transactionUuid,
@@ -116,6 +133,11 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
       holdExpiresAt: hold.expiresAt,
     });
 
+    return initiationResponse(attempt, config);
+  };
+}
+
+function initiationResponse(attempt, config) {
     return {
       statusCode: 201,
       body: {
@@ -128,7 +150,6 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
         },
       },
     };
-  };
 }
 
 module.exports = { createPassengerEsewaCheckoutInitiationService };

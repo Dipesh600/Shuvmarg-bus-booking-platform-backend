@@ -49,6 +49,7 @@ const repository = createPassengerEsewaCheckoutRepository({
   SeatHold,
   Transaction,
   Trip,
+  createReservedAttempt: require('./passenger-esewa-checkout-reservation.service').createReservedAttempt,
 });
 const initiate = createPassengerEsewaCheckoutInitiationService({
   readConfig: readEsewaCheckoutConfig,
@@ -58,14 +59,19 @@ const initiate = createPassengerEsewaCheckoutInitiationService({
   policy,
   tripPolicy,
   boardingOptions: boardingOptions.resolvePassengerBoardingOptions,
+  checkoutFingerprint: require('./passenger-esewa-checkout-reservation.service').checkoutFingerprint,
+  verifyWalletPin: require('../../wallet/payment-authorization/wallet-pin.service').verifyPaymentPin,
+  captureRefundPolicySnapshot: require('../../../shared/refund-policy-snapshot').captureRefundPolicySnapshot,
 });
 const recovery = createPassengerEsewaCheckoutRecoveryService({
+  ...require('../../../shared/payment-attempt-recovery'),
   repository,
   mapper,
   verifyPayment: verifyEsewaPayment,
   sendDisputeAlert: dispute.sendPassengerPaymentDisputeAdminAlert,
 });
 const finalize = createPassengerEsewaCheckoutFinalizationService({
+  verifyPayment: verifyEsewaPayment,
   readConfig: readEsewaCheckoutConfig,
   repository,
   signature,
@@ -80,6 +86,7 @@ const controller = createPassengerEsewaCheckoutController({
 });
 
 module.exports = {
+  reconcilePaymentAttempt: finalize,
   initiatePassengerEsewaCheckout:
     controller.initiatePassengerEsewaCheckout,
   finalizePassengerEsewaCheckout:

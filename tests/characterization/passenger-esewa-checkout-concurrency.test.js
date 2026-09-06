@@ -23,6 +23,7 @@ function payload(transactionUuid = 'SM-CONCURRENT-1') {
     holdId,
     tempBookingId: 'TEMP-CONCURRENT-1',
     transactionUuid,
+    requestFingerprint: 'same-checkout-input',
     productCode: 'EPAYTEST',
     originalAmount: 100,
     gatewayAmount: 100,

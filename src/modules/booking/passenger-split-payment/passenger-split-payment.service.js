@@ -23,6 +23,8 @@ function createPassengerSplitPaymentService({ smLedgerService, logger, mapper })
         userId,
         amount,
         bookingId: null,
+        operationKey: `checkout:${tempBookingId}`,
+        paymentContext: { tempBookingId, gateway },
         note: `SM Money spent at checkout: Rs. ${amount} (temp: ${tempBookingId})`,
       });
 

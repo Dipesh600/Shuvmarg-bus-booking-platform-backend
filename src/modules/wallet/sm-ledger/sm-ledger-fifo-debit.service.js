@@ -1,9 +1,12 @@
 "use strict";
+const { withMongoTransaction } = require("../../../shared/with-mongo-transaction");
+const { toMinorUnits, fromMinorUnits } = require("../../../shared/money");
 
 function createSmLedgerFifoDebitService({
   mongoose,
   SMLedger,
   toObjectId,
+  lockWalletForDebit,
   now = () => new Date(),
 }) {
   return async function debitLedgerFIFO({
@@ -11,12 +14,24 @@ function createSmLedgerFifoDebitService({
     amount,
     bookingId = null,
     note = null,
+    session: existingSession = null,
+    operationKey = null, paymentContext = null,
   }) {
     if (amount <= 0) throw new Error("Debit amount must be greater than zero");
+    const requestedMinor = toMinorUnits(amount, { allowZero: false });
     const userOid = toObjectId(userId);
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    try {
+    return withMongoTransaction(mongoose, existingSession, async session => {
+      if (operationKey) {
+        const previous = await SMLedger.findOne({ operationKey }).session(session);
+        if (previous) {
+          if (String(previous.userId) !== String(userOid) || toMinorUnits(previous.amount) !== requestedMinor
+            || previous.type !== "DEBIT" || previous.reversalEntryId || previous.fulfilledBookingId) {
+            throw new Error("Payment debit is already closed or belongs to a different operation");
+          }
+          return previous;
+        }
+      }
+      if (lockWalletForDebit) await lockWalletForDebit(userOid, session);
       const balanceResult = await SMLedger.aggregate([
         {
           $match: {
@@ -30,8 +45,7 @@ function createSmLedgerFifoDebitService({
         { $group: { _id: null, total: { $sum: "$remainingAmount" } } },
       ]).session(session);
       const available = balanceResult.length > 0 ? balanceResult[0].total : 0;
-      if (available < amount) {
-        await session.abortTransaction();
+      if (toMinorUnits(available) < requestedMinor) {
         throw new Error(
           `Insufficient Shuvmarg Money. Available: Rs. ${Math.max(
             0,
@@ -48,25 +62,28 @@ function createSmLedgerFifoDebitService({
       })
         .sort({ expires_at: 1 })
         .session(session);
-      let remaining = amount;
+      let remaining = requestedMinor;
       const consumed = [];
       for (const credit of credits) {
         if (remaining <= 0) break;
-        const consumedAmount = Math.min(credit.remainingAmount, remaining);
-        credit.remainingAmount -= consumedAmount;
+        const consumedMinor = Math.min(toMinorUnits(credit.remainingAmount), remaining);
+        const consumedAmount = fromMinorUnits(consumedMinor);
+        credit.remainingAmount = fromMinorUnits(toMinorUnits(credit.remainingAmount) - consumedMinor);
         if (credit.remainingAmount <= 0) {
           credit.remainingAmount = 0;
           credit.status = "USED";
         }
         await credit.save({ session });
         consumed.push({ creditEntryId: credit._id, amountConsumed: consumedAmount });
-        remaining -= consumedAmount;
+        remaining -= consumedMinor;
       }
+      if (remaining !== 0) throw new Error("Ledger allocation requires reconciliation");
       const debitEntry = (
         await SMLedger.create(
           [
             {
               userId: userOid,
+              operationKey, paymentContext,
               bookingId,
               type: "DEBIT",
               direction: "DEBIT",
@@ -98,14 +115,8 @@ function createSmLedgerFifoDebitService({
           { session }
         );
       }
-      await session.commitTransaction();
       return debitEntry;
-    } catch (error) {
-      await session.abortTransaction();
-      throw error;
-    } finally {
-      session.endSession();
-    }
+    });
   };
 }
 

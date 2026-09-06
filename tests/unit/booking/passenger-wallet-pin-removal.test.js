@@ -36,7 +36,7 @@ test('payment booking flow: shared wallet PIN authorization', async (t) => {
   // Shared authorization keeps PIN validation out of the orchestrator.
   await t.test('passes the request PIN to shared payment authorization', () => {
     assert.match(controllerSrc, /pinService\.verifyPaymentPin/);
-    assert.match(controllerSrc, /authorize\(\{ userId: state\.userId, pin: req\.body\.walletPin \}\)/);
+    assert.match(controllerSrc, /pinService\.verifyPaymentPin\)\(\{ userId: state\.userId, pin: req\.body\.walletPin \}\)/);
   });
 
   await t.test('does not contain WALLET_PIN_REQUIRED', () => {

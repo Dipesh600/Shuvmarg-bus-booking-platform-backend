@@ -121,6 +121,9 @@ const bookingSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    refundReservedMinor: { type: Number, default: null, min: 0 },
+    refundPolicySnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+    paymentOperationKey: { type: String, default: null },
 
     // === PAYMENT DETAILS (Nepal-specific gateway support) ===
     // Records how the passenger paid — essential for reconciliation and refund processing.
@@ -228,4 +231,5 @@ bookingSchema.statics.getTotalUserSavings = function (userId) {
   ]);
 };
 
+bookingSchema.index({ paymentOperationKey: 1 }, { unique: true, partialFilterExpression: { paymentOperationKey: { $type: "string" } } });
 module.exports = mongoose.model("Booking", bookingSchema);

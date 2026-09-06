@@ -32,6 +32,8 @@ const walletSchema = new mongoose.Schema(
       enum: ["active", "frozen"],
       default: "active",
     },
+    // Serializes spending with freezes and concurrent wallet operations.
+    debitSequence: { type: Number, default: 0 },
     pin: {
       type: String,
       default: null,

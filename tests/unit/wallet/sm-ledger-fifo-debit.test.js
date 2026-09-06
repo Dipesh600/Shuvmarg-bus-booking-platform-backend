@@ -10,6 +10,11 @@ function session() {
   return {
     started: 0, committed: 0, aborted: 0, ended: 0,
     startTransaction() { this.started++; },
+    async withTransaction(work) {
+      this.started++;
+      try { const result = await work(); this.committed++; return result; }
+      catch (error) { this.aborted++; throw error; }
+    },
     async commitTransaction() { this.committed++; },
     async abortTransaction() { this.aborted++; },
     endSession() { this.ended++; },
@@ -59,7 +64,7 @@ test("SM ledger FIFO debit contracts", async (t) => {
     assert.equal(txn.ended, 1);
   });
 
-  await t.test("insufficient balance preserves message and legacy double abort", async () => {
+  await t.test("insufficient balance aborts once without a partial debit", async () => {
     const txn = session();
     const debit = createSmLedgerFifoDebitService({
       mongoose: { startSession: async () => txn },
@@ -70,7 +75,7 @@ test("SM ledger FIFO debit contracts", async (t) => {
       () => debit({ userId: "u", amount: 25 }),
       /Available: Rs\. 20, Required: Rs\. 25/
     );
-    assert.equal(txn.aborted, 2);
+    assert.equal(txn.aborted, 1);
     assert.equal(txn.committed, 0);
     assert.equal(txn.ended, 1);
   });

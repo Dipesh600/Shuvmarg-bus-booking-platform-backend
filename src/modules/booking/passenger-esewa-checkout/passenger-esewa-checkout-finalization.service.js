@@ -28,6 +28,7 @@ function createPassengerEsewaCheckoutFinalizationService(deps) {
       );
     }
     if (['COMPLETED', 'FAILED', 'DISPUTED'].includes(existing.status)) {
+      if (existing.status === 'COMPLETED' && !existing.result) return deps.recovery.recoverCommittedBooking(existing);
       return existing.result || deps.mapper.response(
         409,
         'This payment attempt is already closed.',
@@ -61,14 +62,14 @@ function createPassengerEsewaCheckoutFinalizationService(deps) {
       await deps.repository.updateAttempt(attempt._id, {
         status: 'INITIATED',
         processingExpiresAt: null,
-      });
+      }, attempt.processingToken);
       throw error;
     }
     if (response?.status && response.status !== 'COMPLETE') {
       await deps.repository.updateAttempt(attempt._id, {
         status: 'INITIATED',
         processingExpiresAt: null,
-      });
+      }, attempt.processingToken);
       return deps.mapper.response(
         402,
         'eSewa has not completed this payment.',
@@ -76,12 +77,14 @@ function createPassengerEsewaCheckoutFinalizationService(deps) {
       );
     }
     const hold = await deps.repository.findHoldByAttempt(attempt);
+    const verified = await deps.verifyPayment(attempt.transactionUuid, attempt.gatewayAmount);
+    if (!verified?.verified) return deps.recovery.handleUnverified(attempt, verified);
     if (
       !hold ||
       hold.status !== 'held' ||
       new Date(hold.expiresAt).getTime() <= Date.now()
     ) {
-      return deps.recovery.resolveUnavailableHold(attempt);
+      return deps.recovery.markDisputed(attempt, 'Payment completed after the seat hold became unavailable.');
     }
     const request = {
       body: {
@@ -94,6 +97,10 @@ function createPassengerEsewaCheckoutFinalizationService(deps) {
       userInfo: { activeRole },
       bookingHold: hold,
       paymentAttemptQuote: attempt.confirmationQuote,
+      paymentAttemptId: attempt._id,
+      paymentProcessingToken: attempt.processingToken,
+      providerPaymentVerified: true,
+      refundPolicySnapshot: attempt.refundPolicySnapshot,
     };
     const result = await deps.orchestrate({
       req: request,
@@ -106,14 +113,14 @@ function createPassengerEsewaCheckoutFinalizationService(deps) {
         providerReference: response?.transaction_code || null,
         processingExpiresAt: null,
         result,
-      });
+      }, attempt.processingToken);
       return result;
     }
     if (result?.body?.errorCode === 'ESEWA_VERIFICATION_FAILED') {
       await deps.repository.updateAttempt(attempt._id, {
         status: 'INITIATED',
         processingExpiresAt: null,
-      });
+      }, attempt.processingToken);
       return result;
     }
     return deps.recovery.markDisputed(

@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('node:crypto');
 
 function createPassengerEsewaCheckoutRepository({
   EsewaPaymentAttempt,
@@ -6,6 +7,7 @@ function createPassengerEsewaCheckoutRepository({
   Transaction,
   Trip,
   clock = () => new Date(),
+  createReservedAttempt,
 }) {
   function findCheckoutTrip(tripId) {
     return Trip.findById(tripId)
@@ -54,19 +56,25 @@ function createPassengerEsewaCheckoutRepository({
 
   async function createAttempt(payload) {
     try {
-      return await EsewaPaymentAttempt.create(payload);
+      return createReservedAttempt ? await createReservedAttempt(payload) : await EsewaPaymentAttempt.create(payload);
     } catch (error) {
       if (error?.code !== 11000) throw error;
-      return EsewaPaymentAttempt.findOne({
+      const existing = await EsewaPaymentAttempt.findOne({
         tempBookingId: payload.tempBookingId,
         userId: payload.userId,
       });
+      if (!existing) throw error;
+      if (existing.requestFingerprint !== payload.requestFingerprint || existing.status !== 'INITIATED') {
+        throw Object.assign(new Error('The seat hold already has a different payment attempt'), { statusCode: 409 });
+      }
+      return existing;
     }
   }
 
   function findOwnedAttempt(transactionUuid, userId) {
     return EsewaPaymentAttempt.findOne({ transactionUuid, userId });
   }
+  const findAttemptForHold = (tempBookingId, userId) => EsewaPaymentAttempt.findOne({ tempBookingId, userId });
 
   function claimOwnedAttempt(transactionUuid, userId, leaseMs) {
     const now = clock();
@@ -86,18 +94,22 @@ function createPassengerEsewaCheckoutRepository({
         $set: {
           status: 'VERIFYING',
           processingExpiresAt: new Date(now.getTime() + leaseMs),
+          processingToken: crypto.randomUUID(),
         },
       },
       { new: true }
     );
   }
 
-  function updateAttempt(id, update) {
-    return EsewaPaymentAttempt.findByIdAndUpdate(
-      id,
+  async function updateAttempt(id, update, processingToken) {
+    if (!processingToken) throw new Error('Payment processing ownership is required');
+    const attempt = await EsewaPaymentAttempt.findOneAndUpdate(
+      { _id: id, processingToken },
       { $set: update },
       { new: true }
     );
+    if (!attempt) throw Object.assign(new Error('Payment processing ownership changed; retry the original attempt'), { code: 'PAYMENT_LEASE_LOST' });
+    return attempt;
   }
 
   function findHoldByAttempt(attempt) {
@@ -139,6 +151,7 @@ function createPassengerEsewaCheckoutRepository({
     findCheckoutTrip,
     createAttempt,
     findOwnedAttempt,
+    findAttemptForHold,
     claimOwnedAttempt,
     updateAttempt,
     findHoldByAttempt,

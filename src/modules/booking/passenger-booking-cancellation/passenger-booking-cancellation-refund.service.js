@@ -18,13 +18,15 @@ const createPassengerBookingCancellationRefundService = (
     }
 
     const refundMethodInput = requestBody.refundMethod || "original";
+    if (!["wallet", "original"].includes(refundMethodInput)) throw Object.assign(new Error("Invalid refund destination"), { statusCode: 400 });
     const isWalletRefund = refundMethodInput === "wallet";
 
-    let refundStatus = "pending";
+    let refundStatus = estimate.refundAmount > 0 ? "pending" : "not_applicable";
     let refundGateway = null;
     let remarks = null;
     let processedAt = null;
     let completedAt = null;
+    let settlementEvidence = null;
 
     if (isWalletRefund && estimate.refundAmount > 0) {
       refundStatus = "completed";
@@ -37,7 +39,7 @@ const createPassengerBookingCancellationRefundService = (
       const creditWallet = loadCreditWallet();
 
       try {
-        await creditWallet({
+        const credited = await creditWallet({
           userId: userId,
           amount: estimate.refundAmount,
           purpose: "refund",
@@ -46,6 +48,7 @@ const createPassengerBookingCancellationRefundService = (
           remarks: `Instant refund for cancelled ticket ${booking.ticketId}`,
           ...(session ? { session } : {}),
         });
+        settlementEvidence = { kind: "ledger", ledgerEntryId: credited?.ledgerEntry?._id || null };
       } catch (walletErr) {
         if (session) throw walletErr;
         console.error("Instant Yatra Balance credit failed:", walletErr);
@@ -63,6 +66,10 @@ const createPassengerBookingCancellationRefundService = (
       originalAmount: estimate.refundAmount + estimate.cancellationCharge,
       cancellationCharge: estimate.cancellationCharge,
       refundAmount: estimate.refundAmount,
+      destination: refundMethodInput,
+      paymentAllocation: estimate.allocationKnown ? { smRefundAmount: estimate.smRefundAmount,
+        gatewayRefundAmount: estimate.gatewayRefundAmount } : null,
+      settlementEvidence,
       status: refundStatus,
       requestedAt: new Date(),
       processedAt,

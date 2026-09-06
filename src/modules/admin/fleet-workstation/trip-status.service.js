@@ -39,7 +39,8 @@ const createTripStatusService = ({
       trip.cancelledBy = adminId;
       trip.cancellationReason =
         cancellationReason || "Cancelled by admin via Workstation";
-      await cancellationService.cancelBookings(trip._id);
+      return cancellationService.cancelTrip({ tripId: trip._id, fleetId, adminId,
+        reason: trip.cancellationReason });
     }
     trip.status = status;
     await trip.save();

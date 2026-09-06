@@ -32,6 +32,8 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
     if (!requestValidationResult.ok) return requestValidationResult;
 
     state.userId = req.dbUser._id;
+    // A client-supplied wallet reference is not a unique payment identity.
+    if (gateway === 'wallet') state.paymentId = `sm_wallet_${state.userId}_${tempBookingId}`;
     state.scheduleId = req.bookingHold.tripId;
     state.holdId = req.bookingHold._id;
     state.holdExpiresAt = req.bookingHold.expiresAt;
@@ -51,11 +53,17 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
     if (!confirmationQuoteResult.ok) return confirmationQuoteResult;
 
     Object.assign(state, confirmationQuoteResult.quote);
+    state.paymentAttemptId = req.paymentAttemptId;
+    state.paymentProcessingToken = req.paymentProcessingToken;
+    state.refundPolicySnapshot = req.refundPolicySnapshot;
 
     if (state.smMoneyApplied > 0) {
-      const authorize = deps.verifyWalletPaymentPin || pinService.verifyPaymentPin;
-      const authorization = await authorize({ userId: state.userId, pin: req.body.walletPin });
+      const authorization = req.paymentAttemptId
+        ? await deps.authorizeReservedPayment({ attemptId: req.paymentAttemptId, processingToken: req.paymentProcessingToken,
+          userId: state.userId, amount: state.smMoneyApplied })
+        : await (deps.verifyWalletPaymentPin || pinService.verifyPaymentPin)({ userId: state.userId, pin: req.body.walletPin });
       if (!authorization.ok) return authorization;
+      if (req.paymentAttemptId) state.splitPaymentDebitEntryId = authorization.debitEntryId;
     }
 
     state.holdClaimed = await deps.claimPassengerHoldForConfirmation({
@@ -76,7 +84,9 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
       };
     }
 
-    const splitPaymentResult = await deps.debitPassengerSplitPayment({
+    const splitPaymentResult = state.splitPaymentDebitEntryId
+      ? { ok: true, debitEntryId: state.splitPaymentDebitEntryId }
+      : await deps.debitPassengerSplitPayment({
       gateway,
       userId: state.userId,
       amount: state.smMoneyApplied,
@@ -88,7 +98,9 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
     }
     state.splitPaymentDebitEntryId = splitPaymentResult.debitEntryId;
 
-    const esewaVerificationResult = await deps.verifyPassengerEsewaPayment({
+    const esewaVerificationResult = req.paymentAttemptId && req.providerPaymentVerified === true
+      ? { ok: true }
+      : await deps.verifyPassengerEsewaPayment({
       gateway,
       paymentId,
       gatewayAmount: state.gatewayAmount,
@@ -125,7 +137,7 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
         scheduleId: state.scheduleId,
         seatNumbers: state.normalizedSeats,
         gateway,
-        paymentId,
+        paymentId: state.paymentId,
         originalAmount: state.originalAmount,
         paymentAmount,
         gatewayAmount: state.gatewayAmount,

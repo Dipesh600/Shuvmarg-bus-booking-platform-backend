@@ -10,6 +10,11 @@ const esewaPaymentAttemptSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    requestFingerprint: { type: String, default: null },
+    reservedLedgerEntryId: { type: mongoose.Schema.Types.ObjectId, ref: "SMLedger", default: null },
+    walletAuthorizedAt: { type: Date, default: null },
+    refundPolicySnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+    processingToken: { type: String, default: null },
     holdId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'SeatHold',

@@ -84,6 +84,12 @@ function setupConfirmHarness() {
     return Promise.resolve();
   });
   clearOrchestratorCache();
+  // This harness isolates orchestration. Real atomic persistence is exercised by database tests.
+  mockMethod(require('../../src/shared/commit-payment-booking'), 'commitPaymentBooking', payload => Booking.create(payload));
+  mockMethod(require('../../src/shared/rollback-unfulfilled-seat'), 'rollbackUnfulfilledSeat', ({ tripId, arrayField, seatNo, userId }) =>
+    Seat.findOneAndUpdate({ tripId, [arrayField]: { $elemMatch: { seatNo, bookedBy: userId } } },
+      { $set: { [`${arrayField}.$[elem].booked`]: false, [`${arrayField}.$[elem].bookedBy`]: null, [`${arrayField}.$[elem].bookedAt`]: null } },
+      { arrayFilters: [{ 'elem.seatNo': seatNo, 'elem.bookedBy': userId }] }));
   const { confirmPassengerBooking: confirmBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 
   mockMethod(Trip, 'findById', () => ({ lean: () => Promise.resolve(defaults.trip) }));
@@ -99,6 +105,7 @@ function setupConfirmHarness() {
   mockMethod(Transaction, 'create', () => Promise.resolve(defaults.transaction));
   mockMethod(Transaction, 'findByIdAndUpdate', () => Promise.resolve(defaults.transaction));
   mockMethod(Transaction, 'findOneAndUpdate', () => Promise.resolve({ ...defaults.transaction, status: 'SUCCESS' }));
+  mockMethod(require('../../models/refundPolicyModel'), 'find', () => ({ sort: () => ({ lean: async () => [] }) }));
   mockMethod(Booking, 'create', () => Promise.resolve(defaults.booking));
   mockMethod(Wallet, 'findOne', () => Promise.resolve(defaults.wallet));
   mockMethod(SMLedger, 'updateOne', () => Promise.resolve());

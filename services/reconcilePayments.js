@@ -23,6 +23,7 @@ const setupReconciliationCron = () => {
             // Find transactions stuck in PAYMENT_RECEIVED older than 10 minutes
             const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
             
+            await require('./paymentRecoveryWorker').runPaymentRecovery();
             const orphanedTransactions = await Transaction.find({
                 status: "PAYMENT_RECEIVED",
                 createdAt: { $lt: tenMinutesAgo }
@@ -38,11 +39,11 @@ const setupReconciliationCron = () => {
             for (const txn of orphanedTransactions) {
                 try {
                     // Check if a Booking exists for this payment
-                    const booking = await Booking.findOne({ transactionId: txn.transactionId }).lean();
+                    const booking = await Booking.findOne({ transactionId: txn.transactionId, userId: txn.userId }).lean();
 
                     if (booking) {
                         // Late reconciliation: Booking exists, just update transaction status
-                        await Transaction.findByIdAndUpdate(txn._id, {
+                        await Transaction.findOneAndUpdate({ _id: txn._id, status: 'PAYMENT_RECEIVED' }, {
                             status: "SUCCESS",
                             bookingId: booking._id,
                             ticketId: booking.ticketId
@@ -50,10 +51,11 @@ const setupReconciliationCron = () => {
                         logger.info(`PaymentReconciliationCRON: Auto-resolved ${txn._id} to SUCCESS. Booking found.`);
                     } else {
                         // Disaster scenario: Money taken, no booking created
-                        await Transaction.findByIdAndUpdate(txn._id, {
+                        const claimed = await Transaction.findOneAndUpdate({ _id: txn._id, status: 'PAYMENT_RECEIVED' }, {
                             status: "DISPUTED",
                             disputeReason: "Reconciliation CRON: Stuck in PAYMENT_RECEIVED for >10 mins with no matching booking."
                         });
+                        if (!claimed) continue;
 
                         logger.error(`🚨 PaymentReconciliationCRON: DISPUTED ${txn._id}. No booking found! User money stuck.`, {
                             esewaId: txn.transactionId,

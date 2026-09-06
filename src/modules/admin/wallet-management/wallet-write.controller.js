@@ -24,6 +24,7 @@ async function adjustBalance(req, res) {
       status: true, message: result.message, data: result.data,
     });
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ status: false, message: error.message });
     if (
       error.message.includes("Insufficient") ||
       error.message.includes("frozen")

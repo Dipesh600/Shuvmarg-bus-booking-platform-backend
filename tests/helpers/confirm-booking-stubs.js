@@ -45,6 +45,13 @@ require.cache[esewaVerificationPath] = {
 };
 
 // Load controller AFTER stubs are registered
+// Atomic persistence has separate real-database coverage; this suite isolates orchestration.
+const atomicCommit = require('../../src/shared/commit-payment-booking');
+const originalCommit = atomicCommit.commitPaymentBooking;
+atomicCommit.commitPaymentBooking = payload => require('../../models/bookTicketModel').create(payload);
+const snapshotModule = require('../../src/shared/refund-policy-snapshot');
+const originalSnapshot = snapshotModule.captureRefundPolicySnapshot;
+snapshotModule.captureRefundPolicySnapshot = async () => ({ version: 1, rules: [] });
 const controllerPath = require.resolve('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
 delete require.cache[controllerPath];
 const { confirmPassengerBooking: confirmBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
@@ -107,6 +114,8 @@ const makeRes = () => {
 
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 const teardown = () => {
+  atomicCommit.commitPaymentBooking = originalCommit;
+  snapshotModule.captureRefundPolicySnapshot = originalSnapshot;
   delete require.cache[notifModulePath];
   delete require.cache[userDeviceInfoPath];
   delete require.cache[esewaVerificationPath];

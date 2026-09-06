@@ -13,9 +13,11 @@
  *   - If no active policy matches, falls back to 100% refund (operator-friendly default)
  *   - If trip has already departed, cancellation is blocked
  *   - Gateway deduction is currently 0 (eSewa doesn't charge for manual refunds)
- *   - All monetary calculations round to nearest integer (NPR has no subunits)
+ *   - Monetary calculations use paisa and preserve the saved policy when available.
  */
 
+const { toMinorUnits, fromMinorUnits } = require("../src/shared/money");
+const { allocateRefund } = require("../src/shared/refund-allocation");
 const RefundPolicy = require("../models/refundPolicyModel.js");
 
 /**
@@ -34,40 +36,21 @@ function buildDepartureDate(tripDate, departureTime) {
   return date;
 }
 
-/**
- * Calculates the refund breakdown for a given booking.
- *
- * @param {Object} params
- * @param {Number} params.totalAmount     - The amount the passenger paid
- * @param {Date}   params.tripDate        - Trip date (from Trip document)
- * @param {String} params.departureTime   - "HH:MM" departure time string
- * @param {Date}   [params.currentTime]   - Override for testing (defaults to now)
- * @returns {Promise<Object>} Refund calculation result
- *
- * Return shape:
- * {
- *   eligible:           Boolean,
- *   reason:             String | null,
- *   refundAmount:       Number,
- *   cancellationCharge: Number,
- *   gatewayDeduction:   Number,
- *   refundPercentage:   Number,
- *   hoursBeforeDeparture: Number,
- *   appliedPolicy: {
- *     id:   String,
- *     name: String,
- *     description: String,
- *   } | null,
- * }
- */
+// Uses the saved booking policy when present; historical bookings retain the legacy policy lookup.
 async function calculateRefund({
   totalAmount,
   tripDate,
   departureTime,
   currentTime = new Date(),
+  policySnapshot = null,
+  smMoneyUsed, gatewayAmount, paymentMethod,
 }) {
   // 1. Build the actual departure datetime
+  const totalMinor = toMinorUnits(totalAmount);
   const departureDate = buildDepartureDate(tripDate, departureTime);
+  if (!Number.isFinite(departureDate.getTime()) || !Number.isFinite(currentTime.getTime())) {
+    throw new Error("Invalid departure date; refund requires review");
+  }
 
   // 2. Calculate hours until departure
   const msUntilDeparture = departureDate.getTime() - currentTime.getTime();
@@ -89,7 +72,11 @@ async function calculateRefund({
 
   // 4. Fetch all active refund policies, sorted by minHours ascending
   //    This gives us windows like: [0-12], [12-24], [24-48], [48+]
-  const policies = await RefundPolicy.find({ isActive: true }).sort({ minHours: 1 });
+  if (policySnapshot !== null && (policySnapshot?.version !== 1 || !Array.isArray(policySnapshot.rules))) {
+    throw new Error("Saved refund policy is invalid; refund requires review");
+  }
+  const policies = policySnapshot?.version === 1 && Array.isArray(policySnapshot.rules)
+    ? policySnapshot.rules : await RefundPolicy.find({ isActive: true }).sort({ minHours: 1 });
 
   // 5. Find the matching policy window
   let matchedPolicy = null;
@@ -127,13 +114,18 @@ async function calculateRefund({
   }
 
   const gatewayDeduction = 0; // eSewa manual refunds have no gateway fee
-  const cancellationCharge = Math.round(totalAmount * (1 - refundPercentage / 100));
-  const refundAmount = Math.round(totalAmount - cancellationCharge - gatewayDeduction);
+  if (!Number.isFinite(refundPercentage) || refundPercentage < 0 || refundPercentage > 100) {
+    throw new Error("Invalid refund percentage; policy requires review");
+  }
+  const cancellationMinor = Math.round(totalMinor * (1 - refundPercentage / 100));
+  const cancellationCharge = fromMinorUnits(cancellationMinor);
+  const refundAmount = fromMinorUnits(totalMinor - cancellationMinor);
 
   return {
     eligible: true,
     reason: null,
     refundAmount: Math.max(0, refundAmount),
+    ...allocateRefund({ totalAmount, refundAmount, smMoneyUsed, gatewayAmount, paymentMethod }),
     cancellationCharge,
     gatewayDeduction,
     refundPercentage,

@@ -7,6 +7,7 @@ const autoSeat = require("../../controllers/adminController/seat-controller/admi
 const authController = require("../../controllers/adminController/authController/auth-controller.js");
 const { adminEnrollmentLimiter, adminLoginLimiter } = require("../../middleware/adminAuthRateLimit.js");
 const adminMiddleware = require("../../middleware/adminMiddleware.js");
+const requireFinanceAdmin = require("../../middleware/requireFinanceAdmin");
 const rootAdminMiddleware = require("../../middleware/rootAdminMiddleware.js");
 const requireAccountAdministration = require('../../middleware/requireAccountAdministration');
 const adminAdministration = require("../../src/modules/admin/auth-security/admin-administration.controller.js");
@@ -123,18 +124,18 @@ router.patch("/fleet/:fleetId/trips/:tripId/status",      adminMiddleware, fleet
 router.patch("/fleet/:fleetId/trips/:tripId/driver",      adminMiddleware, fleetWorkstation.reassignTripDriver);
 router.get("/refund/queue", adminMiddleware, refundController.getRefundQueue);
 router.get("/refund/getAllCancelledBookings", adminMiddleware, refundController.getRefundQueue); // legacy alias
-router.patch("/refund/update-status", adminMiddleware, refundController.updateRefundStatus);
-router.post("/refund-policy/create", adminMiddleware, refundPolicyController.createRefundPolicy);
+router.patch("/refund/update-status", adminMiddleware, requireFinanceAdmin, refundController.updateRefundStatus);
+router.post("/refund-policy/create", adminMiddleware, requireFinanceAdmin, refundPolicyController.createRefundPolicy);
 router.get("/refund-policy/getAll", adminMiddleware, refundPolicyController.getAllRefundPolicies);
 router.post("/refund-policy/getById", adminMiddleware, refundPolicyController.getRefundPolicyById);
-router.patch("/refund-policy/update", adminMiddleware, refundPolicyController.updateRefundPolicy);
-router.delete("/refund-policy/delete", adminMiddleware, refundPolicyController.deleteRefundPolicy);
-router.patch("/refund-policy/toggleStatus", adminMiddleware, refundPolicyController.togglePolicyStatus);
+router.patch("/refund-policy/update", adminMiddleware, requireFinanceAdmin, refundPolicyController.updateRefundPolicy);
+router.delete("/refund-policy/delete", adminMiddleware, requireFinanceAdmin, refundPolicyController.deleteRefundPolicy);
+router.patch("/refund-policy/toggleStatus", adminMiddleware, requireFinanceAdmin, refundPolicyController.togglePolicyStatus);
 router.get("/wallet/overview",              adminMiddleware, adminWalletCtrl.getOverview);
 router.get("/wallet/global-feed",           adminMiddleware, adminWalletCtrl.getGlobalFeed);
 router.get("/wallet/lookup",                adminMiddleware, adminWalletCtrl.lookupUser);
-router.post("/wallet/adjust",               adminMiddleware, adminWalletCtrl.adjustBalance);
-router.patch("/wallet/freeze",              adminMiddleware, adminWalletCtrl.freezeWallet);
+router.post("/wallet/adjust",               adminMiddleware, requireFinanceAdmin, adminWalletCtrl.adjustBalance);
+router.patch("/wallet/freeze",              adminMiddleware, requireFinanceAdmin, adminWalletCtrl.freezeWallet);
 router.get("/wallet/user-balance/:userId",  adminMiddleware, adminWalletCtrl.getUserBalance);
 router.get("/kyc/unified-list", adminMiddleware, kycVerificationController.getUnifiedKycList);
 router.delete("/ticket/schedule/delete/:id", adminMiddleware, ticketController.deleteTicket);
@@ -323,7 +324,7 @@ router.get("/transactions",      adminMiddleware, transactionCtrl.getAllTransact
 router.get("/transactions/:id",  adminMiddleware, transactionCtrl.getTransactionById);
 const disputedPayments = require("../../controllers/adminController/disputedPaymentsController.js");
 router.get("/disputes",                          adminMiddleware, disputedPayments.getDisputedPayments);
-router.patch("/disputes/:transactionId/resolve", adminMiddleware, disputedPayments.resolveDispute);
+router.patch("/disputes/:transactionId/resolve", adminMiddleware, requireFinanceAdmin, disputedPayments.resolveDispute);
 const platformConfigCtrl = require("../../controllers/adminController/platformConfigController.js");
 router.get("/platform-config",              adminMiddleware, platformConfigCtrl.listConfigs);
 router.get("/platform-config/:key",         adminMiddleware, platformConfigCtrl.getConfig);

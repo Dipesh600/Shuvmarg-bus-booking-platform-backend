@@ -81,6 +81,8 @@ function createPassengerBookingConfirmationFulfillmentStage(deps) {
         internalMoneyDebitEntryId: state.internalMoneyDebitEntryId,
         gateway: state.gateway,
         paymentId: state.paymentId,
+        paymentAttemptId: state.paymentAttemptId, paymentProcessingToken: state.paymentProcessingToken,
+        refundPolicySnapshot: state.refundPolicySnapshot,
       });
       state.booking = bookingPersistenceResult.booking;
       state.ticketId = bookingPersistenceResult.ticketId;

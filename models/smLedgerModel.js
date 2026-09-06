@@ -59,6 +59,9 @@ const smLedgerSchema = new mongoose.Schema(
       ref: "SMLedger",
       default: null,
     },
+    operationKey: { type: String, default: null },
+    paymentContext: { type: mongoose.Schema.Types.Mixed, default: null },
+    fulfilledBookingId: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", default: null },
 
     // What kind of SM Money event this is
     type: {
@@ -158,6 +161,7 @@ smLedgerSchema.index({ userId: 1, direction: 1, type: 1, createdAt: -1 });
 // Booking-level lookup: find all entries for a specific booking (for clawback)
 smLedgerSchema.index({ bookingId: 1 });
 smLedgerSchema.index({ relatedLedgerEntryId: 1, type: 1 });
+smLedgerSchema.index({ operationKey: 1 }, { unique: true, partialFilterExpression: { operationKey: { $type: "string" } } });
 
 // Referral unlock dedup: ensure we don't double-credit the same booking number
 smLedgerSchema.index({ referralId: 1, bookingNumber: 1 });

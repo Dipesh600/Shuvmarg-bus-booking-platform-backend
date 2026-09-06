@@ -21,6 +21,7 @@ const debitLedgerFIFO = createSmLedgerFifoDebitService({
   mongoose,
   SMLedger,
   toObjectId,
+  lockWalletForDebit: require("./sm-ledger-wallet-lock").lockWalletForDebit,
 });
 const generateCashback = createSmLedgerCashbackService({
   mongoose,

@@ -23,7 +23,7 @@ test("admin wallet-management Express route contract", () => {
     assert.equal(matches.length, 1, `${method.toUpperCase()} ${path}`);
     assert.deepEqual(
       matches[0].route.stack.map((layer) => layer.handle),
-      [adminMiddleware, handler]
+      [adminMiddleware, ...(["post", "patch"].includes(method) ? [require("../../middleware/requireFinanceAdmin")] : []), handler]
     );
   }
 });

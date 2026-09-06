@@ -26,11 +26,12 @@ test('V4 agent cash path imports no platform money machinery', () => {
   assert.deepEqual(violations, []);
 });
 
-test('V5 the shared repository remains the only Booking.create production site', () => {
+test('V5 booking writes stay in shared persistence and its atomic commit helper', () => {
   const files = ['src', 'controllers', 'routes'].flatMap((dir) => walk(path.join(ROOT, dir)));
-  const writers = files.filter((file) => /return Booking\.create\(payload\)/.test(fs.readFileSync(file, 'utf8')));
+  const writers = files.filter((file) => /\bBooking\.create\(\s*(?:payload|record|\[)/.test(fs.readFileSync(file, 'utf8')));
   assert.deepEqual(writers.map((file) => path.relative(ROOT, file)), [
     'src/modules/booking/passenger-booking-persistence/passenger-booking-persistence.repository.js',
+    'src/shared/commit-payment-booking.js',
   ]);
 });
 

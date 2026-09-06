@@ -1,14 +1,14 @@
 "use strict";
+const { withMongoTransaction } = require("../../../shared/with-mongo-transaction");
 
 const reconciliationError = () => new Error("Debit reversal requires reconciliation before any further credit");
 
 function createSmLedgerReversalService({ mongoose, SMLedger, creditLedger }) {
-  return async function reverseDebit(debitLedgerEntryId) {
-    const session = await mongoose.startSession();
-    try {
-      return await session.withTransaction(async () => {
+  return async function reverseDebit(debitLedgerEntryId, { session: parentSession } = {}) {
+      return withMongoTransaction(mongoose, parentSession, async session => {
         const debit = await SMLedger.findById(debitLedgerEntryId).session(session);
         if (!debit) throw new Error("Debit entry not found");
+        if (debit.fulfilledBookingId) throw new Error("This debit belongs to a confirmed booking; use the cancellation refund flow");
         if (debit.direction !== "DEBIT" || debit.type !== "DEBIT") {
           throw new Error("Only booking DEBIT entries can be reversed");
         }
@@ -49,9 +49,6 @@ function createSmLedgerReversalService({ mongoose, SMLedger, creditLedger }) {
           session,
         });
       });
-    } finally {
-      await session.endSession();
-    }
   };
 }
 

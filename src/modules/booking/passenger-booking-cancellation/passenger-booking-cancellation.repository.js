@@ -47,9 +47,7 @@ function createPassengerBookingCancellationRepository() {
     },
 
     async createRefund(refundData, session) {
-      if (!session) return await Refund.create(refundData);
-      const [refund] = await Refund.create([refundData], { session });
-      return refund;
+      return require("../../../shared/refund-budget").createBudgetedRefund(refundData, session);
     },
 
     async saveBooking(booking, session) {

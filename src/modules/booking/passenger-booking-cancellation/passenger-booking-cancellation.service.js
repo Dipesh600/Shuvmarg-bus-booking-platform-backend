@@ -34,7 +34,9 @@ const createPassengerBookingCancellationService = (
       const estimate = await refundCalculatorService.calculateRefund({
         totalAmount: booking.totalAmount || 0,
         tripDate: trip.tripDate,
-        departureTime: trip.departureTime,
+        departureTime: booking.bookedDepartureTime || trip.departureTime,
+        policySnapshot: booking.refundPolicySnapshot,
+        smMoneyUsed: booking.smMoneyUsed, gatewayAmount: booking.gatewayAmount, paymentMethod: booking.paymentMethod,
       });
 
       if (!estimate.eligible) {

@@ -38,6 +38,8 @@ function createPassengerWalletPaymentService({
         userId,
         amount,
         bookingId: null,
+        operationKey: `checkout:${tempBookingId}`,
+        paymentContext: { tempBookingId, gateway: "wallet" },
         note: `SM Wallet full payment: Rs. ${amount} (temp: ${tempBookingId})`,
       });
 

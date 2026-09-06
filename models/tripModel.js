@@ -7,6 +7,7 @@ const tripSchema = new mongoose.Schema(
       unique: true,
       index: true, // e.g., TRIP-KTM-BRT-001
     },
+    paymentCommitSequence: { type: Number, default: 0 },
     busId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Buse", // Reference to the Fleet (Fleet model uses "Buse" as model name)

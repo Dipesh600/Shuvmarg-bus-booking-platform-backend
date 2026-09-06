@@ -8,7 +8,9 @@ const { createPassengerBookingPersistenceService } = require('./passenger-bookin
 const agentMapper = require('./agent-cash-booking-persistence.mapper.js');
 const { createAgentCashBookingPersistenceService } = require('./agent-cash-booking-persistence.service.js');
 
-const repository = createPassengerBookingPersistenceRepository({ Booking });
+const repository = createPassengerBookingPersistenceRepository({ Booking,
+  commitPaymentBooking: require("../../../shared/commit-payment-booking").commitPaymentBooking,
+  captureRefundPolicySnapshot: require("../../../shared/refund-policy-snapshot").captureRefundPolicySnapshot });
 const service = createPassengerBookingPersistenceService({
   repository,
   mapper,
