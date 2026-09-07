@@ -49,21 +49,26 @@ async function seed() {
   const attempt = await createReservedAttempt({ userId: data.userId, holdId: hold._id, tempBookingId: hold.tempBookingId,
     transactionUuid: "CALLBACK-TEST", productCode: "EPAYTEST", paymentEnvironment: "sandbox", originalAmount: 1000, finalAmount: 1000,
     gatewayAmount: 960, smMoneyApplied: 40, walletAuthorizedAt: new Date(), requestFingerprint: "same",
-    confirmationQuote: {}, checkoutPayload: { scheduleId: data.tripId, seatNumbers: ["a1"] }, formFields: {}, holdExpiresAt: hold.expiresAt });
+    confirmationQuote: { finalAmount: 1000, gatewayAmount: 960, smMoneyApplied: 40 },
+    checkoutPayload: { scheduleId: data.tripId, seatNumbers: ["a1"] },
+    formFields: { transaction_uuid: 'CALLBACK-TEST' }, holdExpiresAt: hold.expiresAt });
   const repository = createPassengerEsewaCheckoutRepository({ EsewaPaymentAttempt: Attempt, SeatHold: Hold, Transaction, Trip });
   const state = { providerCalls: 0, bookings: 0, provider: { status: "COMPLETE", transaction_uuid: attempt.transactionUuid, product_code: "EPAYTEST", total_amount: "960.00" } };
   axios.get = async () => { state.providerCalls++; return { data: state.provider }; };
   const recovery = createPassengerEsewaCheckoutRecoveryService({ repository, mapper, ...require("../../src/shared/payment-attempt-recovery") });
   const finalize = createPassengerEsewaCheckoutFinalizationService({ repository, mapper, recovery, signature,
+    preparePaymentRetry: require('../../src/shared/prepare-payment-retry').preparePaymentRetry,
     readConfig: readEsewaCheckoutConfig, validateResponse: validateEsewaResponse, verifyPayment: verifyEsewaPayment,
     orchestrate: async ({ req }) => {
       state.bookings++;
       const ownership = { attemptId: req.paymentAttemptId, processingToken: req.paymentProcessingToken };
       await createAttemptTransaction({ userId: data.userId, tripId: data.tripId, transactionId: attempt.transactionUuid, totalAmount: 1000, gateway: "esewa", transactionType: "BOOKING", status: "PAYMENT_RECEIVED" }, ownership);
       await Hold.updateOne({ _id: hold._id }, { $set: { status: "processing" } });
+      if (state.failBeforeCommit) throw new Error('Simulated database outage before booking commit');
       const booking = await commitPaymentBooking({ userId: data.userId, tripId: data.tripId, seats: ["A1"], ticketId: "CALLBACK-TICKET", originalAmount: 1000,
         totalAmount: 1000, gatewayAmount: 960, smMoneyUsed: 40, smDebitEntryId: attempt.reservedLedgerEntryId,
         transactionId: attempt.transactionUuid, paymentMethod: "SM_WALLET_SPLIT" }, { ...ownership, holdId: hold._id });
+      if (state.failAfterCommit) throw new Error('Simulated lost response after booking commit');
       return { statusCode: 201, body: { success: true, data: { bookingId: booking._id } } };
     },
   });

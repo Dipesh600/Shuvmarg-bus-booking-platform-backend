@@ -23,7 +23,7 @@ async function recoverWalletDebit(debitId) {
 }
 
 async function runPaymentRecovery({ reconcilePaymentAttempt = input => require("../src/modules/booking/passenger-esewa-checkout").reconcilePaymentAttempt(input) } = {}) {
-  const stale = new Date(Date.now() - 5 * 60 * 1000);
+  const stale = new Date(Date.now() - 30 * 1000);
   const attempts = await Attempt.find({ $or: [
     { status: "INITIATED", updatedAt: { $lt: stale } },
     { status: "VERIFYING", processingExpiresAt: { $lt: new Date() } },
@@ -44,7 +44,8 @@ async function runPaymentRecovery({ reconcilePaymentAttempt = input => require("
     catch (error) { logger.error("Wallet payment recovery requires review", { debitId: debit._id, error: error.message }); }
   }
   for (const recover of [require("./bookingCashbackRecovery").recoverBookingCashback,
-    require("./bookingNotificationRecovery").recoverBookingNotifications]) {
+    require("./bookingNotificationRecovery").recoverBookingNotifications,
+    require('./paymentRefundRecovery').recoverPaymentRefunds]) {
     try { await recover(); }
     catch (error) { logger.error("Booking follow-up recovery requires retry", { error: error.message }); }
   }

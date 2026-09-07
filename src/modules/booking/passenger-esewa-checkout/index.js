@@ -79,6 +79,7 @@ const finalize = createPassengerEsewaCheckoutFinalizationService({
   validateResponse: validateEsewaResponse,
   orchestrate: confirmation.orchestratePassengerBookingConfirmation,
   recovery,
+  preparePaymentRetry: require('../../../shared/prepare-payment-retry').preparePaymentRetry,
 });
 const controller = createPassengerEsewaCheckoutController({
   service: { initiate, finalize },

@@ -15,6 +15,14 @@ const { createLocalNotification, notificationManager } = require("../controllers
  */
 
 const setupReconciliationCron = () => {
+    let recoveryRunning = false;
+    cron.schedule('*/30 * * * * *', async () => {
+        if (recoveryRunning) return;
+        recoveryRunning = true;
+        try { await require('./paymentRecoveryWorker').runPaymentRecovery(); }
+        catch (error) { logger.error('Payment recovery sweep failed', { error: error.message }); }
+        finally { recoveryRunning = false; }
+    });
     // Run every 5 minutes
     cron.schedule("*/5 * * * *", async () => {
         logger.info("PaymentReconciliationCRON: ═══ Starting sweep ═══");
@@ -23,7 +31,6 @@ const setupReconciliationCron = () => {
             // Find transactions stuck in PAYMENT_RECEIVED older than 10 minutes
             const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
             
-            await require('./paymentRecoveryWorker').runPaymentRecovery();
             const orphanedTransactions = await Transaction.find({
                 status: "PAYMENT_RECEIVED",
                 createdAt: { $lt: tenMinutesAgo }
@@ -38,6 +45,11 @@ const setupReconciliationCron = () => {
 
             for (const txn of orphanedTransactions) {
                 try {
+                    // Attempt-owned payments are fenced by their recovery flow.
+                    // This legacy sweep must never close one behind its worker.
+                    if (await require('../models/esewaPaymentAttemptModel').exists({
+                        transactionUuid: txn.transactionId, userId: txn.userId,
+                    })) continue;
                     // Check if a Booking exists for this payment
                     const booking = await Booking.findOne({ transactionId: txn.transactionId, userId: txn.userId }).lean();
 

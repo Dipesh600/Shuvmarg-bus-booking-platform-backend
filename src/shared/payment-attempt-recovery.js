@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const Attempt = require("../../models/esewaPaymentAttemptModel");
 const Booking = require("../../models/bookTicketModel");
 const Transaction = require("../../models/transactionModel");
+const Hold = require("../../models/seatHoldModel");
 const ledger = require("../modules/wallet/sm-ledger");
 const { withMongoTransaction } = require("./with-mongo-transaction");
 
@@ -28,14 +29,18 @@ async function recoverCommittedBooking(attempt) {
   return result;
 }
 
-async function closeUnfulfilledAttempt(attempt, { status, result, reason, createDispute }) {
+async function closeUnfulfilledAttempt(attempt, { status, result, reason, createDispute, refundRequired = false }) {
   return withMongoTransaction(mongoose, null, async session => {
     const claimed = await Attempt.findOneAndUpdate({ _id: attempt._id, status: "VERIFYING",
       processingToken: attempt.processingToken, processingExpiresAt: { $gt: new Date() } }, { $set: { status, processingExpiresAt: null } }, { session, new: true });
     if (!claimed) throw Object.assign(new Error("Payment processing ownership changed"), { code: "PAYMENT_LEASE_LOST" });
     const booking = await Booking.exists({ transactionId: attempt.transactionUuid, userId: attempt.userId }).session(session);
     if (booking) throw new Error("Booking exists; payment must be reconciled without compensation");
+    if (refundRequired && !claimed.providerVerifiedAt) throw new Error("Provider confirmation is required before requesting a refund");
     if (attempt.reservedLedgerEntryId) await ledger.reverseDebit(attempt.reservedLedgerEntryId, { session });
+    await Hold.updateOne({ _id: claimed.holdId, userId: claimed.userId,
+      tempBookingId: claimed.tempBookingId, status: { $in: ['held', 'processing'] } },
+    { $set: { status: 'released', releasedAt: new Date() }, $unset: { seatKeys: '', userTripKey: '' } }, { session });
     let transaction;
     if (createDispute) {
       transaction = await Transaction.findOne({ transactionId: attempt.transactionUuid, userId: attempt.userId }).session(session);
@@ -52,9 +57,19 @@ async function closeUnfulfilledAttempt(attempt, { status, result, reason, create
         transaction.status = "DISPUTED"; transaction.disputeReason = reason; await transaction.save({ session });
       }
       result.body.caseId = transaction._id;
+      if (refundRequired) {
+        transaction.refundStatus = 'PENDING';
+        transaction.meta = { ...transaction.meta, refundDestination: 'original',
+          refundRequiredAt: claimed.refundRequiredAt || new Date(), paymentAttemptId: claimed._id,
+          gatewayAmount: claimed.gatewayAmount, smMoneyUsed: claimed.smMoneyApplied,
+          smDebitEntryId: claimed.reservedLedgerEntryId };
+        await transaction.save({ session });
+        result.body.message = 'The ticket could not be issued. Reserved SM Money has been restored and an original-payment refund is pending.';
+      }
     }
     await Attempt.updateOne({ _id: attempt._id, processingToken: attempt.processingToken },
-      { $set: { result, failureReason: reason, transactionRecordId: transaction?._id || null } }, { session });
+      { $set: { result, failureReason: reason, transactionRecordId: transaction?._id || null,
+        ...(refundRequired ? { refundRequiredAt: claimed.refundRequiredAt || new Date(), refundDestination: 'original' } : {}) } }, { session });
     return result;
   });
 }

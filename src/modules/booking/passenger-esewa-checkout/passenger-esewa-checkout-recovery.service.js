@@ -1,11 +1,11 @@
 'use strict';
 
 function createPassengerEsewaCheckoutRecoveryService(deps) {
-  async function markDisputed(attempt, reason) {
+  async function markDisputed(attempt, reason, { refundRequired = false } = {}) {
     if (deps.closeUnfulfilledAttempt) {
       const current = await deps.repository.findOwnedAttempt(attempt.transactionUuid, attempt.userId);
       if (current?.status === 'COMPLETED') return deps.recoverCommittedBooking(current);
-      return deps.closeUnfulfilledAttempt(attempt, { status: 'DISPUTED', reason, createDispute: true,
+      return deps.closeUnfulfilledAttempt(attempt, { status: 'DISPUTED', reason, createDispute: true, refundRequired,
         result: deps.mapper.response(409, 'Your payment was received but the ticket could not be issued. Your case is recorded for resolution.', 'PAYMENT_RECEIVED_BOOKING_DISPUTED') });
     }
     let transaction = await deps.repository.findTransactionByPaymentId(
@@ -68,6 +68,9 @@ function createPassengerEsewaCheckoutRecoveryService(deps) {
       attempt.userId
     );
     if (!transaction) return null;
+    // A durable payment record is an intermediate checkpoint, not a failure.
+    // Verify the provider again and reuse this record during fulfillment.
+    if (['PAYMENT_RECEIVED', 'PENDING'].includes(transaction.status) && !transaction.bookingId) return null;
     if (transaction.status === 'SUCCESS' && transaction.bookingId) {
       const result = {
         statusCode: 201,

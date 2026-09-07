@@ -51,6 +51,13 @@ const esewaPaymentAttemptSchema = new mongoose.Schema(
     failureReason: { type: String, default: null },
     reviewRequiredAt: { type: Date, default: null },
     verificationStatus: { type: String, default: null },
+    providerVerifiedAt: { type: Date, default: null },
+    recoverySequence: { type: Number, default: 0 },
+    fulfillmentRetries: { type: Number, default: 0 },
+    fulfillmentRetryAt: { type: Date, default: null },
+    refundRequiredAt: { type: Date, default: null },
+    refundCheckedAt: { type: Date, default: null },
+    refundDestination: { type: String, enum: ['original'], default: undefined },
     bookingId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Booking',
