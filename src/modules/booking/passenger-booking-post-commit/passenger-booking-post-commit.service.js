@@ -101,6 +101,7 @@ function createPassengerBookingPostCommitService({
   async function sendBookingNotification(params) {
     try {
       await sendBookingConfirmedNotification({
+        ...(params.booking.paymentOperationKey ? { durableBookingId: params.booking._id } : {}),
         userId: params.userId,
         ticketId: params.ticketId,
         metadata: {

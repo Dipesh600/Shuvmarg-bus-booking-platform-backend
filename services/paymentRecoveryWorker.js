@@ -43,6 +43,11 @@ async function runPaymentRecovery({ reconcilePaymentAttempt = input => require("
     try { await recoverWalletDebit(debit._id); }
     catch (error) { logger.error("Wallet payment recovery requires review", { debitId: debit._id, error: error.message }); }
   }
+  for (const recover of [require("./bookingCashbackRecovery").recoverBookingCashback,
+    require("./bookingNotificationRecovery").recoverBookingNotifications]) {
+    try { await recover(); }
+    catch (error) { logger.error("Booking follow-up recovery requires retry", { error: error.message }); }
+  }
 }
 
 module.exports = { runPaymentRecovery, recoverWalletDebit };

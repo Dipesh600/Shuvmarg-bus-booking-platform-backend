@@ -23,7 +23,7 @@ async function run() {
   mongoose.set('autoIndex', false); mongoose.set('autoCreate', false);
   try {
     if (!process.env.MONGODB_URL) throw new Error('Database configuration missing');
-    const names = ['smLedger', 'bookTicket', 'refund', 'financialOperation', 'refundSettlement', 'esewaPaymentAttempt', 'seatHold', 'settlementTripClaim'];
+    const names = ['smLedger', 'bookTicket', 'refund', 'financialOperation', 'refundSettlement', 'esewaPaymentAttempt', 'seatHold', 'settlementTripClaim', 'coupon'];
     const models = names.map(name => require(`../models/${name}Model`));
     await mongoose.connect(process.env.MONGODB_URL, { autoIndex: false, autoCreate: false });
     const report = await inspectPaymentIndexes(mongoose.connection.db, models);

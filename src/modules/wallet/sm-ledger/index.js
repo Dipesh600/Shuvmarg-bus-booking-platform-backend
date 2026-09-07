@@ -25,6 +25,9 @@ const debitLedgerFIFO = createSmLedgerFifoDebitService({
 });
 const generateCashback = createSmLedgerCashbackService({
   mongoose,
+  Booking: require("../../../../models/bookTicketModel"),
+  CashbackJob: require("../../../../models/bookingCashbackJobModel"),
+  SMLedger,
   ScratchCard,
   PlatformConfig,
   creditLedger: entries.creditLedger,

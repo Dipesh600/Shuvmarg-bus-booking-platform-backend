@@ -44,7 +44,9 @@ async function commitPaymentBooking(payload, { attemptId, processingToken, holdI
       await Ledger.updateOne({ _id: debit._id }, { $set: { fulfilledBookingId: bookingId, bookingId } }, { session });
     }
     if (holdId) await require('./commit-passenger-inventory').commitPassengerInventory(payload, { holdId, bookingId, session });
+    if (holdId) await require("./record-booking-coupon").recordBookingCoupon({ ...payload, _id: bookingId }, session);
     const [booking] = await Booking.create([{ ...payload, _id: bookingId, paymentOperationKey }], { session });
+    if (holdId) await require("./record-booking-followups").recordBookingFollowups(booking, session);
     return booking;
   });
 }

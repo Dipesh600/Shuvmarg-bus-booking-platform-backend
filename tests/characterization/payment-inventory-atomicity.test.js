@@ -3,15 +3,16 @@ const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const mongoose = require('mongoose');
 const fixture = require('../helpers/security-cancellation-fixtures');
+const Job = require("../../models/bookingCashbackJobModel");
 const Hold = require('../../models/seatHoldModel');
 const Transaction = require('../../models/transactionModel');
 const Trip = require('../../models/tripModel');
 const { commitPaymentBooking } = require('../../src/shared/commit-payment-booking');
 let data, hold, payload;
-before(async () => { await fixture.start(); await Promise.all([Hold.init(), Transaction.init()]); });
+before(async () => { await fixture.start(); await Promise.all([Hold.init(), Transaction.init(), Job.init()]); });
 after(fixture.stop);
 beforeEach(async () => {
-  data = await fixture.seed();
+  data = await fixture.seed(); await Job.deleteMany({});
   await fixture.Booking.deleteMany({}); await Hold.deleteMany({}); await Transaction.deleteMany({});
   await Trip.updateOne({ _id: data.tripId }, { $set: { status: 'scheduled' } });
   await fixture.Seat.updateOne({ tripId: data.tripId }, { $set: { 'seata.0.booked': false, 'seata.0.bookedBy': null } });
@@ -35,6 +36,7 @@ test('seat, hold, transaction and booking commit together and retries reuse the 
   assert.equal(savedHold.userTripKey, undefined);
   assert.equal(savedHold.seatKeys, undefined);
   assert.equal((await Transaction.findOne()).status, 'SUCCESS');
+  assert.equal(await Job.countDocuments({ status: "PENDING" }), 1);
 });
 test('failure after inventory updates rolls back every write', async () => {
   const create = fixture.Booking.create;
@@ -44,6 +46,7 @@ test('failure after inventory updates rolls back every write', async () => {
   assert.equal((await Hold.findById(hold._id)).status, 'processing');
   assert.equal((await Transaction.findOne()).status, 'PAYMENT_RECEIVED');
   assert.equal(await fixture.Booking.countDocuments({}), 0);
+  assert.equal(await Job.countDocuments({}), 0);
   await commit();
   assert.equal((await seat()).booked, true);
 });
@@ -56,5 +59,6 @@ test('expired or differently owned holds and conflicting seats fail without part
   await fixture.Seat.updateOne({ tripId: data.tripId }, { $set: { 'seata.0.booked': true } });
   await assert.rejects(commit, /seat/);
   assert.equal(await fixture.Booking.countDocuments({}), 0);
+  assert.equal(await Job.countDocuments({}), 0);
   assert.equal((await Transaction.findOne()).status, 'PAYMENT_RECEIVED');
 });

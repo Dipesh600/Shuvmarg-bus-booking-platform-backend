@@ -106,3 +106,10 @@ and PAY-01–PAY-16 in the payment workbook. The mentioned 20-item list has not
 yet been identified. Do not report 20/20 completion until those exact items are
 mapped to evidence. Owner payout findings belong to the finance review scope
 and are described above, not substituted for missing source items.
+## Booking follow-up recovery
+
+Passenger booking now creates cashback jobs, the in-app confirmation, and push delivery jobs inside its transaction. Cashback creation locks the booking, checks existing credit/card consistency, and commits its credit, scratch card, and job completion together. Cancellation prevents later reward creation. Coupon usage and its counter now commit with the booking; retries reuse saved usage and coupon refunds require a cancelled booking. Coupon creation no longer declares conflicting unique and nonunique indexes for the same code.
+
+Focused verification passed: 21 database tests across cashback, coupon, notification, inventory and worker recovery, followed by 6 notification tests including invalid-token and transient-provider failures. Seventeen existing cashback and notification contract tests also passed with updated transaction fixtures. The full regression result is recorded in the current validation report.
+
+Push delivery is at least once: a provider acknowledgement lost before saving completion can cause a repeated push. Permanently invalid device tokens do not cause endless retry. Temporary provider failures remain queued. The in-app notification is created once with the booking. Follow-up failures do not stop payment reconciliation. Historical bookings do not automatically receive new recovery jobs; restored-backup review remains required. Cashback uses configuration at generation time, preserving the current policy; no new promise of booking-time reward rates is introduced.
