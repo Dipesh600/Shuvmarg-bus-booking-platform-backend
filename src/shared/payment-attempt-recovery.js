@@ -31,7 +31,7 @@ async function recoverCommittedBooking(attempt) {
 async function closeUnfulfilledAttempt(attempt, { status, result, reason, createDispute }) {
   return withMongoTransaction(mongoose, null, async session => {
     const claimed = await Attempt.findOneAndUpdate({ _id: attempt._id, status: "VERIFYING",
-      processingToken: attempt.processingToken }, { $set: { status, processingExpiresAt: null } }, { session, new: true });
+      processingToken: attempt.processingToken, processingExpiresAt: { $gt: new Date() } }, { $set: { status, processingExpiresAt: null } }, { session, new: true });
     if (!claimed) throw Object.assign(new Error("Payment processing ownership changed"), { code: "PAYMENT_LEASE_LOST" });
     const booking = await Booking.exists({ transactionId: attempt.transactionUuid, userId: attempt.userId }).session(session);
     if (booking) throw new Error("Booking exists; payment must be reconciled without compensation");

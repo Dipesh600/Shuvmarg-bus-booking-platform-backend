@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-
 const settlementSchema = new mongoose.Schema(
     {
         // Who is this settlement for
@@ -75,6 +74,7 @@ const settlementSchema = new mongoose.Schema(
             default: Date.now,
         },
 
+        settlementEvidence: { type: mongoose.Schema.Types.Mixed, default: null },
         // Payment proof (uploaded by admin after bank transfer)
         paymentProof: {
             type: String,   // URL to bank receipt / screenshot

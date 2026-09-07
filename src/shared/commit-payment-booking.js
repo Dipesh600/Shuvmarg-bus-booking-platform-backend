@@ -8,7 +8,7 @@ const { lockWalletForDebit } = require("../modules/wallet/sm-ledger/sm-ledger-wa
 const { withMongoTransaction } = require("./with-mongo-transaction");
 const { toMinorUnits } = require("./money");
 
-async function commitPaymentBooking(payload, { attemptId, processingToken } = {}) {
+async function commitPaymentBooking(payload, { attemptId, processingToken, holdId } = {}) {
   return withMongoTransaction(mongoose, null, async session => {
     const paymentOperationKey = `${attemptId ? "esewa" : payload.paymentMethod}:${payload.transactionId}`;
     const existing = await Booking.findOne({ paymentOperationKey }).session(session);
@@ -43,6 +43,7 @@ async function commitPaymentBooking(payload, { attemptId, processingToken } = {}
       }
       await Ledger.updateOne({ _id: debit._id }, { $set: { fulfilledBookingId: bookingId, bookingId } }, { session });
     }
+    if (holdId) await require('./commit-passenger-inventory').commitPassengerInventory(payload, { holdId, bookingId, session });
     const [booking] = await Booking.create([{ ...payload, _id: bookingId, paymentOperationKey }], { session });
     return booking;
   });

@@ -71,7 +71,7 @@ function createPassengerBookingPersistenceService({
       });
 
       const booking = await repository.createBooking(payload, { attemptId: params.paymentAttemptId,
-        processingToken: params.paymentProcessingToken, refundPolicySnapshot: params.refundPolicySnapshot });
+        processingToken: params.paymentProcessingToken, holdId: params.holdId, refundPolicySnapshot: params.refundPolicySnapshot });
 
       return {
         booking,

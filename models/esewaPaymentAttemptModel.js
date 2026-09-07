@@ -48,6 +48,8 @@ const esewaPaymentAttemptSchema = new mongoose.Schema(
     processingExpiresAt: { type: Date, default: null },
     providerReference: { type: String, default: null },
     failureReason: { type: String, default: null },
+    reviewRequiredAt: { type: Date, default: null },
+    verificationStatus: { type: String, default: null },
     bookingId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Booking',

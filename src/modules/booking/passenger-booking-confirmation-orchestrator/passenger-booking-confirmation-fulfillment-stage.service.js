@@ -8,6 +8,7 @@ function createPassengerBookingConfirmationFulfillmentStage(deps) {
     });
 
     if (!postPaymentTripResult.ok) {
+      if (state.paymentAttemptId) return postPaymentTripResult;
       await deps.markPassengerPaymentDisputed({
         transactionId: state.txnRecord._id,
         disputeReason: postPaymentTripResult.disputeReason,
@@ -24,7 +25,8 @@ function createPassengerBookingConfirmationFulfillmentStage(deps) {
     }
     state.trip = postPaymentTripResult.trip;
 
-    const seatCommitmentResult = await deps.commitPassengerSeats({
+    const seatCommitmentResult = deps.atomicSeatCommit
+      ? { ok: true, lockedSeatNumbers: [] } : await deps.commitPassengerSeats({
       scheduleId: state.scheduleId,
       userId: state.userId,
       seatNumbers: state.normalizedSeats,
@@ -54,11 +56,12 @@ function createPassengerBookingConfirmationFulfillmentStage(deps) {
       return seatCommitmentResult;
     }
 
-    state.seatsLocked = true;
+    state.seatsLocked = !deps.atomicSeatCommit;
     state.lockedSeatNumbers = seatCommitmentResult.lockedSeatNumbers;
 
     try {
       const bookingPersistenceResult = await deps.persistPassengerBooking({
+        holdId: deps.atomicSeatCommit ? state.holdId : undefined,
         userId: state.userId,
         scheduleId: state.scheduleId,
         trip: state.trip,
@@ -87,8 +90,10 @@ function createPassengerBookingConfirmationFulfillmentStage(deps) {
       state.booking = bookingPersistenceResult.booking;
       state.ticketId = bookingPersistenceResult.ticketId;
       state.bookingCreated = true;
+      state.transactionCommitted = Boolean(deps.atomicSeatCommit);
       return null;
     } catch (error) {
+      if (state.paymentAttemptId) throw error;
       const reason = `Booking.create() failed: ${error.message}`;
       deps.logger.error(
         '🚨 confirmBooking: BOOKING CREATION FAILED after payment',
@@ -103,7 +108,7 @@ function createPassengerBookingConfirmationFulfillmentStage(deps) {
         disputeReason: reason,
         failureReason: error.message,
       });
-      await deps.rollbackPassengerSeatLocks({
+      if (!deps.atomicSeatCommit) await deps.rollbackPassengerSeatLocks({
         tripId: state.scheduleId,
         seatNumbers: state.normalizedSeats,
         userId: state.userId,

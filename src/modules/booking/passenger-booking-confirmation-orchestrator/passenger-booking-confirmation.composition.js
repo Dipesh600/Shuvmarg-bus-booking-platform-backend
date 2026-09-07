@@ -69,6 +69,7 @@ const runFulfillmentStage =
     ...shared,
     ...tripValidation,
     ...bookingPersistence,
+    atomicSeatCommit: true,
   });
 const runSuccessStage = createPassengerBookingConfirmationSuccessStage({
   ...reconciliation,

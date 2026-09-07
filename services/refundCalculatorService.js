@@ -29,10 +29,12 @@ const RefundPolicy = require("../models/refundPolicyModel.js");
  */
 function buildDepartureDate(tripDate, departureTime) {
   const date = new Date(tripDate);
-  if (departureTime && /^\d{2}:\d{2}$/.test(departureTime)) {
-    const [hours, minutes] = departureTime.split(":").map(Number);
-    date.setUTCHours(hours, minutes, 0, 0);
+  if (typeof departureTime !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(departureTime)) {
+    throw new Error('Invalid departure time; refund requires review');
   }
+  const [hours, minutes] = departureTime.split(':').map(Number);
+  // Match the UTC timetable convention used by tripGeneratorCron.
+  date.setUTCHours(hours, minutes, 0, 0);
   return date;
 }
 

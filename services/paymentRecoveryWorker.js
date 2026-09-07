@@ -22,7 +22,7 @@ async function recoverWalletDebit(debitId) {
   });
 }
 
-async function runPaymentRecovery() {
+async function runPaymentRecovery({ reconcilePaymentAttempt = input => require("../src/modules/booking/passenger-esewa-checkout").reconcilePaymentAttempt(input) } = {}) {
   const stale = new Date(Date.now() - 5 * 60 * 1000);
   const attempts = await Attempt.find({ $or: [
     { status: "INITIATED", updatedAt: { $lt: stale } },
@@ -32,7 +32,7 @@ async function runPaymentRecovery() {
   for (const attempt of attempts) {
     try {
       if (attempt.status === "COMPLETED") await recoverCommittedBooking(attempt);
-      else await require("../src/modules/booking/passenger-esewa-checkout").reconcilePaymentAttempt({
+      else await reconcilePaymentAttempt({
         userId: attempt.userId, activeRole: "passenger", transactionUuid: attempt.transactionUuid,
       });
     } catch (error) { logger.error("Payment attempt recovery requires retry", { attemptId: attempt._id, error: error.message }); }

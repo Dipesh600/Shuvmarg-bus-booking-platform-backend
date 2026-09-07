@@ -58,7 +58,6 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
       if (!authorization.ok) return authorization;
       if (req.paymentAttemptId) state.splitPaymentDebitEntryId = authorization.debitEntryId;
     }
-
     state.holdClaimed = await deps.claimPassengerHoldForConfirmation({
       holdId: state.holdId,
       userId: state.userId,
@@ -137,6 +136,7 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
         smMoneyApplied: state.smMoneyApplied,
         tempBookingId,
         internalMoneyDebitEntryId: state.internalMoneyDebitEntryId,
+        ...(state.paymentAttemptId ? { paymentAttemptId: state.paymentAttemptId, paymentProcessingToken: state.paymentProcessingToken } : {}),
       });
 
     state.txnRecord = paymentTransactionResult.transaction;

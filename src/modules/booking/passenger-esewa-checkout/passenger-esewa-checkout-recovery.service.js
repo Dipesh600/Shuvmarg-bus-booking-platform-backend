@@ -55,7 +55,10 @@ function createPassengerEsewaCheckoutRecoveryService(deps) {
       status: 'FAILED', reason: `Provider reports ${verification.status}`, createDispute: false,
       result: deps.mapper.response(410, 'The payment was cancelled or refunded. Reserved SM Money has been restored.', 'PAYMENT_CLOSED'),
     });
-    await deps.repository.updateAttempt(attempt._id, { status: 'INITIATED', processingExpiresAt: null }, attempt.processingToken);
+    await deps.repository.updateAttempt(attempt._id, { status: 'INITIATED', processingExpiresAt: null,
+      verificationStatus: ['PENDING', 'NOT_FOUND', 'AMBIGUOUS', 'CANCELED', 'FULL_REFUND'].includes(verification?.status) ? verification.status : 'UNKNOWN',
+      ...(new Date(attempt.createdAt).getTime() < Date.now() - 15 * 60 * 1000 ? { reviewRequiredAt: attempt.reviewRequiredAt || new Date() } : {}),
+    }, attempt.processingToken);
     return deps.mapper.response(202, 'Payment status is not confirmed yet. We will keep checking this payment.', 'PAYMENT_VERIFICATION_PENDING');
   }
 

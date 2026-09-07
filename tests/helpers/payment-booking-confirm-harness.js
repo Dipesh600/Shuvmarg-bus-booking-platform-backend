@@ -78,7 +78,7 @@ function setupConfirmHarness() {
     return Promise.resolve();
   });
   clearOrchestratorCache();
-  // This harness isolates orchestration. Real atomic persistence is exercised by database tests.
+  require('./payment-legacy-stage-fixture')(require('../../src/modules/booking/passenger-booking-confirmation-orchestrator/passenger-booking-confirmation-fulfillment-stage.service'), mockMethod);
   mockMethod(require('../../src/shared/commit-payment-booking'), 'commitPaymentBooking', payload => Booking.create(payload));
   mockMethod(require('../../src/shared/rollback-unfulfilled-seat'), 'rollbackUnfulfilledSeat', ({ tripId, arrayField, seatNo, userId }) =>
     Seat.findOneAndUpdate({ tripId, [arrayField]: { $elemMatch: { seatNo, bookedBy: userId } } },

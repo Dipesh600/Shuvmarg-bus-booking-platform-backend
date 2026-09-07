@@ -44,6 +44,9 @@ require.cache[esewaVerificationPath] = {
   },
 };
 
+const stages = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator/passenger-booking-confirmation-fulfillment-stage.service');
+const originalStage = stages.createPassengerBookingConfirmationFulfillmentStage;
+require('./payment-legacy-stage-fixture')(stages, (obj, key, fn) => { obj[key] = fn; });
 // Load controller AFTER stubs are registered
 // Atomic persistence has separate real-database coverage; this suite isolates orchestration.
 const atomicCommit = require('../../src/shared/commit-payment-booking');
@@ -114,6 +117,7 @@ const makeRes = () => {
 
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 const teardown = () => {
+  stages.createPassengerBookingConfirmationFulfillmentStage = originalStage;
   atomicCommit.commitPaymentBooking = originalCommit;
   snapshotModule.captureRefundPolicySnapshot = originalSnapshot;
   delete require.cache[notifModulePath];

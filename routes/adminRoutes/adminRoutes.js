@@ -29,9 +29,7 @@ const adminAmenityController = require("../../controllers/adminController/amenit
 const adminBusRouteController = require("../../controllers/adminController/busOwnerController/busRouteController.js");
 const adminFleetController = require("../../controllers/adminController/busOwnerController/fleetController.js");
 const { adminFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
-const {
-  notifyAdminCreatedFleet,
-} = require("../../src/modules/admin/fleet-management/admin-fleet-created-notification.controller");
+const { notifyAdminCreatedFleet } = require("../../src/modules/admin/fleet-management/admin-fleet-created-notification.controller");
 const adminTemplateController = require("../../controllers/adminController/busOwnerController/templateController.js");
 const adminTripController = require("../../controllers/adminController/busOwnerController/tripController.js");
 const adminSettlementCon = require("../../controllers/busOwnerController/settlementController.js");
@@ -121,6 +119,7 @@ router.get("/fleet/:id/workstation",                      adminMiddleware, fleet
 router.get("/fleet/:fleetId/trips/:tripId/manifest",      adminMiddleware, fleetWorkstation.getTripManifest);
 router.patch("/fleet/:fleetId/trips/:tripId/status",      adminMiddleware, fleetWorkstation.updateTripStatus);
 router.patch("/fleet/:fleetId/trips/:tripId/driver",      adminMiddleware, fleetWorkstation.reassignTripDriver);
+router.get("/payments/review", adminMiddleware, requireFinanceAdmin, require("../../src/modules/admin/wallet-management/payment-review.controller"));
 router.get("/refund/queue", adminMiddleware, refundController.getRefundQueue);
 router.get("/refund/getAllCancelledBookings", adminMiddleware, refundController.getRefundQueue); // legacy alias
 router.patch("/refund/update-status", adminMiddleware, requireFinanceAdmin, refundController.updateRefundStatus);
@@ -236,8 +235,8 @@ router.get("/conductors/:id", adminMiddleware, conductorController.getConductorB
 router.patch("/conductors/:id", adminMiddleware, conductorController.updateConductor);
 router.patch("/conductors/:id/status", adminMiddleware, conductorController.updateConductorStatus);
 router.get("/brands/:brandId/conductors", adminMiddleware, conductorController.getConductorsByBrand);
-router.get("/settlements/all", adminMiddleware, adminSettlementCon.getMySettlements);
-router.patch("/settlements/pay", adminMiddleware, adminSettlementCon.paySettlement);
+router.get("/settlements/all", adminMiddleware, requireFinanceAdmin, adminSettlementCon.getMySettlements);
+router.patch("/settlements/pay", adminMiddleware, requireFinanceAdmin, adminSettlementCon.paySettlement);
 router.get("/commissions/summary", adminMiddleware, commissionController.getCommissionSummary);
 router.get("/commissions/history", adminMiddleware, commissionController.getCommissionHistory);
 router.get("/financial/overview", adminMiddleware, financialController.getFinancialOverview);

@@ -18,6 +18,7 @@ const {
 const repository = createPassengerBookingPaymentTransactionRepository({
   PlatformConfig,
   Transaction,
+  createAttemptTransaction: require('../../../shared/create-attempt-transaction').createAttemptTransaction,
 });
 
 const service = createPassengerBookingPaymentTransactionService({
