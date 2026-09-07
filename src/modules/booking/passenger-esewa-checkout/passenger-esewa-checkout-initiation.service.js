@@ -1,4 +1,5 @@
 'use strict';
+const { initiationResponse } = require('./passenger-esewa-checkout-initiation.response');
 function createPassengerEsewaCheckoutInitiationService(deps) {
   return async function initiatePassengerEsewaCheckout({
     userId,
@@ -121,6 +122,7 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
       transactionUuid,
       productCode: config.productCode,
       originalAmount: hold.originalAmount,
+      paymentEnvironment: config.paymentEnvironment,
       gatewayAmount: quoteResult.quote.gatewayAmount,
       finalAmount: quoteResult.quote.finalAmount,
       discountAmount: quoteResult.quote.discountAmount,
@@ -132,19 +134,5 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
     });
     return initiationResponse(attempt, config);
   };
-}
-function initiationResponse(attempt, config) {
-    return {
-      statusCode: 201,
-      body: {
-        success: true,
-        data: {
-          transactionUuid: attempt.transactionUuid,
-          paymentUrl: config.paymentUrl,
-          fields: attempt.formFields,
-          expiresAt: attempt.holdExpiresAt,
-        },
-      },
-    };
 }
 module.exports = { createPassengerEsewaCheckoutInitiationService };

@@ -3,9 +3,12 @@
 const axios = require('axios');
 const logger = require('../utils/logger.js');
 const { toMinorUnits } = require('../src/shared/money');
+const { parseEsewaAmount } = require('../src/shared/esewa-amount');
+const { readEsewaEnvironment, isTrustedEsewaUrl } = require('../src/shared/esewa-environment');
 
 function readVerificationConfig(env = process.env) {
-  const production = env.NODE_ENV === 'production';
+  const environment = readEsewaEnvironment(env);
+  const production = !environment.sandbox;
   const productCode = env.ESEWA_PRODUCT_CODE || (production ? '' : 'EPAYTEST');
   if (!productCode) {
     throw new Error('ESEWA_PRODUCT_CODE is required for eSewa verification');
@@ -18,17 +21,14 @@ function readVerificationConfig(env = process.env) {
         : 'https://rc.esewa.com.np/api/epay/transaction/status/'
     ),
   };
-  const target = new URL(config.baseUrl);
-  const hosts = production ? ['esewa.com.np', 'epay.esewa.com.np']
-    : ['rc.esewa.com.np', 'rc-epay.esewa.com.np'];
-  if (target.protocol !== 'https:' || !hosts.includes(target.hostname) || target.username || target.password
+  if (!isTrustedEsewaUrl(config.baseUrl, environment.statusHosts)
     || (production && productCode === 'EPAYTEST')) throw new Error('Untrusted eSewa verification environment');
   return config;
 }
 
 function parseAmount(data) {
   const raw = data?.total_amount ?? data?.totalAmount;
-  return Number(String(raw ?? '').replace(/,/g, ''));
+  return parseEsewaAmount(raw);
 }
 
 async function verifyEsewaPayment(transactionUuid, totalAmount, { allowedStatuses = ['COMPLETE'] } = {}) {

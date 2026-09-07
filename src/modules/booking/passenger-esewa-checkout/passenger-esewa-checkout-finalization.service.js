@@ -36,6 +36,7 @@ function createPassengerEsewaCheckoutFinalizationService(deps) {
       );
     }
     const config = deps.readConfig();
+    require('../../../shared/esewa-environment').assertEsewaAttemptEnvironment(existing, config);
     const attempt = await deps.repository.claimOwnedAttempt(
       transactionUuid,
       userId,

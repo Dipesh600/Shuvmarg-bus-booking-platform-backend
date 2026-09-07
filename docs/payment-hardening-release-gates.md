@@ -90,6 +90,16 @@ customer balances have been changed.
    MFA finance users, proof storage/read access, worker scheduling, alerts and
    backup restoration. Match every resulting booking, debit, credit and payout.
 
+## Callback and staging environment controls
+
+Callbacks and provider status responses now require an exact positive paisa amount. Invalid numeric strings, excess decimal places, malformed grouping and a one-paisa mismatch fail closed. A valid signed callback still cannot replace provider verification. Database tests cover foreign users, forged callbacks, provider mismatches, absent callback data and twenty concurrent finalizations against one reserved split payment.
+
+Checkout and status verification share sandbox/live selection and exact endpoint allowlists. `NODE_ENV=production` retains production runtime protections; the staging Compose configuration explicitly supplies `DEPLOYMENT_ENV=staging`. Compose also requires `PASSENGER_APP_URL`. New attempts store their payment environment, and resumed initiation/finalization rejects a changed merchant or environment. Historical attempts without an environment field retain merchant checking; they still require historical review before any environment migration.
+
+The passenger website now treats a pending verification response as pending, retries it within a bounded interval, and never derives financial success/failure from the callback URL. A confirmation must contain the server's booking data before it is displayed as a ticket.
+
+On 7 September 2026, the documented staging `/health` returned HTTP 200 with `db: connected`. The pending-payment and finance-review GET endpoints returned HTTP 404. This does not verify the feature branch on staging or prove its authorization guards. The current process has no dedicated audit connection or staging SSH configuration. No deployment or customer-data mutation was performed.
+
 ## Evidence
 
 Focused tests are in `tests/characterization/payment-*-integrity.test.js`,

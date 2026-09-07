@@ -24,6 +24,7 @@ const esewaPaymentAttemptSchema = new mongoose.Schema(
     tempBookingId: { type: String, required: true, unique: true },
     transactionUuid: { type: String, required: true, unique: true },
     productCode: { type: String, required: true },
+    paymentEnvironment: { type: String, enum: ['sandbox', 'live'], default: null },
     originalAmount: { type: Number, required: true, min: 0 },
     gatewayAmount: { type: Number, required: true, min: 0 },
     finalAmount: { type: Number, required: true, min: 0 },

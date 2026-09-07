@@ -1,4 +1,6 @@
 'use strict';
+const { parseEsewaAmount } = require('../../../shared/esewa-amount');
+const { toMinorUnits } = require('../../../shared/money');
 
 function decodeEsewaResponse(responseData) {
   if (!responseData) return null;
@@ -29,12 +31,13 @@ function validateEsewaResponse({
 }) {
   const payload = decodeEsewaResponse(responseData);
   if (!payload) return null;
-  const amount = Number(String(payload.total_amount || '').replace(/,/g, ''));
+  let amount;
+  try { amount = parseEsewaAmount(payload.total_amount); } catch { throw invalidResponse(); }
   if (
     !signature.verifyEsewaResponse(payload, secretKey) ||
     payload.transaction_uuid !== attempt.transactionUuid ||
     payload.product_code !== attempt.productCode ||
-    Math.abs(amount - attempt.gatewayAmount) > 0.01
+    toMinorUnits(amount) !== toMinorUnits(attempt.gatewayAmount)
   ) {
     throw invalidResponse();
   }
