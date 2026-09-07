@@ -7,6 +7,7 @@ const { toMinorUnits } = require("../../../shared/money");
 const { allocateRefund } = require("../../../shared/refund-allocation");
 const { recordManualSettlement, fail } = require("../../../shared/refund-settlement-evidence");
 const wallet = require("../../../../services/walletService");
+const { sourceBudget } = require("../../../shared/refund-source-budget");
 
 async function updateRefund({ refundId, adminId, status, remarks, refundGateway, refundGatewayId, proofKey }) {
   if (!mongoose.isValidObjectId(refundId) || !mongoose.isValidObjectId(adminId)) throw fail("Valid refund and administrator IDs are required");
@@ -21,6 +22,7 @@ async function updateRefund({ refundId, adminId, status, remarks, refundGateway,
     if (!booking || String(booking.userId) !== String(refund.userId)) throw fail("Refund ownership requires reconciliation");
     const amountMinor = toMinorUnits(refund.refundAmount);
     const siblings = await Refund.find({ bookingId: booking._id, status: { $nin: ["rejected", "not_applicable"] } }).session(session);
+    sourceBudget(booking.toObject(), siblings);
     if (siblings.reduce((sum, r) => sum + toMinorUnits(r.refundAmount), 0) > toMinorUnits(booking.totalAmount)) {
       throw fail("Refund history exceeds the payment and requires reconciliation");
     }
@@ -65,6 +67,14 @@ async function updateRefund({ refundId, adminId, status, remarks, refundGateway,
       refund.refundGatewayId = refund.settlementEvidence?.reference || String(refund.settlementEvidence?.ledgerEntryId || "");
     }
     if (status === "rejected" && (typeof remarks !== "string" || remarks.trim().length < 10)) throw fail("Explain the refund rejection in at least 10 characters");
+    if (status === "rejected") {
+      if (refund.settlementEvidence?.proofKey || refund.refundProof || refund.refundGatewayId) {
+        throw fail("A refund with payout evidence cannot be rejected; reconcile the transfer first");
+      }
+      await Booking.updateOne({ _id: booking._id }, { $set: { refundReservedMinor:
+        siblings.filter(row => String(row._id) !== String(refund._id))
+          .reduce((sum, row) => sum + toMinorUnits(row.refundAmount), 0) } }, { session });
+    }
     refund.status = amountMinor === 0 && status === "completed" ? "not_applicable" : status;
     refund.processedBy = adminId;
     refund.processedAt ||= new Date();

@@ -48,6 +48,7 @@ router.delete("/deleteTicket", busOwnerGuard, busOwnerScheduleManagement.deleteS
 router.post("/getTicketById", busOwnerGuard, busOwnerScheduleManagement.getScheduleById);
 
 // Payment Gateway Booking Flow
+router.get("/esewa/pending", ...passengerBookingGuard, passengerEsewaCheckout.pendingPassengerEsewaCheckout);
 router.post("/prepareBooking", ...passengerBookingGuard, preparePassengerBooking);
 router.post(
   "/esewa/initiate",

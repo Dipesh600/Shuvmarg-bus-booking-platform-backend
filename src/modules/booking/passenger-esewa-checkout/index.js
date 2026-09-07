@@ -86,6 +86,7 @@ const controller = createPassengerEsewaCheckoutController({
 });
 
 module.exports = {
+  pendingPassengerEsewaCheckout: require('./passenger-esewa-pending.controller').createPendingCheckoutController({ Attempt: EsewaPaymentAttempt }),
   reconcilePaymentAttempt: finalize,
   initiatePassengerEsewaCheckout:
     controller.initiatePassengerEsewaCheckout,

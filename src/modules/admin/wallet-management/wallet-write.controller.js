@@ -49,7 +49,8 @@ async function freezeWallet(req, res) {
       });
     }
     const result = await statusChanges.changeWalletStatus(
-      req.body.userId, req.body.action
+      req.body.userId, req.body.action, { adminId: req.adminInfo?.id,
+        remarks: req.body.remarks, operationId: req.body.operationId }
     );
     if (result.notFound) {
       return res.status(404).json({
@@ -65,6 +66,7 @@ async function freezeWallet(req, res) {
       status: true, message: result.message, data: result.data,
     });
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ status: false, message: error.message });
     console.error("Admin wallet freeze error:", error);
     return res.status(500).json({
       status: false, message: "Internal Server Error",

@@ -37,9 +37,9 @@ customer balances have been changed.
 
 ## Still required before release
 
-1. Finish the mobile migration from the retired SDK confirmation path to the
-   server-owned eSewa attempt. Exercise PIN authorization for split checkout and
-   persist/recover the original payment reference after app restart. The current
+1. Mobile now uses the server-owned eSewa form and persists the reference across
+   restart, with owner-scoped server discovery if initiation response is lost.
+   Exercise gateway-only, wallet-only and split checkout on real devices in sandbox. The current
    passenger website exposes gateway-only checkout; do not claim split UI support.
 2. Complete end-to-end crash tests around seat locking, hold completion,
    transaction success and compensation. The atomic booking/debit tests do not
@@ -53,11 +53,11 @@ customer balances have been changed.
 4. Agree refund destination, retained fees, credit expiry, partial-seat rules,
    PIN replacement (if any), and finance roles. Current PIN and destination
    choices are preserved. Manual settlement requires two eligible administrators.
-   Refund reservations are conservatively retained after rejection; reopening
-   and releasing that budget needs an explicit tested transition.
-5. Validate cumulative refunds per payment leg, legacy allocation gaps and
-   timetable timezone boundaries. Exact arithmetic and a total-payment budget
-   do not alone establish all partial-seat and split-refund policies.
+   Rejection now releases budget only when no payout evidence exists, within the
+   same transaction. Rejected rows stay closed; a replacement uses a new operation key.
+5. Cumulative refund limits per source now pass concurrent paisa tests. Invalid
+   source allocations fail closed. Review legacy allocation gaps and timetable
+   timezone boundaries; partial-seat business rules still require validation.
 6. Run the existing read-only reversal audit against a restored backup with
    read-only credentials. Investigate findings before proposing any correction.
 7. Verify required indexes exist before enabling new writers. These include
