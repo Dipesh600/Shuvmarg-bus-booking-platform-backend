@@ -67,8 +67,7 @@ function setupConfirmHarness() {
     const orig = obj[key];
     obj[key] = fn;
     patches.push(() => {
-      if (orig === undefined) delete obj[key];
-      else obj[key] = orig;
+      if (orig === undefined) delete obj[key]; else obj[key] = orig;
     });
   }
   mockMethod(require('../../src/modules/wallet/payment-authorization/purchase-authorization.service'), 'authorizeCheckout', async () => ({ ok: true }));
@@ -92,10 +91,7 @@ function setupConfirmHarness() {
   mockMethod(CouponHelper, 'applyCoupon', () => Promise.resolve());
   mockMethod(smLedgerService, 'computeSpendableBalance', () => Promise.resolve(defaults.spendableBalance));
   mockMethod(smLedgerService, 'computePurchaseBalance', () => Promise.resolve({
-    display: defaults.spendableBalance.display,
-    refund: defaults.spendableBalance.display,
-    restricted: 0,
-  }));
+    display: defaults.spendableBalance.display, refund: defaults.spendableBalance.display, restricted: 0 }));
   mockMethod(smLedgerService, 'debitLedgerFIFO', () => Promise.resolve(defaults.debitEntry));
   mockMethod(smLedgerService, 'reverseDebit', () => Promise.resolve());
   mockMethod(smLedgerService, 'generateCashback', () => Promise.resolve({}));
@@ -110,8 +106,7 @@ function setupConfirmHarness() {
   mockMethod(passengerSeatHold, 'completePassengerHold', () => Promise.resolve());
   mockMethod(passengerSeatHold, 'claimPassengerHoldForConfirmation', () => Promise.resolve(true));
   mockMethod(passengerSeatHold, 'restorePassengerHoldAfterFailedConfirmation', () => Promise.resolve());
-  function restore() {
-    patches.forEach(fn => fn());
+  function restore() { patches.forEach(fn => fn());
     [
       notifModulePath, userDeviceInfoPath, esewaPath, confirmationPath, confirmationIndexPath,
       esewaVerificationIndexPath, esewaVerificationServicePath,

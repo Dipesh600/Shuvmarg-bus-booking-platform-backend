@@ -76,13 +76,10 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
         },
       };
     }
-
     const splitPaymentResult = state.splitPaymentDebitEntryId
       ? { ok: true, debitEntryId: state.splitPaymentDebitEntryId }
       : await deps.debitPassengerSplitPayment({
-      gateway,
-      userId: state.userId,
-      amount: state.smMoneyApplied,
+      gateway, userId: state.userId, amount: state.smMoneyApplied,
       refundMoneyApplied: state.refundMoneyApplied,
       restrictedMoneyApplied: state.restrictedMoneyApplied,
       tempBookingId,
@@ -92,7 +89,6 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
       return splitPaymentResult;
     }
     state.splitPaymentDebitEntryId = splitPaymentResult.debitEntryId;
-
     const esewaVerificationResult = req.paymentAttemptId && req.providerPaymentVerified === true
       ? { ok: true }
       : await deps.verifyPassengerEsewaPayment({
@@ -112,8 +108,7 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
 
     if (gateway === 'wallet') {
       const walletPaymentResult = await deps.debitPassengerWalletPayment({
-        userId: state.userId,
-        amount: state.smMoneyApplied,
+        userId: state.userId, amount: state.smMoneyApplied,
         refundMoneyApplied: state.refundMoneyApplied,
         restrictedMoneyApplied: state.restrictedMoneyApplied,
         tempBookingId,
