@@ -116,13 +116,9 @@ The workflow uses `GITHUB_TOKEN` with `packages: write` permission. No additiona
 
 ### Oracle VM → GHCR (pull)
 
-The VM needs a **read-only** personal access token (classic) or a **fine-grained** token:
+The deploy job uses its short-lived `GITHUB_TOKEN` with `packages: read` permission. It passes that token over the existing SSH action only for the image pull. The deploy script uses a temporary Docker configuration directory and removes it on exit, so the credential is not retained on the VM.
 
-1. Go to GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens
-2. Create a token with scope: **Read access to packages** for `Dipesh600/Shuvmarg-bus-booking-platform-backend`
-3. Set the token as a repository secret named **`GHCR_TOKEN`**
-
-The deploy script reads `GHCR_TOKEN` from the environment (passed via SSH by GitHub Actions) and authenticates with:
+The deploy script receives the job token as `GHCR_TOKEN` and authenticates with:
 
 ```bash
 echo "${GHCR_TOKEN}" | docker login ghcr.io -u dipesh600 --password-stdin
@@ -140,7 +136,6 @@ Add these secrets in **GitHub → Settings → Secrets and variables → Actions
 | `ORACLE_STAGING_USER`     | SSH username (e.g. `ubuntu`)                    |
 | `ORACLE_STAGING_SSH_KEY`  | Private SSH key (PEM format) for the VM         |
 | `ORACLE_STAGING_SSH_PORT` | SSH port (default `22`)                         |
-| `GHCR_TOKEN`              | Read-only GitHub package token (for VM pulls)   |
 
 Runtime backend secrets (`MONGODB_URL`, `SECRET_KEY`, etc.) remain **only on the VM** in `/opt/shuvmarg/staging/.env`.
 
@@ -258,10 +253,8 @@ All deployed images are stored in GHCR and identified by immutable SHA tags. Nev
 1. Update affected variables in `/opt/shuvmarg/staging/.env`
 2. `docker compose restart backend`
 
-### GHCR read token (`GHCR_TOKEN`)
-1. Generate new fine-grained token in GitHub Settings
-2. Update the `GHCR_TOKEN` repository secret in GitHub
-3. No VM restart needed — the token is injected at deploy time
+### GHCR workflow access
+No long-lived package token is stored. The deploy job receives a new repository-scoped token for each run. If package access fails, confirm that the deploy job has `packages: read` permission and that the container package grants this repository access.
 
 ### SSH key (`ORACLE_STAGING_SSH_KEY`)
 1. Generate a new key pair: `ssh-keygen -t ed25519 -C "staging-deploy"`
@@ -313,12 +306,12 @@ docker inspect shuvmarg-staging-backend | python3 -m json.tool | grep -A 10 '"He
 ### GHCR authentication failure on VM
 
 ```bash
-# Test manually on the VM
-echo "${GHCR_TOKEN}" | docker login ghcr.io -u dipesh600 --password-stdin
+# Authentication is performed by the deployment workflow with its short-lived
+# repository token; no reusable GHCR credential is installed on the VM.
 ```
 
-- Verify `GHCR_TOKEN` in GitHub secrets has **packages: read** scope
-- Fine-grained tokens must have access to the specific repository
+- Verify the deploy job has `packages: read` permission
+- Verify the container package grants this repository access
 
 ### Staging frontend still using old API URL
 

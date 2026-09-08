@@ -11,9 +11,12 @@
 # inside this workflow before any image is built or deployed.
 #
 # Separation of credentials:
-#   - GITHUB_TOKEN (packages: write)  → push to GHCR
-#   - GHCR_TOKEN (GitHub secret)      → VM pulls from GHCR (read-only package token)
+#   - GITHUB_TOKEN                    → push to and pull from this repository's GHCR package
 #   - ORACLE_STAGING_SSH_KEY          → SSH access to the VM
+#
+# The deploy job passes its short-lived GITHUB_TOKEN to the VM only for the
+# duration of the image pull. deploy.sh uses an ephemeral Docker config and
+# deletes it on exit, so no registry credential remains on the VM.
 
 name: Deploy to Staging
 
@@ -26,15 +29,14 @@ concurrency:
   group: shuvmarg-staging-deployment
   cancel-in-progress: false
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   # ── Step 1: Run full CI gate before building ────────────────────────────────
   ci:
     name: CI Gate
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     strategy:
       matrix:
@@ -84,6 +86,10 @@ jobs:
     name: Build & Push Image
     needs: ci
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
 
     outputs:
       image: ${{ steps.image-ref.outputs.image }}
@@ -137,6 +143,10 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      packages: read
+
     steps:
       - name: Checkout staging deployment files
         uses: actions/checkout@v4
@@ -162,17 +172,19 @@ jobs:
           username: ${{ secrets.ORACLE_STAGING_USER }}
           key: ${{ secrets.ORACLE_STAGING_SSH_KEY }}
           port: ${{ secrets.ORACLE_STAGING_SSH_PORT }}
-          # Pass GHCR_TOKEN as an environment variable so the deploy script
-          # can authenticate to GHCR for pulls. This is a read-only package token
-          # stored as a GitHub secret — separate from GITHUB_TOKEN.
-          envs: GHCR_TOKEN,NEW_IMAGE
+          # Use this job's short-lived repository token for the one image pull.
+          # It expires after the job and replaces the stale long-lived PAT that
+          # previously blocked staging deployments with `denied: denied`.
+          envs: GHCR_TOKEN,GHCR_USER,NEW_IMAGE
           script: |
             export GHCR_TOKEN="${GHCR_TOKEN}"
+            export GHCR_USER="${GHCR_USER}"
             export NEW_IMAGE="${NEW_IMAGE}"
             chmod 750 /opt/shuvmarg/staging/deploy.sh
             /opt/shuvmarg/staging/deploy.sh "${NEW_IMAGE}"
         env:
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
           NEW_IMAGE: ${{ needs.build-and-push.outputs.image }}
 
       - name: Verify deployment health (from CI runner)
