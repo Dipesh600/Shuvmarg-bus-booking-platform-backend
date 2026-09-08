@@ -25,9 +25,9 @@ customer balances have been changed.
   Pending dispute evidence does not mark the transaction refunded.
 - Provider verification requires the expected transaction, merchant and exact
   amount. Unknown provider state remains recoverable.
-- New split checkout attempts reserve SM Money before gateway launch after PIN
-  verification. Reservation creation is atomic and initiation retries reserve
-  only once. The PIN is not stored in the attempt.
+- New split checkout attempts require a short-lived, purchase-bound code sent to
+  the registered phone before reserving SM Money and launching the gateway.
+  Reservation creation is atomic and initiation retries reserve only once.
 - Booking commit ties the payment attempt, processing token, booking and consumed
   ledger debit together. A completed debit cannot be reversed through checkout
   compensation. Wallet references are generated from the user and seat hold.

@@ -71,7 +71,7 @@ function setupConfirmHarness() {
       else obj[key] = orig;
     });
   }
-  mockMethod(require('../../src/modules/wallet/payment-authorization/wallet-pin.service'), 'verifyPaymentPin', async () => ({ ok: true }));
+  mockMethod(require('../../src/modules/wallet/payment-authorization/purchase-authorization.service'), 'authorizeCheckout', async () => ({ ok: true }));
   esewaStub._impl = async () => ({ verified: true });
   mockMethod(bookingConfirmation, 'sendBookingConfirmedNotification', (...args) => {
     if (defaults.onNotifSent) defaults.onNotifSent(...args);

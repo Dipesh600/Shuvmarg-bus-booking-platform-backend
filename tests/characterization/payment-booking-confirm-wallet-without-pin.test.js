@@ -12,14 +12,14 @@ test('confirmBooking: wallet payment without PIN', async (t) => {
   t.beforeEach(() => { h = setupConfirmHarness(); });
   t.afterEach(() => { h.restore(); });
 
-  await t.test('1. wallet payment succeeds without walletPin', async () => {
+  await t.test('1. an approved wallet payment succeeds without a permanent PIN', async () => {
     const res = makeMockConfirmRes();
     await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', paymentAmount: 1000, originalAmount: 1000 }), res);
     assert.equal(res.getStatus(), 201);
     assert.equal(res.getJson().success, true);
   });
 
-  await t.test('2. walletPin omitted entirely — proceeds to debit', async () => {
+  await t.test('2. the approved purchase proceeds to debit without a PIN field', async () => {
     let debitCalled = false;
     h.mockMethod(h.smLedgerService, 'debitLedgerFIFO', ({ amount }) => { debitCalled = true; return Promise.resolve({ _id: 'd1' }); });
     const res = makeMockConfirmRes();
@@ -28,13 +28,13 @@ test('confirmBooking: wallet payment without PIN', async (t) => {
     assert.equal(debitCalled, true);
   });
 
-  await t.test('3. walletPin: null — proceeds to debit', async () => {
+  await t.test('3. a legacy null PIN cannot affect the approved purchase', async () => {
     const res = makeMockConfirmRes();
     await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', walletPin: null, paymentAmount: 1000, originalAmount: 1000 }), res);
     assert.equal(res.getStatus(), 201);
   });
 
-  await t.test('4. walletPin: invalid string — ignored, proceeds to debit', async () => {
+  await t.test('4. a legacy PIN string cannot affect the approved purchase', async () => {
     const res = makeMockConfirmRes();
     await h.confirmBooking(makeConfirmReq({ gateway: 'wallet', walletPin: 'bad-pin', paymentAmount: 1000, originalAmount: 1000 }), res);
     assert.equal(res.getStatus(), 201);

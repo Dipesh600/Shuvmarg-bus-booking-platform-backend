@@ -34,14 +34,6 @@ const walletSchema = new mongoose.Schema(
     },
     // Serializes spending with freezes and concurrent wallet operations.
     debitSequence: { type: Number, default: 0 },
-    pin: {
-      type: String,
-      default: null,
-    },
-    isPinSet: {
-      type: Boolean,
-      default: false,
-    },
   },
   { timestamps: true }
 );

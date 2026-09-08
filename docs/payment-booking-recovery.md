@@ -42,10 +42,23 @@ Developer articles were searched at the user's request. They do not establish
 merchant authorization, supported refund parameters, idempotency or settlement
 guarantees. Confirm those with eSewa before connecting refund initiation.
 
+## PIN-free purchase authorization
+
+- Payment PIN endpoints are retired and checkout no longer reads a PIN. Legacy
+  PIN fields are absent from the wallet schema and response. Run the supplied
+  migration separately to erase old stored hashes after backup verification.
+- Any wallet or split payment first creates a five-minute approval for the
+  authenticated passenger, registered phone, current session version, owned
+  seat hold, server price, payment split and booking details.
+- The six-digit code is stored only as a keyed hash, limited to five guesses and
+  three sends per account per 15 minutes. A successful approval cannot authorize
+  a changed amount, gateway, passenger, hold or session. The same purchase may
+  reuse it for idempotent crash recovery.
+- Gateway-only checkout continues through the provider's authorization and does
+  not require the SM Money code.
+
 ## Agreed policy still requiring implementation
 
-- Remove the payment PIN after implementing secure purchase authorization across
-  backend and passenger clients. Existing code still requires the PIN.
 - Offer SM or original-source destination for passenger and operator cancellation.
   Operator cancellation's passenger-choice workflow still needs implementation.
 - Refund SM may fund an entire future ticket; promotional credit and coupons have

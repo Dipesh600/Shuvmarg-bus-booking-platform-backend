@@ -31,7 +31,8 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
     if (!quoteResult.ok) return quoteResult;
     let walletAuthorizedAt = null;
     if (quoteResult.quote.smMoneyApplied > 0) {
-      const authorization = await deps.verifyWalletPin({ userId, pin: body.walletPin });
+      const authorization = await deps.authorizeCheckout({ userId, hold,
+        body: { ...body, gateway: 'esewa' }, quote: quoteResult.quote });
       if (!authorization.ok) return authorization;
       walletAuthorizedAt = new Date();
     }

@@ -1,5 +1,5 @@
 'use strict';
-const pinService = require('../../wallet/payment-authorization/wallet-pin.service');
+const purchaseAuthorization = require('../../wallet/payment-authorization/purchase-authorization.service');
 function createPassengerBookingConfirmationPaymentStage(deps) {
   return async function runPassengerBookingConfirmationPaymentStage({ req, state }) {
     const restoreClaim = async () => {
@@ -54,7 +54,8 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
       const authorization = req.paymentAttemptId
         ? await deps.authorizeReservedPayment({ attemptId: req.paymentAttemptId, processingToken: req.paymentProcessingToken,
           userId: state.userId, amount: state.smMoneyApplied })
-        : await (deps.verifyWalletPaymentPin || pinService.verifyPaymentPin)({ userId: state.userId, pin: req.body.walletPin });
+        : await purchaseAuthorization.authorizeCheckout({ user: req.dbUser, hold: req.bookingHold,
+          body: req.body, quote: state });
       if (!authorization.ok) return authorization;
       if (req.paymentAttemptId) state.splitPaymentDebitEntryId = authorization.debitEntryId;
     }

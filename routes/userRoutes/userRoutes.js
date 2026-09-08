@@ -121,8 +121,10 @@ router.get(
 
 // Wallet Routes
 router.get("/wallet/details", auth, verifyRoleFromDB, walletController.getWalletDetails);
-router.post("/wallet/setup-pin", auth, verifyRoleFromDB, walletController.setupWalletPin);
-router.post("/wallet/verify-pin", auth, verifyRoleFromDB, walletController.verifyWalletPin);
+const retiredPaymentPin = (_req, res) => res.status(410).json({ success: false,
+  errorCode: 'PAYMENT_PIN_RETIRED', message: 'Payment PINs have been removed. Update the app to approve purchases with a payment code.' });
+router.post("/wallet/setup-pin", auth, verifyRoleFromDB, retiredPaymentPin);
+router.post("/wallet/verify-pin", auth, verifyRoleFromDB, retiredPaymentPin);
 
 // Scratch Card Routes
 router.get("/wallet/scratch-cards", auth, verifyRoleFromDB, scratchCardController.getScratchCards);

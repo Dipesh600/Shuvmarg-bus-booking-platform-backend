@@ -60,7 +60,7 @@ const initiate = createPassengerEsewaCheckoutInitiationService({
   tripPolicy,
   boardingOptions: boardingOptions.resolvePassengerBoardingOptions,
   checkoutFingerprint: require('./passenger-esewa-checkout-reservation.service').checkoutFingerprint,
-  verifyWalletPin: require('../../wallet/payment-authorization/wallet-pin.service').verifyPaymentPin,
+  authorizeCheckout: require('../../wallet/payment-authorization/purchase-authorization.service').authorizeCheckout,
   captureRefundPolicySnapshot: require('../../../shared/refund-policy-snapshot').captureRefundPolicySnapshot,
 });
 const recovery = createPassengerEsewaCheckoutRecoveryService({

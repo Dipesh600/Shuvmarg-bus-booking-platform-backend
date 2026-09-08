@@ -48,6 +48,10 @@ router.delete("/deleteTicket", busOwnerGuard, busOwnerScheduleManagement.deleteS
 router.post("/getTicketById", busOwnerGuard, busOwnerScheduleManagement.getScheduleById);
 
 // Payment Gateway Booking Flow
+const purchaseAuthorization = require('../../src/modules/wallet/payment-authorization/purchase-authorization.controller');
+router.post('/payment-authorization/request', ...passengerBookingGuard,
+  passengerSeatHold.requireOwnedActivePassengerSeatHold, purchaseAuthorization.request);
+router.post('/payment-authorization/approve', ...passengerBookingGuard, purchaseAuthorization.approve);
 router.get("/esewa/pending", ...passengerBookingGuard, passengerEsewaCheckout.pendingPassengerEsewaCheckout);
 router.post("/prepareBooking", ...passengerBookingGuard, preparePassengerBooking);
 router.post(

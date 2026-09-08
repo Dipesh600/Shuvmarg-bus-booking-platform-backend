@@ -52,7 +52,7 @@ function calculateConfirmationQuote({
 
   let gatewayAmount;
   if (gateway === 'wallet') {
-    smMoneyApplied = paymentAmount;
+    smMoneyApplied = originalAmount - discountAmount;
     gatewayAmount = 0;
   } else {
     const afterCoupon = originalAmount - discountAmount;
