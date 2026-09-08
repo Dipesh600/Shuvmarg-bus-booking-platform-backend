@@ -10,6 +10,7 @@
  * and resolution tracking for that process.
  */
 
+const { settleDispute } = require("../../src/modules/admin/wallet-management/dispute-settlement.service");
 const Transaction = require("../../models/transactionModel.js");
 const User        = require("../../models/userModel.js");
 const UserDeviceInfo = require("../../models/userDeviceInfoModel.js");
@@ -153,9 +154,9 @@ const getDisputedPayments = async (req, res) => {
 const resolveDispute = async (req, res) => {
   try {
     const { transactionId } = req.params;
-    const { refundNote, refundStatus = "COMPLETED" } = req.body;
+    const { refundNote, refundReference, refundStatus = "PENDING" } = req.body;
 
-    if (!refundNote || refundNote.trim().length === 0) {
+    if (typeof refundNote !== "string" || refundNote.trim().length === 0 || refundNote.length > 2000) {
       return res.status(400).json({
         success: false,
         message: "refundNote is required. Describe how the refund was processed (e.g., eSewa merchant dashboard reference).",
@@ -217,37 +218,11 @@ const resolveDispute = async (req, res) => {
           message: `Failed to upload proof image: ${uploadErr.message}`,
         });
       }
-    } else if (refundStatus === "COMPLETED") {
-      // Proof is mandatory for completed refunds
-      return res.status(400).json({
-        success: false,
-        message: "Proof image is required when marking refund as COMPLETED. Upload a screenshot of the manual refund.",
-      });
     }
 
-    // ── Atomic update ───────────────────────────────────────────────────
-    const updatePayload = {
-      status:       "REFUNDED",
-      refundStatus: refundStatus,
-      refundNote:   refundNote.trim(),
-      resolvedAt:   new Date(),
-      resolvedBy:   req.adminInfo?.id || null,
-    };
-
-    if (proofAttachmentKey) {
-      updatePayload.proofAttachmentKey = proofAttachmentKey;
-    }
-
-    const updated = await Transaction.findOneAndUpdate(
-      {
-        _id:    transactionId,
-        status: "DISPUTED",
-      },
-      {
-        $set: updatePayload,
-      },
-      { new: true }
-    ).populate("userId", "name phone email");
+    const updated = await settleDispute({ transactionId, adminId: req.adminInfo.id,
+      refundStatus, refundNote: refundNote.trim(), refundReference, proofKey: proofAttachmentKey });
+    await updated.populate("userId", "name phone email");
 
     if (!updated) {
       // Race condition — someone else resolved it between our check and update
@@ -272,8 +247,8 @@ const resolveDispute = async (req, res) => {
         await createLocalNotification(
           notifUserId,
           "DISPUTE_RESOLVED",
-          "Payment Issue Resolved",
-          `Your payment dispute (Case ID: ${updated._id}) has been resolved. ${refundStatus === "COMPLETED" ? "A refund has been processed." : "A refund is being processed."} Note: ${refundNote.trim()}`,
+          refundStatus === "COMPLETED" ? "Payment Issue Resolved" : "Refund Processing",
+          `Your payment dispute (Case ID: ${updated._id}) ${refundStatus === "COMPLETED" ? "has been resolved" : "is being processed"}. ${refundStatus === "COMPLETED" ? "A refund has been processed." : "A refund is being processed."} Note: ${refundNote.trim()}`,
           {
             transactionId: updated._id,
             refundStatus,
@@ -287,8 +262,8 @@ const resolveDispute = async (req, res) => {
         if (tokens.length > 0) {
           await notificationManager(
             tokens,
-            "Payment Issue Resolved",
-            `Your payment dispute (Case ID: ${updated._id}) has been resolved. ${refundStatus === "COMPLETED" ? "Refund processed." : "Refund in progress."}`
+            refundStatus === "COMPLETED" ? "Payment Issue Resolved" : "Refund Processing",
+            `Your payment dispute (Case ID: ${updated._id}) ${refundStatus === "COMPLETED" ? "has been resolved" : "is being processed"}. ${refundStatus === "COMPLETED" ? "Refund processed." : "Refund in progress."}`
           );
         }
       }
@@ -298,10 +273,12 @@ const resolveDispute = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Dispute resolved successfully.",
+      message: refundStatus === "COMPLETED" ? "Dispute resolved successfully." : "Refund evidence saved for finance review.",
       data: updated,
     });
   } catch (error) {
+    if (error.statusCode || error.code === 11000) return res.status(error.statusCode || 409).json({
+      success: false, message: error.code === 11000 ? "This payout reference has already been recorded" : error.message });
     logger.error("resolveDispute: error", { error: error.message });
     return res.status(500).json({
       success: false,

@@ -101,6 +101,7 @@ test("passenger-booking-cancellation estimate characterization", async (t) => {
     
     assert.strictEqual(res.statusCode, 200);
     assert.deepStrictEqual(calcArgs, {
+      policySnapshot: undefined, smMoneyUsed: undefined, gatewayAmount: undefined, paymentMethod: undefined,
       totalAmount: 1000,
       tripDate: "2026-07-25",
       departureTime: "10:00"

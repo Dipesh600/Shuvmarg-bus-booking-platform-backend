@@ -21,14 +21,12 @@ const orchestratorPath = require.resolve('../../src/modules/booking/passenger-bo
 const orchestratorDir = require('node:path').dirname(orchestratorPath);
 const clearOrchestratorCache = () => Object.keys(require.cache)
   .filter(p => p.startsWith(orchestratorDir)).forEach(p => delete require.cache[p]);
-
 const notifStub = { createLocalNotification: async () => {}, notificationManager: async () => {} };
 const userDeviceInfoStub = { find: async () => [] };
 const esewaStub = { verifyEsewaPayment: async (id, amt) => esewaStub._impl(id, amt), _impl: async () => ({ verified: true }), ESEWA_CONFIG: {} };
 require.cache[notifModulePath] = { id: notifModulePath, filename: notifModulePath, loaded: true, exports: notifStub, paths: [], children: [] };
 require.cache[userDeviceInfoPath] = { id: userDeviceInfoPath, filename: userDeviceInfoPath, loaded: true, exports: userDeviceInfoStub };
 require.cache[esewaPath] = { id: esewaPath, filename: esewaPath, loaded: true, exports: esewaStub, paths: [], children: [] };
-
 const Transaction = require('../../models/transactionModel.js');
 const Booking = require('../../models/bookTicketModel.js');
 const PlatformConfig = require('../../models/platformConfigModel.js');
@@ -40,10 +38,8 @@ const CouponHelper = require('../../handlers/couponHelper.js');
 const smLedgerService = require('../../src/modules/wallet/sm-ledger');
 const esewaService = require('../../services/esewaVerificationService.js');
 const passengerSeatHold = require('../../src/modules/booking/passenger-seat-hold');
-
 function setupConfirmHarness() {
   [notifModulePath, userDeviceInfoPath, esewaPath].forEach(p => { require.cache[p] = require.cache[p] || { id: p, filename: p, loaded: true, exports: p === notifModulePath ? notifStub : (p === userDeviceInfoPath ? userDeviceInfoStub : esewaStub) }; });
-
   [
     confirmationPath, confirmationIndexPath,
     esewaVerificationIndexPath, esewaVerificationServicePath,
@@ -53,7 +49,6 @@ function setupConfirmHarness() {
     bookingPersistenceIndexPath, bookingPersistenceServicePath,
     reconciliationIndexPath, reconciliationServicePath
   ].forEach(p => delete require.cache[p]);
-
   const bookingConfirmation = require('../../src/modules/booking/booking-confirmation');
   const defaults = {
     trip: { _id: '507f1f77bcf86cd799439011', status: 'scheduled', bookingClosesAt: null, brandId: 'b1', busId: 'bus1' },
@@ -67,31 +62,36 @@ function setupConfirmHarness() {
     wallet: { status: 'active' },
     onNotifSent: null
   };
-
   const patches = [];
   function mockMethod(obj, key, fn) {
     const orig = obj[key];
     obj[key] = fn;
     patches.push(() => {
-      if (orig === undefined) delete obj[key];
-      else obj[key] = orig;
+      if (orig === undefined) delete obj[key]; else obj[key] = orig;
     });
   }
-  mockMethod(require('../../src/modules/wallet/payment-authorization/wallet-pin.service'), 'verifyPaymentPin', async () => ({ ok: true }));
+  mockMethod(require('../../src/modules/wallet/payment-authorization/purchase-authorization.service'), 'authorizeCheckout', async () => ({ ok: true }));
   esewaStub._impl = async () => ({ verified: true });
   mockMethod(bookingConfirmation, 'sendBookingConfirmedNotification', (...args) => {
     if (defaults.onNotifSent) defaults.onNotifSent(...args);
     return Promise.resolve();
   });
   clearOrchestratorCache();
+  require('./payment-legacy-stage-fixture')(require('../../src/modules/booking/passenger-booking-confirmation-orchestrator/passenger-booking-confirmation-fulfillment-stage.service'), mockMethod);
+  mockMethod(require('../../src/shared/commit-payment-booking'), 'commitPaymentBooking', payload => Booking.create(payload));
+  mockMethod(require('../../src/shared/rollback-unfulfilled-seat'), 'rollbackUnfulfilledSeat', ({ tripId, arrayField, seatNo, userId }) =>
+    Seat.findOneAndUpdate({ tripId, [arrayField]: { $elemMatch: { seatNo, bookedBy: userId } } },
+      { $set: { [`${arrayField}.$[elem].booked`]: false, [`${arrayField}.$[elem].bookedBy`]: null, [`${arrayField}.$[elem].bookedAt`]: null } },
+      { arrayFilters: [{ 'elem.seatNo': seatNo, 'elem.bookedBy': userId }] }));
   const { confirmPassengerBooking: confirmBooking } = require('../../src/modules/booking/passenger-booking-confirmation-orchestrator');
-
   mockMethod(Trip, 'findById', () => ({ lean: () => Promise.resolve(defaults.trip) }));
   mockMethod(Seat, 'findOne', () => Promise.resolve(defaults.seatDoc));
   mockMethod(Seat, 'findOneAndUpdate', () => Promise.resolve({ _id: 'seat-doc' }));
   mockMethod(CouponHelper, 'validateCoupon', () => Promise.resolve(defaults.couponValidation));
   mockMethod(CouponHelper, 'applyCoupon', () => Promise.resolve());
   mockMethod(smLedgerService, 'computeSpendableBalance', () => Promise.resolve(defaults.spendableBalance));
+  mockMethod(smLedgerService, 'computePurchaseBalance', () => Promise.resolve({
+    display: defaults.spendableBalance.display, refund: defaults.spendableBalance.display, restricted: 0 }));
   mockMethod(smLedgerService, 'debitLedgerFIFO', () => Promise.resolve(defaults.debitEntry));
   mockMethod(smLedgerService, 'reverseDebit', () => Promise.resolve());
   mockMethod(smLedgerService, 'generateCashback', () => Promise.resolve({}));
@@ -99,14 +99,14 @@ function setupConfirmHarness() {
   mockMethod(Transaction, 'create', () => Promise.resolve(defaults.transaction));
   mockMethod(Transaction, 'findByIdAndUpdate', () => Promise.resolve(defaults.transaction));
   mockMethod(Transaction, 'findOneAndUpdate', () => Promise.resolve({ ...defaults.transaction, status: 'SUCCESS' }));
+  mockMethod(require('../../models/refundPolicyModel'), 'find', () => ({ sort: () => ({ lean: async () => [] }) }));
   mockMethod(Booking, 'create', () => Promise.resolve(defaults.booking));
   mockMethod(Wallet, 'findOne', () => Promise.resolve(defaults.wallet));
   mockMethod(SMLedger, 'updateOne', () => Promise.resolve());
   mockMethod(passengerSeatHold, 'completePassengerHold', () => Promise.resolve());
   mockMethod(passengerSeatHold, 'claimPassengerHoldForConfirmation', () => Promise.resolve(true));
   mockMethod(passengerSeatHold, 'restorePassengerHoldAfterFailedConfirmation', () => Promise.resolve());
-  function restore() {
-    patches.forEach(fn => fn());
+  function restore() { patches.forEach(fn => fn());
     [
       notifModulePath, userDeviceInfoPath, esewaPath, confirmationPath, confirmationIndexPath,
       esewaVerificationIndexPath, esewaVerificationServicePath,

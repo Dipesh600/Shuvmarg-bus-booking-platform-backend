@@ -22,6 +22,8 @@ services:
     env_file:
       - .env
     environment:
+      DEPLOYMENT_ENV: "staging"
+      PASSENGER_APP_URL: "${PASSENGER_APP_URL:?Set the HTTPS staging passenger app URL}"
       # Exactly one Caddy hop. Backend port is private and Caddy replaces XFF.
       TRUSTED_PROXY_HOPS: "1"
 

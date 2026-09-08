@@ -27,7 +27,7 @@ These changes are being integrated through a feature branch into dev and have no
 
 ## Client behavior to account for
 
-- Send `walletPin` as a four-character string in the actual booking confirmation request whenever SM Money is used, including eSewa split payments. A prior `/verify-pin` response does not authorize a later debit. PINs must never enter URLs, analytics or persistent client storage.
+- Superseded 8 September 2026: SM Money now requires a short-lived code bound to the exact server-priced purchase. Permanent wallet PIN endpoints are retired.
 - A missing PIN returns `WALLET_PIN_REQUIRED`; a wrong PIN returns `WALLET_PIN_INCORRECT`. Account attempt limits return HTTP 429. No reusable PIN proof is issued; the existing owned hold claim prevents duplicate confirmation.
 - A consumed registration proof returns HTTP 409 with `VERIFICATION_ALREADY_USED`. If completion fails after reservation, obtain a fresh OTP and proof. The proof is deliberately not released after a potentially partial write.
 - Existing agent/owner accounts keep their original shared password when adding another role. Registration is not a password-reset endpoint.
@@ -69,4 +69,4 @@ Self-service registration still has separate identity/profile writes. Single-use
 
 ## Staging compatibility gate — 6 September 2026
 
-The passenger Flutter checkout sends `walletPin` for wallet-only confirmation, but `verifyTransactionStatus` omits it for eSewa split payments. Update and test that flow before staging promotion, including cancelled/incorrect PIN entry and provider-success reconciliation. The owner, admin, agent web and partner Flutter changes have been merged into dev; this does not validate deployed infrastructure or provider behavior.
+Superseded 8 September 2026: passenger checkout now requests a purchase-specific phone code for wallet-only and eSewa split payments. Device and provider-sandbox acceptance remain required before staging promotion. The owner, admin, agent web and partner Flutter changes have been merged into dev; this does not validate deployed infrastructure or provider behavior.

@@ -1,8 +1,8 @@
 'use strict';
 /**
  * tests/unit/booking/passenger-wallet-pin-removal.test.js
- * Asserts that wallet payment authorization delegates PIN validation to the
- * shared service while retaining wallet ownership and ledger checks.
+ * Asserts that payment authorization is purchase-bound while retaining wallet
+ * ownership and ledger checks.
  */
 const test   = require('node:test');
 const assert = require('node:assert/strict');
@@ -31,12 +31,12 @@ const moduleSrc = fs.readdirSync(WALLET_MODULE)
 
 const allCode = controllerSrc + '\n' + moduleSrc;
 
-test('payment booking flow: shared wallet PIN authorization', async (t) => {
+test('payment booking flow: purchase-bound authorization', async (t) => {
 
-  // Shared authorization keeps PIN validation out of the orchestrator.
-  await t.test('passes the request PIN to shared payment authorization', () => {
-    assert.match(controllerSrc, /pinService\.verifyPaymentPin/);
-    assert.match(controllerSrc, /authorize\(\{ userId: state\.userId, pin: req\.body\.walletPin \}\)/);
+  // Shared authorization keeps permanent PIN validation out of checkout.
+  await t.test('uses purchase-specific authorization instead of the retired PIN', () => {
+    assert.match(controllerSrc, /purchaseAuthorization\.authorizeCheckout/);
+    assert.equal(controllerSrc.includes('req.body.walletPin'), false);
   });
 
   await t.test('does not contain WALLET_PIN_REQUIRED', () => {

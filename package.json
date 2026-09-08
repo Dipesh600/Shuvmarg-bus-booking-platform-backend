@@ -41,6 +41,7 @@
     "test:sm-ledger-lifecycle": "node --test tests/unit/wallet/sm-ledger-*.test.js",
     "db:index:passenger-seat-hold": "node scripts/ensurePassengerSeatHoldIndexes.js",
     "db:index:esewa-payment-attempt": "node scripts/ensureEsewaPaymentAttemptIndexes.js",
+    "migrate:remove-wallet-pin": "node scripts/removeWalletPinFields.js",
     "db:index:operator-route-config-fleet-scope": "node scripts/ensureOperatorRouteConfigFleetScopeIndex.js",
     "test:account-role-policy": "node --test tests/unit/shared/account-role-policy.test.js",
     "test:admin-coupon-routes": "node --test tests/characterization/admin-coupon-route-wiring.test.js",

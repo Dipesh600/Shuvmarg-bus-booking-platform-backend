@@ -76,6 +76,7 @@ const findRefunds = async (bookingIds) => {
       reason: 1,
       remarks: 1,
       refundGateway: 1,
+      destination: 1,
     })
     .lean();
 };

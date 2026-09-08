@@ -34,7 +34,11 @@ test('anonymous multipart requests are refused before buffering', async () => {
   assert.equal(parsed, false);
 });
 async function streamUpload(app, write) {
-  const server = app.listen(0, '127.0.0.1');
+  let sentStatus;
+  const server = http.createServer((req, res) => {
+    res.once('finish', () => { sentStatus = res.statusCode; });
+    app(req, res);
+  }).listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   try {
     return await new Promise((resolve, reject) => {
@@ -42,7 +46,13 @@ async function streamUpload(app, write) {
         headers: { 'Content-Type': 'multipart/form-data; boundary=limit-test' } }, res => {
         res.resume(); res.on('end', () => resolve(res.statusCode));
       });
-      req.on('error', reject); req.setTimeout(3000, () => req.destroy(new Error('Test request timed out')));
+      req.on('error', error => {
+        // An early rejection may close the socket while queued upload bytes are still being sent.
+        // Require evidence that the server actually finished a rejection; a broken pipe alone is not success.
+        if (['EPIPE', 'ECONNRESET'].includes(error.code) && [408, 413].includes(sentStatus)) resolve(sentStatus);
+        else reject(error);
+      });
+      req.setTimeout(3000, () => req.destroy(new Error('Test request timed out')));
       write(req);
     });
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }

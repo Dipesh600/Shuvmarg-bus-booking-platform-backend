@@ -19,7 +19,7 @@ function createPassengerBookingConfirmationSuccessStage(deps) {
   }) {
     try {
       const reconciliationResult =
-        await deps.reconcilePassengerTransactionSuccess({
+        state.transactionCommitted ? { ok: true } : await deps.reconcilePassengerTransactionSuccess({
         transactionId: state.txnRecord._id,
         bookingId: state.booking._id,
         ticketId: state.ticketId,

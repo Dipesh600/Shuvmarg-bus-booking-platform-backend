@@ -5,7 +5,7 @@
  * Repository factory for passenger booking payment transaction module.
  */
 
-function createPassengerBookingPaymentTransactionRepository({ PlatformConfig, Transaction }) {
+function createPassengerBookingPaymentTransactionRepository({ PlatformConfig, Transaction, createAttemptTransaction }) {
   if (!PlatformConfig || typeof PlatformConfig.getConfig !== 'function') {
     throw new Error('createPassengerBookingPaymentTransactionRepository requires PlatformConfig with getConfig');
   }
@@ -17,8 +17,8 @@ function createPassengerBookingPaymentTransactionRepository({ PlatformConfig, Tr
     return PlatformConfig.getConfig('gateway_fees');
   }
 
-  async function createTransaction(payload) {
-    return Transaction.create(payload);
+  async function createTransaction(payload, ownership) {
+    return createAttemptTransaction ? createAttemptTransaction(payload, ownership) : Transaction.create(payload);
   }
 
   return {

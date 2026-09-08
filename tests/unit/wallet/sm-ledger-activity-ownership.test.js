@@ -63,12 +63,13 @@ test("SM ledger activity and ownership contracts", async (t) => {
     assert.equal(matches[3].type, "REFUND");
   });
 
-  await t.test("public module preserves exactly eleven legacy operations", () => {
+  await t.test("public module exposes purchase balance classification with ledger operations", () => {
     const ledger = require("../../../src/modules/wallet/sm-ledger");
     assert.deepEqual(Object.keys(ledger).sort(), [
       "calculateCashbackAmount",
       "clawbackCashback",
       "computeLockedBalance",
+      "computePurchaseBalance",
       "computeSpendableBalance",
       "creditLedger",
       "debitLedgerFIFO",

@@ -26,7 +26,7 @@ test('passenger-booking-preparation coupon tests', async (t) => {
           };
         },
       },
-      smLedgerService: { computeSpendableBalance: async () => ({ display: 0 }) },
+      smLedgerService: { computePurchaseBalance: async () => ({ display: 0, refund: 0, restricted: 0 }) },
       platformConfig: { getConfig: async () => null },
       passengerSeatHold: {
         normalizeSeatNumbers: (seats) => seats.map((s) => s.toLowerCase()),
@@ -72,7 +72,7 @@ test('passenger-booking-preparation coupon tests', async (t) => {
           errorCode: 'COUPON_EXPIRED',
         }),
       },
-      smLedgerService: { computeSpendableBalance: async () => ({ display: 0 }) },
+      smLedgerService: { computePurchaseBalance: async () => ({ display: 0, refund: 0, restricted: 0 }) },
       platformConfig: { getConfig: async () => null },
       passengerSeatHold: {
         normalizeSeatNumbers: (seats) => seats.map((s) => s.toLowerCase()),

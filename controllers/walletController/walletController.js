@@ -59,10 +59,9 @@ const getWalletDetails = async (req, res) => {
         // Scratch cards
         unscratchedCardCount,
 
-        // Wallet meta (PIN, status, currency)
+        // Wallet status and currency
         currency: wallet.currency,
         walletStatus: wallet.status,
-        isPinSet: wallet.isPinSet || false,
 
         // Activity feed (from sm_ledger)
         activities: activityFeed.entries,
@@ -79,10 +78,6 @@ const getWalletDetails = async (req, res) => {
   }
 };
 
-const { setupWalletPin, verifyWalletPin } = require('../../src/modules/wallet/payment-authorization/wallet-pin.controller');
-
 module.exports = {
   getWalletDetails,
-  setupWalletPin,
-  verifyWalletPin,
 };

@@ -57,7 +57,7 @@ const raiseSettlement = async (req, res) => {
         // Check no trip is already part of another pending/paid settlement
         const existingSettlements = await Settlement.find({
             tripIds: { $in: tripIds },
-            status: { $in: ["pending", "processing", "paid"] }
+            status: { $in: ["pending", "processing", "paid", "received", "disputed"] }
         });
         if (existingSettlements.length > 0) {
             return res.status(409).json({
@@ -74,20 +74,25 @@ const raiseSettlement = async (req, res) => {
             status: "booked",   // only confirmed bookings, not cancelled
         }).lean();
 
-        let totalGross = 0;
+        const { toMinorUnits, fromMinorUnits } = require("../../src/shared/money");
+        let grossMinor = 0;
         let totalSold = 0;
 
         for (const booking of bookings) {
             totalSold += booking.seats.length;
-            totalGross += booking.totalAmount;   // the amount actually paid (post-discount)
+            grossMinor += toMinorUnits(booking.totalAmount);   // the amount actually paid (post-discount)
         }
 
         // Use the brand's negotiated rate — NOT a hardcoded value
         const commissionRate = brand.commissionRate ?? 8;
-        const platformCommission = Math.round((totalGross * commissionRate) / 100);
-        const netPayableAmount = totalGross - platformCommission;
+        const rateMinor = toMinorUnits(commissionRate);
+        if (rateMinor > 10000 || !Number.isSafeInteger(grossMinor)) throw new Error('Invalid settlement calculation');
+        const commissionMinor = Number((BigInt(grossMinor) * BigInt(rateMinor) + 5000n) / 10000n);
+        const totalGross = fromMinorUnits(grossMinor);
+        const platformCommission = fromMinorUnits(commissionMinor);
+        const netPayableAmount = fromMinorUnits(grossMinor - commissionMinor);
 
-        const newSettlement = await Settlement.create({
+        const newSettlement = await require("../../src/shared/create-owner-settlement").createOwnerSettlement({
             ownerId: targetOwnerId,
             brandId,                    // ← brand-scoped
             tripIds,
@@ -107,6 +112,7 @@ const raiseSettlement = async (req, res) => {
         });
 
     } catch (e) {
+      if (e.statusCode) return res.status(e.statusCode).json({ success: false, message: e.message });
       console.error("raiseSettlement error:", e);
       return res.status(500).json({ success: false, message: "Internal Server Error" });
     }
@@ -131,7 +137,14 @@ const getMySettlements = async (req, res) => {
         return res.status(200).json({
             success: true,
             results: settlements.length,
-            data: settlements
+            data: await Promise.all(settlements.map(async item => {
+                const row = item.toObject();
+                if (row.settlementEvidence?.proofKey) {
+                    try { row.paymentProofUrl = await require('../../services/s3Service').getPresignedUrl(row.settlementEvidence.proofKey); }
+                    catch { row.paymentProofUrl = null; }
+                }
+                return row;
+            }))
         });
     } catch (e) {
       console.error(e);
@@ -140,40 +153,16 @@ const getMySettlements = async (req, res) => {
 };
 
 const paySettlement = async (req, res) => {
-
     try {
-        // paySettlement is admin-only — called via adminMiddleware
-        const adminId = req.adminInfo?.id;
-        if (!adminId) return res.status(403).json({ success: false, message: "Admin only" });
-
-        const { settlementId, paymentMethod, paymentProof, remarks } = req.body;
-
-        const settlement = await Settlement.findById(settlementId);
-        if (!settlement) {
-            return res.status(404).json({ success: false, message: "Settlement not found" });
-        }
-
-        if (settlement.status === "paid" || settlement.status === "received") {
-            return res.status(400).json({ success: false, message: "Settlement is already paid." });
-        }
-
-        settlement.status = "paid";
-        settlement.paymentMethod = paymentMethod || "BANK_TRANSFER";
-        settlement.paymentProof = paymentProof;
-        settlement.paidAt = new Date();
-        settlement.paidBy = adminId;
-        if (remarks) settlement.remarks = remarks;
-
-        await settlement.save();
-
-        return res.status(200).json({
-            success: true,
-            message: "Settlement marked as paid",
-            data: settlement
+        const proofKey = await require('../../src/shared/refund-proof-upload').uploadRefundProof(req.files?.proofImage, req.body.settlementId);
+        const data = await require('../../src/modules/admin/wallet-management/owner-settlement.service').reviewOwnerSettlement({
+            settlementId: req.body.settlementId, adminId: req.adminInfo?.id, action: req.body.action,
+            paymentReference: req.body.paymentReference, remarks: req.body.remarks, proofKey,
         });
-    } catch (e) {
-        console.error(e);
-        return res.status(500).json({ success: false, message: "Internal Server Error" });
+        return res.status(200).json({ success: true, message: data.status === 'processing' ? 'Payout evidence saved for independent review' : 'Payout confirmed', data });
+    } catch (error) {
+        return res.status(error.statusCode || 500).json({ success: false,
+            message: error.statusCode ? error.message : 'Unable to update settlement' });
     }
 };
 

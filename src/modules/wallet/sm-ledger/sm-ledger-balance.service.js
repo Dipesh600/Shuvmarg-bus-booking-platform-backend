@@ -9,7 +9,7 @@ function createSmLedgerBalanceService({ SMLedger, toObjectId, now = () => new Da
           direction: "CREDIT",
           status: "ACTIVE",
           remainingAmount: { $gt: 0 },
-          expires_at: { $gt: now() },
+          $or: [{ type: "REFUND", expires_at: null }, { expires_at: { $gt: now() } }],
         },
       },
       { $group: { _id: null, total: { $sum: "$remainingAmount" } } },
@@ -21,6 +21,30 @@ function createSmLedgerBalanceService({ SMLedger, toObjectId, now = () => new Da
       raw: rounded,
       isNegative: spendable < 0,
     };
+  }
+
+  async function computePurchaseBalance(userId) {
+    const result = await SMLedger.aggregate([
+      {
+        $match: {
+          userId: toObjectId(userId),
+          direction: "CREDIT",
+          status: "ACTIVE",
+          remainingAmount: { $gt: 0 },
+          $or: [{ type: "REFUND", expires_at: null }, { expires_at: { $gt: now() } }],
+        },
+      },
+      {
+        $group: {
+          _id: { $cond: [{ $eq: ["$type", "REFUND"] }, "refund", "restricted"] },
+          total: { $sum: "$remainingAmount" },
+        },
+      },
+    ]);
+    const amount = (kind) => Math.max(0, Math.round((result.find((row) => row._id === kind)?.total || 0) * 100) / 100);
+    const refund = amount("refund");
+    const restricted = amount("restricted");
+    return { display: Math.round((refund + restricted) * 100) / 100, refund, restricted };
   }
 
   async function computeLockedBalance(userId) {
@@ -55,7 +79,7 @@ function createSmLedgerBalanceService({ SMLedger, toObjectId, now = () => new Da
       .lean();
   }
 
-  return { computeSpendableBalance, computeLockedBalance, getExpiringCredits };
+  return { computeSpendableBalance, computePurchaseBalance, computeLockedBalance, getExpiringCredits };
 }
 
 module.exports = { createSmLedgerBalanceService };

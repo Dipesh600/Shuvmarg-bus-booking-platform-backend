@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const operations = require("../../src/shared/financial-operation");
 const User = require("../../models/userModel.js");
 const walletService = require("../../services/walletService.js");
 const service = require(
@@ -19,6 +20,7 @@ function userQuery(value) {
 }
 
 test("credit adjustment preserves audited financial input", async (t) => {
+  patch(t, operations, "runOperation", async ({ work }) => work(null));
   let input;
   patch(t, User, "findById", () => userQuery({
     name: "Passenger", phone: "9800000000",
@@ -38,6 +40,7 @@ test("credit adjustment preserves audited financial input", async (t) => {
     referenceType: "admin",
     referenceId: "admin-1",
     remarks: "[ADMIN: admin-1] manual correction",
+    session: null,
   });
   assert.equal(
     result.message,
@@ -47,6 +50,7 @@ test("credit adjustment preserves audited financial input", async (t) => {
 });
 
 test("debit adjustment uses the debit engine", async (t) => {
+  patch(t, operations, "runOperation", async ({ work }) => work(null));
   let debitCalls = 0;
   let creditCalls = 0;
   patch(t, User, "findById", () => userQuery({

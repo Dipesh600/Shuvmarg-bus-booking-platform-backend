@@ -1,4 +1,5 @@
 "use strict";
+const { toMinorUnits } = require("../../../shared/money");
 
 const PURPOSES = [
   "admin_adjustment", "bonus", "promotional", "reversal",
@@ -10,14 +11,13 @@ function validateAdjustment(data) {
   if (!type || !["credit", "debit"].includes(type)) {
     return "type must be 'credit' or 'debit'";
   }
-  const parsedAmount = parseFloat(amount);
-  if (!parsedAmount || parsedAmount <= 0) {
+  try { toMinorUnits(amount, { allowZero: false }); } catch {
     return "amount must be a positive number";
   }
   if (!purpose || !PURPOSES.includes(purpose)) {
     return `purpose must be one of: ${PURPOSES.join(", ")}`;
   }
-  if (!remarks || remarks.trim().length < 10) {
+  if (typeof remarks !== "string" || remarks.trim().length < 10 || remarks.length > 2000) {
     return "remarks is required and must be at least 10 characters. " +
       "This becomes a permanent audit record.";
   }
@@ -30,7 +30,7 @@ function validateStatusChange(data) {
   if (!action || !["freeze", "unfreeze"].includes(action)) {
     return "action must be 'freeze' or 'unfreeze'";
   }
-  if (!remarks || remarks.trim().length < 10) {
+  if (typeof remarks !== "string" || remarks.trim().length < 10 || remarks.length > 2000) {
     return "remarks is required (min 10 chars). Explain why this wallet is " +
       `being ${action}d.`;
   }

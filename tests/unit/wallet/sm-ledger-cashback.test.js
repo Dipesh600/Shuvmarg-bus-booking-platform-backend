@@ -14,9 +14,21 @@ function session() {
   return {
     committed: 0, aborted: 0, ended: 0,
     startTransaction() {},
+    async withTransaction(work) {
+      try { const result = await work(); await this.commitTransaction(); return result; }
+      catch (error) { await this.abortTransaction(); throw error; }
+    },
     async commitTransaction() { this.committed++; },
     async abortTransaction() { this.aborted++; },
     endSession() { this.ended++; },
+  };
+}
+
+function rewardModels(originalAmount) {
+  return {
+    Booking: { findOneAndUpdate: async () => ({ originalAmount }) },
+    SMLedger: { find: () => ({ session: async () => [] }) },
+    CashbackJob: { updateOne: async () => ({ modifiedCount: 1 }) },
   };
 }
 
@@ -47,8 +59,9 @@ test("SM ledger cashback contracts", async (t) => {
     let creditInput;
     let scratchInput;
     const service = createSmLedgerCashbackService({
+      ...rewardModels(200),
       mongoose: { startSession: async () => txn },
-      ScratchCard: { create: async (rows, options) => ((scratchInput = { rows, options }), [{ _id: "s1" }]) },
+      ScratchCard: { find: () => ({ session: async () => [] }), create: async (rows, options) => ((scratchInput = { rows, options }), [{ _id: "s1" }]) },
       PlatformConfig: {
         getConfig: async (key) => ({
           cashback_config: {},
@@ -77,8 +90,9 @@ test("SM ledger cashback contracts", async (t) => {
     const warnings = [];
     let scratch;
     const service = createSmLedgerCashbackService({
+      ...rewardModels(100),
       mongoose: { startSession: async () => txn },
-      ScratchCard: { create: async ([row]) => ((scratch = row), [row]) },
+      ScratchCard: { find: () => ({ session: async () => [] }), create: async ([row]) => ((scratch = row), [row]) },
       PlatformConfig: {
         getConfig: async (key) => {
           if (key === "cashback_config") return {};
@@ -100,14 +114,15 @@ test("SM ledger cashback contracts", async (t) => {
   await t.test("cashback write failure aborts and ends transaction", async () => {
     const txn = session();
     const service = createSmLedgerCashbackService({
+      ...rewardModels(100),
       mongoose: { startSession: async () => txn },
-      ScratchCard: { create: async () => { throw new Error("scratch failed"); } },
+      ScratchCard: { find: () => ({ session: async () => [] }), create: async () => { throw new Error("scratch failed"); } },
       PlatformConfig: { getConfig: async (key) => (key === "scratch_card_themes" ? [] : {}) },
       creditLedger: async () => ({ _id: "c1" }),
       calculateCashbackAmount: () => 5,
       selectScratchCardTheme,
     });
-    await assert.rejects(() => service({}), /scratch failed/);
+    await assert.rejects(() => service({ userId: "u", bookingId: "b", baseTicketPrice: 100 }), /scratch failed/);
     assert.equal(txn.aborted, 1);
     assert.equal(txn.ended, 1);
   });

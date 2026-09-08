@@ -249,8 +249,10 @@ All deployed images are stored in GHCR and identified by immutable SHA tags. Nev
 2. `docker compose restart backend`
 
 ### Payment credentials (`ESEWA_PRODUCT_CODE`, `ESEWA_SECRET_KEY`)
-1. Update in `/opt/shuvmarg/staging/.env`
-2. `docker compose restart backend`
+1. Use sandbox credentials in `/opt/shuvmarg/staging/.env`. Keep `NODE_ENV=production`; the staging Compose file explicitly sets `DEPLOYMENT_ENV=staging` so both checkout and verification select sandbox endpoints.
+2. Set `PASSENGER_APP_URL` to the HTTPS staging passenger website. Compose rejects a missing value. Live endpoint overrides are rejected in staging, and test credentials/sandbox endpoints are rejected in live production.
+3. Recreate the backend container through the normal staging deployment workflow so changed environment values are loaded. Restarting the existing container does not reload its environment.
+4. Review pending attempts before changing merchant or environment. New attempts save their payment environment; initiation retries and finalization refuse to repurpose an attempt under different payment configuration.
 
 ### Storage credentials (AWS, Cloudinary)
 1. Update affected variables in `/opt/shuvmarg/staging/.env`

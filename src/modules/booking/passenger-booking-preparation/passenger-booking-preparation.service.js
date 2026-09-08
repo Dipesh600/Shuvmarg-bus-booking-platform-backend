@@ -88,7 +88,7 @@ function createPassengerBookingPreparationService({
       }
 
       const [balanceResult, smConfig] = await Promise.all([
-        smLedgerService.computeSpendableBalance(userId),
+        smLedgerService.computePurchaseBalance(userId),
         platformConfig.getConfig("sm_money_config"),
       ]);
 
@@ -96,6 +96,8 @@ function createPassengerBookingPreparationService({
         originalAmount: authoritativeOriginalAmount,
         couponDiscount: discountAmount,
         spendableBalance: balanceResult.display,
+        refundBalance: balanceResult.refund,
+        restrictedBalance: balanceResult.restricted,
         requestedSmMoney: smMoneyToUse,
         maxDiscountPercent: (smConfig && smConfig.maxDiscountPercent) || 80,
       });
@@ -119,6 +121,8 @@ function createPassengerBookingPreparationService({
           afterCouponAmount: quote.afterCouponAmount,
           spendableBalance: quote.spendableBalance,
           smMoneyApplied: quote.smMoneyApplied,
+          refundMoneyApplied: quote.refundMoneyApplied,
+          restrictedMoneyApplied: quote.restrictedMoneyApplied,
           maxSmMoneyAllowed: quote.maxSmMoneyAllowed,
           totalDiscount: quote.totalDiscount,
           gatewayAmount: quote.gatewayAmount,

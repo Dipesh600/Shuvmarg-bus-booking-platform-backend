@@ -50,7 +50,7 @@ test('prepareBooking pricing & hold characterization', async (t) => {
   });
 
   await t.test('4. SM Money pricing clamping & cap logic', async () => {
-    h.mockMethod(h.smLedgerService, 'computeSpendableBalance', () => Promise.resolve({ display: 500 }));
+    h.mockMethod(h.smLedgerService, 'computePurchaseBalance', () => Promise.resolve({ display: 500, refund: 0, restricted: 500 }));
     const { res, getStatus, getJson } = makeMockRes();
     await h.prepareBooking(makePrepareReq({ scheduleId: 't1', seatNumbers: ['a1'], originalAmount: 1000, smMoneyToUse: 600 }), res);
     assert.equal(getStatus(), 200);
@@ -64,7 +64,7 @@ test('prepareBooking pricing & hold characterization', async (t) => {
     h.mockMethod(h.CouponHelper, 'validateCoupon', () => Promise.resolve({
       isValid: true, discountAmount: 700, finalAmount: 300, coupon: { _id: 'c1', couponCode: 'BIG700', title: 'Big', discountType: 'fixed', discountValue: 700 }
     }));
-    h.mockMethod(h.smLedgerService, 'computeSpendableBalance', () => Promise.resolve({ display: 500 }));
+    h.mockMethod(h.smLedgerService, 'computePurchaseBalance', () => Promise.resolve({ display: 500, refund: 0, restricted: 500 }));
     const { res, getStatus, getJson } = makeMockRes();
     await h.prepareBooking(makePrepareReq({ scheduleId: 't1', seatNumbers: ['a1'], originalAmount: 1000, couponCode: 'BIG700', smMoneyToUse: 300 }), res);
     assert.equal(getStatus(), 200);

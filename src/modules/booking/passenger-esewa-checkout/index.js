@@ -49,6 +49,7 @@ const repository = createPassengerEsewaCheckoutRepository({
   SeatHold,
   Transaction,
   Trip,
+  createReservedAttempt: require('./passenger-esewa-checkout-reservation.service').createReservedAttempt,
 });
 const initiate = createPassengerEsewaCheckoutInitiationService({
   readConfig: readEsewaCheckoutConfig,
@@ -58,14 +59,19 @@ const initiate = createPassengerEsewaCheckoutInitiationService({
   policy,
   tripPolicy,
   boardingOptions: boardingOptions.resolvePassengerBoardingOptions,
+  checkoutFingerprint: require('./passenger-esewa-checkout-reservation.service').checkoutFingerprint,
+  authorizeCheckout: require('../../wallet/payment-authorization/purchase-authorization.service').authorizeCheckout,
+  captureRefundPolicySnapshot: require('../../../shared/refund-policy-snapshot').captureRefundPolicySnapshot,
 });
 const recovery = createPassengerEsewaCheckoutRecoveryService({
+  ...require('../../../shared/payment-attempt-recovery'),
   repository,
   mapper,
   verifyPayment: verifyEsewaPayment,
   sendDisputeAlert: dispute.sendPassengerPaymentDisputeAdminAlert,
 });
 const finalize = createPassengerEsewaCheckoutFinalizationService({
+  verifyPayment: verifyEsewaPayment,
   readConfig: readEsewaCheckoutConfig,
   repository,
   signature,
@@ -73,6 +79,7 @@ const finalize = createPassengerEsewaCheckoutFinalizationService({
   validateResponse: validateEsewaResponse,
   orchestrate: confirmation.orchestratePassengerBookingConfirmation,
   recovery,
+  preparePaymentRetry: require('../../../shared/prepare-payment-retry').preparePaymentRetry,
 });
 const controller = createPassengerEsewaCheckoutController({
   service: { initiate, finalize },
@@ -80,6 +87,8 @@ const controller = createPassengerEsewaCheckoutController({
 });
 
 module.exports = {
+  pendingPassengerEsewaCheckout: require('./passenger-esewa-pending.controller').createPendingCheckoutController({ Attempt: EsewaPaymentAttempt }),
+  reconcilePaymentAttempt: finalize,
   initiatePassengerEsewaCheckout:
     controller.initiatePassengerEsewaCheckout,
   finalizePassengerEsewaCheckout:

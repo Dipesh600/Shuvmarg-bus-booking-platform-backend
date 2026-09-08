@@ -35,4 +35,14 @@ test("passenger-booking-cancellation routes", async (t) => {
     assert.strictEqual(handlers[1], verifyRoleFromDB);
     assert.strictEqual(handlers[2], passengerBookingCancellation.estimatePassengerBookingCancellation);
   });
+
+  await t.test("operator refund destination route is authenticated", () => {
+    const matches = routeLayers.filter((layer) => layer.route.path === "/selectRefundDestination");
+    assert.strictEqual(matches.length, 1);
+    const route = matches[0].route;
+    assert.strictEqual(route.methods.post, true);
+    const handlers = route.stack.map((layer) => layer.handle);
+    assert.deepStrictEqual(handlers, [auth, verifyRoleFromDB,
+      passengerBookingCancellation.selectOperatorRefundDestination]);
+  });
 });

@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 
 const refundSchema = new mongoose.Schema(
   {
+    operationKey: { type: String, default: null },
+    settlementEvidence: { type: mongoose.Schema.Types.Mixed, default: null },
+    destination: { type: String, enum: ["original", "wallet"], default: null },
+    paymentAllocation: { type: mongoose.Schema.Types.Mixed, default: null },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -68,7 +72,7 @@ const refundSchema = new mongoose.Schema(
     // Which admin approved/processed the refund
     processedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "SuperAdmin",
       default: null,
     },
 
@@ -92,6 +96,7 @@ const refundSchema = new mongoose.Schema(
 
 // Indexes for common queries
 refundSchema.index({ bookingId: 1 });
+refundSchema.index({ operationKey: 1 }, { unique: true, partialFilterExpression: { operationKey: { $type: "string" } } });
 refundSchema.index({ userId: 1, createdAt: -1 });
 refundSchema.index({ status: 1, createdAt: -1 });
 

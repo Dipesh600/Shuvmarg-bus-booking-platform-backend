@@ -32,7 +32,7 @@ function createPassengerBookingPaymentTransactionService({
     gatewayAmount,
     smMoneyApplied,
     tempBookingId,
-    internalMoneyDebitEntryId,
+    internalMoneyDebitEntryId, paymentAttemptId, paymentProcessingToken,
   } = {}) {
     const gatewayFeeConfig = await repository.getGatewayFeeConfig();
     const gatewayFeeRate =
@@ -65,7 +65,7 @@ function createPassengerBookingPaymentTransactionService({
       },
     };
 
-    const transaction = await repository.createTransaction(payload);
+    const transaction = await repository.createTransaction(payload, { attemptId: paymentAttemptId, processingToken: paymentProcessingToken });
 
     if (logger && typeof logger.info === 'function') {
       logger.info(

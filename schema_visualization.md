@@ -1132,7 +1132,6 @@ classDiagram
     +String currency
     +String status
     +String pin
-    +Boolean isPinSet
     +ObjectId _id
     +Date createdAt
     +Date updatedAt

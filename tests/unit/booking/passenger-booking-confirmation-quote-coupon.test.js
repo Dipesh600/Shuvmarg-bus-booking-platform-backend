@@ -67,7 +67,7 @@ test('passenger-booking-confirmation-quote coupon integration tests', async (t) 
       }),
     };
     const smLedgerService = {
-      computeSpendableBalance: async () => { balanceCalled = true; return { display: 500 }; },
+      computePurchaseBalance: async () => { balanceCalled = true; return { display: 500, refund: 0, restricted: 500 }; },
     };
 
     const service = createPassengerBookingConfirmationQuoteService({

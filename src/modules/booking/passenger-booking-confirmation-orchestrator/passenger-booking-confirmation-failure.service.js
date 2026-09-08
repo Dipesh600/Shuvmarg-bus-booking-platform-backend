@@ -35,6 +35,10 @@ function createPassengerBookingConfirmationFailureHandler(deps) {
     }
     if (state.bookingCreated) return reconciliationRequired(state);
 
+    // The eSewa attempt owner closes failures atomically after this returns.
+    // A stale worker must not reverse funds or alter another worker's records.
+    if (state.paymentAttemptId) return { statusCode: 409, body: { success: false,
+      message: 'Payment confirmation requires recovery.', errorCode: 'PAYMENT_RECOVERY_REQUIRED' } };
     const reason = `Unexpected crash: ${error.message}`;
     await deps._reverseInternalMoneyDebitIfNeeded(state, reason);
 

@@ -77,13 +77,14 @@ function createPassengerSeatRollbackService({ repository, logger }) {
           continue;
         }
 
-        await repository.rollbackSeat({
+        const outcome = await repository.rollbackSeat({
           tripId,
           arrayField,
           seatNo,
           userId,
         });
-        result.rolledBack += 1;
+        if (outcome?.protected) result.skipped += 1;
+        else result.rolledBack += 1;
       } catch (rollbackErr) {
         result.failed += 1;
         if (logger && typeof logger.error === 'function') {

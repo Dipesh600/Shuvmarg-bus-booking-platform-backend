@@ -1,7 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const policy = require('../../../src/modules/booking/passenger-booking-preparation/passenger-booking-preparation.policy.js');
-
 test('seat-layout pricing is authoritative per selected passenger place', () => {
   const pricing = {
     snapshot: {
@@ -131,19 +130,21 @@ test('passenger-booking-preparation policy tests', async (t) => {
   await t.test('10. calculatePreparationQuote rules', () => {
     const q1 = policy.calculatePreparationQuote({ originalAmount: 1000, requestedSmMoney: -50, spendableBalance: 500 });
     assert.equal(q1.smMoneyApplied, 0);
-
     const q2 = policy.calculatePreparationQuote({ originalAmount: 1000, requestedSmMoney: 49.9, spendableBalance: 500 });
     assert.equal(q2.smMoneyApplied, 49);
-
     // Balance cap
     const q3 = policy.calculatePreparationQuote({ originalAmount: 1000, requestedSmMoney: 500, spendableBalance: 200 });
     assert.equal(q3.smMoneyApplied, 200);
-
     // 80% combined discount cap: 800 total max. Coupon 500 => max SM money 300.
     const q4 = policy.calculatePreparationQuote({ originalAmount: 1000, couponDiscount: 500, requestedSmMoney: 400, spendableBalance: 1000 });
     assert.equal(q4.maxSmMoneyAllowed, 300);
     assert.equal(q4.smMoneyApplied, 300);
     assert.equal(q4.gatewayAmount, 200);
     assert.equal(q4.paymentAmount, 200);
+    const q5 = policy.calculatePreparationQuote({ originalAmount: 1000, couponDiscount: 700,
+      requestedSmMoney: 300, spendableBalance: 1000, refundBalance: 200,
+      restrictedBalance: 800, maxDiscountPercent: 80 });
+    assert.deepEqual([q5.maxSmMoneyAllowed, q5.refundMoneyApplied,
+      q5.restrictedMoneyApplied, q5.gatewayAmount], [300, 200, 100, 0]);
   });
 });

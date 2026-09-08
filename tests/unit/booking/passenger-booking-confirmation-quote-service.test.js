@@ -12,7 +12,7 @@ test('passenger-booking-confirmation-quote service tests', async (t) => {
   await t.test('1. no coupon skips coupon validation; positive SM money loads balance and config', async () => {
     let couponCalled = false; let balanceCalled = false; let configCalled = false;
     const couponHelper = { validateCoupon: async () => { couponCalled = true; } };
-    const smLedgerService = { computeSpendableBalance: async () => { balanceCalled = true; return { display: 500 }; } };
+    const smLedgerService = { computePurchaseBalance: async () => { balanceCalled = true; return { display: 500, refund: 0, restricted: 500 }; } };
     const platformConfig = { getConfig: async () => { configCalled = true; return { maxDiscountPercent: 80 }; } };
 
     const service = createPassengerBookingConfirmationQuoteService({
@@ -30,13 +30,14 @@ test('passenger-booking-confirmation-quote service tests', async (t) => {
     assert.equal(configCalled, true);
     assert.deepEqual(res.quote, {
       discountAmount: 0, finalAmount: 1000, couponUsed: null, appliedCouponCode: null,
-      requestedSmMoney: 200, smMoneyApplied: 200, gatewayAmount: 800, expectedTotal: 1000,
+      requestedSmMoney: 200, smMoneyApplied: 200, refundMoneyApplied: 0,
+      restrictedMoneyApplied: 200, gatewayAmount: 800, expectedTotal: 1000,
     });
   });
 
   await t.test('2. zero SM Money skips balance/config lookup', async () => {
     let balanceCalled = false;
-    const smLedgerService = { computeSpendableBalance: async () => { balanceCalled = true; return { display: 500 }; } };
+    const smLedgerService = { computePurchaseBalance: async () => { balanceCalled = true; return { display: 500, refund: 0, restricted: 500 }; } };
     const platformConfig = { getConfig: async () => { throw new Error('Should not be called'); } };
 
     const service = createPassengerBookingConfirmationQuoteService({
@@ -55,7 +56,7 @@ test('passenger-booking-confirmation-quote service tests', async (t) => {
   });
 
   await t.test('3. direct balanceResult.display failure propagates (throws)', async () => {
-    const smLedgerService = { computeSpendableBalance: async () => null };
+    const smLedgerService = { computePurchaseBalance: async () => null };
     const platformConfig = { getConfig: async () => ({ maxDiscountPercent: 80 }) };
 
     const service = createPassengerBookingConfirmationQuoteService({
@@ -74,7 +75,7 @@ test('passenger-booking-confirmation-quote service tests', async (t) => {
   });
 
   await t.test('4. wallet quote overrides smMoneyApplied to paymentAmount and gatewayAmount to zero', async () => {
-    const smLedgerService = { computeSpendableBalance: async () => ({ display: 1000 }) };
+    const smLedgerService = { computePurchaseBalance: async () => ({ display: 1000, refund: 1000, restricted: 0 }) };
     const platformConfig = { getConfig: async () => ({ maxDiscountPercent: 80 }) };
 
     const service = createPassengerBookingConfirmationQuoteService({

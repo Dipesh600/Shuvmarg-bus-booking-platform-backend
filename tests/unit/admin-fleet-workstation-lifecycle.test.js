@@ -15,7 +15,11 @@ const statusService = (trip, calls) =>
     Trip: { findOne: async () => trip },
     transitionPolicy,
     cancellationService: {
-      cancelBookings: async (id) => calls.push(["cancel", id]),
+      cancelTrip: async ({ tripId, adminId, reason }) => {
+        calls.push(["cancel", tripId]);
+        trip.cancelledBy = adminId; trip.cancellationReason = reason;
+        trip.status = "cancelled"; await trip.save(); return { trip };
+      },
     },
     referralService: {
       processCompletion: async (id) => calls.push(["referral", id]),

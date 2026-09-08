@@ -1,5 +1,5 @@
 'use strict';
-
+const { initiationResponse } = require('./passenger-esewa-checkout-initiation.response');
 function createPassengerEsewaCheckoutInitiationService(deps) {
   return async function initiatePassengerEsewaCheckout({
     userId,
@@ -8,6 +8,15 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
     body = {},
   }) {
     const config = deps.readConfig();
+    const requestFingerprint = deps.checkoutFingerprint?.(body);
+    const existing = await deps.repository.findAttemptForHold?.(hold.tempBookingId, userId);
+    if (existing) {
+      if (existing.status !== 'INITIATED' || existing.requestFingerprint !== requestFingerprint
+        || new Date(existing.holdExpiresAt).getTime() <= Date.now()) {
+        throw Object.assign(new Error('This seat hold already has a different or closed payment attempt'), { statusCode: 409 });
+      }
+      return initiationResponse(existing, config);
+    }
     const quoteResult = await deps.buildQuote({
       gateway: 'esewa',
       tempBookingId: hold.tempBookingId,
@@ -20,7 +29,14 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
       activeRole,
     });
     if (!quoteResult.ok) return quoteResult;
-
+    let walletAuthorizedAt = null;
+    if (quoteResult.quote.smMoneyApplied > 0) {
+      const authorization = await deps.authorizeCheckout({ userId, hold,
+        body: { ...body, gateway: 'esewa' }, quote: quoteResult.quote });
+      if (!authorization.ok) return authorization;
+      walletAuthorizedAt = new Date();
+    }
+    const refundPolicySnapshot = await deps.captureRefundPolicySnapshot?.();
     const passengerDetails = deps.policy.normalizePassengerDetails(
       body.passengerDetails,
       hold.seatNumbers
@@ -101,11 +117,13 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
     };
     const attempt = await deps.repository.createAttempt({
       userId,
+      requestFingerprint, walletAuthorizedAt, refundPolicySnapshot,
       holdId: hold._id,
       tempBookingId: hold.tempBookingId,
       transactionUuid,
       productCode: config.productCode,
       originalAmount: hold.originalAmount,
+      paymentEnvironment: config.paymentEnvironment,
       gatewayAmount: quoteResult.quote.gatewayAmount,
       finalAmount: quoteResult.quote.finalAmount,
       discountAmount: quoteResult.quote.discountAmount,
@@ -115,20 +133,7 @@ function createPassengerEsewaCheckoutInitiationService(deps) {
       formFields: fields,
       holdExpiresAt: hold.expiresAt,
     });
-
-    return {
-      statusCode: 201,
-      body: {
-        success: true,
-        data: {
-          transactionUuid: attempt.transactionUuid,
-          paymentUrl: config.paymentUrl,
-          fields: attempt.formFields,
-          expiresAt: attempt.holdExpiresAt,
-        },
-      },
-    };
+    return initiationResponse(attempt, config);
   };
 }
-
 module.exports = { createPassengerEsewaCheckoutInitiationService };

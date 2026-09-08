@@ -29,7 +29,7 @@ test('passenger-booking-preparation service tests', async (t) => {
         findTripSeatDocument: async () => fakeSeatDoc,
       },
       couponHelper: { validateCoupon: async () => { throw new Error('Should not be called'); } },
-      smLedgerService: { computeSpendableBalance: async () => ({ display: 100 }) },
+      smLedgerService: { computePurchaseBalance: async () => ({ display: 100, refund: 0, restricted: 100 }) },
       platformConfig: { getConfig: async () => ({ maxDiscountPercent: 80 }) },
       passengerSeatHold: {
         normalizeSeatNumbers: (seats) => seats.map((s) => s.toLowerCase()),
@@ -88,7 +88,7 @@ test('passenger-booking-preparation service tests', async (t) => {
         findTripSeatDocument: async () => fakeSeatDoc,
       },
       couponHelper: {},
-      smLedgerService: { computeSpendableBalance: async () => ({ display: 0 }) },
+      smLedgerService: { computePurchaseBalance: async () => ({ display: 0, refund: 0, restricted: 0 }) },
       platformConfig: { getConfig: async () => null },
       passengerSeatHold: {
         normalizeSeatNumbers: (s) => s.map((x) => x.toLowerCase()),

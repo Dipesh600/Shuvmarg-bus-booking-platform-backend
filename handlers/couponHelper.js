@@ -194,55 +194,9 @@ class CouponHelper {
    */
   static async applyCoupon(couponCode, userId, bookingId, originalAmount, activeRole = null) {
     try {
-      // Validate coupon first
-      const validation = await this.validateCoupon(
-        couponCode,
-        userId,
-        originalAmount,
-        null,
-        activeRole
+      return await require("../src/shared/booking-coupon-operations").applyBookedCoupon(
+        couponCode, userId, bookingId, originalAmount
       );
-
-      if (!validation.isValid) {
-        return {
-          success: false,
-          error: validation.error,
-          errorCode: validation.errorCode,
-        };
-      }
-
-      const coupon = validation.coupon;
-      const discountAmount = validation.discountAmount;
-      const finalAmount = validation.finalAmount;
-
-      // Create coupon usage record
-      const couponUsage = new CouponUsage({
-        userId: userId,
-        couponId: coupon._id,
-        couponCode: coupon.couponCode,
-        bookingId: bookingId,
-        originalAmount: originalAmount,
-        discountAmount: discountAmount,
-        finalAmount: finalAmount,
-        discountType: coupon.discountType,
-        discountValue: coupon.discountValue,
-      });
-
-      await couponUsage.save();
-
-      // Increment coupon usage count
-      await Coupon.findByIdAndUpdate(coupon._id, {
-        $inc: { usedCount: 1 },
-      });
-
-      return {
-        success: true,
-        couponUsage: couponUsage,
-        originalAmount: originalAmount,
-        discountAmount: discountAmount,
-        finalAmount: finalAmount,
-        couponCode: coupon.couponCode,
-      };
     } catch (error) {
       return {
         success: false,
@@ -338,29 +292,7 @@ class CouponHelper {
    */
   static async refundCouponUsage(bookingId) {
     try {
-      const couponUsage = await CouponUsage.findOne({ bookingId: bookingId });
-
-      if (!couponUsage) {
-        return {
-          success: true,
-          message: "No coupon usage found for this booking",
-        };
-      }
-
-      // Mark coupon usage as refunded
-      couponUsage.status = "refunded";
-      await couponUsage.save();
-
-      // Decrement coupon usage count
-      await Coupon.findByIdAndUpdate(couponUsage.couponId, {
-        $inc: { usedCount: -1 },
-      });
-
-      return {
-        success: true,
-        message: "Coupon usage refunded successfully",
-        refundedAmount: couponUsage.discountAmount,
-      };
+      return await require("../src/shared/booking-coupon-operations").refundBookedCoupon(bookingId);
     } catch (error) {
       return {
         success: false,

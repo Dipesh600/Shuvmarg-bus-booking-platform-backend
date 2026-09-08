@@ -16,6 +16,7 @@ function setupHarness() {
   const mocks = {
     repositoryFactory: mock.method(repositoryModule, 'createPassengerBookingCancellationRepository', () => ({
       ...createRepository(), withTransaction: work => work(null),
+      createRefund: data => Refund.create(data),
     })),
     bookingUpdateOne: mock.method(Booking, 'updateOne', async () => ({ modifiedCount: 1 })),
     bookingFindOne: mock.method(Booking, "findOne", () => Promise.resolve(null)),

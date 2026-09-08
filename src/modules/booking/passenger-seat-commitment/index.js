@@ -33,6 +33,7 @@ const service = createPassengerSeatCommitmentService({
 
 const rollbackRepository = createPassengerSeatRollbackRepository({
   Seat,
+  rollbackUnfulfilledSeat: require('../../../shared/rollback-unfulfilled-seat').rollbackUnfulfilledSeat,
 });
 
 const rollbackService = createPassengerSeatRollbackService({

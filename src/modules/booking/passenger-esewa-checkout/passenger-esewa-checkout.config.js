@@ -1,12 +1,14 @@
 'use strict';
+const { readEsewaEnvironment, isTrustedEsewaUrl } = require('../../../shared/esewa-environment');
 
 function readEsewaCheckoutConfig(env = process.env) {
   const production = env.NODE_ENV === 'production';
-  const productCode = env.ESEWA_PRODUCT_CODE || (production ? '' : 'EPAYTEST');
+  const environment = readEsewaEnvironment(env);
+  const productCode = env.ESEWA_PRODUCT_CODE || (environment.sandbox ? 'EPAYTEST' : '');
   const secretKey = env.ESEWA_SECRET_KEY || '';
   const passengerUrl = (env.PASSENGER_APP_URL || '').replace(/\/+$/, '');
   const paymentUrl = env.ESEWA_PAYMENT_URL || (
-    production
+    !environment.sandbox
       ? 'https://epay.esewa.com.np/api/epay/main/v2/form'
       : 'https://rc-epay.esewa.com.np/api/epay/main/v2/form'
   );
@@ -27,14 +29,16 @@ function readEsewaCheckoutConfig(env = process.env) {
     throw configurationError('eSewa checkout URLs are invalid');
   }
   if (
-    paymentTarget.protocol !== 'https:' ||
-    !/(^|\.)esewa\.com\.np$/i.test(paymentTarget.hostname) ||
+    !isTrustedEsewaUrl(paymentTarget.href, [environment.paymentHost]) ||
+    (!environment.sandbox && productCode === 'EPAYTEST') ||
+    !['http:', 'https:'].includes(passengerTarget.protocol) || passengerTarget.username || passengerTarget.password ||
     (production && passengerTarget.protocol !== 'https:')
   ) {
     throw configurationError('eSewa checkout URLs are not trusted');
   }
 
   return {
+    paymentEnvironment: environment.sandbox ? 'sandbox' : 'live',
     productCode,
     secretKey,
     passengerUrl,
