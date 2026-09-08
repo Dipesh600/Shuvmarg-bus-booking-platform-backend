@@ -11,7 +11,7 @@
 # Requirements:
 #   - Docker and docker compose installed
 #   - /opt/shuvmarg/staging/.env present with mode 600
-#   - GHCR_TOKEN environment variable set (read-only package token) for docker login
+#   - GHCR_TOKEN environment variable set to the current workflow job token
 #   - STAGING_API_DOMAIN set in .env for the public health check
 
 set -Eeuo pipefail
@@ -89,7 +89,7 @@ if [[ ! -f "${DEPLOY_DIR}/docker-compose.yml" ]]; then
 fi
 
 if [[ -z "${GHCR_TOKEN:-}" ]]; then
-  log_error "GHCR_TOKEN is not set. The VM must have a read-only package token."
+  log_error "GHCR_TOKEN is not set. The deployment workflow must pass its package-read token."
   exit 1
 fi
 
@@ -126,7 +126,7 @@ else
 fi
 log "Previous running image: ${PREVIOUS_IMAGE:-<none>}"
 
-# ── Authenticate to GHCR (read-only token from VM) ───────────────────────────
+# ── Authenticate to GHCR with the workflow's short-lived token ──────────────
 log "Authenticating to GHCR..."
 echo "${GHCR_TOKEN}" | docker login "${GHCR_REGISTRY}" -u "${GHCR_USER}" --password-stdin
 log "GHCR login successful."
