@@ -85,3 +85,15 @@ test('deployment validates the proxy and syncs versioned files before SSH', () =
   assert.ok(syncPosition > -1);
   assert.ok(deployPosition > syncPosition);
 });
+
+test('staging image pull uses a short-lived repository token', () => {
+  const workflow = read('.github/workflows/deploy-staging.yml');
+  const deployScript = read('deploy/staging/deploy.sh');
+
+  assert.match(workflow, /deploy:\s+[\s\S]*?packages: read/);
+  assert.match(workflow, /GHCR_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(workflow, /GHCR_USER: \$\{\{ github\.actor \}\}/);
+  assert.doesNotMatch(workflow, /secrets\.GHCR_TOKEN/);
+  assert.match(deployScript, /DOCKER_CONFIG="\$\{DOCKER_AUTH_DIR\}"/);
+  assert.match(deployScript, /trap cleanup_auth EXIT/);
+});
