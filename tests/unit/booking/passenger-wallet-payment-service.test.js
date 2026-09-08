@@ -62,7 +62,10 @@ test('passengerWalletPaymentService unit tests', async (t) => {
       amount: 1500,
       bookingId: null,
       operationKey: 'checkout:tmp-456',
-      paymentContext: { tempBookingId: 'tmp-456', gateway: 'wallet' },
+      paymentContext: {
+        tempBookingId: 'tmp-456', gateway: 'wallet', preferRefundCredit: true,
+        refundMoneyApplied: 0, restrictedMoneyApplied: 0,
+      },
       note: 'SM Wallet full payment: Rs. 1500 (temp: tmp-456)',
     });
     assert.ok(loggedInfo);

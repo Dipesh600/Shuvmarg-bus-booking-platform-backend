@@ -129,6 +129,7 @@ describe("passenger-booking-history repository", () => {
       reason: 1,
       remarks: 1,
       refundGateway: 1,
+      destination: 1,
     });
     
     assert.deepStrictEqual(result, [{ _id: "rf1" }]);

@@ -62,6 +62,7 @@ describe("passenger-booking-history response characterization", () => {
       reason: "Changed plans",
       remarks: "Ok",
       refundGateway: "eSewa",
+      destination: "original_source",
     };
 
     harness.mocks.bookingFind.mock.mockImplementation(() => ({
@@ -131,6 +132,7 @@ describe("passenger-booking-history response characterization", () => {
       reason: "Changed plans",
       remarks: "Ok",
       refundGateway: "eSewa",
+      destination: "original_source",
     });
   });
 
