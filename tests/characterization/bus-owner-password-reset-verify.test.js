@@ -42,7 +42,7 @@ test('bus-owner password reset OTP verify characterization', async (t) => {
       assert.equal(consume, false);
       assert.equal(verifyFn, otpHelper.verifyOTPCode);
       assert.equal(await lookup('x'), null);
-      return { valid: true, user: { roles: [], role: 'busOwner' } };
+      return { valid: true, user: { roles: ['busOwner'], role: 'busOwner', status: 'active' } };
     });
     try {
       const res = await post({ phone: '9810000000', otp: '12-34 56' });
@@ -75,7 +75,7 @@ test('bus-owner password reset OTP verify characterization', async (t) => {
     } finally { restore(); }
   });
 
-  await t.test('legacy role fallback and unexpected error are preserved', async () => {
+  await t.test('empty role membership is rejected and unexpected error is preserved', async () => {
     const original = enumGuard.otpFirstVerify;
     let restore = patch(enumGuard, 'otpFirstVerify', async (phone, ...args) => {
       if (phone === '9810000000') {
@@ -84,7 +84,7 @@ test('bus-owner password reset OTP verify characterization', async (t) => {
       return original.call(enumGuard, phone, ...args);
     });
     try {
-      assert.equal((await post({ phone: '9810000000', otp: '123456' })).status, 200);
+      assert.equal((await post({ phone: '9810000000', otp: '123456' })).status, 400);
     } finally { restore(); }
 
     restore = patch(enumGuard, 'otpFirstVerify', async (phone, ...args) => {

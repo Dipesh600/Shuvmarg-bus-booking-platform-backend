@@ -12,6 +12,7 @@ const bcrypt = require('bcryptjs');
 const passwordValidator = require('../../../../../utils/passwordValidator');
 const repository = require('./bus-owner-registration.repository');
 const errors = require('./bus-owner-registration.errors');
+const { requireRoleGrantResult } = require('../../../../shared/auth/role-grant-state');
 
 /**
  * Persist the bus-owner role upgrade for a User who ALREADY HAS a password.
@@ -41,13 +42,8 @@ const persistUpgradePasswordless = async (user, password, now) => {
     activatedAt: now,
   });
   if (updated) return updated;
-  // Concurrent request established a password — re-read and use that state.
-  const reread = await repository.findBusOwnerByUser(user._id);
-  if (reread) {
-    const savedUser = await repository.upgradeUserToBusOwner(user._id, now);
-    return savedUser || reread;
-  }
-  throw errors.passwordRequiredForRoleUpgradeError();
+  // Retry only the guarded grant. A profile document cannot authorize a User.
+  return requireRoleGrantResult(await repository.upgradeUserToBusOwner(user._id, now));
 };
 
 /**

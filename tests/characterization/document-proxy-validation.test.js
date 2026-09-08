@@ -42,7 +42,7 @@ const cred = () => `${crypto.randomBytes(12).toString('hex')}A1!`;
 
 const seedAgent = async () => {
     const n = next();
-    return User.create({
+    const user = await User.create({
         name:     `DocProxy Agent ${n}`,
         email:    `docproxy-${n}@example.test`,
         phone:    `98700${n.padStart(5, '0')}`,
@@ -51,6 +51,8 @@ const seedAgent = async () => {
         roles:    ['agent'],
         status:   'active',
     });
+    await require('../../models/agentModel').collection.insertOne({ user: user._id, documents: [{ fileKey: '/api/agent/documents/view' }, { fileKey: 'owners/abc/doc.pdf' }, { fileKey: 'owners/abc/missing.pdf' }] });
+    return user;
 };
 
 const tokenFor = (user) => jwt.sign(
@@ -111,8 +113,7 @@ test('document-proxy characterization - validation', async (t) => {
         assert.equal(res.status, 403);
         assert.equal(res.body.success, false);
         assert.equal(res.body.message, 'Access denied: key path is not permitted.');
-        assert.ok('debug_key_start' in res.body);
-        assert.ok(res.body.debug_key_start.startsWith('private/'));
+        assert.ok(!('debug_key_start' in res.body));
     });
 
     await t.test('8. S3 NoSuchKey → 404 with exact body and debug_key', async () => {
@@ -127,7 +128,7 @@ test('document-proxy characterization - validation', async (t) => {
         assert.equal(res.status, 404);
         assert.equal(res.body.success, false);
         assert.equal(res.body.message, 'Document not found. It may have been deleted or the key is incorrect.');
-        assert.ok('debug_key' in res.body);
+        assert.ok(!('debug_key' in res.body));
     });
 
     await t.test('9. unexpected S3 error → 500 with exact body', async () => {

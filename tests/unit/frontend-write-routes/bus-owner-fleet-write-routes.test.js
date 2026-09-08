@@ -22,6 +22,12 @@ test("Bus-owner fleet write routes registration contract", async (t) => {
     assert.ok(inspectLayer(router, "DELETE", "/fleets/:fleetId"));
   });
 
+  await t.test("1a. Setup-status uses the approved-owner middleware and shared controller", () => {
+    const setupStatus = inspectLayer(router, "GET", "/fleets/:fleetId/setup-status");
+    assert.ok(setupStatus);
+    assert.equal(setupStatus.route.stack.length, 2);
+  });
+
   await t.test("2. Legacy write aliases registered", () => {
     assert.ok(inspectLayer(router, "POST", "/submitFleetForVerification"));
     assert.ok(inspectLayer(router, "PATCH", "/updateFleet"));

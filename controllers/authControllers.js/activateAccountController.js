@@ -1,27 +1,11 @@
-/**
- * controllers/authControllers.js/activateAccountController.js
- *
- * Account activation for conductors, drivers, and admin-onboarded bus owners.
- *
- * Flow:
- *   1. Staff receives SMS with phone + temp password
- *   2. Staff logs in → gets forcePasswordChange: true + tempToken
- *   3. Staff calls POST /api/auth/activate with:
- *      { tempToken, newPassword, phone, otp }
- *   4. OTP verifies phone ownership
- *   5. Password is changed, forcePasswordChange set to false
- *   6. Full access token + refresh token issued
- *
- * This is essentially the same as changeForcePassword but with OTP required.
- * Separated for clarity — this is the dedicated "invited user activation" flow.
- */
+/** Activate an invited account after OTP verification and password setup. */
 
-const User = require("../../models/userModel.js");
+const { activateInvitedUser } = require("../../src/modules/auth/account-activation/account-activation-persistence.service");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const { createAndSendOTP, verifyOTPCode } = require("../../utils/otpHelper.js");
 const { validatePassword } = require("../../utils/passwordValidator.js");
 const { generateTokenPair, revokeAllUserTokens } = require("../../utils/tokenService.js");
+const { activationContext, sendEligibilityFailure } = require("../../src/modules/auth/account-activation/account-activation-context");
 
 /**
  * POST /api/auth/activate/sendOTP
@@ -38,21 +22,20 @@ const sendActivationOTP = async (req, res) => {
             });
         }
 
-        // Verify this phone belongs to an invited user
-        const user = await User.findOne({ phone, status: "invited" });
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "No pending activation found for this phone number.",
-            });
-        }
+        const { role, user, eligibility } = await activationContext(req);
+        if (eligibility.state !== "PENDING") return sendEligibilityFailure(res, eligibility);
 
-        const result = await createAndSendOTP(phone, "ACCOUNT_ACTIVATION");
+        const result = await createAndSendOTP(user.phone, "ACCOUNT_ACTIVATION");
 
         return res.status(200).json({
             success: true,
             message: "Activation OTP sent!",
-            data: { phone, expiresIn: result.expiresIn },
+            data: {
+                phone: user.phone,
+                role,
+                activationState: "OTP_SENT",
+                expiresIn: result.expiresIn,
+            },
         });
     } catch (error) {
         console.error("sendActivationOTP error:", error);
@@ -80,17 +63,13 @@ const activateAccount = async (req, res) => {
             });
         }
 
-        // Find the invited user
-        const user = await User.findOne({ phone, status: "invited" }).select("+password");
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "No pending activation found for this phone number.",
-            });
-        }
+        const context = await activationContext(req);
+        const { role, eligibility } = context;
+        let { user } = context;
+        if (eligibility.state !== "PENDING") return sendEligibilityFailure(res, eligibility);
 
         // Verify OTP
-        const otpResult = await verifyOTPCode(phone, otp, "ACCOUNT_ACTIVATION");
+        const otpResult = await verifyOTPCode(user.phone, otp, "ACCOUNT_ACTIVATION");
         if (!otpResult.valid) {
             return res.status(400).json({
                 success: false,
@@ -108,14 +87,10 @@ const activateAccount = async (req, res) => {
             });
         }
 
-        // Update user
+        // Update the shared account and every invited crew-role record in one
+        // transaction so the UI can never show a stale inferred state.
         const hashedPassword = await bcrypt.hash(newPassword, 12);
-        user.password = hashedPassword;
-        user.status = "active";
-        user.forcePasswordChange = false;
-        user.phoneVerified = true;
-        user.isVerified = true;
-        await user.save();
+        user = await activateInvitedUser({ userId: user._id, hashedPassword });
 
         // Revoke all prior sessions before issuing new credentials (FINDING-07)
         await revokeAllUserTokens(user._id);
@@ -124,6 +99,7 @@ const activateAccount = async (req, res) => {
         const { accessToken, refreshToken } = await generateTokenPair(user, {
             deviceInfo: req.get("User-Agent") || null,
             ipAddress: req.ip || req.connection?.remoteAddress || null,
+            activeRole: role,
         });
 
         const userWithoutPassword = user.toObject();
@@ -134,6 +110,7 @@ const activateAccount = async (req, res) => {
             message: "Account activated successfully! Welcome to Sumarg.",
             user: userWithoutPassword,
             accessToken,
+            activeRole: role,
         };
         // Refresh token delivered via httpOnly cookie only — not in response body (FINDING-06)
         if (refreshToken) {

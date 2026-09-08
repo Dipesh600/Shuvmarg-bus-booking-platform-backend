@@ -25,6 +25,7 @@ const phoneGuard = require('../../../utils/phoneGuard');
 const passwordValidator = require('../../../utils/passwordValidator');
 const tokenService = require('../../../utils/tokenService');
 const verificationToken = require('../../../utils/verificationToken');
+const registrationProof = require('../../../src/shared/auth/registration-proof');
 const repository = require('../../../src/modules/bus-owner/auth/registration/bus-owner-registration.repository');
 const leadRepository = require('../../../src/modules/bus-owner/auth/registration/bus-owner-registration-lead.repository');
 const service = require('../../../src/modules/bus-owner/auth/registration/bus-owner-registration.service');
@@ -39,6 +40,7 @@ const baseInput = { rawPhone: '9810000000', name: 'Owner', companyName: 'Company
 const setupBase = (restores, overrides = {}) => {
   patch(phoneGuard, 'normalizePhone', (p) => p, restores);
   patch(verificationToken, 'validateVerificationToken', () => ({ valid: true }), restores);
+  patch(registrationProof, 'consume', async () => {}, restores);
   patch(repository, 'findConsumedOtp', async () => ({ updatedAt: new Date() }), restores);
   patch(phoneGuard, 'checkPhoneForRole', async () => ({ exists: true, user: { _id: 'uid-pass' } }), restores);
   patch(tokenService, 'generateTokenPair', async () => ({ accessToken: 'a', refreshToken: 'r' }), restores);
@@ -53,6 +55,7 @@ test('bus-owner upgrade edge cases (D5–D8)', async (t) => {
     const restores = []; let called = false;
     patch(phoneGuard, 'normalizePhone', (p) => p, restores);
     patch(verificationToken, 'validateVerificationToken', () => ({ valid: true }), restores);
+  patch(registrationProof, 'consume', async () => {}, restores);
     patch(repository, 'findConsumedOtp', async () => ({ updatedAt: new Date() }), restores);
     patch(phoneGuard, 'checkPhoneForRole', async () => ({
       exists: true, user: { _id: 'uid-trap', password: 'trap-value' },

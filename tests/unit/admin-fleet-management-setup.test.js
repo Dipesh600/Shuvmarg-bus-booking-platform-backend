@@ -53,7 +53,11 @@ test("setup status preserves route, driver, schedule, and return activation", as
   const service = createFleetSetupService({
     repository: {
       findFleet: async () => fleet,
-      findRouteConfigs: async () => [{ _id: "rc1" }],
+      findRouteConfigs: async () => [{
+        _id: "rc1",
+        status: "ACTIVE",
+        activeStops: ["stop-1", "stop-2"],
+      }],
       findAssignedDriver: async () => ({ _id: "d1" }),
       findSchedule: async () => ({
         _id: "s1",

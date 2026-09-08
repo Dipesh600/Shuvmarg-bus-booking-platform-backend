@@ -1,16 +1,41 @@
 "use strict";
 
+function mapAssignedRoute(corridor) {
+  if (!corridor) return null;
+  if (typeof corridor !== "object") {
+    return {
+      corridorId: String(corridor),
+      code: null,
+      origin: null,
+      destination: null,
+      label: null,
+    };
+  }
+
+  const origin = corridor.origin || corridor.originId?.name || corridor.originId?.city || null;
+  const destination = corridor.destination || corridor.destinationId?.name || corridor.destinationId?.city || null;
+  const code = corridor.code || corridor.corridorCode || null;
+  return {
+    corridorId: String(corridor._id || corridor.id || ""),
+    code,
+    origin,
+    destination,
+    label: origin && destination ? `${origin} to ${destination}` : code,
+  };
+}
+
 function mapFleetSetupStatus(canonicalData) {
   if (!canonicalData) return null;
 
   const steps = canonicalData.steps || {};
+  const assignedRoute = mapAssignedRoute(canonicalData.assignedCorridor);
 
   const stepItems = [
-    { key: "routeAssigned", label: "Route Assignment", complete: Boolean(steps.routeAssigned) },
-    { key: "routeConfigured", label: "Route Configuration", complete: Boolean(steps.routeConfigured) },
-    { key: "driverAssigned", label: "Driver Assignment", complete: Boolean(steps.driverAssigned) },
-    { key: "scheduleCreated", label: "Schedule Creation", complete: Boolean(steps.scheduleCreated) },
-    { key: "activated", label: "Fleet Activation", complete: Boolean(steps.activated) },
+    { key: "routeAssigned", label: "Route approved", complete: Boolean(steps.routeAssigned) },
+    { key: "routeConfigured", label: "Stops & timings", complete: Boolean(steps.routeConfigured) },
+    { key: "driverAssigned", label: "Driver", complete: Boolean(steps.driverAssigned) },
+    { key: "scheduleCreated", label: "Trip schedule", complete: Boolean(steps.scheduleCreated) },
+    { key: "activated", label: "Start selling tickets", complete: Boolean(steps.activated) },
   ];
 
   const completedCount = stepItems.filter((s) => s.complete).length;
@@ -23,6 +48,7 @@ function mapFleetSetupStatus(canonicalData) {
 
   return {
     fleetId: String(canonicalData.fleetId || ""),
+    brandId: canonicalData.brandId ? String(canonicalData.brandId._id || canonicalData.brandId) : null,
     busName: canonicalData.busName || null,
     busNumber: canonicalData.busNumber || null,
     approvalStatus: canonicalData.approvalStatus || null,
@@ -39,6 +65,7 @@ function mapFleetSetupStatus(canonicalData) {
     blockingReasons,
     scheduleId: canonicalData.scheduleId || null,
     returnScheduleId: canonicalData.returnScheduleId || null,
+    assignedRoute,
     assignedCorridor: canonicalData.assignedCorridor || null,
     assignedRouteConfigs: canonicalData.assignedRouteConfigs || [],
     assignedDriver: canonicalData.assignedDriver || null,

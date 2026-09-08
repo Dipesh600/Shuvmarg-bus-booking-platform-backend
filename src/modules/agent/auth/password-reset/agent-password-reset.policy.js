@@ -1,11 +1,12 @@
 'use strict';
+const { getEffectiveRoles } = require('../../../../shared/auth/account-role.policy');
 
 const OTP_PURPOSE = 'AGENT_PASSWORD_RESET';
 const MINIMUM_LATENCY_MS = 600;
 
 const cleanOtp = (otp) => String(otp).replace(/\D/g, '');
 const isSixDigitOtp = (otp) => cleanOtp(otp).length === 6;
-const rolesFor = (user) => (user.roles && user.roles.length > 0 ? user.roles : [user.role]);
+const rolesFor = (user) => (getEffectiveRoles(user));
 const hasAgentRole = (user) => rolesFor(user).includes('agent');
 const canRecoverPassword = (user) => Boolean(
   user

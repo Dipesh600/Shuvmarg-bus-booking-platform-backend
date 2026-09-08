@@ -22,7 +22,7 @@ const restoreAll = (restores) => restores.reverse().forEach((fn) => fn());
 test('force-password service preserves successful operation sequence', async () => {
   const r = [];
   const order = [];
-  const user = { _id: 'u1', forcePasswordChange: true };
+  const user = { _id: 'u1', forcePasswordChange: true, roles: ['passenger'] };
   const freshUser = {
     _id: 'u1',
     role: 'passenger',
@@ -35,7 +35,7 @@ test('force-password service preserves successful operation sequence', async () 
     patch(jwt, 'verify', (token, secret) => {
       order.push('jwt');
       assert.deepEqual([token, secret], ['temp', process.env.SECRET_KEY]);
-      return { id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE' };
+      return { id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'passenger', credentialVersion: 0, tokenVersion: 0 };
     }, r);
     patch(passwordValidator, 'validatePassword', (password) => {
       order.push('validate');
@@ -61,7 +61,7 @@ test('force-password service preserves successful operation sequence', async () 
       order.push('save');
       assert.equal(savedUser, user);
       assert.equal(hash, 'hashed');
-      assert.deepEqual(options, { credentialVersion: undefined, phoneVerified: true });
+      assert.deepEqual(options, { credentialVersion: 0, tokenVersion: 0, activeRole: 'passenger', phoneVerified: true });
       savedUser.password = hash;
       savedUser.forcePasswordChange = false;
       savedUser.phoneVerified = true;

@@ -1,4 +1,5 @@
 'use strict';
+const registrationProof = require('../../../shared/auth/registration-proof');
 
 const bcrypt = require('bcryptjs');
 const AppError = require('../../../shared/errors/app-error');
@@ -83,6 +84,7 @@ const completeRegistration = async (input) => {
     const userData = await _hashAndBuild(                                      // 7-9
       { phone, name, email, address, gender }, password
     );
+    await registrationProof.consume(token, phone, 'REGISTRATION');
     const resolution = await _resolveReferral(referralCode, phone, userData); // 10-11
     const savedUser = await repository.createPassenger(userData);              // 12
     await _recordHistory(referralCode, resolution, savedUser._id,              // 13

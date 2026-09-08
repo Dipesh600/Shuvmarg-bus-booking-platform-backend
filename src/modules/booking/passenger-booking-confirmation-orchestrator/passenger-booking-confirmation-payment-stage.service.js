@@ -1,5 +1,5 @@
 'use strict';
-
+const purchaseAuthorization = require('../../wallet/payment-authorization/purchase-authorization.service');
 function createPassengerBookingConfirmationPaymentStage(deps) {
   return async function runPassengerBookingConfirmationPaymentStage({ req, state }) {
     const restoreClaim = async () => {
@@ -16,21 +16,20 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
       couponCode, boardingPoint, droppingPoint, bookedFrom, bookedTo,
       bookedDepartureTime, bookedArrivalTime, passengerDetails, smMoneyToUse,
     } = req.body;
-
     Object.assign(state, {
       tempBookingId, paymentId, paymentAmount, gateway,
       couponCode, boardingPoint, droppingPoint, bookedFrom, bookedTo,
       bookedDepartureTime, bookedArrivalTime, passengerDetails,
     });
-
     const requestValidationResult =
       deps.validatePassengerBookingConfirmationRequest({
       gateway,
       tempBookingId,
     });
     if (!requestValidationResult.ok) return requestValidationResult;
-
     state.userId = req.dbUser._id;
+    // A client-supplied wallet reference is not a unique payment identity.
+    if (gateway === 'wallet') state.paymentId = `sm_wallet_${state.userId}_${tempBookingId}`;
     state.scheduleId = req.bookingHold.tripId;
     state.holdId = req.bookingHold._id;
     state.holdExpiresAt = req.bookingHold.expiresAt;
@@ -38,7 +37,6 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
     state.originalAmount = req.bookingHold.originalAmount;
     state.lockUserId = state.userId;
     state.lockTripId = state.scheduleId;
-
     const confirmationQuoteResult = req.paymentAttemptQuote
       ? { ok: true, quote: req.paymentAttemptQuote }
       : await deps.buildPassengerBookingConfirmationQuote({
@@ -48,9 +46,19 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
         activeRole: req.userInfo.activeRole,
       });
     if (!confirmationQuoteResult.ok) return confirmationQuoteResult;
-
     Object.assign(state, confirmationQuoteResult.quote);
-
+    state.paymentAttemptId = req.paymentAttemptId;
+    state.paymentProcessingToken = req.paymentProcessingToken;
+    state.refundPolicySnapshot = req.refundPolicySnapshot;
+    if (state.smMoneyApplied > 0) {
+      const authorization = req.paymentAttemptId
+        ? await deps.authorizeReservedPayment({ attemptId: req.paymentAttemptId, processingToken: req.paymentProcessingToken,
+          userId: state.userId, amount: state.smMoneyApplied })
+        : await purchaseAuthorization.authorizeCheckout({ user: req.dbUser, hold: req.bookingHold,
+          body: req.body, quote: state });
+      if (!authorization.ok) return authorization;
+      if (req.paymentAttemptId) state.splitPaymentDebitEntryId = authorization.debitEntryId;
+    }
     state.holdClaimed = await deps.claimPassengerHoldForConfirmation({
       holdId: state.holdId,
       userId: state.userId,
@@ -68,11 +76,12 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
         },
       };
     }
-
-    const splitPaymentResult = await deps.debitPassengerSplitPayment({
-      gateway,
-      userId: state.userId,
-      amount: state.smMoneyApplied,
+    const splitPaymentResult = state.splitPaymentDebitEntryId
+      ? { ok: true, debitEntryId: state.splitPaymentDebitEntryId }
+      : await deps.debitPassengerSplitPayment({
+      gateway, userId: state.userId, amount: state.smMoneyApplied,
+      refundMoneyApplied: state.refundMoneyApplied,
+      restrictedMoneyApplied: state.restrictedMoneyApplied,
       tempBookingId,
     });
     if (!splitPaymentResult.ok) {
@@ -80,8 +89,9 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
       return splitPaymentResult;
     }
     state.splitPaymentDebitEntryId = splitPaymentResult.debitEntryId;
-
-    const esewaVerificationResult = await deps.verifyPassengerEsewaPayment({
+    const esewaVerificationResult = req.paymentAttemptId && req.providerPaymentVerified === true
+      ? { ok: true }
+      : await deps.verifyPassengerEsewaPayment({
       gateway,
       paymentId,
       gatewayAmount: state.gatewayAmount,
@@ -98,8 +108,9 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
 
     if (gateway === 'wallet') {
       const walletPaymentResult = await deps.debitPassengerWalletPayment({
-        userId: state.userId,
-        amount: state.smMoneyApplied,
+        userId: state.userId, amount: state.smMoneyApplied,
+        refundMoneyApplied: state.refundMoneyApplied,
+        restrictedMoneyApplied: state.restrictedMoneyApplied,
         tempBookingId,
       });
       if (!walletPaymentResult.ok) {
@@ -118,13 +129,14 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
         scheduleId: state.scheduleId,
         seatNumbers: state.normalizedSeats,
         gateway,
-        paymentId,
+        paymentId: state.paymentId,
         originalAmount: state.originalAmount,
         paymentAmount,
         gatewayAmount: state.gatewayAmount,
         smMoneyApplied: state.smMoneyApplied,
         tempBookingId,
         internalMoneyDebitEntryId: state.internalMoneyDebitEntryId,
+        ...(state.paymentAttemptId ? { paymentAttemptId: state.paymentAttemptId, paymentProcessingToken: state.paymentProcessingToken } : {}),
       });
 
     state.txnRecord = paymentTransactionResult.transaction;

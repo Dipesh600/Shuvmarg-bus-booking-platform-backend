@@ -24,11 +24,13 @@ function createPassengerInternalMoneyCompensationService({
     let nextWalletDebitEntryId = walletDebitEntryId || null;
 
     if (splitPaymentDebitEntryId) {
-      await splitPayment.reversePassengerSplitPaymentDebit({
+      const result = await splitPayment.reversePassengerSplitPaymentDebit({
         debitEntryId: splitPaymentDebitEntryId,
         reason,
       });
-      nextSplitPaymentDebitEntryId = null;
+      // The split service returns failures instead of throwing. Keep the debit
+      // available to subsequent compensation attempts until success is explicit.
+      if (result?.reversed === true) nextSplitPaymentDebitEntryId = null;
     }
 
     if (walletDebitEntryId) {

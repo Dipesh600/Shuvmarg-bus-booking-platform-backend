@@ -17,7 +17,7 @@ test('confirmBooking quote & context characterization', async (t) => {
     h.mockMethod(h.Seat, 'findOneAndUpdate', () => { calls.seatLock++; return Promise.resolve({}); });
     h.mockMethod(h.Booking, 'create', () => { calls.booking++; return Promise.resolve([]); });
     h.mockMethod(h.CouponHelper, 'validateCoupon', () => { calls.coupon++; return Promise.resolve({ isValid: true }); });
-    h.mockMethod(h.smLedgerService, 'computeSpendableBalance', () => { calls.balance++; return Promise.resolve({ display: 1000 }); });
+    h.mockMethod(h.smLedgerService, 'computePurchaseBalance', () => { calls.balance++; return Promise.resolve({ display: 1000, refund: 0, restricted: 1000 }); });
     h.mockMethod(h.PlatformConfig, 'getConfig', () => { calls.config++; return Promise.resolve({ maxDiscountPercent: 80 }); });
     return calls;
   }
@@ -73,7 +73,7 @@ test('confirmBooking quote & context characterization', async (t) => {
 
   await t.test('7. positive smMoneyToUse loads spendable balance & config', async () => {
     let balanceCalled = false, configCalled = false;
-    h.mockMethod(h.smLedgerService, 'computeSpendableBalance', () => { balanceCalled = true; return Promise.resolve({ display: 1000 }); });
+    h.mockMethod(h.smLedgerService, 'computePurchaseBalance', () => { balanceCalled = true; return Promise.resolve({ display: 1000, refund: 0, restricted: 1000 }); });
     h.mockMethod(h.PlatformConfig, 'getConfig', () => { configCalled = true; return Promise.resolve({ maxDiscountPercent: 80 }); });
     const res = makeMockConfirmRes();
     await h.confirmBooking(makeConfirmReq({ smMoneyToUse: 100, paymentAmount: 900, originalAmount: 1000 }), res);
@@ -83,7 +83,7 @@ test('confirmBooking quote & context characterization', async (t) => {
 
   await t.test('8. zero smMoneyToUse skips balance & config lookup', async () => {
     let balanceCalled = false;
-    h.mockMethod(h.smLedgerService, 'computeSpendableBalance', () => { balanceCalled = true; return Promise.resolve({ display: 1000 }); });
+    h.mockMethod(h.smLedgerService, 'computePurchaseBalance', () => { balanceCalled = true; return Promise.resolve({ display: 1000, refund: 0, restricted: 1000 }); });
     const res = makeMockConfirmRes();
     await h.confirmBooking(makeConfirmReq({ smMoneyToUse: 0 }), res);
     assert.equal(res.getStatus(), 201);

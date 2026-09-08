@@ -8,7 +8,9 @@
 const Refund = require("../../../models/refundModel.js");
 const Booking = require("../../../models/bookTicketModel.js");
 const User = require("../../../models/userModel.js");
-const Trip = require("../../../models/tripModel.js");
+const { updateRefund } = require("../../../src/modules/admin/wallet-management/refund-settlement.service");
+const { uploadRefundProof } = require("../../../src/shared/refund-proof-upload");
+const { getPresignedUrl } = require("../../../services/s3Service");
 const UserDeviceInfo = require("../../../models/userDeviceInfoModel.js");
 const {
   createLocalNotification,
@@ -97,7 +99,7 @@ const getRefundQueue = async (req, res) => {
     const userMap = new Map(users.map((u) => [String(u._id), u]));
     const bookingMap = new Map(bookings.map((b) => [String(b._id), b]));
 
-    const enriched = refunds.map((refund) => {
+    const enriched = await Promise.all(refunds.map(async (refund) => {
       const user = userMap.get(String(refund.userId));
       const booking = bookingMap.get(String(refund.bookingId));
       const trip = booking?.tripId;
@@ -126,6 +128,8 @@ const getRefundQueue = async (req, res) => {
         processedAt: refund.processedAt,
         completedAt: refund.completedAt,
         processedBy: refund.processedBy,
+        settlementEvidence: refund.settlementEvidence,
+        refundProofUrl: refund.refundProof ? await getPresignedUrl(refund.refundProof) : null,
         user: user
           ? {
               _id: user._id,
@@ -147,7 +151,7 @@ const getRefundQueue = async (req, res) => {
         tripDate: trip?.tripDate || null,
         departureTime: trip?.departureTime || null,
       };
-    });
+    }));
 
     // Summary counts
     const statusCounts = await Refund.aggregate([
@@ -204,42 +208,10 @@ const updateRefundStatus = async (req, res) => {
       });
     }
 
-    const refund = await Refund.findById(refundId);
-    if (!refund) {
-      return res.status(404).json({ status: false, message: "Refund not found" });
-    }
-
-    // Validate transitions
-    const validTransitions = {
-      pending: ["processing", "completed", "rejected"],
-      processing: ["completed", "rejected"],
-      completed: [],
-      rejected: [],
-    };
-
-    if (!validTransitions[refund.status]?.includes(newStatus)) {
-      return res.status(400).json({
-        status: false,
-        message: `Cannot transition from '${refund.status}' to '${newStatus}'`,
-      });
-    }
-
-    // Apply updates
-    refund.status = newStatus;
-    refund.processedBy = adminId;
-
-    if (remarks) refund.remarks = remarks;
-    if (refundGateway) refund.refundGateway = refundGateway;
-    if (refundGatewayId) refund.refundGatewayId = refundGatewayId;
-
-    if (newStatus === "processing") {
-      refund.processedAt = new Date();
-    } else if (newStatus === "completed") {
-      refund.completedAt = new Date();
-      if (!refund.processedAt) refund.processedAt = new Date();
-    }
-
-    await refund.save();
+    const proofKey = await uploadRefundProof(req.files?.proofImage, refundId);
+    const { refund, changed } = await updateRefund({ refundId, adminId, status: newStatus,
+      remarks, refundGateway, refundGatewayId, proofKey });
+    if (!changed) return res.status(200).json({ status: true, message: "Refund already completed", data: refund });
 
     // Send notification to user
     try {
@@ -283,6 +255,8 @@ const updateRefundStatus = async (req, res) => {
       data: refund,
     });
   } catch (error) {
+    if (error.statusCode || error.code === 11000) return res.status(error.statusCode || 409).json({
+      status: false, message: error.code === 11000 ? "This payout reference was already used; reconcile before continuing" : error.message });
     console.error("updateRefundStatus error:", error);
     return res.status(500).json({ status: false, message: "Internal Server Error" });
   }

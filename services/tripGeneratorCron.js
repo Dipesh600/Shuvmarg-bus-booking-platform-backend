@@ -22,6 +22,8 @@ const Trip         = require("../models/tripModel.js");
 const SeatTemplate = require("../models/seatTemplateModel.js");
 const Bus          = require("../models/fleetModel.js");
 const logger       = require("../utils/logger.js");
+const DriverProfile = require("../models/driverProfileModel");
+const { resolveDefaultDriver } = require("../src/shared/crew/default-driver.service");
 const {
     assertScheduleRouteChainReady,
 } = require("../src/modules/admin/schedule-management/schedule-route-chain.policy.js");
@@ -317,6 +319,9 @@ const createTripFromSchedule = async (schedule, tripDateStart, dateStr) => {
     }
 
     const legacySeats = await buildSeatArrays(schedule.busId, schedule.seatTemplateId);
+    const eligibleDriverId = await resolveDefaultDriver({
+      driverId: schedule.driverId, brandId: schedule.brandId, tripDate: tripDateStart,
+    }, { DriverProfile, logger });
     const creation = await tripSeatLayoutDualWriteService.createTrip({
       trip: {
         tripId:          newTripId,
@@ -325,7 +330,7 @@ const createTripFromSchedule = async (schedule, tripDateStart, dateStr) => {
         ownerId:         schedule.ownerId,
         busId:           schedule.busId,
         variantId:       schedule.variantId  || null,
-        driverId:        schedule.driverId   || null,   // inherited from schedule default
+        driverId:        eligibleDriverId,
         seatTemplateId:  schedule.seatTemplateId,
         tripDate:        tripDateStart,
         departureTime:   schedule.departureTime,

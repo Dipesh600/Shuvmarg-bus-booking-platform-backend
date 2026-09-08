@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-
 const tripSchema = new mongoose.Schema(
   {
     tripId: {
@@ -7,6 +6,7 @@ const tripSchema = new mongoose.Schema(
       unique: true,
       index: true, // e.g., TRIP-KTM-BRT-001
     },
+    paymentCommitSequence: { type: Number, default: 0 },
     busId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Buse", // Reference to the Fleet (Fleet model uses "Buse" as model name)
@@ -47,7 +47,7 @@ const tripSchema = new mongoose.Schema(
     driverAssignmentLog: [{
       driverId: { type: mongoose.Schema.Types.ObjectId, ref: "DriverProfile" },
       assignedAt: { type: Date, default: Date.now },
-      assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "SuperAdmin" },
       reason: { type: String }
     }],
     tripDate: {
@@ -253,4 +253,3 @@ tripSchema.pre("save", async function (next) {
 });
 
 module.exports = mongoose.models.Trip || mongoose.model("Trip", tripSchema);
-

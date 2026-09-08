@@ -10,7 +10,7 @@ test('agent-registration policy preserves pure legacy decisions', () => {
   assert.equal(policy.isValidNepalMobile('9612345678'), false);
   assert.equal(policy.cleanOtp('a1-2 3b456'), '123456');
   assert.deepEqual(policy.rolesFor({ roles: ['agent'], role: 'passenger' }), ['agent']);
-  assert.deepEqual(policy.rolesFor({ roles: [], role: 'busOwner' }), ['busOwner']);
+  assert.deepEqual(policy.rolesFor({ role: 'busOwner' }), ['busOwner']);
   assert.deepEqual(policy.rolesFor({ role: null }), []);
   const now = Date.UTC(2026, 0, 1, 0, 30, 0);
   assert.equal(policy.isOtpRecent({ updatedAt: new Date(now - policy.OTP_WINDOW_MS + 1) }, now), true);

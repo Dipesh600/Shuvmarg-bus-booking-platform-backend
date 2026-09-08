@@ -707,7 +707,7 @@ models/refundPolicyModel.js
 **Owns:**
 - Passenger wallet balance
 - Wallet transactions (credit/debit)
-- Wallet PIN management
+- Purchase-bound SM Money authorization
 - Scratch card management (user-facing)
 - SM Ledger (internal double-entry accounting for all financial events)
 
@@ -734,7 +734,7 @@ models/scratchCardModel.js
 
 **Business invariants:**
 - Every credit/debit must have a corresponding SM Ledger entry
-- Wallet PIN must be set before PIN-verified operations
+- SM Money spending requires a current purchase-bound approval
 
 ---
 

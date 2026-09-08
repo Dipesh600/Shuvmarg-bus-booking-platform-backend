@@ -91,7 +91,7 @@ test("mutation controllers preserve exact success messages", async () => {
   const context = {
     params: { fleetId: "f1", tripId: "t1" },
     body: { status: "boarding", driverId: "d1" },
-    user: { id: "admin-1" },
+    adminInfo: { id: "admin-1" },
   };
   const status = await invoke(controller.updateTripStatus, context);
   const driver = await invoke(controller.reassignTripDriver, context);
@@ -101,7 +101,7 @@ test("mutation controllers preserve exact success messages", async () => {
   assert.equal(driver.body.message, "Driver reassigned successfully");
 });
 
-test("dependency failures preserve exposed-message 500 behavior", async () => {
+test("dependency failures log details but sanitize the public response", async () => {
   const logs = [];
   const controller = makeController({
     dashboardService: {
@@ -116,7 +116,7 @@ test("dependency failures preserve exposed-message 500 behavior", async () => {
   });
   assert.deepEqual(result, {
     statusCode: 500,
-    body: { success: false, message: "database unavailable" },
+    body: { success: false, message: "Unable to complete this operation." },
   });
   assert.equal(logs.length, 1);
 });

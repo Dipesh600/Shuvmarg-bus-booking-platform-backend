@@ -29,6 +29,8 @@ const createPassengerBookingCancellationEstimateService = (repository) => {
       totalAmount: booking.totalAmount || 0,
       tripDate: trip.tripDate,
       departureTime: trip.departureTime,
+        policySnapshot: booking.refundPolicySnapshot,
+        smMoneyUsed: booking.smMoneyUsed, gatewayAmount: booking.gatewayAmount, paymentMethod: booking.paymentMethod,
     });
 
     return {

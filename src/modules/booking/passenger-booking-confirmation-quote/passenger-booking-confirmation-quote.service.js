@@ -64,26 +64,32 @@ function createPassengerBookingConfirmationQuoteService({
 
     // 7. Load balance and config only when requested SM Money is positive
     let spendableBalance = 0;
+    let refundBalance = 0;
+    let restrictedBalance = 0;
     let maxDiscountPercent = 80;
 
-    if (requestedSmMoney > 0) {
+    if (requestedSmMoney > 0 || gateway === 'wallet') {
       const [balanceResult, smConfig] = await Promise.all([
-        smLedgerService.computeSpendableBalance(userId),
+        smLedgerService.computePurchaseBalance(userId),
         platformConfig.getConfig('sm_money_config'),
       ]);
       // 8. Direct access — throws if balanceResult is null/undefined
       spendableBalance = balanceResult.display;
+      refundBalance = balanceResult.refund;
+      restrictedBalance = balanceResult.restricted;
       maxDiscountPercent = (smConfig && smConfig.maxDiscountPercent) || 80;
     }
 
     // 10. Calculate the quote
-    const { smMoneyApplied, gatewayAmount } = policy.calculateConfirmationQuote({
+    const { smMoneyApplied, refundMoneyApplied, restrictedMoneyApplied, gatewayAmount } = policy.calculateConfirmationQuote({
       gateway,
       originalAmount,
       discountAmount,
       paymentAmount,
       requestedSmMoney,
       spendableBalance,
+      refundBalance,
+      restrictedBalance,
       maxDiscountPercent,
     });
 
@@ -92,6 +98,8 @@ function createPassengerBookingConfirmationQuoteService({
       finalAmount,
       gatewayAmount,
       smMoneyApplied,
+      refundMoneyApplied,
+      restrictedMoneyApplied,
     });
     if (!amountCheck.isValid) {
       logger.warn('confirmBooking: Amount mismatch in confirmation quote', amountCheck.warnData);
@@ -106,6 +114,8 @@ function createPassengerBookingConfirmationQuoteService({
       appliedCouponCode,
       requestedSmMoney,
       smMoneyApplied,
+      refundMoneyApplied,
+      restrictedMoneyApplied,
       gatewayAmount,
       expectedTotal: amountCheck.expectedTotal,
     });

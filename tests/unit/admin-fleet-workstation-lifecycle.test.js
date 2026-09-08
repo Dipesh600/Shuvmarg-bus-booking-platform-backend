@@ -15,7 +15,11 @@ const statusService = (trip, calls) =>
     Trip: { findOne: async () => trip },
     transitionPolicy,
     cancellationService: {
-      cancelBookings: async (id) => calls.push(["cancel", id]),
+      cancelTrip: async ({ tripId, adminId, reason }) => {
+        calls.push(["cancel", tripId]);
+        trip.cancelledBy = adminId; trip.cancellationReason = reason;
+        trip.status = "cancelled"; await trip.save(); return { trip };
+      },
     },
     referralService: {
       processCompletion: async (id) => calls.push(["referral", id]),
@@ -82,6 +86,7 @@ test("trip cancellation preserves metadata and refund ordering", async () => {
 test("driver reassignment preserves brand guard and audit entry", async () => {
   const trip = {
     brandId: "brand-1",
+    status: "scheduled",
     driverAssignmentLog: [],
     save: async () => {},
   };
@@ -91,7 +96,9 @@ test("driver reassignment preserves brand guard and audit entry", async () => {
     DriverProfile: {
       findOne: async (query) => {
         driverQuery = query;
-        return { _id: "driver-1" };
+        return { _id: "driver-1", brandId: "brand-1", approvalStatus: "APPROVED", status: "AVAILABLE",
+          accessStatus: "ACTIVE",
+          licenseNumber: "NL123", licenseType: "HV", licenseExpiry: "2099-01-01", licenseDoc: "license.pdf" };
       },
     },
     clock: () => new Date("2026-07-27T12:00:00Z"),

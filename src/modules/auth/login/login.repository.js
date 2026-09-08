@@ -5,7 +5,7 @@ const User = require('../../../../models/userModel');
 exports.findUserByEmailOrPhone = async (emailOrPhone) => {
   return User.findOne({
     $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
-  }).select('+password');
+  }).select('+password +temporaryCredentialVersion +temporaryCredentialExpiresAt');
 };
 
 exports.incrementFailedAttempts = async (userId) => {

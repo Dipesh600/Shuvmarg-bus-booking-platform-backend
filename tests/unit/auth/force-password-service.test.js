@@ -41,14 +41,14 @@ test('force-password service validation, JWT, OTP and user state', async (t) => 
 
   await t.test('jwt.verify receives token and SECRET_KEY; decoded.id reaches repo', async () => {
     const r = [];
-    const user = { _id: 'u1', forcePasswordChange: true };
+    const user = { _id: 'u1', forcePasswordChange: true, roles: ['passenger'] };
     const fresh = { toObject: () => ({ _id: 'u1', password: 'x' }) };
     let repoId;
     try {
       patch(jwt, 'verify', (token, secret) => {
         assert.equal(token, 'tt');
         assert.equal(secret, process.env.SECRET_KEY);
-        return { id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE' };
+        return { id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'passenger', credentialVersion: 0, tokenVersion: 0 };
       }, r);
       patch(passwordValidator, 'validatePassword', () => ({ valid: true, errors: [] }), r);
       patch(repository, 'findByIdWithPassword', async (id) => { repoId = id; return user; }, r);
@@ -84,7 +84,7 @@ test('force-password service validation, JWT, OTP and user state', async (t) => 
     let otpCalled = false;
     let repoCalled = false;
     try {
-      patch(jwt, 'verify', () => ({ id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE' }), r);
+      patch(jwt, 'verify', () => ({ id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'passenger', credentialVersion: 0, tokenVersion: 0 }), r);
       patch(passwordValidator, 'validatePassword', (p) => {
         assert.equal(p, 'weak');
         return { valid: false, errors: ['e1', 'e2'] };
@@ -120,7 +120,7 @@ test('force-password service validation, JWT, OTP and user state', async (t) => 
     const r = [];
     let hashCalled = false;
     try {
-      patch(jwt, 'verify', () => ({ id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE' }), r);
+      patch(jwt, 'verify', () => ({ id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'passenger', credentialVersion: 0, tokenVersion: 0 }), r);
       patch(passwordValidator, 'validatePassword', () => ({ valid: true, errors: [] }), r);
       patch(bcrypt, 'hash', async () => { hashCalled = true; }, r);
       patch(repository, 'findByIdWithPassword', async () => null, r);
@@ -129,7 +129,7 @@ test('force-password service validation, JWT, OTP and user state', async (t) => 
         message: 'User not found.',
       });
       restoreAll(r); r.length = 0;
-      patch(jwt, 'verify', () => ({ id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE' }), r);
+      patch(jwt, 'verify', () => ({ id: 'u1', purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'passenger', credentialVersion: 0, tokenVersion: 0 }), r);
       patch(passwordValidator, 'validatePassword', () => ({ valid: true, errors: [] }), r);
       patch(bcrypt, 'hash', async () => { hashCalled = true; }, r);
       patch(repository, 'findByIdWithPassword', async () => ({ forcePasswordChange: false }), r);

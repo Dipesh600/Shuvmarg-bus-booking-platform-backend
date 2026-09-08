@@ -48,6 +48,11 @@ router.delete("/deleteTicket", busOwnerGuard, busOwnerScheduleManagement.deleteS
 router.post("/getTicketById", busOwnerGuard, busOwnerScheduleManagement.getScheduleById);
 
 // Payment Gateway Booking Flow
+const purchaseAuthorization = require('../../src/modules/wallet/payment-authorization/purchase-authorization.controller');
+router.post('/payment-authorization/request', ...passengerBookingGuard,
+  passengerSeatHold.requireOwnedActivePassengerSeatHold, purchaseAuthorization.request);
+router.post('/payment-authorization/approve', ...passengerBookingGuard, purchaseAuthorization.approve);
+router.get("/esewa/pending", ...passengerBookingGuard, passengerEsewaCheckout.pendingPassengerEsewaCheckout);
 router.post("/prepareBooking", ...passengerBookingGuard, preparePassengerBooking);
 router.post(
   "/esewa/initiate",
@@ -80,13 +85,16 @@ router.post("/getSeats", optionalAuth, tripSeatAvailability.getTripSeatAvailabil
 router.get(
   "/getMyTicketHistory",
   auth,
+  verifyRoleFromDB,
   passengerBookingHistory.getPassengerBookingHistory
 );
 const passengerBookingCancellation = require("../../src/modules/booking/passenger-booking-cancellation");
 
 // Cancel Ticket
-router.post("/cancelTicket", auth, passengerBookingCancellation.cancelPassengerBooking);
+router.post("/cancelTicket", auth, verifyRoleFromDB, passengerBookingCancellation.cancelPassengerBooking);
 // Cancel Estimate (preview refund breakdown)
-router.post("/cancelEstimate", auth, passengerBookingCancellation.estimatePassengerBookingCancellation);
+router.post("/cancelEstimate", auth, verifyRoleFromDB, passengerBookingCancellation.estimatePassengerBookingCancellation);
+router.post("/selectRefundDestination", auth, verifyRoleFromDB,
+  passengerBookingCancellation.selectOperatorRefundDestination);
 
 module.exports = router;

@@ -8,10 +8,23 @@ const findByIdWithPassword = (userId) =>
   );
 
 const saveForcedPasswordChange = async (user, hashedPassword, options = {}) => {
-  const query = { _id: user._id, forcePasswordChange: true };
-  if (Number.isInteger(options.credentialVersion)) {
-    query.temporaryCredentialVersion = options.credentialVersion;
-  }
+  if (!Number.isInteger(options.credentialVersion) || options.credentialVersion < 0
+    || !Number.isInteger(options.tokenVersion) || options.tokenVersion < 0
+    || typeof options.activeRole !== 'string') return null;
+  const versionFilter = (field, version) => version === 0
+    ? { $or: [{ [field]: 0 }, { [field]: { $exists: false } }] }
+    : { [field]: version };
+  const query = {
+    _id: user._id, forcePasswordChange: true, status: 'active', deletedAt: null,
+    $and: [
+      versionFilter('temporaryCredentialVersion', options.credentialVersion),
+      versionFilter('tokenVersion', options.tokenVersion),
+      { $or: [{ temporaryCredentialExpiresAt: null },
+        { temporaryCredentialExpiresAt: { $gt: new Date() } }] },
+      { $or: [{ roles: options.activeRole },
+        { roles: { $exists: false }, role: options.activeRole }] },
+    ],
+  };
   const set = {
     password: hashedPassword,
     forcePasswordChange: false,

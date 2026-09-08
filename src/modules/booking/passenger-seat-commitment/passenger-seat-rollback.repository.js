@@ -5,7 +5,7 @@
  * Repository factory for passenger seat rollback module.
  */
 
-function createPassengerSeatRollbackRepository({ Seat }) {
+function createPassengerSeatRollbackRepository({ Seat, rollbackUnfulfilledSeat }) {
   if (
     !Seat ||
     typeof Seat.findOne !== 'function' ||
@@ -21,6 +21,7 @@ function createPassengerSeatRollbackRepository({ Seat }) {
   }
 
   async function rollbackSeat({ tripId, arrayField, seatNo, userId }) {
+    if (rollbackUnfulfilledSeat) return rollbackUnfulfilledSeat({ tripId, arrayField, seatNo, userId });
     return Seat.findOneAndUpdate(
       {
         tripId,

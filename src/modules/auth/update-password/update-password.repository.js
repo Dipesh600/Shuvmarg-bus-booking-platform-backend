@@ -41,7 +41,8 @@ const clearFailedPasswordState = (userId) =>
 
 const updatePasswordHash = (userId, hashedPassword) =>
   User.findByIdAndUpdate(userId, {
-    password: hashedPassword,
+    $set: { password: hashedPassword },
+    $inc: { tokenVersion: 1, temporaryCredentialVersion: 1 },
   });
 
 module.exports = {

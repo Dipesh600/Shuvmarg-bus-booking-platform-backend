@@ -47,7 +47,7 @@ const cred = () => `${crypto.randomBytes(12).toString('hex')}A1!`;
 
 const seedAgent = async () => {
     const n = next();
-    return User.create({
+    const user = await User.create({
         name:     `DocProxy Agent ${n}`,
         email:    `docproxy-${n}@example.test`,
         phone:    `98700${n.padStart(5, '0')}`,
@@ -56,6 +56,8 @@ const seedAgent = async () => {
         roles:    ['agent'],
         status:   'active',
     });
+    await require('../../models/agentModel').collection.insertOne({ user: user._id, documents: [{ fileKey: '/api/agent/documents/view' }, { fileKey: 'agents/xyz/doc.pdf' }, { fileKey: 'owners/123/citizenship.pdf' }, { fileKey: 'owners/123/doc.pdf' }, { fileKey: 'owners/abc/doc.jpg' }] });
+    return user;
 };
 
 const tokenFor = (user) => jwt.sign(
@@ -100,7 +102,7 @@ test('document-proxy characterization - streaming', async (t) => {
         const res   = await get('owners/abc/doc.jpg', token);
         assert.equal(res.status, 200);
         assert.equal(res.headers['content-type'], 'image/jpeg');
-        assert.equal(res.headers['cache-control'], 'private, max-age=300');
+        assert.equal(res.headers['cache-control'], 'private, no-store');
     });
 
     await t.test('5. allowed prefix agents/ is served', async () => {

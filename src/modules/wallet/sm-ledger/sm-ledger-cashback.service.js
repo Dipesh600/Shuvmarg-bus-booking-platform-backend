@@ -2,6 +2,9 @@
 
 function createSmLedgerCashbackService({
   mongoose,
+  Booking,
+  SMLedger,
+  CashbackJob,
   ScratchCard,
   PlatformConfig,
   creditLedger,
@@ -25,9 +28,27 @@ function createSmLedgerCashbackService({
         error.message
       );
     }
-    const session = await mongoose.startSession();
-    session.startTransaction();
-    try {
+    return require("../../../shared/with-mongo-transaction").withMongoTransaction(mongoose, null, async session => {
+      // This write serializes reward creation with booking cancellation and other retries.
+      const booking = await Booking.findOneAndUpdate({ _id: bookingId, userId, status: "booked" },
+        { $inc: { __v: 1 } }, { session, new: true });
+      if (!booking) {
+        const owned = await Booking.findOne({ _id: bookingId, userId }).session(session);
+        if (!owned) throw new Error("Cashback booking does not belong to this user");
+        await CashbackJob.updateOne({ _id: bookingId }, { $set: { status: "SKIPPED" } }, { session });
+        return null;
+      }
+      if (booking.originalAmount !== baseTicketPrice) throw new Error("Cashback base differs from booked amount");
+      const cards = await ScratchCard.find({ bookingId }).session(session);
+      const credits = await SMLedger.find({ bookingId, type: "CASHBACK" }).session(session);
+      if (cards.length || credits.length) {
+        if (cards.length !== 1 || credits.length !== 1
+          || String(cards[0].ledgerEntryId) !== String(credits[0]._id)
+          || String(credits[0].userId) !== String(userId) || String(cards[0].userId) !== String(userId)
+          || cards[0].amount !== credits[0].amount) throw new Error("Existing cashback requires review");
+        await CashbackJob.updateOne({ _id: bookingId }, { $set: { status: "COMPLETED" } }, { session });
+        return { ledgerEntry: credits[0], scratchCard: cards[0] };
+      }
       const ledgerEntry = await creditLedger({
         userId,
         type: "CASHBACK",
@@ -56,14 +77,9 @@ function createSmLedgerCashbackService({
           { session }
         )
       )[0];
-      await session.commitTransaction();
+      await CashbackJob.updateOne({ _id: bookingId }, { $set: { status: "COMPLETED" } }, { session });
       return { ledgerEntry, scratchCard };
-    } catch (error) {
-      await session.abortTransaction();
-      throw error;
-    } finally {
-      session.endSession();
-    }
+    });
   };
 }
 

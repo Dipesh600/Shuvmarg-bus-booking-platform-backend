@@ -1,55 +1,40 @@
+const mongoose = require("mongoose");
+const { withMongoTransaction } = require("../src/shared/with-mongo-transaction");
+const { toMinorUnits, fromMinorUnits } = require("../src/shared/money");
 const Wallet = require("../models/walletModel");
-const WalletTransaction = require("../models/walletTransactionModel");
 const smLedgerService = require("../src/modules/wallet/sm-ledger");
 
 /**
  * Wallet Service — Bridge layer between old Wallet model and new SM Ledger.
  *
- * POST-MIGRATION ARCHITECTURE:
  *   - Balance is always computed from sm_ledger (never from Wallet.balance)
- *   - PIN management still lives on the Wallet model
  *   - Wallet.balance is kept in sync as a CACHE for performance on
  *     non-critical reads (e.g., push notification text), but the ledger
  *     aggregation is the authoritative source.
- *   - WalletTransaction receives no new writes — replaced by sm_ledger.
- *
- * All credit/debit operations go through smLedgerService.
- * This file wraps them for backward compatibility with existing callers.
+ * All credit/debit operations go through smLedgerService for legacy callers.
  */
 
 /**
  * Get or create wallet for a user.
  * Auto-creates a wallet with zero balance on first access.
- * Still needed: PIN storage lives on the Wallet document.
  */
-const getOrCreateWallet = async (userId) => {
-  let wallet = await Wallet.findOne({ userId });
+const getOrCreateWallet = async (userId, session = null) => {
+  const query = Wallet.findOne({ userId });
+  let wallet = await (session ? query.session(session) : query);
   if (!wallet) {
-    wallet = await Wallet.create({
+    const data = {
       userId,
       balance: 0,
       currency: "NPR",
       status: "active",
-    });
+    };
+    wallet = session ? (await Wallet.create([data], { session }))[0] : await Wallet.create(data);
   }
   return wallet;
 };
 
-/**
- * Get current spendable balance for a user.
- * SOURCE OF TRUTH: sm_ledger aggregation.
- * Falls back to Wallet.balance only if ledger computation fails.
- */
-const getBalance = async (userId) => {
-  try {
-    const result = await smLedgerService.computeSpendableBalance(userId);
-    return result.display;
-  } catch (err) {
-    console.error("smLedgerService.computeSpendableBalance failed, falling back to Wallet.balance:", err.message);
-    const wallet = await getOrCreateWallet(userId);
-    return wallet.balance;
-  }
-};
+// Ledger failures must propagate; cached balances cannot authorize spending.
+const getBalance = async (userId) => (await smLedgerService.computeSpendableBalance(userId)).display;
 
 /**
  * Get full balance details (spendable + locked + expiring).
@@ -99,13 +84,14 @@ const creditWallet = async ({
   referenceType,
   referenceId,
   remarks,
-}) => {
-  if (amount <= 0) throw new Error("Credit amount must be greater than zero");
+  session: existingSession = null,
+}) => withMongoTransaction(mongoose, existingSession, async session => {
+  amount = fromMinorUnits(toMinorUnits(amount, { allowZero: false }));
 
-  // Ensure wallet exists (for PIN and status check)
-  const wallet = await getOrCreateWallet(userId);
+  // Ensure wallet exists for status checks and the compatibility balance cache.
+  const wallet = await getOrCreateWallet(userId, session);
 
-  if (wallet.status !== "active") {
+  if (wallet.status !== "active" && purpose !== "refund") {
     throw new Error("Wallet is frozen. Contact support.");
   }
 
@@ -129,17 +115,18 @@ const creditWallet = async ({
     amount,
     bookingId: referenceType === "booking" || referenceType === "refund" ? referenceId : null,
     note: remarks || `SM Money credited: Rs. ${amount} (${purpose})`,
+    session,
   });
 
   // Sync Wallet.balance cache (not authoritative, but keeps old reads working)
   await Wallet.findOneAndUpdate(
     { userId },
     { $inc: { balance: amount } },
-    { new: true }
+    { new: true, ...(session ? { session } : {}) }
   );
 
   return { ledgerEntry, wallet };
-};
+});
 
 /**
  * Debit funds from user wallet — uses FIFO consumption via sm_ledger.
@@ -154,10 +141,11 @@ const debitWallet = async ({
   referenceType,
   referenceId,
   remarks,
-}) => {
-  if (amount <= 0) throw new Error("Debit amount must be greater than zero");
+  session: existingSession = null,
+}) => withMongoTransaction(mongoose, existingSession, async session => {
+  amount = fromMinorUnits(toMinorUnits(amount, { allowZero: false }));
 
-  const wallet = await getOrCreateWallet(userId);
+  const wallet = await getOrCreateWallet(userId, session);
 
   if (wallet.status !== "active") {
     throw new Error("Wallet is frozen. Contact support.");
@@ -169,17 +157,18 @@ const debitWallet = async ({
     amount,
     bookingId: referenceType === "booking" ? referenceId : null,
     note: remarks || `SM Money debited: Rs. ${amount} (${purpose})`,
+    session,
   });
 
   // Sync Wallet.balance cache
   await Wallet.findOneAndUpdate(
     { userId },
     { $inc: { balance: -amount } },
-    { new: true }
+    { new: true, session }
   );
 
   return { ledgerEntry, wallet };
-};
+});
 
 module.exports = {
   getOrCreateWallet,

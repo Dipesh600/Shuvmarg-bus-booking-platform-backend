@@ -122,6 +122,7 @@ describe("passenger-booking-history queries characterization", () => {
       reason: 1,
       remarks: 1,
       refundGateway: 1,
+      destination: 1,
     });
     const refundLean = refundSelect.mock.calls[0].result.lean;
     assert.strictEqual(refundLean.mock.callCount(), 1);

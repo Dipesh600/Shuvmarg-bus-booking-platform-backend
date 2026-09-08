@@ -1,10 +1,11 @@
 'use strict';
+const { getEffectiveRoles } = require('../../../../shared/auth/account-role.policy');
 
 const MAX_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
 
 const resolveRoles = (user) => (
-  user.roles && user.roles.length > 0 ? user.roles : [user.role]
+  getEffectiveRoles(user)
 );
 
 const hasActiveLock = (user, now) => (

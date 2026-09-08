@@ -3,15 +3,14 @@
  *
  * Centralized JWT access + refresh token management.
  *
- * Access Token:  Short-lived (15 min default), stateless, in response body.
- * Refresh Token: Long-lived (30 days default), stored as SHA-256 hash in DB.
- *
  * Flow:
  *   Login  → generateTokenPair() → { accessToken, refreshToken }
  *   Refresh → rotateRefreshToken() → new { accessToken, refreshToken }, old one deleted
  *   Logout  → revokeRefreshToken() → delete from DB
  *   Ban / Password change → revokeAllUserTokens() → delete ALL from DB
  */
+
+const { getEffectiveRoles, requireSessionRole } = require("../src/shared/auth/account-role.policy");
 
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
@@ -71,13 +70,10 @@ const buildAccessTokenPayload = (user, activeRole) => {
         phone: user.phone,
         role: user.role,              // backward compat — first registered role
         activeRole: activeRole,       // the role context for THIS session
-        roles: user.roles || [],      // all roles the user holds
+        roles: getEffectiveRoles(user), // all roles the user holds
         isVerified: user.isVerified,
         purpose: "access",            // explicitly whitelist token capability
-        // Snapshot of the user's tokenVersion at mint time.
-        // verifyRoleFromDB compares this against the DB value on every request.
-        // Logout and password change increment the DB counter, instantly
-        // invalidating all previously issued access tokens.
+        // Reject access tokens issued before the current account session version.
         tokenVersion: user.tokenVersion ?? 0,
     };
 };
@@ -86,11 +82,11 @@ const buildAccessTokenPayload = (user, activeRole) => {
  * Sign a new access token for a user.
  * @param {Object} user - Mongoose user document or plain object with _id, role, etc.
  * @param {string} [activeRole] - Which role context this session operates in.
- *   Falls back to user.role for backward compat with old callers.
+ *   Defaults to a currently held role for callers without an explicit role.
  * @returns {string} Signed JWT access token
  */
 const signAccessToken = (user, activeRole) => {
-    const effectiveRole = activeRole || user.role || "passenger";
+    const effectiveRole = requireSessionRole(user, activeRole);
     const expiry = ACCESS_TOKEN_EXPIRY[effectiveRole] || "15m";
 
     return jwt.sign(
@@ -112,10 +108,10 @@ const signAccessToken = (user, activeRole) => {
  * @returns {Promise<{accessToken: string, refreshToken: string|null}>}
  */
 const generateTokenPair = async (user, meta = {}) => {
-    const activeRole = meta.activeRole || user.role || "passenger";
+    const activeRole = requireSessionRole(user, meta.activeRole);
     const accessToken = signAccessToken(user, activeRole);
 
-    const refreshDays = REFRESH_TOKEN_EXPIRY_DAYS[activeRole] || REFRESH_TOKEN_EXPIRY_DAYS["passenger"];
+    const refreshDays = REFRESH_TOKEN_EXPIRY_DAYS[activeRole] ?? REFRESH_TOKEN_EXPIRY_DAYS["passenger"];
 
     // No refresh token for zero-day roles
     if (refreshDays === 0) {
@@ -166,8 +162,9 @@ const rotateRefreshToken = async (oldRefreshToken, meta = {}) => {
 
     if (meta.expectedActiveRole && sessionActiveRole !== meta.expectedActiveRole) throw new Error("SESSION_ROLE_MISMATCH");
 
-    // Delete the old refresh token (single-use)
-    await RefreshToken.deleteOne({ _id: storedToken._id });
+    // Exactly one concurrent reader may consume this token and issue a replacement.
+    const consumed = await RefreshToken.deleteOne({ _id: storedToken._id });
+    if (consumed.deletedCount !== 1) throw new Error("INVALID_REFRESH_TOKEN");
 
     // Load the user to build a fresh access token with current DB state
     const User = require("../models/userModel.js");
@@ -180,9 +177,12 @@ const rotateRefreshToken = async (oldRefreshToken, meta = {}) => {
     // Block if user is banned, deleted, or inactive
     if (user.deletedAt) throw new Error("ACCOUNT_DEACTIVATED");
     if (user.status === "banned") throw new Error("ACCOUNT_BANNED");
+    if (user.status === "inactive") throw new Error("ACCOUNT_INACTIVE");
+    if (user.status === "invited") throw new Error("ACCOUNT_NOT_ACTIVATED");
+    if (user.forcePasswordChange) throw new Error("FORCE_PASSWORD_CHANGE");
 
     // Verify the activeRole is still in the user's roles (role may have been revoked)
-    if (!user.roles || !user.roles.includes(sessionActiveRole)) {
+    if (!getEffectiveRoles(user).includes(sessionActiveRole)) {
         throw new Error("ROLE_REVOKED");
     }
 

@@ -1,91 +1,7 @@
 'use strict';
-
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const mapper = require(
-  '../../../src/modules/booking/passenger-esewa-checkout/passenger-esewa-checkout.mapper'
-);
-const {
-  createPassengerEsewaCheckoutFinalizationService,
-} = require('../../../src/modules/booking/passenger-esewa-checkout/passenger-esewa-checkout-finalization.service');
-
-function attempt(overrides = {}) {
-  return {
-    _id: 'attempt-1',
-    userId: 'user-1',
-    holdId: 'hold-1',
-    tempBookingId: 'TEMP-1',
-    transactionUuid: 'SM-1',
-    productCode: 'EPAYTEST',
-    gatewayAmount: 900,
-    status: 'INITIATED',
-    checkoutPayload: {
-      tempBookingId: 'TEMP-1',
-      scheduleId: 'trip-1',
-      seatNumbers: ['a1'],
-      passengerDetails: [
-        { name: 'Ram', gender: 'male', seatNo: 'a1' },
-      ],
-    },
-    confirmationQuote: {
-      gatewayAmount: 900,
-      finalAmount: 900,
-      smMoneyApplied: 0,
-      discountAmount: 0,
-    },
-    ...overrides,
-  };
-}
-
-function makeService(overrides = {}) {
-  const current = attempt();
-  const updates = [];
-  const repository = {
-    findOwnedAttempt: async () => current,
-    claimOwnedAttempt: async () => current,
-    findHoldByAttempt: async () => ({
-      _id: 'hold-1',
-      userId: 'user-1',
-      tripId: 'trip-1',
-      tempBookingId: 'TEMP-1',
-      seatNumbers: ['a1'],
-      originalAmount: 900,
-      status: 'held',
-      expiresAt: new Date(Date.now() + 60_000),
-    }),
-    updateAttempt: async (_id, update) => updates.push(update),
-    ...overrides.repository,
-  };
-  let capturedRequest;
-  const service = createPassengerEsewaCheckoutFinalizationService({
-    readConfig: () => ({ secretKey: 'secret' }),
-    repository,
-    signature: {},
-    mapper,
-    validateResponse: () => null,
-    orchestrate: async ({ req }) => {
-      capturedRequest = req;
-      return {
-        statusCode: 201,
-        body: {
-          success: true,
-          data: { bookingId: 'booking-1', ticketId: 'TKT-1' },
-        },
-      };
-    },
-    recovery: {
-      recoverRecordedTransaction: async () => null,
-      resolveUnavailableHold: async () => {
-        throw new Error('not expected');
-      },
-      markDisputed: async () => {
-        throw new Error('not expected');
-      },
-    },
-    ...overrides.deps,
-  });
-  return { service, current, updates, getRequest: () => capturedRequest };
-}
+const { attempt, makeService } = require('../../helpers/passenger-esewa-finalization-fixture');
 
 test('finalization uses the owned attempt snapshot and completes once', async () => {
   const h = makeService();
@@ -98,8 +14,21 @@ test('finalization uses the owned attempt snapshot and completes once', async ()
   assert.equal(h.getRequest().body.paymentAmount, 900);
   assert.equal(h.getRequest().body.paymentId, 'SM-1');
   assert.equal(h.getRequest().paymentAttemptQuote, h.current.confirmationQuote);
+  assert.equal(h.getRequest().providerPaymentVerified, true);
   assert.equal(h.updates.at(-1).status, 'COMPLETED');
   assert.equal(h.updates.at(-1).bookingId, 'booking-1');
+});
+
+test('an unconfirmed provider result cannot reach booking orchestration', async () => {
+  let orchestrated = false;
+  const pending = { statusCode: 202, body: { success: false } };
+  const h = makeService({ deps: {
+    verifyPayment: async () => ({ verified: false }),
+    orchestrate: async () => { orchestrated = true; },
+    recovery: { recoverRecordedTransaction: async () => null, handleUnverified: async () => pending },
+  } });
+  assert.equal(await h.service({ userId: 'user-1', transactionUuid: 'SM-1' }), pending);
+  assert.equal(orchestrated, false);
 });
 
 test('completed attempts are idempotent and do not run confirmation again', async () => {

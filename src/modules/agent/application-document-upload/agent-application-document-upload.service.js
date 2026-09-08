@@ -22,17 +22,20 @@ const validateUploadRequest = (agent, documentType, file) => {
     return null;
 };
 
-const replaceOrAddDocument = (agent, documentType, fileKey) => {
+const replaceOrAddDocument = (agent, documentType, fileKey, malwareScan) => {
+    const security = { malwareScanStatus: malwareScan?.status || 'unknown',
+        malwareScannedAt: malwareScan?.scannedAt || null, contentHash: malwareScan?.contentHashes?.[0] || null };
     const existingIndex = agent.documents.findIndex((d) => d.type === documentType);
     if (existingIndex !== -1) {
         const oldKey = agent.documents[existingIndex].fileKey;
         agent.documents[existingIndex] = {
             type: documentType, fileKey, uploadedAt: new Date(),
+            ...security,
             verified: false, verifiedBy: null, verifiedAt: null, rejectionReason: null,
         };
         storage.deleteOldFile(oldKey);
     } else {
-        agent.documents.push({ type: documentType, fileKey, uploadedAt: new Date() });
+        agent.documents.push({ type: documentType, fileKey, uploadedAt: new Date(), ...security });
     }
 };
 
@@ -60,8 +63,8 @@ const processDocumentUpload = async (userId, documentType, file) => {
     const validationError = validateUploadRequest(agent, documentType, file);
     if (validationError) return validationError;
 
-    const { processed, fileKey } = await storage.processAndUpload(file, agent._id, documentType);
-    replaceOrAddDocument(agent, documentType, fileKey);
+    const { processed, fileKey, malwareScan } = await storage.processAndUpload(file, agent._id, documentType);
+    replaceOrAddDocument(agent, documentType, fileKey, malwareScan);
     await repository.saveAgent(agent);
 
     const previewUrl = await storage.getPreviewUrl(fileKey);

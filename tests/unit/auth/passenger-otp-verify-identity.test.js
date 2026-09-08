@@ -67,16 +67,16 @@ test('passenger OTP verify service — identity cases and role repair', async (t
     } finally { restore.reverse().forEach((fn) => fn()); }
   });
 
-  await t.test('T11: legacy account (roles:[]) triggers materializeLegacyPassengerRole', async () => {
+  await t.test('T11: legacy account (roles missing) triggers materializeLegacyPassengerRole', async () => {
     const restore = [];
-    const legacy = { _id: 'uid3', role: 'passenger', roles: [], status: 'active', deletedAt: null, phoneVerified: true, forcePasswordChange: false, tokenVersion: 0 };
+    const legacy = { _id: 'uid3', role: 'passenger', status: 'active', deletedAt: null, phoneVerified: true, forcePasswordChange: false, tokenVersion: 0 };
     let repaired = false;
     let loadCount = 0;
     patch(otpHelper, 'verifyOTPCode', async () => ({ valid: true, error: null }), restore);
     patch(passengerAccount, 'resolvePassengerAccountAfterPhoneVerification', async () => ({ _id: 'uid3' }), restore);
     patch(repository, 'loadPassengerSessionState', async () => {
       loadCount++;
-      return { user: { ...legacy, roles: loadCount > 1 ? ['passenger'] : [] }, hasUsablePassword: false };
+      return { user: { ...legacy, roles: loadCount > 1 ? ['passenger'] : undefined }, hasUsablePassword: false };
     }, restore);
     patch(repository, 'materializeLegacyPassengerRole', async () => { repaired = true; }, restore);
     patch(repository, 'recordPassengerLogin', async () => {}, restore);
@@ -106,7 +106,7 @@ test('passenger OTP verify service — identity cases and role repair', async (t
 
   await t.test('failed role repair throws UNEXPECTED_PASSENGER_STATE and aborts login/token issuance', async () => {
     const restore = [];
-    const legacy = { _id: 'uid5', role: 'passenger', roles: [], status: 'active', deletedAt: null, phoneVerified: true, forcePasswordChange: false, tokenVersion: 0 };
+    const legacy = { _id: 'uid5', role: 'passenger', status: 'active', deletedAt: null, phoneVerified: true, forcePasswordChange: false, tokenVersion: 0 };
     let loginRecorded = false;
     let tokenGenerated = false;
     patch(otpHelper, 'verifyOTPCode', async () => ({ valid: true, error: null }), restore);

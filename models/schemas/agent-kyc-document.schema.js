@@ -28,6 +28,9 @@ const agentKycDocumentSchema = new mongoose.Schema({
         required: true,
     },
     fileKey: { type: String, required: true },
+    malwareScanStatus: { type: String, enum: ['clean', 'skipped_non_production', 'unknown'], default: 'unknown' },
+    malwareScannedAt: { type: Date, default: null },
+    contentHash: { type: String, default: null },
     uploadedAt: { type: Date, default: Date.now },
     verified: { type: Boolean, default: false },
     verifiedBy: {

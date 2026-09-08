@@ -52,6 +52,11 @@ function setupPrepareHarness() {
   mockMethod(TripSeatLayoutControl, 'findOne', () => ({ lean: () => Promise.resolve(null) }));
   mockMethod(CouponHelper, 'validateCoupon', () => Promise.resolve(defaults.couponValidation));
   mockMethod(smLedgerService, 'computeSpendableBalance', () => Promise.resolve(defaults.spendableBalance));
+  mockMethod(smLedgerService, 'computePurchaseBalance', () => Promise.resolve({
+    display: defaults.spendableBalance.display,
+    refund: 0,
+    restricted: defaults.spendableBalance.display,
+  }));
   mockMethod(PlatformConfig, 'getConfig', () => Promise.resolve(defaults.smConfig));
   mockMethod(passengerSeatHold, 'createOrReusePassengerSeatHold', () => Promise.resolve(defaults.hold));
 

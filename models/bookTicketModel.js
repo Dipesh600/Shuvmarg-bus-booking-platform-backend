@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 const boardingSelectionSchema = require("./bookingBoardingSelectionSchema.js");
-
 const passengerSchema = new mongoose.Schema({
   name:     { type: String, required: true, trim: true },
   phone:    { type: String, default: null, trim: true },
@@ -10,7 +9,6 @@ const passengerSchema = new mongoose.Schema({
   idNumber: { type: String, default: null },
   seatNo:   { type: String, required: true },  // Links passenger to a specific seat
 }, { _id: false });
-
 const bookingSchema = new mongoose.Schema(
   {
     userId: {
@@ -23,7 +21,6 @@ const bookingSchema = new mongoose.Schema(
       ref: "Trip",
       required: true,
     },
-
     // [DENORMALIZED CHAIN LINKS] — copied from the Trip at booking time.
     // Avoids 3-collection joins when computing brand/fleet financials.
     // Booking.brandId → OperatorBrand (direct)
@@ -40,7 +37,6 @@ const bookingSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
-
     // === USER'S BOOKED ROUTE (search context) ===
     // The actual from/to the user searched & booked, NOT the bus's full route.
     // e.g., "Bardibas" → "Kathmandu" even though the bus runs Janakpur → Kathmandu.
@@ -121,6 +117,9 @@ const bookingSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    refundReservedMinor: { type: Number, default: null, min: 0 },
+    refundPolicySnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+    paymentOperationKey: { type: String, default: null },
 
     // === PAYMENT DETAILS (Nepal-specific gateway support) ===
     // Records how the passenger paid — essential for reconciliation and refund processing.
@@ -228,4 +227,5 @@ bookingSchema.statics.getTotalUserSavings = function (userId) {
   ]);
 };
 
+bookingSchema.index({ paymentOperationKey: 1 }, { unique: true, partialFilterExpression: { paymentOperationKey: { $type: "string" } } });
 module.exports = mongoose.model("Booking", bookingSchema);

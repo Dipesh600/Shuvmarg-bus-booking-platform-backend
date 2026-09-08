@@ -1,5 +1,4 @@
-const express = require("express");
-const router = express.Router();
+const router = require("express").Router();
 const admin = require("../../src/modules/admin/user-management");
 const bookings = require("../../controllers/adminController/booking/bookingController.js");
 const couponAdminRoutes = require("../../src/modules/coupon/admin");
@@ -7,7 +6,9 @@ const autoSeat = require("../../controllers/adminController/seat-controller/admi
 const authController = require("../../controllers/adminController/authController/auth-controller.js");
 const { adminEnrollmentLimiter, adminLoginLimiter } = require("../../middleware/adminAuthRateLimit.js");
 const adminMiddleware = require("../../middleware/adminMiddleware.js");
+const requireFinanceAdmin = require("../../middleware/requireFinanceAdmin");
 const rootAdminMiddleware = require("../../middleware/rootAdminMiddleware.js");
+const requireAccountAdministration = require('../../middleware/requireAccountAdministration');
 const adminAdministration = require("../../src/modules/admin/auth-security/admin-administration.controller.js");
 const dashboard = require("../../controllers/adminController/dashboardController/dashboardController.js");
 const userDashboard = require("../../controllers/adminController/dashboardController/userDashboardController.js");
@@ -28,9 +29,7 @@ const adminAmenityController = require("../../controllers/adminController/amenit
 const adminBusRouteController = require("../../controllers/adminController/busOwnerController/busRouteController.js");
 const adminFleetController = require("../../controllers/adminController/busOwnerController/fleetController.js");
 const { adminFleetDocumentController } = require("../../src/modules/fleet/document-lifecycle");
-const {
-  notifyAdminCreatedFleet,
-} = require("../../src/modules/admin/fleet-management/admin-fleet-created-notification.controller");
+const { notifyAdminCreatedFleet } = require("../../src/modules/admin/fleet-management/admin-fleet-created-notification.controller");
 const adminTemplateController = require("../../controllers/adminController/busOwnerController/templateController.js");
 const adminTripController = require("../../controllers/adminController/busOwnerController/tripController.js");
 const adminSettlementCon = require("../../controllers/busOwnerController/settlementController.js");
@@ -46,6 +45,8 @@ const scheduleController   = require("../../src/modules/admin/schedule-managemen
 const tripExceptionCtrl    = require("../../controllers/adminController/tripExceptionController.js");
 const brandFinancialCtrl   = require("../../controllers/adminController/brandFinancialController.js");
 const driverController     = require("../../controllers/adminController/driverController.js");
+const { rejectOversizedDriverUpload, driverUploadRateLimiter, parseDriverLicenseUpload } = require("../../middleware/driverLicenseUpload");
+const conductorController  = require("../../controllers/adminController/conductorController.js");
 const fleetWorkstation     = require("../../src/modules/admin/fleet-workstation");
 const tripOverviewCtrl     = require("../../src/modules/admin/trip-overview");
 const adminWalletCtrl      = require("../../src/modules/admin/wallet-management");
@@ -66,7 +67,7 @@ router.delete("/deleteAccount", adminMiddleware, admin.deleteAccount);
 router.get("/getAllUsers", adminMiddleware, admin.getAllUsers);
 router.get("/userDashboard", adminMiddleware, userDashboard.getUserDashboardStats);
 router.post("/getuserById", adminMiddleware, admin.getUserById);
-router.patch("/resetPassword", adminMiddleware, admin.changeUserPassword);
+router.patch("/resetPassword", adminMiddleware, requireAccountAdministration, admin.changeUserPassword);
 router.patch("/updateStatus", adminMiddleware, admin.updateUserStatus);
 router.get("/users/:id/transactions", adminMiddleware, admin.getUserTransactions);
 router.get("/getAllTicket", adminMiddleware, ticketController.getAllTickets);
@@ -81,15 +82,16 @@ router.get("/userdashboard", adminMiddleware, userDashboard.getUserDashboardStat
 router.post("/getAgentDetails", adminMiddleware, agentDirectory.getAgentsById);
 router.get("/getAllAgents", adminMiddleware, agentDirectory.getAllAgents);
 router.get("/agentDashboard", adminMiddleware, agentDashboard.getAgentDashboard);
-router.post("/makeUserAgent", adminMiddleware, agentConversion.makeUserAgent);
+router.post("/makeUserAgent", adminMiddleware, requireAccountAdministration, agentConversion.makeUserAgent);
 router.patch("/finalizeAgentSetup", adminMiddleware, agentSetup.finalizeAgentSetup);
 router.patch("/agentKycStatus", adminMiddleware, agentKycReview.updateAgentKyc);
 const { registerAdminFrontendReadRoutes } = require("./frontendReadRoutes.js");
 registerAdminFrontendReadRoutes(router);
-router.post("/busOwner/create", adminMiddleware, rejectOversizedKycRequest, parseKycSubmissionUpload, busOwnerController.createBusOwnerFull);
+router.post("/busOwner/create", adminMiddleware, requireAccountAdministration, rejectOversizedKycRequest, parseKycSubmissionUpload, busOwnerController.createBusOwnerFull);
 router.post(
   "/busOwner/:userId/access-notification/resend",
   adminMiddleware,
+  requireAccountAdministration,
   require("../../middleware/adminOwnerAccessRateLimit"),
   busOwnerController.resendOwnerAccess
 );
@@ -117,20 +119,21 @@ router.get("/fleet/:id/workstation",                      adminMiddleware, fleet
 router.get("/fleet/:fleetId/trips/:tripId/manifest",      adminMiddleware, fleetWorkstation.getTripManifest);
 router.patch("/fleet/:fleetId/trips/:tripId/status",      adminMiddleware, fleetWorkstation.updateTripStatus);
 router.patch("/fleet/:fleetId/trips/:tripId/driver",      adminMiddleware, fleetWorkstation.reassignTripDriver);
+router.get("/payments/review", adminMiddleware, requireFinanceAdmin, require("../../src/modules/admin/wallet-management/payment-review.controller"));
 router.get("/refund/queue", adminMiddleware, refundController.getRefundQueue);
 router.get("/refund/getAllCancelledBookings", adminMiddleware, refundController.getRefundQueue); // legacy alias
-router.patch("/refund/update-status", adminMiddleware, refundController.updateRefundStatus);
-router.post("/refund-policy/create", adminMiddleware, refundPolicyController.createRefundPolicy);
+router.patch("/refund/update-status", adminMiddleware, requireFinanceAdmin, refundController.updateRefundStatus);
+router.post("/refund-policy/create", adminMiddleware, requireFinanceAdmin, refundPolicyController.createRefundPolicy);
 router.get("/refund-policy/getAll", adminMiddleware, refundPolicyController.getAllRefundPolicies);
 router.post("/refund-policy/getById", adminMiddleware, refundPolicyController.getRefundPolicyById);
-router.patch("/refund-policy/update", adminMiddleware, refundPolicyController.updateRefundPolicy);
-router.delete("/refund-policy/delete", adminMiddleware, refundPolicyController.deleteRefundPolicy);
-router.patch("/refund-policy/toggleStatus", adminMiddleware, refundPolicyController.togglePolicyStatus);
+router.patch("/refund-policy/update", adminMiddleware, requireFinanceAdmin, refundPolicyController.updateRefundPolicy);
+router.delete("/refund-policy/delete", adminMiddleware, requireFinanceAdmin, refundPolicyController.deleteRefundPolicy);
+router.patch("/refund-policy/toggleStatus", adminMiddleware, requireFinanceAdmin, refundPolicyController.togglePolicyStatus);
 router.get("/wallet/overview",              adminMiddleware, adminWalletCtrl.getOverview);
 router.get("/wallet/global-feed",           adminMiddleware, adminWalletCtrl.getGlobalFeed);
 router.get("/wallet/lookup",                adminMiddleware, adminWalletCtrl.lookupUser);
-router.post("/wallet/adjust",               adminMiddleware, adminWalletCtrl.adjustBalance);
-router.patch("/wallet/freeze",              adminMiddleware, adminWalletCtrl.freezeWallet);
+router.post("/wallet/adjust",               adminMiddleware, requireFinanceAdmin, adminWalletCtrl.adjustBalance);
+router.patch("/wallet/freeze",              adminMiddleware, requireFinanceAdmin, adminWalletCtrl.freezeWallet);
 router.get("/wallet/user-balance/:userId",  adminMiddleware, adminWalletCtrl.getUserBalance);
 router.get("/kyc/unified-list", adminMiddleware, kycVerificationController.getUnifiedKycList);
 router.delete("/ticket/schedule/delete/:id", adminMiddleware, ticketController.deleteTicket);
@@ -192,6 +195,7 @@ router.get("/busRoutes/:id", adminMiddleware, adminBusRouteController.getRouteBy
 router.patch("/busRoutes/:id", adminMiddleware, adminBusRouteController.updateRouteByAdmin);
 router.delete("/busRoutes/:id", adminMiddleware, adminBusRouteController.deleteRouteByAdmin);
 router.post("/fleet/createForOwner", adminMiddleware, adminFleetController.createFleetForOwner);
+router.put("/fleet/:fleetId/route-setup", adminMiddleware, adminFleetController.saveFleetRouteSetup);
 router.post(
   "/fleet/:fleetId/notify-created",
   adminMiddleware,
@@ -217,16 +221,22 @@ router.patch("/trips/update/:id",          adminMiddleware, adminTripController.
 router.patch("/trips/status/:id",          adminMiddleware, adminTripController.updateTripStatusByAdmin);
 router.delete("/trips/delete/:id",         adminMiddleware, adminTripController.deleteTripByAdmin);
 router.patch("/trips/assign-driver/:id",   adminMiddleware, adminTripController.assignDriverToTrip);
-router.post("/drivers",                    adminMiddleware, driverController.createDriver);
+router.post("/drivers",                    adminMiddleware, requireAccountAdministration, require("../../middleware/adminCrewInviteRateLimit"), driverUploadRateLimiter, rejectOversizedDriverUpload, parseDriverLicenseUpload, driverController.createDriver);
 router.get("/drivers",                     adminMiddleware, driverController.getAllDrivers);
 router.get("/drivers/:id",                 adminMiddleware, driverController.getDriverById);
-router.patch("/drivers/:id",               adminMiddleware, driverController.updateDriver);
-router.patch("/drivers/:id/approve",       adminMiddleware, driverController.approveDriver);
+router.get("/drivers/:id/documents/:slot/view", adminMiddleware, driverController.viewDriverDocument);
+router.patch("/drivers/:id",               adminMiddleware, driverUploadRateLimiter, rejectOversizedDriverUpload, parseDriverLicenseUpload, driverController.updateDriver);
 router.patch("/drivers/:id/reject",        adminMiddleware, driverController.rejectDriver);
 router.patch("/drivers/:id/assign-bus",    adminMiddleware, driverController.assignBusToDriver);
 router.get("/brands/:brandId/drivers",     adminMiddleware, driverController.getDriversByBrand);
-router.get("/settlements/all", adminMiddleware, adminSettlementCon.getMySettlements);
-router.patch("/settlements/pay", adminMiddleware, adminSettlementCon.paySettlement);
+router.post("/conductors", adminMiddleware, requireAccountAdministration, require("../../middleware/adminCrewInviteRateLimit"), conductorController.createConductor);
+router.get("/conductors", adminMiddleware, conductorController.getAllConductors);
+router.get("/conductors/:id", adminMiddleware, conductorController.getConductorById);
+router.patch("/conductors/:id", adminMiddleware, conductorController.updateConductor);
+router.patch("/conductors/:id/status", adminMiddleware, conductorController.updateConductorStatus);
+router.get("/brands/:brandId/conductors", adminMiddleware, conductorController.getConductorsByBrand);
+router.get("/settlements/all", adminMiddleware, requireFinanceAdmin, adminSettlementCon.getMySettlements);
+router.patch("/settlements/pay", adminMiddleware, requireFinanceAdmin, adminSettlementCon.paySettlement);
 router.get("/commissions/summary", adminMiddleware, commissionController.getCommissionSummary);
 router.get("/commissions/history", adminMiddleware, commissionController.getCommissionHistory);
 router.get("/financial/overview", adminMiddleware, financialController.getFinancialOverview);
@@ -312,7 +322,7 @@ router.get("/transactions",      adminMiddleware, transactionCtrl.getAllTransact
 router.get("/transactions/:id",  adminMiddleware, transactionCtrl.getTransactionById);
 const disputedPayments = require("../../controllers/adminController/disputedPaymentsController.js");
 router.get("/disputes",                          adminMiddleware, disputedPayments.getDisputedPayments);
-router.patch("/disputes/:transactionId/resolve", adminMiddleware, disputedPayments.resolveDispute);
+router.patch("/disputes/:transactionId/resolve", adminMiddleware, requireFinanceAdmin, disputedPayments.resolveDispute);
 const platformConfigCtrl = require("../../controllers/adminController/platformConfigController.js");
 router.get("/platform-config",              adminMiddleware, platformConfigCtrl.listConfigs);
 router.get("/platform-config/:key",         adminMiddleware, platformConfigCtrl.getConfig);

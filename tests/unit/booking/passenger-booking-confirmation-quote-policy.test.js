@@ -52,6 +52,8 @@ test('passenger-booking-confirmation-quote policy tests', async (t) => {
       paymentAmount: 800,
       requestedSmMoney: 0,
       spendableBalance: 1000,
+      refundBalance: 1000,
+      restrictedBalance: 0,
       maxDiscountPercent: 80,
     });
     assert.equal(q.smMoneyApplied, 800);
@@ -82,6 +84,16 @@ test('passenger-booking-confirmation-quote policy tests', async (t) => {
       maxDiscountPercent: 80,
     });
     assert.equal(q2.smMoneyApplied, 100);
+
+    const q3 = policy.calculateConfirmationQuote({
+      gateway: 'esewa', originalAmount: 1000, discountAmount: 700,
+      requestedSmMoney: 300, spendableBalance: 1000,
+      refundBalance: 200, restrictedBalance: 800, maxDiscountPercent: 80,
+    });
+    assert.equal(q3.maxSmMoneyAllowed, 300);
+    assert.equal(q3.refundMoneyApplied, 200);
+    assert.equal(q3.restrictedMoneyApplied, 100);
+    assert.equal(q3.gatewayAmount, 0);
   });
 
   await t.test('7. amount consistency validation', () => {

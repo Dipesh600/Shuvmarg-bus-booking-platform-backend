@@ -55,7 +55,7 @@ test('confirmBooking passenger booking persistence module characterization tests
       assert.equal(capturedPayloads[0].paymentMethod, 'SM_WALLET');
       assert.ok(capturedPayloads[0].transactionId.startsWith('sm_wallet_'));
 
-      h.mockMethod(h.smLedgerService, 'computeSpendableBalance', () => Promise.resolve({ display: 1000 }));
+      h.mockMethod(h.smLedgerService, 'computePurchaseBalance', () => Promise.resolve({ display: 1000, refund: 0, restricted: 1000 }));
       const req2 = makeConfirmReq({ gateway: 'esewa', paymentId: 'p2', smMoneyToUse: 200 });
       await h.confirmBooking(req2, makeMockConfirmRes());
       assert.equal(capturedPayloads[1].paymentMethod, 'SM_WALLET_SPLIT');

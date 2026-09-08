@@ -1,4 +1,5 @@
 'use strict';
+const { getEffectiveRoles } = require('../../../shared/auth/account-role.policy');
 
 const AppError = require('../../../shared/errors/app-error');
 
@@ -84,24 +85,8 @@ exports.verifyAccountStatus = (user) => {
   }
 };
 
-/**
- * X-App-Source values mapped from their lowercased form to the canonical role
- * name stored on the user.
- *
- * The header arrives already lowercased (login.controller.js), so matching it
- * against a list containing the camel-cased 'busOwner' meant that one value
- * could never match: the role gate fell open and a caller without the busOwner
- * role was issued a passenger session with 200 instead of being refused. Every
- * other role is lowercase, so only busOwner was affected.
- *
- * Keying on the lowercased form fixes that without making the header
- * case-sensitive for clients, which would break the ones already sending
- * lowercase.
- *
- * A Map, not an object: the key comes straight off an untrusted header, and on a
- * plain object `X-App-Source: constructor` would resolve truthy off the
- * prototype chain. A Map has no inherited keys.
- */
+// Header values are case-insensitive. A Map prevents inherited object keys
+// such as "constructor" from being treated as role names.
 const APP_SOURCE_ROLES = new Map([
   ['passenger', 'passenger'],
   ['busowner', 'busOwner'],
@@ -126,7 +111,7 @@ const APP_SOURCE_ROLES = new Map([
 exports.resolveActiveRole = (user, appSource) => {
   const key = typeof appSource === 'string' ? appSource.trim().toLowerCase() : '';
   const requestedRole = APP_SOURCE_ROLES.get(key) || null;
-  const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+  const userRoles = getEffectiveRoles(user);
 
   if (requestedRole) {
     if (!userRoles.includes(requestedRole)) {
@@ -143,5 +128,11 @@ exports.resolveActiveRole = (user, appSource) => {
     return requestedRole;
   }
 
-  return user.role || 'passenger';
+  const defaultRole = userRoles.includes(user.role) ? user.role : userRoles[0];
+  if (!defaultRole) {
+    throw new AppError('Your role has been revoked. Please login again.', 403, {
+      success: false, message: 'Your role has been revoked. Please login again.', errorCode: 'ROLE_REVOKED',
+    });
+  }
+  return defaultRole;
 };

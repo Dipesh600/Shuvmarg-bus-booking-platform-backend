@@ -68,7 +68,7 @@ test('prepareBooking validation characterization', async (t) => {
 
     h.mockMethod(h.Seat, 'findOne', () => { seatFindCount++; return Promise.resolve(h.defaults.seatDoc); });
     h.mockMethod(h.CouponHelper, 'validateCoupon', () => { validateCouponCount++; return Promise.resolve(h.defaults.couponValidation); });
-    h.mockMethod(h.smLedgerService, 'computeSpendableBalance', () => { computeBalanceCount++; return Promise.resolve(h.defaults.spendableBalance); });
+    h.mockMethod(h.smLedgerService, 'computePurchaseBalance', () => { computeBalanceCount++; return Promise.resolve({ display: h.defaults.spendableBalance.display, refund: 0, restricted: h.defaults.spendableBalance.display }); });
     h.mockMethod(h.PlatformConfig, 'getConfig', () => { getConfigCount++; return Promise.resolve(h.defaults.smConfig); });
     h.mockMethod(h.passengerSeatHold, 'createOrReusePassengerSeatHold', (args) => {
       createHoldCount++;

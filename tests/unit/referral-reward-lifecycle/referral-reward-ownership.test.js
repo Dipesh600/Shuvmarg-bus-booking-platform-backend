@@ -49,7 +49,8 @@ test("role adapters retain their distinct responsibilities", () => {
   const fleetUnlock = read(
     "src/modules/admin/fleet-workstation/referral-unlock.service.js"
   );
-  assert.match(controller, /referralRewardService\.createReferral/);
+  assert.match(read("src/modules/referral/reward-lifecycle/referral-apply.controller.js"), /referralRewardService\.createReferral/);
+  assert.match(controller, /referral-apply.controller/);
   assert.match(controller, /referralRewardService\.getReferralDashboard/);
   assert.match(fleetUnlock, /processJourneyCompletion/);
   assert.doesNotMatch(

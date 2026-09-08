@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { crewAccessFields } = require("../src/shared/crew/crew-access-state");
 
 /**
  * CONDUCTOR PROFILE MODEL
@@ -36,6 +37,7 @@ const conductorProfileSchema = new mongoose.Schema(
             required: true,
             unique: true,
         },
+        ...crewAccessFields(),
 
         // ─── IDENTITY ─────────────────────────────────────────────────────────
         fullName: {
@@ -57,10 +59,23 @@ const conductorProfileSchema = new mongoose.Schema(
             index: true,
         },
 
+        removedAt: { type: Date, default: null },
+        removedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+
         // ─── AUDIT ─────────────────────────────────────────────────────────────
         assignedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
+            default: null,
+        },
+        createdBy: {
+            type: String,
+            enum: ["ADMIN", "OPERATOR"],
+            default: "OPERATOR",
+        },
+        adminCreatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "SuperAdmin",
             default: null,
         },
         notes: {
@@ -77,13 +92,24 @@ const conductorProfileSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Trip",
         }],
+        statusHistory: [{
+            from: { type: String, enum: ["AVAILABLE", "ON_DUTY", "OFF_DUTY", "SUSPENDED", "INACTIVE"] },
+            to: { type: String, enum: ["AVAILABLE", "ON_DUTY", "OFF_DUTY", "SUSPENDED", "INACTIVE"] },
+            actorId: { type: mongoose.Schema.Types.ObjectId, ref: "SuperAdmin" },
+            at: { type: Date, default: Date.now },
+            reason: { type: String, default: null },
+        }],
+        suspendedBy: { type: mongoose.Schema.Types.ObjectId, ref: "SuperAdmin", default: null },
+        suspendedAt: { type: Date, default: null },
+        suspensionReason: { type: String, default: null, trim: true },
     },
-    { timestamps: true }
+    { timestamps: true, optimisticConcurrency: true }
 );
 
 // Brand dashboard: all conductors for a brand
 conductorProfileSchema.index({ brandId: 1, status: 1 });
 // Owner view: all conductors across all brands
 conductorProfileSchema.index({ ownerId: 1, status: 1 });
+conductorProfileSchema.index({ ownerId: 1, accessStatus: 1 });
 
 module.exports = mongoose.model("ConductorProfile", conductorProfileSchema);

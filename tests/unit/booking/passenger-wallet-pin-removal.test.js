@@ -1,8 +1,8 @@
 'use strict';
 /**
  * tests/unit/booking/passenger-wallet-pin-removal.test.js
- * Asserts that the payment booking controller no longer contains runtime
- * wallet PIN dependencies after the removal refactor.
+ * Asserts that payment authorization is purchase-bound while retaining wallet
+ * ownership and ledger checks.
  */
 const test   = require('node:test');
 const assert = require('node:assert/strict');
@@ -31,12 +31,12 @@ const moduleSrc = fs.readdirSync(WALLET_MODULE)
 
 const allCode = controllerSrc + '\n' + moduleSrc;
 
-test('payment booking flow: runtime wallet PIN removal', async (t) => {
+test('payment booking flow: purchase-bound authorization', async (t) => {
 
-  // ── Removed references ────────────────────────────────────────────────────
-  await t.test('does not contain walletPin', () => {
-    assert.equal(allCode.includes('walletPin'), false,
-      'walletPin must not appear in controller or module');
+  // Shared authorization keeps permanent PIN validation out of checkout.
+  await t.test('uses purchase-specific authorization instead of the retired PIN', () => {
+    assert.match(controllerSrc, /purchaseAuthorization\.authorizeCheckout/);
+    assert.equal(controllerSrc.includes('req.body.walletPin'), false);
   });
 
   await t.test('does not contain WALLET_PIN_REQUIRED', () => {

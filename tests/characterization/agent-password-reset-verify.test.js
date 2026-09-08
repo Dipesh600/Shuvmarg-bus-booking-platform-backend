@@ -79,7 +79,7 @@ test('agent password reset OTP verify characterization', async (t) => {
     } finally { restore(); }
   });
 
-  await t.test('role fallback and unexpected failure are preserved', async () => {
+  await t.test('empty role membership is rejected and unexpected failure is preserved', async () => {
     let mode = 'role';
     const restore = patch(enumGuard, 'otpFirstVerify', async () => {
       if (mode === 'boom') throw new Error('boom');
@@ -87,7 +87,7 @@ test('agent password reset OTP verify characterization', async (t) => {
     });
     try {
       let res = await request(app).post('/api/auth/agent/verifyOtpForReset').send({ phone: phone(6), otp: '123456' });
-      assert.equal(res.status, 200);
+      assert.equal(res.status, 400);
       mode = 'boom';
       res = await request(app).post('/api/auth/agent/verifyOtpForReset').send({ phone: phone(7), otp: '123456' });
       assert.equal(res.status, 500);

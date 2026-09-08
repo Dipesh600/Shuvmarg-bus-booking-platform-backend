@@ -47,6 +47,7 @@ test("passenger-booking-cancellation refund characterization", async (t) => {
     }));
     harness.mocks.calculateRefund.mock.mockImplementationOnce((args) => {
       assert.deepStrictEqual(args, {
+        policySnapshot: undefined, smMoneyUsed: undefined, gatewayAmount: undefined, paymentMethod: undefined,
         totalAmount: 1000,
         tripDate: "2026-07-25",
         departureTime: "10:00",

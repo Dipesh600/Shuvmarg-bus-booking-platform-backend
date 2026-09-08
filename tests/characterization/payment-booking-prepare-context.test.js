@@ -66,7 +66,7 @@ test('prepareBooking malformed context characterization', async (t) => {
     try {
       let holdCalled = false;
       let nextErr;
-      h.mockMethod(h.smLedgerService, 'computeSpendableBalance', () => Promise.resolve(null));
+      h.mockMethod(h.smLedgerService, 'computePurchaseBalance', () => Promise.resolve(null));
       h.mockMethod(h.passengerSeatHold, 'createOrReusePassengerSeatHold', () => { holdCalled = true; return Promise.resolve(h.defaults.hold); });
 
       const { res, getStatus, getJson } = makeMockRes();

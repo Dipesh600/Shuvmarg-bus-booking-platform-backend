@@ -87,6 +87,7 @@ describe("passenger-booking-history mapper", () => {
       reason: "User Request",
       remarks: "Test refund",
       refundGateway: "esewa",
+      destination: "sm_wallet",
     };
 
     const reviewedSet = new Set();

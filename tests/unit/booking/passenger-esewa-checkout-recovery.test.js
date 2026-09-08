@@ -48,17 +48,17 @@ test('paid attempt with expired hold becomes an actionable dispute', async () =>
   assert.equal(h.updates.at(-1).status, 'DISPUTED');
 });
 
-test('unpaid expired attempt fails without creating a dispute', async () => {
+test('unconfirmed expired attempt remains recoverable without creating a dispute', async () => {
   const h = setup({ verified: false, error: 'NOT_FOUND' });
   const result = await h.service.resolveUnavailableHold({
     _id: 'attempt-1',
     transactionUuid: 'SM-1',
     gatewayAmount: 900,
   });
-  assert.equal(result.statusCode, 410);
-  assert.equal(result.body.errorCode, 'BOOKING_HOLD_EXPIRED');
+  assert.equal(result.statusCode, 202);
+  assert.equal(result.body.errorCode, 'PAYMENT_VERIFICATION_PENDING');
   assert.equal(h.getDisputes(), 0);
-  assert.equal(h.updates.at(-1).status, 'FAILED');
+  assert.equal(h.updates.at(-1).status, 'INITIATED');
 });
 
 test('a recorded successful transaction recovers a crash idempotently', async () => {

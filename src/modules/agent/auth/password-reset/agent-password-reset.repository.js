@@ -9,7 +9,7 @@ const completePasswordReset = ({ userId, expectedStatus, hashedPassword }) =>
       _id: userId,
       status: expectedStatus,
       deletedAt: null,
-      $or: [{ roles: 'agent' }, { role: 'agent', roles: { $size: 0 } }],
+      $or: [{ roles: 'agent' }, { role: 'agent', roles: { $exists: false } }],
     },
     {
       $set: {

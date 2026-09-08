@@ -51,6 +51,7 @@ const shared = {
       passengerSeatHold.restorePassengerHoldAfterFailedConfirmation(input),
 };
 const runPaymentStage = createPassengerBookingConfirmationPaymentStage({
+  authorizeReservedPayment: require('../../../shared/authorize-reserved-payment').authorizeReservedPayment,
   ...quote,
   ...walletPayment,
   ...splitPayment,
@@ -68,6 +69,7 @@ const runFulfillmentStage =
     ...shared,
     ...tripValidation,
     ...bookingPersistence,
+    atomicSeatCommit: true,
   });
 const runSuccessStage = createPassengerBookingConfirmationSuccessStage({
   ...reconciliation,

@@ -10,7 +10,7 @@ test('bus-owner-login policy unit tests', async (t) => {
   });
 
   await t.test('resolveRoles falls back to [role] when roles is empty', () => {
-    assert.deepEqual(policy.resolveRoles({ roles: [], role: 'busOwner' }), ['busOwner']);
+    assert.deepEqual(policy.resolveRoles({ role: 'busOwner' }), ['busOwner']);
   });
 
   await t.test('resolveRoles falls back to [role] when roles is absent', () => {

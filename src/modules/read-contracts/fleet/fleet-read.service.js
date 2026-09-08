@@ -32,13 +32,7 @@ function createFleetReadService({
       operational,
     });
 
-    return {
-      success: true,
-      data: {
-        items,
-        pagination: formatPagination({ page, limit, totalItems }),
-      },
-    };
+    return { success: true, data: { items, pagination: formatPagination({ page, limit, totalItems }) } };
   }
 
   async function getFleetDetailForAdmin(req) {
@@ -70,10 +64,7 @@ function createFleetReadService({
     }
 
     const canonicalData = result.body?.data || result.data || result;
-    return {
-      success: true,
-      data: mapFleetSetupStatus(canonicalData),
-    };
+    return { success: true, data: mapFleetSetupStatus(canonicalData) };
   }
 
   async function listFleetsForOwner(req) {
@@ -87,13 +78,7 @@ function createFleetReadService({
       skip,
     });
 
-    return {
-      success: true,
-      data: {
-        items,
-        pagination: formatPagination({ page, limit, totalItems }),
-      },
-    };
+    return { success: true, data: { items, pagination: formatPagination({ page, limit, totalItems }) } };
   }
 
   async function getFleetDetailForOwner(req) {
@@ -112,12 +97,38 @@ function createFleetReadService({
     return { success: true, data };
   }
 
+  async function getFleetSetupStatusForOwner(req) {
+    const authenticatedUserId = authorizeOwner(req);
+    const fleetId = req.params?.fleetId || req.params?.id;
+
+    if (!fleetId || typeof fleetId !== "string" || !mongoose.Types.ObjectId.isValid(fleetId)) {
+      throw new ReadContractValidationError("READ_INVALID_ID", "Valid fleet ID is required.");
+    }
+
+    const ownsFleet = await repository.ownerOwnsFleet({
+      fleetId,
+      userId: authenticatedUserId,
+    });
+    if (!ownsFleet) {
+      throw new ReadContractNotFoundError("FLEET_NOT_FOUND", "Fleet record not found or not owned by user.");
+    }
+
+    const result = await getCanonicalSetupStatus(fleetId);
+    if (!result || result.statusCode === 404) {
+      throw new ReadContractNotFoundError("FLEET_NOT_FOUND", "Fleet record not found.");
+    }
+
+    const canonicalData = result.body?.data || result.data || result;
+    return { success: true, data: mapFleetSetupStatus(canonicalData) };
+  }
+
   return {
     listFleetsForAdmin,
     getFleetDetailForAdmin,
     getFleetSetupStatusForAdmin,
     listFleetsForOwner,
     getFleetDetailForOwner,
+    getFleetSetupStatusForOwner,
   };
 }
 

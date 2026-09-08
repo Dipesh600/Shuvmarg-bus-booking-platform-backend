@@ -24,7 +24,7 @@ const makeUser = () => User.create({
   phoneVerified: false,
   tokenVersion: 2,
 });
-const sign = (id) => jwt.sign({ id, purpose: 'FORCE_PASSWORD_CHANGE' }, process.env.SECRET_KEY);
+const sign = (id) => jwt.sign({ id, purpose: 'FORCE_PASSWORD_CHANGE', activeRole: 'passenger', credentialVersion: 0, tokenVersion: 2 }, process.env.SECRET_KEY);
 
 test('Auth: changeForcePassword success and partial OTP legacy behavior', async (t) => {
   const { app, loginRateLimiters, teardown } = createAuthTestApp();

@@ -115,7 +115,7 @@ test('document-proxy controller — streaming', async (t) => {
         assert.equal(res.headers['content-length'], undefined);
     });
 
-    await t.test('12. Cache-Control is always "private, max-age=300"', async () => {
+    await t.test('12. Cache-Control is always "private, no-store"', async () => {
         const stream = Readable.from([]);
         stream.pipe = () => {};
         mock.method(service, 'resolveDocument', async () => ({
@@ -127,7 +127,7 @@ test('document-proxy controller — streaming', async (t) => {
         const res = makeRes();
         await controller.viewDocument(req, res);
 
-        assert.equal(res.headers['cache-control'], 'private, max-age=300');
+        assert.equal(res.headers['cache-control'], 'private, no-store');
     });
 
     await t.test('13. S3 body is piped to the response', async () => {

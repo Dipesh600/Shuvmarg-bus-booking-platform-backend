@@ -1,23 +1,11 @@
-/**
- * tripExceptionService.js
- *
- * Trip-level exception management — the GTFS calendar_dates pattern.
- *
- * These operations affect INDIVIDUAL TRIPS on SPECIFIC DATES without
- * touching the master Schedule document. The master schedule continues
- * generating future trips normally.
- *
- * Edge cases covered:
- *   1. cancelTrip          — single trip cancelled (breakdown, emergency)
- *   2. rescheduleTrip      — single trip time-shifted (road work, delay)
- *   3. cancelDateRange     — bulk cancel trips in a window (maintenance, holiday)
- *   4. createExtraRun      — one-off trip on a date not in the regular schedule
- */
+/** Trip-specific cancellations, rescheduling and extra runs without changing the master schedule. */
 
 const Trip     = require("../models/tripModel");
 const Booking  = require("../models/bookTicketModel");
 const Schedule = require("../models/scheduleModel");
 const logger   = require("../utils/logger");
+const DriverProfile = require("../models/driverProfileModel");
+const { resolveDefaultDriver } = require("../src/shared/crew/default-driver.service");
 
 // ─── 1. CANCEL SINGLE TRIP ────────────────────────────────────────────────────
 /**
@@ -259,13 +247,16 @@ const createExtraRun = async (scheduleId, { tripDate, departureTime, arrivalTime
 
     const tripIdStr = `EXTRA-${schedule.busId?.toString().slice(-4).toUpperCase()}-${new Date(tripDate).toISOString().split("T")[0].replace(/-/g, "")}`;
 
+    const eligibleDriverId = await resolveDefaultDriver({
+        driverId: schedule.driverId, brandId: schedule.brandId, tripDate,
+    }, { DriverProfile, logger });
     const trip = new Trip({
         tripId:        tripIdStr,
         busId:         schedule.busId,
         variantId:     schedule.variantId,
         ownerId:       schedule.ownerId,
         brandId:       schedule.brandId,
-        driverId:      schedule.driverId,
+        driverId:      eligibleDriverId,
         seatTemplateId: schedule.seatTemplateId,
         scheduleId:    schedule._id,
         tripDate:      new Date(tripDate),

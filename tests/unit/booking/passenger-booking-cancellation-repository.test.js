@@ -34,10 +34,8 @@ test("repository - saveSeat", async () => {
   assert.strictEqual(res.saved, true);
 });
 
-test("repository - createRefund", async () => {
-  mock.method(Refund, "create", async () => ({ id: 4 }));
-  const res = await repository.createRefund({});
-  assert.strictEqual(res.id, 4);
+test("repository - createRefund requires the cancellation transaction", async () => {
+  await assert.rejects(() => repository.createRefund({}), /active transaction/);
 });
 
 test("repository - saveBooking", async () => {

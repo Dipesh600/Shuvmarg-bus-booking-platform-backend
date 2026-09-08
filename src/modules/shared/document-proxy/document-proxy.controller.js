@@ -23,7 +23,9 @@ const service = require('./document-proxy.service.js');
  */
 const viewDocument = async (req, res) => {
     try {
-        const result = await service.resolveDocument(req.query.key);
+        const result = await service.resolveDocument(req.query.key, {
+            user: req.userInfo, admin: req.adminInfo,
+        });
 
         if (!result.ok) {
             return res.status(result.status).json(result.body);
@@ -43,8 +45,7 @@ const viewDocument = async (req, res) => {
             res.setHeader('Content-Length', s3Response.ContentLength);
         }
 
-        // Cache for 5 minutes in the browser (session only)
-        res.setHeader('Cache-Control', 'private, max-age=300');
+        res.setHeader('Cache-Control', 'private, no-store');
 
         // Pipe the S3 readable stream directly to the HTTP response
         s3Response.Body.pipe(res);

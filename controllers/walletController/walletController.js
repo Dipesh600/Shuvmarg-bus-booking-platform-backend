@@ -1,8 +1,6 @@
 const { getOrCreateWallet, getFullBalance } = require("../../services/walletService");
 const smLedgerService = require("../../src/modules/wallet/sm-ledger");
 const ScratchCard = require("../../models/scratchCardModel");
-const Wallet = require("../../models/walletModel");
-const bcrypt = require("bcryptjs");
 
 /**
  * Fetch wallet balance and activity feed.
@@ -61,10 +59,9 @@ const getWalletDetails = async (req, res) => {
         // Scratch cards
         unscratchedCardCount,
 
-        // Wallet meta (PIN, status, currency)
+        // Wallet status and currency
         currency: wallet.currency,
         walletStatus: wallet.status,
-        isPinSet: wallet.isPinSet || false,
 
         // Activity feed (from sm_ledger)
         activities: activityFeed.entries,
@@ -81,109 +78,6 @@ const getWalletDetails = async (req, res) => {
   }
 };
 
-/**
- * Setup wallet PIN — hashes the 4-digit PIN and stores it.
- * Called once when the user enables their wallet.
- */
-const setupWalletPin = async (req, res) => {
-  try {
-    const userId = req.userInfo.id;
-    const { pin } = req.body;
-
-    if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-      return res.status(400).json({
-        status: false,
-        message: "PIN must be exactly 4 digits",
-      });
-    }
-
-    const wallet = await getOrCreateWallet(userId);
-
-    if (wallet.isPinSet) {
-      return res.status(400).json({
-        status: false,
-        message: "Wallet PIN is already set. Use change-pin to update it.",
-      });
-    }
-
-    // Hash the PIN with bcrypt (10 salt rounds)
-    const hashedPin = await bcrypt.hash(pin, 10);
-
-    wallet.pin = hashedPin;
-    wallet.isPinSet = true;
-    await wallet.save();
-
-    return res.status(200).json({
-      status: true,
-      message: "Wallet PIN set successfully",
-    });
-  } catch (error) {
-    console.error("Error setting wallet PIN:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Internal Server Error",
-      error: error.message,
-    });
-  }
-};
-
-/**
- * Verify wallet PIN — compares the provided PIN against the stored hash.
- * Called before every wallet payment transaction.
- */
-const verifyWalletPin = async (req, res) => {
-  try {
-    const userId = req.userInfo.id;
-    const { pin } = req.body;
-
-    if (!pin || !/^\d{4}$/.test(pin)) {
-      return res.status(400).json({
-        status: false,
-        message: "PIN must be exactly 4 digits",
-      });
-    }
-
-    const wallet = await Wallet.findOne({ userId });
-
-    if (!wallet || !wallet.isPinSet) {
-      return res.status(400).json({
-        status: false,
-        message: "Wallet PIN is not set. Please set up your wallet first.",
-      });
-    }
-
-    if (wallet.status !== "active") {
-      return res.status(403).json({
-        status: false,
-        message: "Wallet is frozen. Please contact support.",
-      });
-    }
-
-    const isMatch = await bcrypt.compare(pin, wallet.pin);
-
-    if (!isMatch) {
-      return res.status(401).json({
-        status: false,
-        message: "Incorrect PIN. Please try again.",
-      });
-    }
-
-    return res.status(200).json({
-      status: true,
-      message: "PIN verified successfully",
-    });
-  } catch (error) {
-    console.error("Error verifying wallet PIN:", error);
-    return res.status(500).json({
-      status: false,
-      message: "Internal Server Error",
-      error: error.message,
-    });
-  }
-};
-
 module.exports = {
   getWalletDetails,
-  setupWalletPin,
-  verifyWalletPin,
 };

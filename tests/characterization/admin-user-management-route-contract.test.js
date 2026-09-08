@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const routes = require("../../routes/adminRoutes/adminRoutes");
 const adminMiddleware = require("../../middleware/adminMiddleware");
+const requireAccountAdministration = require("../../middleware/requireAccountAdministration");
 const userManagement = require("../../src/modules/admin/user-management");
 
 test("admin user-management route and retirement contract", () => {
@@ -30,7 +31,7 @@ test("admin user-management route and retirement contract", () => {
     );
     assert.deepEqual(
       matches[0].route.stack.map((layer) => layer.handle),
-      [adminMiddleware, handler]
+      [adminMiddleware, ...(routePath === "/resetPassword" ? [requireAccountAdministration] : []), handler]
     );
   }
   assert.equal(Object.keys(userManagement).length, 6);

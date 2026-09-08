@@ -1,4 +1,5 @@
 "use strict";
+const { getEffectiveRoles } = require('../../../shared/auth/account-role.policy');
 
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
@@ -13,7 +14,7 @@ function ownerAccessError(message, statusCode, code) {
 }
 
 function ownerRoles(user) {
-  return Array.isArray(user.roles) && user.roles.length ? user.roles : [user.role];
+  return getEffectiveRoles(user);
 }
 
 function createOwnerAccessResendService(deps = {}) {

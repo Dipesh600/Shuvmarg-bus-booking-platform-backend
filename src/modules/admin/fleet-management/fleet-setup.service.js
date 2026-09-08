@@ -29,9 +29,14 @@ function createFleetSetupService({ repository }) {
       );
     }
 
+    const hasActiveRouteConfig = routeConfigs.some((config) =>
+      config?.status === "ACTIVE" &&
+      Array.isArray(config.activeStops) &&
+      config.activeStops.length >= 2
+    );
     const steps = {
       routeAssigned: !!fleet.corridorId,
-      routeConfigured: routeConfigs.length > 0,
+      routeConfigured: hasActiveRouteConfig,
       driverAssigned: !!assignedDriver,
       scheduleCreated: !!schedule,
       returnTripLinked: !!schedule?.returnScheduleId,
@@ -46,6 +51,7 @@ function createFleetSetupService({ repository }) {
         success: true,
         data: {
           fleetId: fleet._id,
+          brandId: fleet.brandId || null,
           busName: fleet.busName,
           busNumber: fleet.busNumber,
           approvalStatus: fleet.approvalStatus,

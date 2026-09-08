@@ -53,12 +53,12 @@ test('User model — privileged roles require a password', async (t) => {
   });
 
   // Critical: validators run BEFORE pre-save hooks — cannot rely on roles[] being populated.
-  await t.test('role:agent with empty roles[] — password required (pre-save timing)', async () => {
-    await expectPasswordRequired(makeUser({ role: 'agent', roles: [] }));
+  await t.test('role:agent with missing roles — password required (pre-save timing)', async () => {
+    await expectPasswordRequired(makeUser({ role: 'agent' }));
   });
 
-  await t.test('role:busOwner with empty roles[] — password required (pre-save timing)', async () => {
-    await expectPasswordRequired(makeUser({ role: 'busOwner', roles: [] }));
+  await t.test('role:busOwner with missing roles — password required (pre-save timing)', async () => {
+    await expectPasswordRequired(makeUser({ role: 'busOwner' }));
   });
 
   await t.test('passenger + agent roles — password required', async () => {

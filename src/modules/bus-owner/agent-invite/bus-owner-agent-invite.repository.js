@@ -22,27 +22,30 @@ const findOwnedBrand = (ownerId, brandId) => OperatorBrand
   .select('brandName')
   .lean();
 
-const createUser = (userData) => new User(userData).save();
+const { withTransaction } = require('../../../shared/auth/identity-transaction');
+const { availableAccountFilter } = require('../../../shared/auth/role-grant-state');
+const createUser = (userData, session) => new User(userData).save({ session });
 
-const addAgentRole = (userId, activatedAt) => User.findByIdAndUpdate(
-  userId,
+const addAgentRole = (userId, activatedAt, session) => User.findOneAndUpdate(
+  availableAccountFilter(userId),
   {
     $addToSet: { roles: 'agent' },
     $set: { 'roleActivatedAt.agent': activatedAt },
   },
-  { new: true },
+  { new: true, session },
 ).lean();
 
-const findAgentByUserId = (userId) => Agent.findOne({ user: userId });
+const findAgentByUserId = (userId, session) => Agent.findOne({ user: userId }).session(session || null);
 
 /**
  * Created with `new` + save(), never findOneAndUpdate/upsert: the pre('save')
  * hook is what allocates the SM-AG code, and Mongoose does not run it for
  * upserts. An agent created by upsert would have no code to share.
  */
-const createAgent = (agentData) => new Agent(agentData).save();
+const createAgent = (agentData, session) => new Agent(agentData).save({ session });
 
 module.exports = {
+  withTransaction,
   addAgentRole,
   createAgent,
   createUser,

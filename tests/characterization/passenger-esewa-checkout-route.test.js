@@ -21,6 +21,18 @@ const findPost = (routePath) => layers.filter(
 const handlers = (layer) =>
   layer.route.stack.map((entry) => entry.handle);
 
+test('purchase approval endpoints require a current passenger and an owned hold for issuing codes', () => {
+  for (const path of ['/payment-authorization/request', '/payment-authorization/approve']) {
+    const route = findPost(path);
+    assert.equal(route.length, 1);
+    const chain = handlers(route[0]);
+    assert.equal(chain[0], auth);
+    assert.equal(chain[1], verifyRoleFromDB);
+    assert.equal(chain.length, path.endsWith('/request') ? 5 : 4);
+    if (path.endsWith('/request')) assert.equal(chain[3], seatHold.requireOwnedActivePassengerSeatHold);
+  }
+});
+
 test('secure eSewa checkout routes use passenger ownership guards', () => {
   const initiation = findPost('/esewa/initiate');
   const finalization = findPost('/esewa/finalize');

@@ -32,6 +32,7 @@ function createFleetManagementController({
   return {
     getMyFleets: readCtrl.getMyFleets,
     getFleetById: readCtrl.getFleetById,
+    getFleetSetupStatus: readCtrl.getFleetSetupStatus,
 
     createFleet: cmdCtrl.createFleet,
     updateFleet: cmdCtrl.updateFleet,

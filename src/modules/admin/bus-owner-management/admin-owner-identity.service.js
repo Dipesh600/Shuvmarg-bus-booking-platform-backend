@@ -1,4 +1,5 @@
 "use strict";
+const { getEffectiveRoles } = require('../../../shared/auth/account-role.policy');
 
 const bcrypt = require("bcryptjs");
 const User = require("../../../../models/userModel");
@@ -12,7 +13,7 @@ async function prepareOwnerIdentity(body, deps = {}) {
   if (body.email) query.$or.push({ email: body.email });
   const existing = await UserModel.findOne(query);
   if (existing) {
-    const roles = Array.isArray(existing.roles) && existing.roles.length ? existing.roles : [existing.role];
+    const roles = getEffectiveRoles(existing);
     if (roles.includes("busOwner")) {
       const error = new Error("This user is already registered as a bus owner!");
       error.statusCode = 400;
@@ -48,7 +49,7 @@ async function createUnnotifiedUser(prepared, deps = {}) {
 async function addOwnerRoleToExistingUser(existingUser, deps = {}) {
   const user = await (deps.User || User).findByIdAndUpdate(existingUser._id, {
     $addToSet: { roles: "busOwner" },
-    $set: { "roleActivatedAt.busOwner": (deps.clock || (() => new Date()))(), forcePasswordChange: false },
+    $set: { "roleActivatedAt.busOwner": (deps.clock || (() => new Date()))() },
   }, { new: true });
   return { user, wasCreated: false, roleWasAdded: true };
 }

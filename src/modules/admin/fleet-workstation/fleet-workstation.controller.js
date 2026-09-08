@@ -12,7 +12,8 @@ const createFleetWorkstationController = ({
       error: error.message,
       ...(withStack ? { stack: error.stack } : {}),
     });
-    return res.status(500).json({ success: false, message: error.message });
+    const statusCode = error.isOperational ? error.statusCode : ["DocumentNotFoundError", "VersionError"].includes(error.name) ? 409 : error.name === "CastError" ? 400 : 500;
+    return res.status(statusCode).json({ success: false, message: statusCode === 500 ? "Unable to complete this operation." : statusCode === 409 ? "Trip changed. Refresh and retry." : error.message });
   };
 
   const getFleetWorkstation = async (req, res) => {
@@ -51,7 +52,7 @@ const createFleetWorkstationController = ({
         ...req.params,
         status,
         cancellationReason,
-        adminId: req.user.id,
+        adminId: req.adminInfo.id,
       });
       if (result.statusCode) {
         return res
@@ -75,7 +76,7 @@ const createFleetWorkstationController = ({
         ...req.params,
         driverId,
         reason,
-        adminId: req.user.id,
+        adminId: req.adminInfo.id,
       });
       if (result.statusCode) {
         return res

@@ -13,11 +13,11 @@
  *
  * EFFECTIVE-ROLE RULE
  * -------------------
- * Use roles[] when it is present and non-empty.
- * Otherwise fall back to [role].
+ * Use roles[] whenever it is present, including an empty array.
+ * Only fall back to [role] when the field is missing (legacy documents).
  * This handles:
  *   - Modern multi-role documents (roles[] populated)
- *   - Legacy documents where roles[] is empty but role is set
+ *   - Legacy documents where roles is missing but role is set
  *   - New documents created before pre-save runs (Mongoose validators
  *     execute BEFORE pre-save hooks in Mongoose 7+)
  *
@@ -43,6 +43,8 @@
  * Passenger-only accounts are explicitly allowed to be passwordless.
  * Super-admin authentication is a separate system and is not included here.
  */
+const ACCOUNT_ROLES = Object.freeze(['passenger', 'agent', 'busOwner', 'conductor', 'driver']);
+
 const PRIVILEGED_ROLES = Object.freeze([
   'agent',
   'busOwner',
@@ -64,11 +66,12 @@ const PRIVILEGED_ROLES = Object.freeze([
 const getEffectiveRoles = (userLike) => {
   if (!userLike) return [];
   const rolesArr = userLike.roles;
-  if (Array.isArray(rolesArr) && rolesArr.length > 0) {
-    return [...new Set(rolesArr)];
+  if (Array.isArray(rolesArr)) {
+    return rolesArr.every(role => ACCOUNT_ROLES.includes(role)) ? [...new Set(rolesArr)] : [];
   }
+  if (rolesArr !== undefined) return []; // Malformed role state fails closed.
   const legacyRole = userLike.role;
-  if (legacyRole && typeof legacyRole === 'string') {
+  if (ACCOUNT_ROLES.includes(legacyRole)) {
     return [legacyRole];
   }
   return [];
@@ -108,9 +111,19 @@ const canRemainPasswordless = (userLike) => {
   return !hasPrivilegedRole(userLike);
 };
 
+/** Select only a currently granted role, even when the original role was revoked. */
+const requireSessionRole = (user, requestedRole) => {
+  const roles = getEffectiveRoles(user);
+  const role = requestedRole || (roles.includes(user?.role) ? user.role : roles[0]);
+  if (!role || !roles.includes(role)) throw new Error('ROLE_REVOKED');
+  return role;
+};
+
 // ── Exports ───────────────────────────────────────────────────────────────────
 
 module.exports = {
+  ACCOUNT_ROLES,
+  requireSessionRole,
   PRIVILEGED_ROLES,
   getEffectiveRoles,
   requiresPasswordForRoles,

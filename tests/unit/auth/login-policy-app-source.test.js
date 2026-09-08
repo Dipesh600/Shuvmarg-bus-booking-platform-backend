@@ -62,9 +62,9 @@ test('login policy — X-App-Source role gate', async (t) => {
     }
   });
 
-  await t.test('a user with an empty roles array falls back to role', () => {
-    assert.equal(resolve({ role: 'agent', roles: [] }, ''), 'agent');
-    assert.equal(resolve({ role: 'agent', roles: [] }, 'agent'), 'agent');
-    assert.equal(resolve({ role: 'agent', roles: [] }, 'driver'), '403 ROLE_NOT_REGISTERED');
+  await t.test('a user with a missing roles array falls back to role', () => {
+    assert.equal(resolve({ role: 'agent' }, ''), 'agent');
+    assert.equal(resolve({ role: 'agent' }, 'agent'), 'agent');
+    assert.equal(resolve({ role: 'agent' }, 'driver'), '403 ROLE_NOT_REGISTERED');
   });
 });

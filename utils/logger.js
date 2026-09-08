@@ -10,6 +10,7 @@
 
 const { createLogger, format, transports } = require("winston");
 const path = require("path");
+const { redact } = require('./logRedaction');
 
 const { combine, timestamp, printf, colorize, json, errors } = format;
 
@@ -36,7 +37,7 @@ const prodFormat = combine(
 
 const logger = createLogger({
     level: process.env.LOG_LEVEL || (isProduction ? "info" : "debug"),
-    format: isProduction ? prodFormat : devFormat,
+    format: combine(format(info => redact(info))(), isProduction ? prodFormat : devFormat),
     defaultMeta: {
         service: "shuvmarg-api",
         env: process.env.NODE_ENV || "development",

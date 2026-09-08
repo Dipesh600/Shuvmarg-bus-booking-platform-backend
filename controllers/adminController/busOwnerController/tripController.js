@@ -83,7 +83,7 @@ const getTripById = async (req, res) => {
 const updateTripByAdmin = async (req, res) => {
     try {
         const { id } = req.params;
-        const updatedTrip = await tripService.updateTripDetails(id, req.body);
+        const updatedTrip = await tripService.updateTripDetails(id, req.body, null, req.adminInfo?.id);
 
         return res.status(200).json({
             success: true,
@@ -198,9 +198,9 @@ const updateTripStatusByAdmin = async (req, res) => {
         });
     } catch (error) {
         console.error("updateTripStatusByAdmin error:", error);
-        const status = error.message.includes("Invalid") ? 400
+        const status = error.statusCode || (error.message.includes("Invalid") ? 400
                       : error.message.includes("found")  ? 404
-                      : 500;
+                      : 500);
         return res.status(status).json({
             success: false,
             message: error.message || "Internal Server Error",
@@ -218,7 +218,7 @@ const assignDriverToTrip = async (req, res) => {
             return res.status(400).json({ success: false, message: "driverId is required." });
         }
 
-        const trip = await tripService.assignDriver(id, driverId);
+        const trip = await tripService.assignDriver(id, driverId, req.adminInfo?.id);
 
         return res.status(200).json({
             success: true,
@@ -227,7 +227,7 @@ const assignDriverToTrip = async (req, res) => {
         });
     } catch (error) {
         console.error("assignDriverToTrip error:", error);
-        const status = error.message.includes("not found") ? 404 : 400;
+        const status = error.statusCode || (error.message.includes("not found") ? 404 : 400);
         return res.status(status).json({ success: false, message: error.message });
     }
 };
@@ -256,4 +256,3 @@ module.exports = {
     assignDriverToTrip,
     getDriversForBrand,
 };
-

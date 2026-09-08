@@ -21,9 +21,13 @@ const debitLedgerFIFO = createSmLedgerFifoDebitService({
   mongoose,
   SMLedger,
   toObjectId,
+  lockWalletForDebit: require("./sm-ledger-wallet-lock").lockWalletForDebit,
 });
 const generateCashback = createSmLedgerCashbackService({
   mongoose,
+  Booking: require("../../../../models/bookTicketModel"),
+  CashbackJob: require("../../../../models/bookingCashbackJobModel"),
+  SMLedger,
   ScratchCard,
   PlatformConfig,
   creditLedger: entries.creditLedger,

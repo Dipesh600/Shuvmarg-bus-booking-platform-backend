@@ -5,6 +5,9 @@ process.env.SPARROW_SMS_TOKEN = 'test-stub';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const registrationProof = require('../../../src/shared/auth/registration-proof');
+test.beforeEach(() => test.mock.method(registrationProof, 'consume', async () => {}));
+test.afterEach(() => test.mock.restoreAll());
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const AppError = require('../../../src/shared/errors/app-error');

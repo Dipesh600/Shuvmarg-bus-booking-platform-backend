@@ -10,6 +10,11 @@ function session() {
   return {
     started: 0, committed: 0, aborted: 0, ended: 0,
     startTransaction() { this.started++; },
+    async withTransaction(work) {
+      this.started++;
+      try { const result = await work(); this.committed++; return result; }
+      catch (error) { this.aborted++; throw error; }
+    },
     async commitTransaction() { this.committed++; },
     async abortTransaction() { this.aborted++; },
     endSession() { this.ended++; },
@@ -21,14 +26,15 @@ test("SM ledger FIFO debit contracts", async (t) => {
     const txn = session();
     const saved = [];
     const updates = [];
+    let balancePipeline, creditFilter;
     const credits = [
       { _id: "c1", remainingAmount: 30, status: "ACTIVE", async save(value) { saved.push([this._id, value]); } },
       { _id: "c2", remainingAmount: 50, status: "ACTIVE", async save(value) { saved.push([this._id, value]); } },
     ];
     let debitPayload;
     const SMLedger = {
-      aggregate: () => ({ session: async () => [{ total: 80 }] }),
-      find: () => ({
+      aggregate: (value) => ((balancePipeline = value), { session: async () => [{ total: 80 }] }),
+      find: (value) => ((creditFilter = value), {
         sort(value) { assert.deepEqual(value, { expires_at: 1 }); return this; },
         session: async () => credits,
       }),
@@ -57,9 +63,11 @@ test("SM ledger FIFO debit contracts", async (t) => {
     assert.equal(txn.committed, 1);
     assert.equal(txn.aborted, 0);
     assert.equal(txn.ended, 1);
+    assert.deepEqual(balancePipeline[0].$match.$or[0], { type: "REFUND", expires_at: null });
+    assert.deepEqual(creditFilter.$or[0], { type: "REFUND", expires_at: null });
   });
 
-  await t.test("insufficient balance preserves message and legacy double abort", async () => {
+  await t.test("insufficient balance aborts once without a partial debit", async () => {
     const txn = session();
     const debit = createSmLedgerFifoDebitService({
       mongoose: { startSession: async () => txn },
@@ -70,9 +78,34 @@ test("SM ledger FIFO debit contracts", async (t) => {
       () => debit({ userId: "u", amount: 25 }),
       /Available: Rs\. 20, Required: Rs\. 25/
     );
-    assert.equal(txn.aborted, 2);
+    assert.equal(txn.aborted, 1);
     assert.equal(txn.committed, 0);
     assert.equal(txn.ended, 1);
+  });
+
+  await t.test("ticket purchases consume unrestricted refund credit before promotional credit", async () => {
+    const txn = session();
+    const credits = [
+      { _id: "promo", type: "CASHBACK", remainingAmount: 100, status: "ACTIVE", async save() {} },
+      { _id: "refund", type: "REFUND", remainingAmount: 40, status: "ACTIVE", async save() {} },
+    ];
+    let debitPayload;
+    const debit = createSmLedgerFifoDebitService({
+      mongoose: { startSession: async () => txn },
+      SMLedger: {
+        aggregate: () => ({ session: async () => [{ total: 140 }] }),
+        find: () => ({ sort() { return this; }, session: async () => credits }),
+        create: async ([row]) => ((debitPayload = row), [{ _id: "d1", ...row }]),
+        updateOne: async () => {},
+      },
+      toObjectId: (value) => value,
+    });
+    await debit({ userId: "u1", amount: 50,
+      paymentContext: { preferRefundCredit: true } });
+    assert.deepEqual(debitPayload.consumedBy, [
+      { debitLedgerEntryId: "refund", amountConsumed: 40 },
+      { debitLedgerEntryId: "promo", amountConsumed: 10 },
+    ]);
   });
 
   await t.test("write failure aborts once and always ends the session", async () => {

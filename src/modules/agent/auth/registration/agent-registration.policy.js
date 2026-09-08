@@ -1,4 +1,5 @@
 'use strict';
+const { getEffectiveRoles } = require('../../../../shared/auth/account-role.policy');
 
 const AGENT_PURPOSE = 'AGENT_REGISTRATION';
 const NEPAL_MOBILE_RE = /^(97|98)\d{8}$/;
@@ -6,7 +7,7 @@ const OTP_WINDOW_MS = 30 * 60 * 1000;
 
 const isValidNepalMobile = (phone) => NEPAL_MOBILE_RE.test(phone);
 const cleanOtp = (otp) => String(otp).replace(/\D/g, '');
-const rolesFor = (user) => (user.roles && user.roles.length > 0 ? user.roles : [user.role])
+const rolesFor = (user) => (getEffectiveRoles(user))
   .filter(Boolean);
 const isOtpRecent = (otpRecord, nowMs) =>
   !(otpRecord.updatedAt < new Date(nowMs - OTP_WINDOW_MS));

@@ -7,63 +7,80 @@ const createPassengerBookingCancellationService = (
   refundService,
   notificationService
 ) => {
-    const cancelPassengerBooking = async (ticketId, userId, cancelReason, requestBody) => {
+  const cancelPassengerBooking = async (ticketId, userId, cancelReason, requestBody) => {
     if (!ticketId) {
       throw new PassengerBookingCancellationValidationError(400, "ticketId is required");
     }
-
-    const booking = await repository.findBookingByTicketId(ticketId);
-    if (!booking) {
-      throw new PassengerBookingCancellationValidationError(404, "Booking not found");
+    if (requestBody?.seats !== undefined || requestBody?.seatNumbers !== undefined) {
+      throw new PassengerBookingCancellationValidationError(
+        400, "Partial-seat cancellation is not supported. Cancel the complete booking."
+      );
     }
 
-    if (booking.userId.toString() !== userId) {
-      throw new PassengerBookingCancellationValidationError(403, "You are not authorized to cancel this booking");
-    }
+    const committed = await repository.withTransaction(async (session) => {
+      const booking = await repository.findBookingByTicketId(ticketId, session);
+      if (!booking) {
+        throw new PassengerBookingCancellationValidationError(404, "Booking not found");
+      }
 
-    if (booking.status !== "booked") {
-      throw new PassengerBookingCancellationValidationError(400, `Cannot cancel a booking with status '${booking.status}'`);
-    }
+      if (booking.userId.toString() !== userId) {
+        throw new PassengerBookingCancellationValidationError(403, "You are not authorized to cancel this booking");
+      }
 
-    const trip = await repository.findTripById(booking.tripId);
-    if (!trip) {
-      throw new PassengerBookingCancellationValidationError(404, "Trip details not found.");
-    }
+      if (booking.status !== "booked") {
+        throw new PassengerBookingCancellationValidationError(400, `Cannot cancel a booking with status '${booking.status}'`);
+      }
 
-    const estimate = await refundCalculatorService.calculateRefund({
-      totalAmount: booking.totalAmount || 0,
-      tripDate: trip.tripDate,
-      departureTime: trip.departureTime,
+      const trip = await repository.findTripById(booking.tripId, session);
+      if (!trip) {
+        throw new PassengerBookingCancellationValidationError(404, "Trip details not found.");
+      }
+
+      const estimate = await refundCalculatorService.calculateRefund({
+        totalAmount: booking.totalAmount || 0,
+        tripDate: trip.tripDate,
+        departureTime: trip.departureTime,
+        policySnapshot: booking.refundPolicySnapshot,
+        smMoneyUsed: booking.smMoneyUsed, gatewayAmount: booking.gatewayAmount, paymentMethod: booking.paymentMethod,
+      });
+
+      if (!estimate.eligible) {
+        throw new PassengerBookingCancellationValidationError(400, estimate.reason);
+      }
+
+      // Free the seats in Seat collection
+      const seatDoc = await repository.findSeatByTripId(booking.tripId, session);
+      if (!seatDoc) {
+        throw new PassengerBookingCancellationValidationError(404, "Seat data not found for trip.");
+      }
+
+      // Serialize all cancellation effects on the booking. A competing request
+      // retries the transaction and observes cancelled status before moving money.
+      if (!await repository.claimBooking(booking, session)) {
+        throw new PassengerBookingCancellationValidationError(409, 'Booking cancellation is already being processed');
+      }
+      seatService.freeSeats(seatDoc, booking.seats);
+      await repository.saveSeat(seatDoc, session);
+
+      const refundInfo = await refundService.processRefundAndClawback(
+        booking,
+        userId,
+        estimate,
+        cancelReason,
+        requestBody || {},
+        session
+      );
+
+      booking.status = "cancelled";
+      booking.cancellationReason = cancelReason || "User cancelled";
+      booking.cancellationRequestedAt = new Date();
+      booking.cancelledBy = "user";
+      booking.refundId = refundInfo._id;
+
+      await repository.saveBooking(booking, session);
+      return { booking, estimate };
     });
-
-    if (!estimate.eligible) {
-      throw new PassengerBookingCancellationValidationError(400, estimate.reason);
-    }
-
-    // Free the seats in Seat collection
-    const seatDoc = await repository.findSeatByTripId(booking.tripId);
-    if (!seatDoc) {
-      throw new PassengerBookingCancellationValidationError(404, "Seat data not found for trip.");
-    }
-
-    seatService.freeSeats(seatDoc, booking.seats);
-    await repository.saveSeat(seatDoc);
-
-    const refundInfo = await refundService.processRefundAndClawback(
-      booking,
-      userId,
-      estimate,
-      cancelReason,
-      requestBody
-    );
-
-    booking.status = "cancelled";
-    booking.cancellationReason = cancelReason || "User cancelled";
-    booking.cancellationRequestedAt = new Date();
-    booking.cancelledBy = "user";
-    booking.refundId = refundInfo._id;
-
-    await repository.saveBooking(booking);
+    const { booking, estimate } = committed;
 
     await notificationService.sendCancellationNotifications(
       userId,

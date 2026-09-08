@@ -15,6 +15,14 @@ const { createLocalNotification, notificationManager } = require("../controllers
  */
 
 const setupReconciliationCron = () => {
+    let recoveryRunning = false;
+    cron.schedule('*/30 * * * * *', async () => {
+        if (recoveryRunning) return;
+        recoveryRunning = true;
+        try { await require('./paymentRecoveryWorker').runPaymentRecovery(); }
+        catch (error) { logger.error('Payment recovery sweep failed', { error: error.message }); }
+        finally { recoveryRunning = false; }
+    });
     // Run every 5 minutes
     cron.schedule("*/5 * * * *", async () => {
         logger.info("PaymentReconciliationCRON: ═══ Starting sweep ═══");
@@ -37,12 +45,17 @@ const setupReconciliationCron = () => {
 
             for (const txn of orphanedTransactions) {
                 try {
+                    // Attempt-owned payments are fenced by their recovery flow.
+                    // This legacy sweep must never close one behind its worker.
+                    if (await require('../models/esewaPaymentAttemptModel').exists({
+                        transactionUuid: txn.transactionId, userId: txn.userId,
+                    })) continue;
                     // Check if a Booking exists for this payment
-                    const booking = await Booking.findOne({ transactionId: txn.transactionId }).lean();
+                    const booking = await Booking.findOne({ transactionId: txn.transactionId, userId: txn.userId }).lean();
 
                     if (booking) {
                         // Late reconciliation: Booking exists, just update transaction status
-                        await Transaction.findByIdAndUpdate(txn._id, {
+                        await Transaction.findOneAndUpdate({ _id: txn._id, status: 'PAYMENT_RECEIVED' }, {
                             status: "SUCCESS",
                             bookingId: booking._id,
                             ticketId: booking.ticketId
@@ -50,10 +63,11 @@ const setupReconciliationCron = () => {
                         logger.info(`PaymentReconciliationCRON: Auto-resolved ${txn._id} to SUCCESS. Booking found.`);
                     } else {
                         // Disaster scenario: Money taken, no booking created
-                        await Transaction.findByIdAndUpdate(txn._id, {
+                        const claimed = await Transaction.findOneAndUpdate({ _id: txn._id, status: 'PAYMENT_RECEIVED' }, {
                             status: "DISPUTED",
                             disputeReason: "Reconciliation CRON: Stuck in PAYMENT_RECEIVED for >10 mins with no matching booking."
                         });
+                        if (!claimed) continue;
 
                         logger.error(`🚨 PaymentReconciliationCRON: DISPUTED ${txn._id}. No booking found! User money stuck.`, {
                             esewaId: txn.transactionId,

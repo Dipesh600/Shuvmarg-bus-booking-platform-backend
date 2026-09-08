@@ -70,7 +70,7 @@ test('agent password reset service preserves orchestration', async (t) => {
       assert.equal(purpose, 'AGENT_PASSWORD_RESET'); assert.equal(consume, false);
       assert.equal(verifyFn, otpHelper.verifyOTPCode);
       assert.equal(await lookup('x'), 'found');
-      return { valid: true, user: { roles: [], role: 'agent', status: 'invited' } };
+      return { valid: true, user: { roles: ['agent'], role: 'agent', status: 'invited' } };
     }, restores);
     patch(repository, 'findUserByPhone', async () => 'found', restores);
     try {

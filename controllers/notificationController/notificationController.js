@@ -43,11 +43,9 @@ const notifyUsers = async (req, res) => {
   try {
     const { title, body } = req.body;
     const devices = await UserDeviceInfo.find({});
-    console.log("list of token ", devices);
     const tokens = devices
       .map((device) => device.token)
       .filter((token) => !!token);
-    console.log("my tokens", tokens);
     if (tokens.length === 0) {
       return res.status(404).json({
         success: false,

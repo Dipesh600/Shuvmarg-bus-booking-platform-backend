@@ -3,6 +3,7 @@
 const User = require('../../../../../models/userModel');
 const BusOwner = require('../../../../../models/busOwnerModel');
 const OTP = require('../../../../../models/otpModel');
+const { availableAccountFilter } = require('../../../../shared/auth/role-grant-state');
 
 const findConsumedOtp = (phone) => OTP.findOne({
   phone,
@@ -12,8 +13,8 @@ const findConsumedOtp = (phone) => OTP.findOne({
 
 const findUserByEmail = (email) => User.findOne({ email });
 
-const upgradeUserToBusOwner = (userId, activatedAt) => User.findByIdAndUpdate(
-  userId,
+const upgradeUserToBusOwner = (userId, activatedAt) => User.findOneAndUpdate(
+  { ...availableAccountFilter(userId), password: { $exists: true, $type: 'string', $ne: '' } },
   {
     $addToSet: { roles: 'busOwner' },
     $set: { 'roleActivatedAt.busOwner': activatedAt },
@@ -57,7 +58,7 @@ const hasUsablePassword = (userId) =>
 const upgradePasswordlessUserToBusOwner = ({ userId, hashedPassword, activatedAt }) =>
   User.findOneAndUpdate(
     {
-      _id: userId,
+      ...availableAccountFilter(userId),
       $or: [
         { password: { $exists: false } },
         { password: null },
@@ -66,6 +67,7 @@ const upgradePasswordlessUserToBusOwner = ({ userId, hashedPassword, activatedAt
     },
     {
       $addToSet: { roles: 'busOwner' },
+      $inc: { tokenVersion: 1 },
       $set: {
         password: hashedPassword,
         'roleActivatedAt.busOwner': activatedAt,
