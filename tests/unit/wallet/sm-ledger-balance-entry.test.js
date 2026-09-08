@@ -25,6 +25,7 @@ test("SM ledger balance and entry contracts", async (t) => {
     assert.equal(pipeline[0].$match.userId, "oid:u1");
     assert.equal(pipeline[0].$match.direction, "CREDIT");
     assert.equal(pipeline[0].$match.status, "ACTIVE");
+    assert.deepEqual(pipeline[0].$match.$or[0], { type: "REFUND", expires_at: null });
   });
 
   await t.test("locked and empty balances preserve result shapes", async () => {
@@ -69,18 +70,31 @@ test("SM ledger balance and entry contracts", async (t) => {
     assert.deepEqual(calls[2], ["sort", { expires_at: 1 }]);
   });
 
-  await t.test("credit uses configured expiry and exact active payload", async () => {
+  await t.test("refund credit never expires", async () => {
     let created;
+    let configLoaded = false;
     const service = createSmLedgerEntryService({
       SMLedger: { create: async (rows, options) => ((created = { rows, options }), [{ _id: "c1" }]) },
-      PlatformConfig: { getConfig: async () => ({ creditExpiryMonths: 6 }) },
+      PlatformConfig: { getConfig: async () => ((configLoaded = true), { creditExpiryMonths: 6 }) },
       now: () => new Date("2026-01-15T00:00:00Z"),
     });
     assert.deepEqual(await service.creditLedger({ userId: "u1", type: "REFUND", amount: 25 }), { _id: "c1" });
     assert.equal(created.rows[0].remainingAmount, 25);
     assert.equal(created.rows[0].direction, "CREDIT");
-    assert.equal(created.rows[0].expires_at.toISOString(), "2026-07-15T00:00:00.000Z");
+    assert.equal(created.rows[0].expires_at, null);
+    assert.equal(configLoaded, false);
     assert.deepEqual(created.options, {});
+  });
+
+  await t.test("promotional credit uses configured expiry", async () => {
+    let row;
+    const service = createSmLedgerEntryService({
+      SMLedger: { create: async (rows) => (([row] = rows), rows) },
+      PlatformConfig: { getConfig: async () => ({ creditExpiryMonths: 6 }) },
+      now: () => new Date("2026-01-15T00:00:00Z"),
+    });
+    await service.creditLedger({ userId: "u1", type: "CASHBACK", amount: 25 });
+    assert.equal(row.expires_at.toISOString(), "2026-07-15T00:00:00.000Z");
   });
 
   await t.test("locked credit and simple debit preserve lifecycle fields", async () => {

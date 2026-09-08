@@ -11,6 +11,11 @@ const createPassengerBookingCancellationService = (
     if (!ticketId) {
       throw new PassengerBookingCancellationValidationError(400, "ticketId is required");
     }
+    if (requestBody?.seats !== undefined || requestBody?.seatNumbers !== undefined) {
+      throw new PassengerBookingCancellationValidationError(
+        400, "Partial-seat cancellation is not supported. Cancel the complete booking."
+      );
+    }
 
     const committed = await repository.withTransaction(async (session) => {
       const booking = await repository.findBookingByTicketId(ticketId, session);

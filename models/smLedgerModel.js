@@ -116,7 +116,7 @@ const smLedgerSchema = new mongoose.Schema(
       default: null,
     },
 
-    // When this credit expires (12 months from creation for most types)
+    // Refund credit never expires. Promotional and reward credit uses configured expiry.
     expires_at: {
       type: Date,
       default: null, // Null for DEBIT entries

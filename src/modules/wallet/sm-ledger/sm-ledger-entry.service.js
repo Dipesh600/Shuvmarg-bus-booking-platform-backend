@@ -17,12 +17,12 @@ function createSmLedgerEntryService({ SMLedger, PlatformConfig, now = () => new 
   }) {
     if (amount <= 0) throw new Error("Credit amount must be greater than zero");
     let expiryMonths = expiresInMonths;
-    if (expiryMonths === null) {
+    if (expiryMonths === null && type !== "REFUND") {
       const config = await PlatformConfig.getConfig("sm_money_config");
       expiryMonths = config.creditExpiryMonths || 12;
     }
-    const expiresAt = now();
-    expiresAt.setMonth(expiresAt.getMonth() + expiryMonths);
+    const expiresAt = type === "REFUND" ? null : now();
+    if (expiresAt) expiresAt.setMonth(expiresAt.getMonth() + expiryMonths);
     const entries = await SMLedger.create(
       [
         {

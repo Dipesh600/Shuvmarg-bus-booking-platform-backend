@@ -12,6 +12,14 @@ test("cancelPassengerBooking - missing ticketId", async () => {
   }
 });
 
+test("cancelPassengerBooking - rejects ambiguous partial-seat requests", async () => {
+  const service = createPassengerBookingCancellationService({}, {}, {}, {});
+  await assert.rejects(
+    () => service.cancelPassengerBooking("T1", "u1", "reason", { seatNumbers: ["A1"] }),
+    /Partial-seat cancellation is not supported/
+  );
+});
+
 test("cancelPassengerBooking - booking not found", async () => {
   const repo = { findBookingByTicketId: async () => null };
   const service = createPassengerBookingCancellationService({ withTransaction: work => work(null), claimBooking: async () => true, ...repo }, {}, {}, {});

@@ -19,13 +19,15 @@ async function inspectPaymentIndexes(db, models) {
   return report;
 }
 async function run() {
-  require('dotenv').config();
   mongoose.set('autoIndex', false); mongoose.set('autoCreate', false);
   try {
-    if (!process.env.MONGODB_URL) throw new Error('Database configuration missing');
+    if (!process.env.PAYMENT_PREFLIGHT_MONGODB_URI) throw new Error('Dedicated preflight database configuration missing');
     const names = ['smLedger', 'bookTicket', 'refund', 'financialOperation', 'refundSettlement', 'esewaPaymentAttempt', 'seatHold', 'settlementTripClaim', 'coupon'];
     const models = names.map(name => require(`../models/${name}Model`));
-    await mongoose.connect(process.env.MONGODB_URL, { autoIndex: false, autoCreate: false });
+    await mongoose.connect(process.env.PAYMENT_PREFLIGHT_MONGODB_URI, {
+      autoIndex: false, autoCreate: false, readPreference: 'secondaryPreferred',
+      readConcern: { level: 'majority' }, serverSelectionTimeoutMS: 15000,
+    });
     const report = await inspectPaymentIndexes(mongoose.connection.db, models);
     console.log(JSON.stringify(report, null, 2));
     process.exitCode = report.ready ? 0 : 2;

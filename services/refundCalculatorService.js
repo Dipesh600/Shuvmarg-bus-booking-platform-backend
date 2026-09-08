@@ -12,7 +12,7 @@
  *   - Policies are time-window based (hours before departure)
  *   - If no active policy matches, falls back to 100% refund (operator-friendly default)
  *   - If trip has already departed, cancellation is blocked
- *   - Gateway deduction is currently 0 (eSewa doesn't charge for manual refunds)
+ *   - Provider fees are not deducted from passengers; the saved cancellation policy is the only deduction
  *   - Monetary calculations use paisa and preserve the saved policy when available.
  */
 
@@ -115,7 +115,7 @@ async function calculateRefund({
     };
   }
 
-  const gatewayDeduction = 0; // eSewa manual refunds have no gateway fee
+  const gatewayDeduction = 0;
   if (!Number.isFinite(refundPercentage) || refundPercentage < 0 || refundPercentage > 100) {
     throw new Error("Invalid refund percentage; policy requires review");
   }

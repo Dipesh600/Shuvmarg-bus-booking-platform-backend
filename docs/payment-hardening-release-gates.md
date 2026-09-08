@@ -19,6 +19,13 @@ customer balances have been changed.
   operator cancellation.
 - Refund calculations use paisa and preserve new bookings' policy snapshots.
   Original-payment refunds retain a separate SM and external allocation.
+- Refund-originated SM Money does not expire and may cover the complete fare.
+  Promotional and reward credit keeps its configured expiry and purchase cap.
+  Provider fees are not deducted from the passenger; only the saved cancellation
+  policy may reduce an eligible refund.
+- Passenger cancellation applies to the complete booking and releases all of its
+  seats. Partial-seat cancellation is unsupported and explicit partial requests
+  fail instead of being interpreted as a full cancellation.
 - Manual external settlement requires a saved receipt/reference and a different
   finance administrator to approve it. A reference cannot settle two cases.
   This is manual review, not automated verification by the payment provider.
@@ -69,23 +76,30 @@ customer balances have been changed.
 3. Provision finance access to the payment review queue and verify it on staging.
    Confirm uncertain references in the provider dashboard. Unknown/NOT_FOUND alone
    is never sufficient to release funds. Automatic verification continues.
-4. Validate retained fees, credit expiry and partial-seat rules against staging data.
-   PIN-free purchase approval and passenger-selected cancellation destinations are
-   implemented. Refund credit may fund the full remaining fare; promotional value
-   stays capped. Manual settlement requires two eligible administrators.
+4. Validate the recorded refund policy against staging data. PIN-free purchase
+   approval and passenger-selected cancellation destinations are implemented.
+   Refund credit never expires and may fund the full remaining fare; promotional
+   value stays capped and retains configured expiry. Provider fees are not charged
+   to passengers. Cancellation is whole-booking only. Manual external settlement
+   requires two eligible administrators for every amount.
    Rejection now releases budget only when no payout evidence exists, within the
    same transaction. Rejected rows stay closed; a replacement uses a new operation key.
 5. Cumulative refund limits per source now pass concurrent paisa tests. Invalid
-   source allocations fail closed. Review legacy allocation gaps. UTC policy boundaries are locally tested; confirm
-   the deployed timetable convention and partial-seat business rules.
+   source allocations fail closed. Review legacy allocation gaps. UTC policy
+   boundaries are locally tested; confirm the deployed timetable convention.
 6. Run the existing read-only reversal audit against a restored backup with
    read-only credentials. Investigate findings before proposing any correction.
+   Run `scripts/migrateRefundCreditExpiry.js` without `--apply` on that connection
+   to count legacy refund credits that still expire. The apply mode requires a
+   separate migration connection and explicit confirmation; use it only after the
+   report and backup are reviewed.
 7. Verify required indexes exist before enabling new writers. These include
    the partial unique `operationKey` indexes on ledger/refund records, unique
    `paymentOperationKey` on bookings, `(scope, operationId)` on financial
    operations, `(method, reference)` on refund settlements and the existing
    attempt/hold uniqueness constraints and unique settlement trip claims. Run
-   `node scripts/preflightPaymentIndexes.js` using read-only access. Preflight duplicate data first; never
+   `PAYMENT_PREFLIGHT_MONGODB_URI='<read-only-uri>' node scripts/preflightPaymentIndexes.js`.
+   Use a dedicated read-only account. Preflight duplicate data first; never
    drop existing indexes or edit balances to force a migration through.
 8. On staging, verify replica-set transactions, provider sandbox configuration,
    MFA finance users, proof storage/read access, worker scheduling, alerts and

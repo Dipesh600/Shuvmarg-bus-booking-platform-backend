@@ -26,14 +26,15 @@ test("SM ledger FIFO debit contracts", async (t) => {
     const txn = session();
     const saved = [];
     const updates = [];
+    let balancePipeline, creditFilter;
     const credits = [
       { _id: "c1", remainingAmount: 30, status: "ACTIVE", async save(value) { saved.push([this._id, value]); } },
       { _id: "c2", remainingAmount: 50, status: "ACTIVE", async save(value) { saved.push([this._id, value]); } },
     ];
     let debitPayload;
     const SMLedger = {
-      aggregate: () => ({ session: async () => [{ total: 80 }] }),
-      find: () => ({
+      aggregate: (value) => ((balancePipeline = value), { session: async () => [{ total: 80 }] }),
+      find: (value) => ((creditFilter = value), {
         sort(value) { assert.deepEqual(value, { expires_at: 1 }); return this; },
         session: async () => credits,
       }),
@@ -62,6 +63,8 @@ test("SM ledger FIFO debit contracts", async (t) => {
     assert.equal(txn.committed, 1);
     assert.equal(txn.aborted, 0);
     assert.equal(txn.ended, 1);
+    assert.deepEqual(balancePipeline[0].$match.$or[0], { type: "REFUND", expires_at: null });
+    assert.deepEqual(creditFilter.$or[0], { type: "REFUND", expires_at: null });
   });
 
   await t.test("insufficient balance aborts once without a partial debit", async () => {

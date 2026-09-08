@@ -39,7 +39,7 @@ function createSmLedgerFifoDebitService({
             direction: "CREDIT",
             status: "ACTIVE",
             remainingAmount: { $gt: 0 },
-            expires_at: { $gt: now() },
+            $or: [{ type: "REFUND", expires_at: null }, { expires_at: { $gt: now() } }],
           },
         },
         { $group: { _id: null, total: { $sum: "$remainingAmount" } } },
@@ -58,7 +58,7 @@ function createSmLedgerFifoDebitService({
         direction: "CREDIT",
         status: "ACTIVE",
         remainingAmount: { $gt: 0 },
-        expires_at: { $gt: now() },
+        $or: [{ type: "REFUND", expires_at: null }, { expires_at: { $gt: now() } }],
       })
         .sort({ expires_at: 1 })
         .session(session);

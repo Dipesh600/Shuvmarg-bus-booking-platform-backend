@@ -9,7 +9,7 @@ function createSmLedgerBalanceService({ SMLedger, toObjectId, now = () => new Da
           direction: "CREDIT",
           status: "ACTIVE",
           remainingAmount: { $gt: 0 },
-          expires_at: { $gt: now() },
+          $or: [{ type: "REFUND", expires_at: null }, { expires_at: { $gt: now() } }],
         },
       },
       { $group: { _id: null, total: { $sum: "$remainingAmount" } } },
@@ -31,7 +31,7 @@ function createSmLedgerBalanceService({ SMLedger, toObjectId, now = () => new Da
           direction: "CREDIT",
           status: "ACTIVE",
           remainingAmount: { $gt: 0 },
-          expires_at: { $gt: now() },
+          $or: [{ type: "REFUND", expires_at: null }, { expires_at: { $gt: now() } }],
         },
       },
       {

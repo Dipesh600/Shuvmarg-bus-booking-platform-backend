@@ -14,7 +14,7 @@ async function main() {
   // No dotenv or application bootstrap; no collection or index creation on connect.
   await mongoose.connect(process.env.PAYMENT_AUDIT_MONGODB_URI, {
     autoIndex: false, autoCreate: false, readConcern: { level: "majority" },
-    serverSelectionTimeoutMS: 15000,
+    readPreference: "secondaryPreferred", maxPoolSize: 2, serverSelectionTimeoutMS: 15000,
   });
   const counts = {};
   let examined = 0;

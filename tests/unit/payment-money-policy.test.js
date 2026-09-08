@@ -15,6 +15,7 @@ test("saved refund rules survive later policy changes and preserve paisa and spl
     ] } });
   assert.equal(result.refundAmount, 20.01);
   assert.equal(result.cancellationCharge, 80.04);
+  assert.equal(result.gatewayDeduction, 0);
   assert.equal(result.smRefundAmount, 6.67);
   assert.equal(result.gatewayRefundAmount, 13.34);
   assert.equal(result.appliedPolicy.id, "saved-rule");
