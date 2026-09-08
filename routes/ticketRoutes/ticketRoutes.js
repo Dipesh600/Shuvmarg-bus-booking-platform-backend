@@ -94,5 +94,7 @@ const passengerBookingCancellation = require("../../src/modules/booking/passenge
 router.post("/cancelTicket", auth, verifyRoleFromDB, passengerBookingCancellation.cancelPassengerBooking);
 // Cancel Estimate (preview refund breakdown)
 router.post("/cancelEstimate", auth, verifyRoleFromDB, passengerBookingCancellation.estimatePassengerBookingCancellation);
+router.post("/selectRefundDestination", auth, verifyRoleFromDB,
+  passengerBookingCancellation.selectOperatorRefundDestination);
 
 module.exports = router;

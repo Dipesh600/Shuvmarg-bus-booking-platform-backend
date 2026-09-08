@@ -57,12 +57,13 @@ guarantees. Confirm those with eSewa before connecting refund initiation.
 - Gateway-only checkout continues through the provider's authorization and does
   not require the SM Money code.
 
-## Agreed policy still requiring implementation
+## Agreed refund and credit policy
 
-- Offer SM or original-source destination for passenger and operator cancellation.
-  Operator cancellation's passenger-choice workflow still needs implementation.
-- Refund SM may fund an entire future ticket; promotional credit and coupons have
-  separate limits. Verify source classification and allocation end to end.
+- Passenger cancellations choose SM Money or original sources before cancellation commits.
+- Operator cancellations reserve the full refund, then wait for the owning passenger's
+  one-time destination choice. Finance settlement is blocked until that choice exists.
+- Refund credit may fund the full remaining fare and is consumed first. Promotional
+  credit and coupons remain under the configured combined discount cap.
 - On failed fulfillment, restore each split contribution to its original source.
 
 ## Verification and release

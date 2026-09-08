@@ -74,6 +74,7 @@ const mapToPassengerHistory = (booking, transaction, refund, reviewedSet, presig
           reason: refund.reason,
           remarks: refund.remarks,
           refundGateway: refund.refundGateway,
+          destination: refund.destination,
         }
       : null,
   };

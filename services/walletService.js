@@ -8,7 +8,6 @@ const smLedgerService = require("../src/modules/wallet/sm-ledger");
  * Wallet Service — Bridge layer between old Wallet model and new SM Ledger.
  *
  *   - Balance is always computed from sm_ledger (never from Wallet.balance)
- *   - PIN management still lives on the Wallet model
  *   - Wallet.balance is kept in sync as a CACHE for performance on
  *     non-critical reads (e.g., push notification text), but the ledger
  *     aggregation is the authoritative source.
@@ -18,7 +17,6 @@ const smLedgerService = require("../src/modules/wallet/sm-ledger");
 /**
  * Get or create wallet for a user.
  * Auto-creates a wallet with zero balance on first access.
- * Still needed: PIN storage lives on the Wallet document.
  */
 const getOrCreateWallet = async (userId, session = null) => {
   const query = Wallet.findOne({ userId });
@@ -90,7 +88,7 @@ const creditWallet = async ({
 }) => withMongoTransaction(mongoose, existingSession, async session => {
   amount = fromMinorUnits(toMinorUnits(amount, { allowZero: false }));
 
-  // Ensure wallet exists (for PIN and status check)
+  // Ensure wallet exists for status checks and the compatibility balance cache.
   const wallet = await getOrCreateWallet(userId, session);
 
   if (wallet.status !== "active" && purpose !== "refund") {

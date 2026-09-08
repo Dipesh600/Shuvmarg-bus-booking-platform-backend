@@ -145,5 +145,13 @@ test('passenger-booking-preparation policy tests', async (t) => {
     assert.equal(q4.smMoneyApplied, 300);
     assert.equal(q4.gatewayAmount, 200);
     assert.equal(q4.paymentAmount, 200);
+
+    const q5 = policy.calculatePreparationQuote({ originalAmount: 1000,
+      couponDiscount: 700, requestedSmMoney: 300, spendableBalance: 1000,
+      refundBalance: 200, restrictedBalance: 800, maxDiscountPercent: 80 });
+    assert.equal(q5.maxSmMoneyAllowed, 300);
+    assert.equal(q5.refundMoneyApplied, 200);
+    assert.equal(q5.restrictedMoneyApplied, 100);
+    assert.equal(q5.gatewayAmount, 0);
   });
 });

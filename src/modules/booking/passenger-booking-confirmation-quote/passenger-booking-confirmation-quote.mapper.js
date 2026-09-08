@@ -7,6 +7,8 @@ function mapPassengerBookingConfirmationQuote({
   appliedCouponCode,
   requestedSmMoney,
   smMoneyApplied,
+  refundMoneyApplied,
+  restrictedMoneyApplied,
   gatewayAmount,
   expectedTotal,
 }) {
@@ -17,6 +19,8 @@ function mapPassengerBookingConfirmationQuote({
     appliedCouponCode,
     requestedSmMoney,
     smMoneyApplied,
+    refundMoneyApplied,
+    restrictedMoneyApplied,
     gatewayAmount,
     expectedTotal,
   };

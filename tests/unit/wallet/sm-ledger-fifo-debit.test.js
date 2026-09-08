@@ -80,6 +80,31 @@ test("SM ledger FIFO debit contracts", async (t) => {
     assert.equal(txn.ended, 1);
   });
 
+  await t.test("ticket purchases consume unrestricted refund credit before promotional credit", async () => {
+    const txn = session();
+    const credits = [
+      { _id: "promo", type: "CASHBACK", remainingAmount: 100, status: "ACTIVE", async save() {} },
+      { _id: "refund", type: "REFUND", remainingAmount: 40, status: "ACTIVE", async save() {} },
+    ];
+    let debitPayload;
+    const debit = createSmLedgerFifoDebitService({
+      mongoose: { startSession: async () => txn },
+      SMLedger: {
+        aggregate: () => ({ session: async () => [{ total: 140 }] }),
+        find: () => ({ sort() { return this; }, session: async () => credits }),
+        create: async ([row]) => ((debitPayload = row), [{ _id: "d1", ...row }]),
+        updateOne: async () => {},
+      },
+      toObjectId: (value) => value,
+    });
+    await debit({ userId: "u1", amount: 50,
+      paymentContext: { preferRefundCredit: true } });
+    assert.deepEqual(debitPayload.consumedBy, [
+      { debitLedgerEntryId: "refund", amountConsumed: 40 },
+      { debitLedgerEntryId: "promo", amountConsumed: 10 },
+    ]);
+  });
+
   await t.test("write failure aborts once and always ends the session", async () => {
     const txn = session();
     const credit = {

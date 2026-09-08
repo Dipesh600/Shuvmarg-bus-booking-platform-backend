@@ -50,6 +50,24 @@ function createPassengerBookingCancellationRepository() {
       return require("../../../shared/refund-budget").createBudgetedRefund(refundData, session);
     },
 
+    async findRefundForBooking(refundId, bookingId, userId, session) {
+      const query = Refund.findOne({ _id: refundId, bookingId, userId });
+      return await (session ? query.session(session) : query);
+    },
+
+    async claimRefundDestination(refundId, userId, destination, session) {
+      const query = Refund.findOneAndUpdate(
+        { _id: refundId, userId, destination: null, status: "pending" },
+        { $set: { destination } },
+        { new: true, ...(session ? { session } : {}) }
+      );
+      return await query;
+    },
+
+    async saveRefund(refund, session) {
+      return refund.save(session ? { session } : {});
+    },
+
     async saveBooking(booking, session) {
       return await booking.save(session ? { session } : {});
     },

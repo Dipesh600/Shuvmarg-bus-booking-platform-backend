@@ -42,24 +42,29 @@ function calculateConfirmationQuote({
   paymentAmount,
   requestedSmMoney,
   spendableBalance,
+  refundBalance = 0,
+  restrictedBalance = spendableBalance,
   maxDiscountPercent,
 }) {
+  const afterCoupon = originalAmount - discountAmount;
   const maxTotalDiscount = Math.floor(originalAmount * (maxDiscountPercent / 100));
-  const maxSmMoneyAllowed = Math.max(0, maxTotalDiscount - discountAmount);
+  const restrictedMoneyAllowed = Math.min(restrictedBalance, Math.max(0, maxTotalDiscount - discountAmount));
+  const maxSmMoneyAllowed = Math.min(afterCoupon, refundBalance + restrictedMoneyAllowed);
 
   let smMoneyApplied = Math.min(requestedSmMoney, spendableBalance, maxSmMoneyAllowed);
   if (smMoneyApplied <= 0) smMoneyApplied = 0;
 
   let gatewayAmount;
   if (gateway === 'wallet') {
-    smMoneyApplied = originalAmount - discountAmount;
+    smMoneyApplied = Math.min(afterCoupon, spendableBalance, maxSmMoneyAllowed);
     gatewayAmount = 0;
   } else {
-    const afterCoupon = originalAmount - discountAmount;
     gatewayAmount = afterCoupon - smMoneyApplied;
   }
 
-  return { smMoneyApplied, gatewayAmount, maxSmMoneyAllowed };
+  const refundMoneyApplied = Math.min(refundBalance, smMoneyApplied);
+  const restrictedMoneyApplied = smMoneyApplied - refundMoneyApplied;
+  return { smMoneyApplied, refundMoneyApplied, restrictedMoneyApplied, gatewayAmount, maxSmMoneyAllowed };
 }
 
 function validateConfirmationAmount({ finalAmount, gatewayAmount, smMoneyApplied }) {

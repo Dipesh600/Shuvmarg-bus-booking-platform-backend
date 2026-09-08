@@ -13,7 +13,8 @@ function createPassengerSplitPaymentService({ smLedgerService, logger, mapper })
     throw new Error('createPassengerSplitPaymentService: mapper is required');
   }
 
-  async function debitPassengerSplitPayment({ gateway, userId, amount, tempBookingId }) {
+  async function debitPassengerSplitPayment({ gateway, userId, amount, tempBookingId,
+    refundMoneyApplied = 0, restrictedMoneyApplied = 0 }) {
     if (gateway === 'wallet' || !amount || amount <= 0) {
       return { ok: true, applied: false, debitEntryId: null };
     }
@@ -24,7 +25,8 @@ function createPassengerSplitPaymentService({ smLedgerService, logger, mapper })
         amount,
         bookingId: null,
         operationKey: `checkout:${tempBookingId}`,
-        paymentContext: { tempBookingId, gateway },
+        paymentContext: { tempBookingId, gateway, preferRefundCredit: true,
+          refundMoneyApplied, restrictedMoneyApplied },
         note: `SM Money spent at checkout: Rs. ${amount} (temp: ${tempBookingId})`,
       });
 

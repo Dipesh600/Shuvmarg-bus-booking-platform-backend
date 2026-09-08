@@ -22,7 +22,8 @@ function createPassengerWalletPaymentService({
     throw new Error('createPassengerWalletPaymentService: mapper is required');
   }
 
-  async function debitPassengerWalletPayment({ userId, amount, tempBookingId }) {
+  async function debitPassengerWalletPayment({ userId, amount, tempBookingId,
+    refundMoneyApplied = 0, restrictedMoneyApplied = 0 }) {
     const userWallet = await walletRepository.findPassengerWalletByUserId(userId);
 
     if (!userWallet) {
@@ -39,7 +40,8 @@ function createPassengerWalletPaymentService({
         amount,
         bookingId: null,
         operationKey: `checkout:${tempBookingId}`,
-        paymentContext: { tempBookingId, gateway: "wallet" },
+        paymentContext: { tempBookingId, gateway: "wallet", preferRefundCredit: true,
+          refundMoneyApplied, restrictedMoneyApplied },
         note: `SM Wallet full payment: Rs. ${amount} (temp: ${tempBookingId})`,
       });
 

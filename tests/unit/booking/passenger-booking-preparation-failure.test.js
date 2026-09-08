@@ -17,7 +17,7 @@ function makeService(balanceResult) {
       findTripSeatDocument: async () => fakeSeatDoc,
     },
     couponHelper: {},
-    smLedgerService: { computeSpendableBalance: async () => balanceResult },
+    smLedgerService: { computePurchaseBalance: async () => balanceResult },
     platformConfig: { getConfig: async () => ({ maxDiscountPercent: 80 }) },
     passengerSeatHold: {
       normalizeSeatNumbers: (s) => s.map((x) => x.toLowerCase()),

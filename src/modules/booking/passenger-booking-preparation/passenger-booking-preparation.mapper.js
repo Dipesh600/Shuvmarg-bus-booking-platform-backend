@@ -23,6 +23,8 @@ function mapPassengerBookingPreparationResponse(params) {
       afterCouponAmount: params.afterCouponAmount,
       smMoneyBalance: params.spendableBalance,
       smMoneyApplied: params.smMoneyApplied,
+      refundMoneyApplied: params.refundMoneyApplied,
+      restrictedMoneyApplied: params.restrictedMoneyApplied,
       maxSmMoneyAllowed: params.maxSmMoneyAllowed,
       totalDiscount: params.totalDiscount,
       gatewayAmount: params.gatewayAmount,

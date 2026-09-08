@@ -83,6 +83,8 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
       gateway,
       userId: state.userId,
       amount: state.smMoneyApplied,
+      refundMoneyApplied: state.refundMoneyApplied,
+      restrictedMoneyApplied: state.restrictedMoneyApplied,
       tempBookingId,
     });
     if (!splitPaymentResult.ok) {
@@ -112,6 +114,8 @@ function createPassengerBookingConfirmationPaymentStage(deps) {
       const walletPaymentResult = await deps.debitPassengerWalletPayment({
         userId: state.userId,
         amount: state.smMoneyApplied,
+        refundMoneyApplied: state.refundMoneyApplied,
+        restrictedMoneyApplied: state.restrictedMoneyApplied,
         tempBookingId,
       });
       if (!walletPaymentResult.ok) {

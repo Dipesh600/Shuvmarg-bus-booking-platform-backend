@@ -20,7 +20,7 @@ async function createReservedAttempt(payload) {
       const debit = await ledger.debitLedgerFIFO({ userId: attempt.userId, amount: attempt.smMoneyApplied,
         operationKey: `checkout:${attempt.tempBookingId}`, session,
         paymentContext: { tempBookingId: attempt.tempBookingId, holdId: attempt.holdId,
-          gateway: "esewa", transactionUuid: attempt.transactionUuid },
+          gateway: "esewa", transactionUuid: attempt.transactionUuid, preferRefundCredit: true },
         note: `SM Money reserved for checkout ${attempt.tempBookingId}` });
       attempt.reservedLedgerEntryId = debit._id;
       await attempt.save({ session });

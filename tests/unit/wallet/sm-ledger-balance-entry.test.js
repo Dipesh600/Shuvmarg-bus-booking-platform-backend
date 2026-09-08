@@ -41,6 +41,17 @@ test("SM ledger balance and entry contracts", async (t) => {
     });
   });
 
+  await t.test("purchase balance separates unrestricted refunds from restricted credit", async () => {
+    const service = createSmLedgerBalanceService({
+      SMLedger: { aggregate: async () => [{ _id: "refund", total: 125.5 }, { _id: "restricted", total: 400 }] },
+      toObjectId: (value) => value,
+      now: () => new Date("2026-01-01T00:00:00Z"),
+    });
+    assert.deepEqual(await service.computePurchaseBalance("u1"), {
+      display: 525.5, refund: 125.5, restricted: 400,
+    });
+  });
+
   await t.test("expiring credits preserve selection, order, and deadline", async () => {
     const calls = [];
     const query = {

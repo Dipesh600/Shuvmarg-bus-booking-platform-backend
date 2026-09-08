@@ -62,6 +62,9 @@ function createSmLedgerFifoDebitService({
       })
         .sort({ expires_at: 1 })
         .session(session);
+      if (paymentContext?.preferRefundCredit) {
+        credits.sort((left, right) => Number(right.type === "REFUND") - Number(left.type === "REFUND"));
+      }
       let remaining = requestedMinor;
       const consumed = [];
       for (const credit of credits) {

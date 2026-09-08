@@ -34,6 +34,13 @@ test("refund completion requires saved proof and a different finance reviewer", 
   assert.equal(await Ledger.countDocuments({ type: "REFUND" }), 0);
 });
 
+test("operator cancellation cannot settle before passenger chooses a destination", async () => {
+  await Booking.updateOne({ _id: data.booking._id }, { $set: { cancelledBy: "admin" } });
+  await Refund.updateOne({ _id: refund._id }, { $set: { destination: null } });
+  await assert.rejects(() => update(author, "processing"), /passenger to select/);
+  assert.equal((await Refund.findById(refund._id)).status, "pending");
+});
+
 test("concurrent completion records one external settlement and one SM refund leg", async () => {
   await submit();
   await Promise.allSettled(Array.from({ length: 20 }, () => update(reviewer, "completed")));

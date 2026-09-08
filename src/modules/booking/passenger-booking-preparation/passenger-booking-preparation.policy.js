@@ -93,19 +93,24 @@ function calculatePreparationQuote({
   originalAmount,
   couponDiscount = 0,
   spendableBalance = 0,
+  refundBalance = 0,
+  restrictedBalance = spendableBalance,
   requestedSmMoney = 0,
   maxDiscountPercent = 80,
 }) {
   const discountAmount = couponDiscount;
+  const afterCouponAmount = originalAmount - discountAmount;
   const maxDiscountPct = maxDiscountPercent || 80;
   const maxTotalDiscount = Math.floor(originalAmount * (maxDiscountPct / 100));
-  const maxSmMoneyAllowed = Math.max(0, maxTotalDiscount - discountAmount);
+  const restrictedMoneyAllowed = Math.min(restrictedBalance, Math.max(0, maxTotalDiscount - discountAmount));
+  const maxSmMoneyAllowed = Math.min(afterCouponAmount, refundBalance + restrictedMoneyAllowed);
 
   let reqSmMoney = Number(requestedSmMoney) || 0;
   reqSmMoney = Math.max(0, Math.floor(reqSmMoney));
   const smMoneyApplied = Math.min(reqSmMoney, spendableBalance, maxSmMoneyAllowed);
+  const refundMoneyApplied = Math.min(refundBalance, smMoneyApplied);
+  const restrictedMoneyApplied = smMoneyApplied - refundMoneyApplied;
 
-  const afterCouponAmount = originalAmount - discountAmount;
   const gatewayAmount = afterCouponAmount - smMoneyApplied;
   const paymentAmount = gatewayAmount;
 
@@ -115,6 +120,8 @@ function calculatePreparationQuote({
     afterCouponAmount,
     spendableBalance,
     smMoneyApplied,
+    refundMoneyApplied,
+    restrictedMoneyApplied,
     maxSmMoneyAllowed,
     totalDiscount: discountAmount + smMoneyApplied,
     gatewayAmount,

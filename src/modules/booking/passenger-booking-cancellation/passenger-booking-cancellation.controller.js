@@ -2,7 +2,8 @@ const { PassengerBookingCancellationValidationError } = require("./passenger-boo
 
 const createPassengerBookingCancellationController = (
   cancellationService,
-  cancellationEstimateService
+  cancellationEstimateService,
+  operatorRefundDestinationService
 ) => {
   const cancelPassengerBooking = async (req, res) => {
     try {
@@ -66,7 +67,24 @@ const createPassengerBookingCancellationController = (
     }
   };
 
-  return { cancelPassengerBooking, estimatePassengerBookingCancellation };
+  const selectOperatorRefundDestination = async (req, res) => {
+    try {
+      const data = await operatorRefundDestinationService.selectOperatorRefundDestination(
+        req.body?.ticketId,
+        req.userInfo.id,
+        req.body?.refundMethod
+      );
+      return res.status(200).json({ status: true, message: "Refund destination selected", data });
+    } catch (error) {
+      if (error instanceof PassengerBookingCancellationValidationError) {
+        return res.status(error.statusCode).json({ status: false, message: error.message });
+      }
+      console.error("Select Refund Destination Error:", error);
+      return res.status(500).json({ status: false, message: "Failed to select refund destination" });
+    }
+  };
+
+  return { cancelPassengerBooking, estimatePassengerBookingCancellation, selectOperatorRefundDestination };
 };
 
 module.exports = {

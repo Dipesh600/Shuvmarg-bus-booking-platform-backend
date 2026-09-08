@@ -91,6 +91,11 @@ function setupConfirmHarness() {
   mockMethod(CouponHelper, 'validateCoupon', () => Promise.resolve(defaults.couponValidation));
   mockMethod(CouponHelper, 'applyCoupon', () => Promise.resolve());
   mockMethod(smLedgerService, 'computeSpendableBalance', () => Promise.resolve(defaults.spendableBalance));
+  mockMethod(smLedgerService, 'computePurchaseBalance', () => Promise.resolve({
+    display: defaults.spendableBalance.display,
+    refund: defaults.spendableBalance.display,
+    restricted: 0,
+  }));
   mockMethod(smLedgerService, 'debitLedgerFIFO', () => Promise.resolve(defaults.debitEntry));
   mockMethod(smLedgerService, 'reverseDebit', () => Promise.resolve());
   mockMethod(smLedgerService, 'generateCashback', () => Promise.resolve({}));

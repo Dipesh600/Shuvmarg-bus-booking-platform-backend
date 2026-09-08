@@ -24,7 +24,9 @@ const createTripCancellationService = ({ mongoose, Booking, Trip, Seat, transiti
       if (claimed.modifiedCount !== 1) throw new Error("Booking cancellation changed concurrently");
       const refund = await createBudgetedRefund({ userId: booking.userId, bookingId: booking._id,
         originalAmount: booking.totalAmount, refundAmount: booking.totalAmount,
-        reason: "Trip Cancelled by Operator", status: booking.totalAmount > 0 ? "pending" : "not_applicable" }, session);
+        reason: "Trip Cancelled by Operator", destination: null,
+        remarks: booking.totalAmount > 0 ? "Waiting for passenger refund destination" : null,
+        status: booking.totalAmount > 0 ? "pending" : "not_applicable" }, session);
       await clawbackCashback(booking._id, { session });
       createPassengerBookingCancellationSeatService().freeSeats(seats, booking.seats);
       booking.status = "cancelled";

@@ -69,9 +69,10 @@ customer balances have been changed.
 3. Provision finance access to the payment review queue and verify it on staging.
    Confirm uncertain references in the provider dashboard. Unknown/NOT_FOUND alone
    is never sufficient to release funds. Automatic verification continues.
-4. Agree refund destination, retained fees, credit expiry, partial-seat rules,
-   PIN replacement (if any), and finance roles. Current PIN and destination
-   choices are preserved. Manual settlement requires two eligible administrators.
+4. Validate retained fees, credit expiry and partial-seat rules against staging data.
+   PIN-free purchase approval and passenger-selected cancellation destinations are
+   implemented. Refund credit may fund the full remaining fare; promotional value
+   stays capped. Manual settlement requires two eligible administrators.
    Rejection now releases budget only when no payout evidence exists, within the
    same transaction. Rejected rows stay closed; a replacement uses a new operation key.
 5. Cumulative refund limits per source now pass concurrent paisa tests. Invalid

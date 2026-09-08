@@ -20,6 +20,9 @@ async function updateRefund({ refundId, adminId, status, remarks, refundGateway,
     if (!["pending", "processing"].includes(refund.status)) throw fail("This refund is already closed");
     const booking = await Booking.findById(refund.bookingId).session(session);
     if (!booking || String(booking.userId) !== String(refund.userId)) throw fail("Refund ownership requires reconciliation");
+    if (booking.cancelledBy === "admin" && refund.destination === null && refund.refundAmount > 0) {
+      throw fail("Wait for the passenger to select a refund destination");
+    }
     const amountMinor = toMinorUnits(refund.refundAmount);
     const siblings = await Refund.find({ bookingId: booking._id, status: { $nin: ["rejected", "not_applicable"] } }).session(session);
     sourceBudget(booking.toObject(), siblings);
