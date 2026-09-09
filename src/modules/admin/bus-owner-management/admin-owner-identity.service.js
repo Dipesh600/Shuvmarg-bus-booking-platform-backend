@@ -2,10 +2,10 @@
 const { getEffectiveRoles } = require('../../../shared/auth/account-role.policy');
 
 const bcrypt = require("bcryptjs");
+const crypto = require("node:crypto");
 const User = require("../../../../models/userModel");
-const sendOTP = require("../../../../handlers/sparro-otp");
-const generatePassword = require("../../../../handlers/passwordGenerator");
-const { resolveOperatorLoginUrl, temporaryCredentialTtlMs } = require("./operator-portal.config");
+const notificationOutbox = require("../../notifications/outbox");
+const { resolveOperatorLoginUrl } = require("./operator-portal.config");
 
 async function prepareOwnerIdentity(body, deps = {}) {
   const UserModel = deps.User || User;
@@ -23,27 +23,22 @@ async function prepareOwnerIdentity(body, deps = {}) {
     return { existingUser: existing, isNew: false };
   }
   const now = (deps.clock || (() => new Date()))();
-  const password = (deps.generatePassword || generatePassword)(12);
-  const expiresAt = new Date(now.getTime() + temporaryCredentialTtlMs(deps.env));
-  const passwordHash = await (deps.bcryptHash || bcrypt.hash)(password, 12);
+  const bootstrapSecret = (deps.generateBootstrapSecret || (() => crypto.randomBytes(32).toString("base64url")))();
+  const passwordHash = await (deps.bcryptHash || bcrypt.hash)(bootstrapSecret, 12);
   const userData = {
     name: body.ownerName, phone: body.phone, address: body.address,
     password: passwordHash, gender: "male", role: "busOwner", roles: ["busOwner"],
-    status: "active", forcePasswordChange: true,
+    status: "invited", forcePasswordChange: true,
     roleActivatedAt: { busOwner: now },
-    temporaryCredentialIssuedAt: now,
-    temporaryCredentialExpiresAt: expiresAt,
-    temporaryCredentialVersion: 1,
-    temporaryCredentialIssuedBy: deps.issuedBy || null,
   };
   if (body.email) userData.email = body.email;
-  return { userData, password, expiresAt, isNew: true };
+  return { userData, isNew: true };
 }
 
 async function createUnnotifiedUser(prepared, deps = {}) {
   const user = new (deps.User || User)(prepared.userData);
   const savedUser = await user.save();
-  return { user: savedUser, wasCreated: true, roleWasAdded: false, password: prepared.password };
+  return { user: savedUser, wasCreated: true, roleWasAdded: false };
 }
 
 async function addOwnerRoleToExistingUser(existingUser, deps = {}) {
@@ -67,7 +62,7 @@ async function recordDelivery(userId, status, deps = {}) {
   if (!userId) return;
   const now = (deps.clock || (() => new Date()))();
   const set = { "accessNotification.status": status, "accessNotification.lastAttemptAt": now };
-  if (status === "DELIVERED") set["accessNotification.deliveredAt"] = now;
+  if (status === "PROVIDER_ACCEPTED") set["accessNotification.providerAcceptedAt"] = now;
   await (deps.User || User).findByIdAndUpdate(userId, {
     $set: set, $inc: { "accessNotification.attempts": 1 },
   }).catch(() => {});
@@ -75,9 +70,24 @@ async function recordDelivery(userId, status, deps = {}) {
 
 async function sendAccessSms({ userId, phone, message }, deps = {}) {
   try {
-    await (deps.sendOTP || sendOTP)(phone, message);
-    await recordDelivery(userId, "DELIVERED", deps);
-    return { status: "DELIVERED", channel: "SMS", canRetry: false };
+    const businessReference = `bus-owner-user:${userId}`;
+    const result = await (deps.notificationOutbox || notificationOutbox).dispatchSms({
+      messageType: "OWNER_ACCESS",
+      idempotencyKey: `owner-access:${userId}:${deps.notificationVersion || "initial"}`,
+      businessReference,
+      recipientPhone: phone,
+      body: message,
+      userId,
+      ownerId: userId,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      manualReplay: deps.manualReplay || undefined,
+    }, deps.sendOTP ? { send: deps.sendOTP } : {});
+    const accepted = ["PROVIDER_ACCEPTED", "DELIVERED"].includes(result?.status);
+    const pending = ["PENDING", "RETRY_SCHEDULED", "PROCESSING"].includes(result?.status);
+    const status = accepted ? "PROVIDER_ACCEPTED" : pending ? "PENDING" : "FAILED";
+    await recordDelivery(userId, status, deps);
+    return { status, channel: "SMS", canRetry: status === "FAILED",
+      messageId: result?.jobId || null };
   } catch (error) {
     (deps.logger || console).warn("[Admin Owner Access] SMS delivery failed:", error.message);
     await recordDelivery(userId, "FAILED", deps);
@@ -86,10 +96,10 @@ async function sendAccessSms({ userId, phone, message }, deps = {}) {
 }
 
 async function notifyNewOwnerCredentials(input, deps = {}) {
-  if (!input.password) return { status: "NOT_REQUIRED", channel: "SMS", canRetry: false };
   const loginUrl = input.loginUrl || resolveOperatorLoginUrl(deps.env);
-  const expiry = input.expiresAt ? new Date(input.expiresAt).toISOString() : "within 24 hours";
-  const message = `Shuvmarg operator account created. Login phone: ${input.phone}. One-time password: ${input.password}. Sign in at ${loginUrl} and change the password before ${expiry}. Do not share these credentials.`;
+  const activationUrl = loginUrl.replace(/\/login\/?$/, "/activate-account");
+  const message = `Shuvmarg operator account created for ${input.phone}. Open ${activationUrl}, `
+    + "choose Activate invited account, verify the SMS code, and create your password.";
   return sendAccessSms({ ...input, message }, deps);
 }
 

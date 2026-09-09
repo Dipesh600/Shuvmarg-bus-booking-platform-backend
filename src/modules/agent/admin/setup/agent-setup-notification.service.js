@@ -1,7 +1,7 @@
 'use strict';
 
-const sendOTP = require('../../../../../handlers/sparro-otp');
 const notificationManager = require('../../../../../controllers/notificationController/notification_manager');
+const notificationOutbox = require('../../../notifications/outbox');
 
 const welcomeSms = (agentUser, agent) => (
   `Welcome to Shuvmarg, ${agentUser.name || 'Agent'}! ` +
@@ -9,10 +9,18 @@ const welcomeSms = (agentUser, agent) => (
   'Start selling tickets now at www.shuvmargagent.vercel.app/'
 );
 
-const sendSmsIfPossible = async (agentUser, agent) => {
+const sendSmsIfPossible = async (agentUser, agent, deps = {}) => {
   if (!agentUser?.phone) return;
   try {
-    await sendOTP(agentUser.phone, welcomeSms(agentUser, agent));
+    await (deps.dispatchSms || notificationOutbox.dispatchSms)({
+      messageType: 'AGENT_SETUP_APPROVED',
+      idempotencyKey: `agent:${agent._id || agent.agentId}:setup-approved:${agent.__v || 1}`,
+      businessReference: `agent:${agent._id || agent.agentId}`,
+      recipientPhone: agentUser.phone,
+      body: welcomeSms(agentUser, agent),
+      userId: agentUser._id || agent.user,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
   } catch (smsErr) {
     console.warn('[finalizeAgentSetup] SMS failed (non-fatal):', smsErr.message);
   }
@@ -32,8 +40,8 @@ const createLocalWelcome = async (agent) => {
   }
 };
 
-const notifyOperatorLinkedAgent = async (agentUser, agent) => {
-  await sendSmsIfPossible(agentUser, agent);
+const notifyOperatorLinkedAgent = async (agentUser, agent, deps = {}) => {
+  await sendSmsIfPossible(agentUser, agent, deps);
   await createLocalWelcome(agent);
 };
 

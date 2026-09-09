@@ -62,7 +62,7 @@ const dashboardService = createDashboardService({
 });
 const manifestService = createManifestService({ Trip, Booking });
 const cancellationService = createTripCancellationService({ mongoose, Booking, Trip,
-  Seat: require("../../../../models/seatsModel"), transitionPolicy,
+  Seat: require("../../../../models/seatsModel"), User: require("../../../../models/userModel"), transitionPolicy,
   clawbackCashback: require("../../wallet/sm-ledger").clawbackCashback });
 const referralService = createReferralUnlockService({
   Booking,

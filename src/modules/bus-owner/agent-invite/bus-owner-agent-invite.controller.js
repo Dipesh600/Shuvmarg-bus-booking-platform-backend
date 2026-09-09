@@ -3,6 +3,7 @@
 const AppError = require('../../../shared/errors/app-error');
 const asyncHandler = require('../../../shared/http/async-handler');
 const respond = require('../../../shared/http/respond');
+const invitationOperations = require('./bus-owner-agent-invitation-operations.service');
 const service = require('./bus-owner-agent-invite.service');
 
 const unauthorized = { success: false, message: 'Unauthorized.' };
@@ -27,6 +28,34 @@ const createAgent = asyncHandler(async (req, res) => {
   }
 });
 
+const resendAgentInvitation = asyncHandler(async (req, res) => {
+  const ownerId = req.userInfo?.id;
+  if (!ownerId) return respond(res, 401, unauthorized);
+  try {
+    const result = await invitationOperations.resendAgentInvitation(ownerId, req.params.agentId);
+    return respond(res, result.statusCode, result.responseBody);
+  } catch (error) {
+    if (error instanceof AppError) return respond(res, error.statusCode, error.responseBody);
+    console.error('[BusOwner resendAgentInvitation] Error:', error.message);
+    return respond(res, 500, { success: false, message: 'Internal Server Error' });
+  }
+});
+
+const getAgentInvitationStatus = asyncHandler(async (req, res) => {
+  const ownerId = req.userInfo?.id;
+  if (!ownerId) return respond(res, 401, unauthorized);
+  try {
+    const result = await invitationOperations.getAgentInvitationStatus(ownerId, req.params.agentId);
+    return respond(res, result.statusCode, result.responseBody);
+  } catch (error) {
+    if (error instanceof AppError) return respond(res, error.statusCode, error.responseBody);
+    console.error('[BusOwner getAgentInvitationStatus] Error:', error.message);
+    return respond(res, 500, { success: false, message: 'Internal Server Error' });
+  }
+});
+
 module.exports = {
   createAgent,
+  getAgentInvitationStatus,
+  resendAgentInvitation,
 };

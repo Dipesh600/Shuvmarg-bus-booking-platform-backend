@@ -1,11 +1,13 @@
 const refundCalculatorService = require("../../../../services/refundCalculatorService");
 const { PassengerBookingCancellationValidationError } = require("./passenger-booking-cancellation-validation.error");
+const bookingSms = require("../../notifications/outbox/booking-sms.service");
 
 const createPassengerBookingCancellationService = (
   repository,
   seatService,
   refundService,
-  notificationService
+  notificationService,
+  smsService = bookingSms
 ) => {
   const cancelPassengerBooking = async (ticketId, userId, cancelReason, requestBody) => {
     if (!ticketId) {
@@ -78,7 +80,11 @@ const createPassengerBookingCancellationService = (
       booking.refundId = refundInfo._id;
 
       await repository.saveBooking(booking, session);
-      return { booking, estimate };
+      if (repository.findUserById) {
+        const user = await repository.findUserById(userId, session);
+        if (user?.phone) await smsService.enqueueBookingCancelled({ booking, refund: refundInfo, phone: user.phone }, { session });
+      }
+      return { booking, estimate, refundInfo };
     });
     const { booking, estimate } = committed;
 

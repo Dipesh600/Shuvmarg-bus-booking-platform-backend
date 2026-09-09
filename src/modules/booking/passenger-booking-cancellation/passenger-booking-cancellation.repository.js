@@ -3,6 +3,7 @@ const Trip = require("../../../../models/tripModel");
 const Seat = require("../../../../models/seatsModel.js");
 const Refund = require("../../../../models/refundModel");
 const UserDeviceInfo = require("../../../../models/userDeviceInfoModel.js");
+const User = require("../../../../models/userModel.js");
 const mongoose = require('mongoose');
 
 function createPassengerBookingCancellationRepository() {
@@ -78,6 +79,11 @@ function createPassengerBookingCancellationRepository() {
 
     async findUserDevices(userId) {
       return await UserDeviceInfo.find({ userId });
+    },
+
+    async findUserById(userId, session) {
+      const query = User.findById(userId).select("phone");
+      return await (session ? query.session(session) : query);
     }
   };
 }

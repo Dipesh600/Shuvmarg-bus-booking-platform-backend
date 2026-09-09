@@ -43,6 +43,7 @@ function createPassengerOperatorRefundDestinationService(repository, loadCreditW
       if (destination === "original") {
         refund.remarks = "Passenger selected the original payment source";
         await repository.saveRefund(refund, session);
+        await recordRefundSms(repository, booking, refund, session);
         return result(refund);
       }
 
@@ -64,11 +65,20 @@ function createPassengerOperatorRefundDestinationService(repository, loadCreditW
       refund.completedAt = completedAt;
       refund.settlementEvidence = { kind: "ledger", ledgerEntryId: credited?.ledgerEntry?._id || null };
       await repository.saveRefund(refund, session);
+      await recordRefundSms(repository, booking, refund, session);
       return result(refund);
     });
   };
 
   return { selectOperatorRefundDestination };
+}
+
+async function recordRefundSms(repository, booking, refund, session) {
+  if (!repository.findUserById) return;
+  const user = await repository.findUserById(refund.userId, session);
+  if (!user?.phone) return;
+  await require("../../notifications/outbox/booking-sms.service")
+    .enqueueRefundStatus({ booking, refund, phone: user.phone }, { session });
 }
 
 module.exports = { createPassengerOperatorRefundDestinationService };

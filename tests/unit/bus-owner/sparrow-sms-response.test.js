@@ -2,7 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { queuedMessageCount } = require('../../../handlers/sparro-otp');
+const sendSms = require('../../../handlers/sparro-otp');
+const { queuedMessageCount } = sendSms;
 
 test('Sparrow success requires its documented code and a positive queued count', () => {
   assert.equal(queuedMessageCount({ response_code: 200, count: 1 }), 1);
@@ -11,4 +12,13 @@ test('Sparrow success requires its documented code and a positive queued count',
   assert.equal(queuedMessageCount({ count: 1 }), 0);
   assert.equal(queuedMessageCount({ response_code: 1001, count: 1 }), 0);
   assert.equal(queuedMessageCount({ response_code: 200, count: 0 }), 0);
+});
+
+test('Sparrow rejects malformed recipients before making a provider request', async () => {
+  await assert.rejects(
+    sendSms('not-a-phone', 'test'),
+    error => error.name === 'SmsProviderError'
+      && error.providerCode === 'INVALID_PHONE'
+      && error.retryable === false,
+  );
 });

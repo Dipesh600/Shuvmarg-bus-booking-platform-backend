@@ -36,6 +36,8 @@ const addAgentRole = (userId, activatedAt, session) => User.findOneAndUpdate(
 ).lean();
 
 const findAgentByUserId = (userId, session) => Agent.findOne({ user: userId }).session(session || null);
+const findOwnedAgent = (ownerId, agentId) => Agent.findOne({ _id: agentId, createdByOwnerId: ownerId }).lean();
+const findUserForActivation = (userId) => User.findById(userId).select('name phone status roles role deletedAt').lean();
 
 /**
  * Created with `new` + save(), never findOneAndUpdate/upsert: the pre('save')
@@ -50,5 +52,7 @@ module.exports = {
   createAgent,
   createUser,
   findAgentByUserId,
+  findOwnedAgent,
+  findUserForActivation,
   findOwnedBrand,
 };

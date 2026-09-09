@@ -48,11 +48,8 @@ const isValidNepalMobile = (normalisedPhone) => NEPAL_MOBILE_RE.test(String(norm
 /**
  * The User an owner-created agent starts life as.
  *
- * `status: 'invited'` is the whole security story. login.policy rejects that
- * status with ACCOUNT_NOT_ACTIVATED, so the temp password in the SMS cannot be
- * used to reach anything until the agent activates. An owner can therefore
- * create the identity but never operate it — which matters, because the owner
- * chose the password.
+ * `status: 'invited'` prevents login. The bootstrap secret is never disclosed;
+ * activation requires phone OTP verification and a password chosen by the agent.
  */
 const invitedAgentUser = ({ name, phone, hashedPassword, now }) => ({
   name,
@@ -88,11 +85,11 @@ const newOperatorAgent = ({ userId, ownerId, outletType, district, municipality,
   placeName,
 });
 
-const smsBody = ({ name, phone, tempPassword, brandName }) => {
+const smsBody = ({ name, phone, brandName }) => {
   const who = brandName ? ` by ${brandName}` : '';
   return `${name}, you've been added as a ticket agent on Shuvmarg${who}. `
-    + `Login with Phone: ${phone} | Temp Password: ${tempPassword} — `
-    + 'change your password on first login.';
+    + `Open the Partner app, choose Agent, tap "Set up invited account", enter ${phone}, `
+    + 'verify the SMS code, and create your password.';
 };
 
 module.exports = {

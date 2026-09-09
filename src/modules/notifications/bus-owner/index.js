@@ -9,6 +9,7 @@ const {
   createLocalNotification,
 } = require("../../../../controllers/notificationController/notification_manager");
 const fleetStatusPolicy = require("../../admin/fleet-management/fleet-status.policy");
+const notificationOutbox = require("../outbox");
 const { createBusOwnerNotificationService } = require("./bus-owner-notification.service");
 
 // Create a singleton instance of the service
@@ -21,6 +22,7 @@ const busOwnerNotificationService = createBusOwnerNotificationService({
   generateStatusEmail,
   policy: fleetStatusPolicy,
   logger: console,
+  notificationOutbox,
 });
 
 module.exports = {
