@@ -136,6 +136,20 @@ log "Pulling image: ${NEW_IMAGE}"
 docker pull "${NEW_IMAGE}"
 log "Image pulled successfully."
 
+# ── Database indexes required by this release ───────────────────────────────
+# Run the idempotent index command from the immutable image before changing
+# BACKEND_IMAGE or restarting Compose. A failure therefore leaves the current
+# healthy staging deployment untouched.
+log "Ensuring notification outbox indexes..."
+if ! docker run --rm \
+  --env-file "${ENV_FILE}" \
+  "${NEW_IMAGE}" \
+  npm run db:index:notification-outbox; then
+  log_error "Notification outbox index preparation failed. Existing deployment remains active."
+  exit 1
+fi
+log "Notification outbox indexes are ready."
+
 # ── Health and rollback helpers ──────────────────────────────────────────────
 wait_healthy() {
   local elapsed=0
