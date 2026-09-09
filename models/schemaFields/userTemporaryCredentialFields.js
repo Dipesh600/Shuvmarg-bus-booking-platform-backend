@@ -15,11 +15,12 @@ module.exports = {
   accessNotification: {
     status: {
       type: String,
-      enum: ["NOT_ATTEMPTED", "DELIVERED", "FAILED"],
+      enum: ["NOT_ATTEMPTED", "PENDING", "PROVIDER_ACCEPTED", "DELIVERED", "FAILED"],
       default: "NOT_ATTEMPTED",
     },
     attempts: { type: Number, default: 0 },
     lastAttemptAt: { type: Date, default: null },
+    providerAcceptedAt: { type: Date, default: null },
     deliveredAt: { type: Date, default: null },
   },
 };

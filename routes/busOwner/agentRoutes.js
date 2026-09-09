@@ -31,6 +31,11 @@ function registerBusOwnerAgentRoutes(router) {
   // Create an agent identity from name + phone. The owner invites; the agent
   // activates themselves via /api/auth/activate.
   router.post("/agents", agentCreateRateLimit, busOwnerAgentInvite.createAgent);
+  router.post("/agents/:agentId/invitation/resend",
+    require("../../middleware/busOwnerAgentInviteResendRateLimit"),
+    busOwnerAgentInvite.resendAgentInvitation);
+  router.get("/agents/:agentId/invitation/status",
+    assignmentListRateLimit, busOwnerAgentInvite.getAgentInvitationStatus);
 
   // Look up an agent by the code they published, before inviting them.
   // Rate-limited because the code is the only thing standing between a caller and

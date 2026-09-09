@@ -4,6 +4,7 @@ const AppError = require("../../../shared/errors/app-error");
 const { validateAssignment, phoneVariants } = require("./crew-input.policy");
 const { assertDriverCompliance } = require("../../../shared/crew/driver-eligibility.policy");
 const { persistCrewProfile } = require("./crew-profile-persistence.service");
+const { deliverCrewInvitation, enqueueCrewInvitation } = require('./crew-invitation.service');
 
 function createCrewAssignmentService({ mongoose, User, DriverProfile, ConductorProfile, OperatorBrand,
   hashPassword, randomPassword, sendSMS, logger, driverDocuments = null }) {
@@ -19,6 +20,8 @@ function createCrewAssignmentService({ mongoose, User, DriverProfile, ConductorP
     let stagedProfileId = null;
     let stagedLicenseKey = null;
     let result;
+    let invitationJobId = null;
+    let invitationJobStatus = null;
     try {
       if (role === "driver" && driverDocuments) {
         const brand = await OperatorBrand.findOne({ _id: data.brandId, ownerId, status: "ACTIVE" }).lean();
@@ -92,6 +95,17 @@ function createCrewAssignmentService({ mongoose, User, DriverProfile, ConductorP
           }
           result = await persistCrewProfile({ Profile, user, data, ownerId, role, session,
             stagedLicenseKey, stagedProfileId, source, adminId, brand, isUpgrade });
+          const invitation = await enqueueCrewInvitation({
+            role, result, input, ownerId, brandId: data.brandId, session,
+          });
+          invitationJobId = invitation.jobId;
+          invitationJobStatus = invitation.jobStatus;
+          if (invitationJobId) {
+            await Profile.updateOne({ _id: result.profileId, accessStatus: "INVITED" }, {
+              $set: { invitationDeliveryStatus: "PENDING" },
+            }, { session, runValidators: true });
+            result.invitationDeliveryStatus = "PENDING";
+          }
         });
       } finally {
         await session.endSession();
@@ -107,31 +121,14 @@ function createCrewAssignmentService({ mongoose, User, DriverProfile, ConductorP
     // No network side effects inside a retryable database transaction.
     // Only a genuinely invited account needs setup instructions. Existing
     // active accounts already have credentials and can use the newly-added role.
-    const shouldNotify = result.activationRequired
-      && (!result.alreadyAssigned || input.resendInvite === true);
-    let notificationStatus = "NOT_REQUESTED";
-    if (shouldNotify) {
-      try {
-        const delivery = await sendSMS(result.phone,
-          `Sumarg: You are assigned as ${role} for ${result.brand}. Open the Partner app, choose ${role}, tap "Set up invited account", enter ${result.phone}, verify the OTP, and create your password.`);
-        notificationStatus = delivery?.queued === true ? "QUEUED" : "FAILED";
-      } catch (error) {
-        notificationStatus = "FAILED";
-        logger.warn("Crew invitation notification failed", { profileId: result.profileId, error: error.message });
-      }
-      try {
-        await Profile.updateOne({ _id: result.profileId, accessStatus: "INVITED" }, {
-          $set: { invitationDeliveryStatus: notificationStatus,
-            invitationLastAttemptAt: new Date() },
-        }, { runValidators: true });
-        result.invitationDeliveryStatus = notificationStatus;
-      } catch (error) {
-        logger.error("Crew invitation state persistence failed", {
-          profileId: result.profileId, error: error.message,
-        });
-        throw new AppError("Crew was saved, but its invitation state could not be recorded. Retry safely.", 500);
-      }
-    }
+    const notificationStatus = await deliverCrewInvitation({
+      jobId: invitationJobId,
+      jobStatus: invitationJobStatus,
+      Profile,
+      result,
+      sendSMS,
+      logger,
+    });
     return { ...result, notificationStatus };
   };
   return { assign };

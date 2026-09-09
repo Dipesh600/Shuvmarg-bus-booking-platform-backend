@@ -6,6 +6,7 @@ const ACTIVATION_ROLES = new Map([
   ['agent', 'agent'],
   ['conductor', 'conductor'],
   ['driver', 'driver'],
+  ['busowner', 'busOwner'],
 ]);
 
 const requestedActivationRole = (rawAppSource) => {
@@ -21,7 +22,7 @@ const activationEligibility = (user, role, options = {}) => {
       state: 'ROLE_REQUIRED',
       statusCode: 400,
       errorCode: 'ACTIVATION_ROLE_REQUIRED',
-      message: 'Choose the partner account type you were invited to activate.',
+      message: 'Choose the account type you were invited to activate.',
     };
   }
 

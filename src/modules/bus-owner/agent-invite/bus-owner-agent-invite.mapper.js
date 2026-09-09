@@ -10,10 +10,8 @@ const { scopeOf } = require('../../../shared/identity/agent-enums');
  * name matches GET /api/agent/me — schema calls it `code`, the wire calls it
  * `agentCode`, because `code` alone is ambiguous in a body full of other codes.
  *
- * `tempPassword` is deliberately NOT here. It goes out by SMS to the agent's own
- * phone and nowhere else — putting it in an HTTP response would put it in the
- * owner's browser history, logs and network tab, for an account the owner is not
- * meant to be able to operate.
+ * The activation message contains no password. The invited agent proves phone
+ * ownership and creates their own password in the Partner app.
  */
 const toCreatedResponse = ({ agent, name, phone, brand, isUpgrade, smsStatus }) => ({
   success: true,
@@ -21,7 +19,9 @@ const toCreatedResponse = ({ agent, name, phone, brand, isUpgrade, smsStatus }) 
     ? 'Agent role added to the existing account.'
     : smsStatus === 'QUEUED'
       ? 'Agent created. Activation SMS accepted into the provider queue.'
-      : 'Agent created, but the activation SMS could not be queued.',
+      : smsStatus === 'PENDING'
+        ? 'Agent created. Activation SMS is saved and will retry automatically.'
+        : 'Agent created, but the activation SMS could not be queued.',
   data: {
     agentCode: agent.code || null,
     agentId: agent._id,

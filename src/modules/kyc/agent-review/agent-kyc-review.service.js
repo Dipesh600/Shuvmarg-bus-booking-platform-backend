@@ -1,8 +1,8 @@
 'use strict';
 
 const emailManager = require('../../../../emailManager/emailManager');
-const sendOTP = require('../../../../handlers/sparro-otp');
 const notification = require('../../../../controllers/notificationController/notification_manager');
+const notificationOutbox = require('../../notifications/outbox');
 const generateAgentStatusEmail = require('../../../../handlers/agentStatusEmailTemp');
 const repository = require('./agent-kyc-review.repository');
 const policy = require('./agent-kyc-review.policy');
@@ -94,7 +94,15 @@ const sendEmail = async (user, statusText, invalidDocs) => {
 const sendSms = async (user, agent, applicationStatus, invalidDocs) => {
   if (!user || !user.phone) return;
   try {
-    await sendOTP(user.phone, policy.smsText(user, agent, applicationStatus, invalidDocs));
+    await notificationOutbox.dispatchSms({
+      messageType: 'AGENT_KYC',
+      idempotencyKey: `agent:${agent._id}:kyc:${applicationStatus}:${agent.__v || 0}`,
+      businessReference: `agent:${agent._id}`,
+      recipientPhone: user.phone,
+      body: policy.smsText(user, agent, applicationStatus, invalidDocs),
+      userId: user._id || agent.user,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
   } catch (smsErr) {
     console.warn('[updateAgentKyc] SMS failed (non-fatal):', smsErr.message);
   }

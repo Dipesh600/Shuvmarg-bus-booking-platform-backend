@@ -3,7 +3,9 @@
 const { withMongoTransaction } = require("../../../shared/with-mongo-transaction");
 const { createBudgetedRefund } = require("../../../shared/refund-budget");
 const { createPassengerBookingCancellationSeatService } = require("../../booking/passenger-booking-cancellation/passenger-booking-cancellation-seat.service");
-const createTripCancellationService = ({ mongoose, Booking, Trip, Seat, transitionPolicy, clawbackCashback }) => {
+const bookingSms = require("../../notifications/outbox/booking-sms.service");
+const createTripCancellationService = ({ mongoose, Booking, Trip, Seat, User, transitionPolicy,
+  clawbackCashback, smsService = bookingSms }) => {
   const cancelTrip = async ({ tripId, fleetId, adminId, reason }) => withMongoTransaction(mongoose, null, async session => {
     const trip = await Trip.findOne({ _id: tripId, busId: fleetId }).session(session);
     if (!trip) return { statusCode: 404, message: "Trip not found." };
@@ -16,6 +18,9 @@ const createTripCancellationService = ({ mongoose, Booking, Trip, Seat, transiti
     trip.cancellationReason = reason;
     await trip.save({ session });
     const bookings = await Booking.find({ tripId, status: "booked" }).session(session);
+    const users = User && bookings.length ? await User.find({ _id: { $in: bookings.map(row => row.userId) } })
+      .select("phone").session(session).lean() : [];
+    const phones = new Map(users.map(user => [String(user._id), user.phone]));
     const seats = await Seat.findOne({ tripId }).session(session);
     if (bookings.length && !seats) throw new Error("Trip seat data is missing; cancellation requires review");
     for (const booking of bookings) {
@@ -35,6 +40,8 @@ const createTripCancellationService = ({ mongoose, Booking, Trip, Seat, transiti
       booking.cancellationRequestedAt = new Date();
       booking.cancelledBy = "admin";
       await booking.save({ session });
+      const phone = phones.get(String(booking.userId));
+      if (phone) await smsService.enqueueBookingCancelled({ booking, refund, phone }, { session });
     }
     if (seats) await seats.save({ session });
     return { trip };

@@ -1,13 +1,12 @@
 "use strict";
 const { getEffectiveRoles } = require('../../../shared/auth/account-role.policy');
 
-const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const User = require("../../../../models/userModel");
-const generatePassword = require("../../../../handlers/passwordGenerator");
 const { resolveAuthorizedAdminActor } = require("./admin-actor.resolver");
 const { notifyNewOwnerCredentials, notifyExistingOwnerAccess } = require("./admin-owner-identity.service");
-const { resolveOperatorLoginUrl, temporaryCredentialTtlMs } = require("./operator-portal.config");
+const { resolveOperatorLoginUrl } = require("./operator-portal.config");
+const notificationOutbox = require("../../notifications/outbox");
 
 function ownerAccessError(message, statusCode, code) {
   return Object.assign(new Error(message), { statusCode, code });
@@ -28,56 +27,32 @@ function createOwnerAccessResendService(deps = {}) {
     if (!isValidUserId(userId)) {
       throw ownerAccessError("Bus owner account not found.", 404, "BUS_OWNER_ACCOUNT_NOT_FOUND");
     }
-    const user = await UserModel.findById(userId).select(
-      "+temporaryCredentialVersion +temporaryCredentialExpiresAt"
-    );
+    const user = await UserModel.findById(userId);
     if (!user || user.deletedAt || !ownerRoles(user).includes("busOwner")) {
       throw ownerAccessError("Bus owner account not found.", 404, "BUS_OWNER_ACCOUNT_NOT_FOUND");
     }
-    if (user.status !== "active") {
-      throw ownerAccessError("Bus owner account is not active.", 409, "BUS_OWNER_ACCOUNT_INACTIVE");
+    if (!["active", "invited"].includes(user.status)) {
+      throw ownerAccessError("Bus owner account is unavailable.", 409, "BUS_OWNER_ACCOUNT_INACTIVE");
     }
     const loginUrl = resolveOperatorLoginUrl(deps.env);
-    if (!user.forcePasswordChange) {
+    const businessReference = `bus-owner-user:${user._id}`;
+    const notificationVersion = `resend:${Math.floor(clock().getTime() / (5 * 60 * 1000))}`;
+    await (deps.notificationOutbox || notificationOutbox).cancelPendingSms(businessReference, {
+      excludeIdempotencyKey: `owner-access:${user._id}:${notificationVersion}`,
+    });
+    if (user.status === "active") {
       const notification = await (deps.notifyExistingOwnerAccess || notifyExistingOwnerAccess)({
         userId: user._id, phone: user.phone, ownerName: user.name, loginUrl,
-      }, deps);
+      }, { ...deps, notificationVersion, manualReplay: { actorType: "ADMIN", actorId: admin._id,
+        reason: "Operator access message resend", at: clock() } });
       return { credentialMode: "EXISTING_PASSWORD", notification };
     }
-
-    const now = clock();
-    const password = (deps.generatePassword || generatePassword)(12);
-    const expiresAt = new Date(now.getTime() + temporaryCredentialTtlMs(deps.env));
-    const passwordHash = await (deps.bcryptHash || bcrypt.hash)(password, 12);
-    const credentialVersion = Number(user.temporaryCredentialVersion || 0);
-    const updated = await UserModel.findOneAndUpdate(
-      {
-        _id: user._id,
-        forcePasswordChange: true,
-        ...(credentialVersion === 0
-          ? { $or: [{ temporaryCredentialVersion: 0 }, { temporaryCredentialVersion: { $exists: false } }] }
-          : { temporaryCredentialVersion: credentialVersion }),
-      },
-      {
-        $set: {
-          password: passwordHash,
-          temporaryCredentialIssuedAt: now,
-          temporaryCredentialExpiresAt: expiresAt,
-          temporaryCredentialIssuedBy: admin._id,
-          "accessNotification.status": "NOT_ATTEMPTED",
-        },
-        $inc: { temporaryCredentialVersion: 1, tokenVersion: 1 },
-      },
-      { new: true }
-    );
-    if (!updated) {
-      throw ownerAccessError("Temporary credential state changed. Reload and try again.", 409, "TEMPORARY_CREDENTIAL_CONFLICT");
-    }
     const notification = await (deps.notifyNewOwnerCredentials || notifyNewOwnerCredentials)({
-      userId: updated._id, phone: updated.phone, email: updated.email,
-      ownerName: updated.name, password, expiresAt, loginUrl,
-    }, deps);
-    return { credentialMode: "TEMPORARY_PASSWORD", notification };
+      userId: user._id, phone: user.phone, email: user.email,
+      ownerName: user.name, loginUrl,
+    }, { ...deps, notificationVersion, manualReplay: { actorType: "ADMIN", actorId: admin._id,
+      reason: "Operator activation message resend", at: clock() } });
+    return { credentialMode: "ACCOUNT_ACTIVATION", notification };
   }
   return { resendOwnerAccess };
 }

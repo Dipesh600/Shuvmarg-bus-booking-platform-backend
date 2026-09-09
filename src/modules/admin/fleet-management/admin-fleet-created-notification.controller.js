@@ -13,9 +13,9 @@ async function notifyAdminCreatedFleet(req, res) {
     });
     return res.status(200).json({
       success: true,
-      message: result.status === "DELIVERED"
-        ? "Fleet creation SMS delivered."
-        : "Fleet was created, but its SMS was not delivered.",
+      message: ["PROVIDER_ACCEPTED", "DELIVERED"].includes(result.status)
+        ? "Fleet creation SMS accepted by the provider."
+        : "Fleet was created, but its SMS has not been accepted yet.",
       notification: result,
     });
   } catch (error) {

@@ -9,6 +9,8 @@ const Wallet = require('../../models/walletModel');
 const Ledger = require('../../models/smLedgerModel');
 const ScratchCard = require('../../models/scratchCardModel');
 const PlatformConfig = require('../../models/platformConfigModel');
+const User = require('../../models/userModel');
+const NotificationOutbox = require('../../models/notificationOutboxModel');
 const { createPassengerBookingCancellationRepository } = require('../../src/modules/booking/passenger-booking-cancellation/passenger-booking-cancellation.repository');
 const { createPassengerBookingCancellationSeatService } = require('../../src/modules/booking/passenger-booking-cancellation/passenger-booking-cancellation-seat.service');
 const { createPassengerBookingCancellationRefundService } = require('../../src/modules/booking/passenger-booking-cancellation/passenger-booking-cancellation-refund.service');
@@ -16,7 +18,7 @@ const { createPassengerBookingCancellationService } = require('../../src/modules
 const ledgerService = require('../../src/modules/wallet/sm-ledger');
 const walletService = require('../../services/walletService');
 let replica;
-const models = [Booking, Trip, Seat, Refund, Wallet, Ledger, ScratchCard, PlatformConfig];
+const models = [Booking, Trip, Seat, Refund, Wallet, Ledger, ScratchCard, PlatformConfig, User, NotificationOutbox];
 async function start() {
   replica = await MongoMemoryReplSet.create({ binary: { version: '8.2.6' },
     instanceOpts: [{ args: ['--setParameter', 'indexBuildMinAvailableDiskSpaceMB=32'] }], replSet: { count: 1 } });
@@ -29,6 +31,8 @@ async function seed() {
   const userId = new mongoose.Types.ObjectId();
   const tripId = new mongoose.Types.ObjectId();
   await Trip.collection.insertOne({ _id: tripId, tripDate: new Date('2099-01-01'), departureTime: '10:00' });
+  await User.collection.insertOne({ _id: userId, name: 'Passenger', phone: '9800000001',
+    role: 'passenger', roles: ['passenger'], status: 'active' });
   const booking = await Booking.create({ userId, tripId, ticketId: 'SEC-TICKET', status: 'booked',
     seats: ['A1'], totalAmount: 1000, originalAmount: 1000 });
   await Seat.create({ tripId, seata: [{ seatNo: 'A1', booked: true, bookedBy: userId }] });

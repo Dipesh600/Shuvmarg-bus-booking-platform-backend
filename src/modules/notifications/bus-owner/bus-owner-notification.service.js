@@ -1,5 +1,7 @@
 "use strict";
 
+const { createNotificationDelivery } = require('./bus-owner-notification-delivery');
+
 function createBusOwnerNotificationService({
   UserDeviceInfo,
   emailManager,
@@ -8,45 +10,18 @@ function createBusOwnerNotificationService({
   sendOTP,
   generateStatusEmail,
   policy, // Required for formatting fleet status messages
-  logger
+  logger,
+  notificationOutbox,
 }) {
-
-  // ─── INTERNAL HELPERS ────────────────────────────────────────────────────────
-
-  async function sendEmail(email, subject, htmlContent, context) {
-    if (!email) return;
-    try {
-      await emailManager(email, subject, htmlContent);
-    } catch (error) {
-      logger.warn(`[busOwnerNotificationService] Email notification failed for ${context}:`, error.message);
-    }
-  }
-
-  async function sendSms(phone, message, context) {
-    if (!phone) return false;
-    try {
-      await sendOTP(phone, message);
-      return true;
-    } catch (error) {
-      logger.warn(`[busOwnerNotificationService] SMS notification failed for ${context}:`, error.message);
-      return false;
-    }
-  }
-
-  async function sendPushAndLocal(userId, title, body, meta, context) {
-    try {
-      await createLocalNotification(userId, context, title, body, meta, "busOwner");
-
-      const devices = await UserDeviceInfo.find({ userId });
-      const tokens = devices.map((device) => device.token).filter(Boolean);
-
-      if (tokens.length > 0) {
-        await notificationManager(tokens, title, body);
-      }
-    } catch (error) {
-      logger.error(`[busOwnerNotificationService] Push Notification Error for ${context}:`, error);
-    }
-  }
+  const { sendEmail, sendPushAndLocal, sendSms } = createNotificationDelivery({
+    UserDeviceInfo,
+    emailManager,
+    notificationManager,
+    createLocalNotification,
+    sendOTP,
+    logger,
+    notificationOutbox,
+  });
 
   // ─── PUBLIC METHODS ──────────────────────────────────────────────────────────
 
@@ -75,7 +50,13 @@ function createBusOwnerNotificationService({
     }
 
     // SMS
-    await sendSms(owner.phone || owner.contactNumber, `${message.title}\n${message.body}`, "FLEET_STATUS_UPDATE");
+    await sendSms(owner.phone || owner.contactNumber, `${message.title}\n${message.body}`, "FLEET_STATUS_UPDATE", {
+      messageType: "FLEET_STATUS",
+      idempotencyKey: `fleet:${bus._id}:status:${status}`,
+      businessReference: `fleet:${bus._id}`,
+      userId: owner._id,
+      ownerId: owner._id,
+    });
 
     // Push/Local
     await sendPushAndLocal(owner._id, message.title, message.body, { fleetId: bus._id, status }, "FLEET_STATUS_UPDATE");
@@ -86,12 +67,19 @@ function createBusOwnerNotificationService({
     if (!owner) return { smsDelivered: false };
     const title = "Fleet added by Shuvmarg";
     const body = `Fleet ${bus.busName} (${bus.busNumber}) was added to your operator account. Sign in to review its setup: ${loginUrl}`;
-    const smsDelivered = await sendSms(owner.phone || owner.contactNumber, `${title}. ${body}`, "FLEET_ADMIN_CREATED");
+    const smsStatus = await sendSms(owner.phone || owner.contactNumber, `${title}. ${body}`, "FLEET_ADMIN_CREATED", {
+      messageType: "FLEET_CREATED",
+      idempotencyKey: `fleet:${bus._id}:created:1`,
+      businessReference: `fleet:${bus._id}`,
+      userId: owner._id,
+      ownerId: owner._id,
+    });
     await sendPushAndLocal(owner._id, title, body, {
       fleetId: bus._id,
       status: bus.approvalStatus,
     }, "FLEET_ADMIN_CREATED");
-    return { smsDelivered };
+    const smsAccepted = ["PROVIDER_ACCEPTED", "DELIVERED"].includes(smsStatus);
+    return { smsStatus, smsAccepted, smsDelivered: smsAccepted };
   }
 
   async function notifyKycResult({ owner, user, status, documents }) {
@@ -105,7 +93,13 @@ function createBusOwnerNotificationService({
     if (documents && documents.length > 0) {
       smsMessage += ` Invalid documents: ${documents.map(({ label }) => label).join(", ")}.`;
     }
-    await sendSms(user.phone, smsMessage, "BUS_OWNER_KYC_UPDATE");
+    await sendSms(user.phone, smsMessage, "BUS_OWNER_KYC_UPDATE", {
+      messageType: "BUS_OWNER_KYC",
+      idempotencyKey: `bus-owner:${owner?._id || owner?.id || user._id}:kyc:${status}:${owner?.__v || 0}`,
+      businessReference: `bus-owner:${owner?._id || owner?.id || user._id}`,
+      userId: user._id || owner.user,
+      ownerId: user._id || owner.user,
+    });
 
     // Push/Local
     const title = "Bus Owner KYC Updated";
