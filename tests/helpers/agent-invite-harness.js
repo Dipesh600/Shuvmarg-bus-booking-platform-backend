@@ -31,6 +31,7 @@ require.cache[smsPath] = {
 
 const phoneGuard = require('../../utils/phoneGuard');
 const repository = require('../../src/modules/bus-owner/agent-invite/bus-owner-agent-invite.repository');
+const notificationOutbox = require('../../src/modules/notifications/outbox');
 const service = require('../../src/modules/bus-owner/agent-invite/bus-owner-agent-invite.service');
 
 const OWNER_ID = '507f1f77bcf86cd799439011';
@@ -53,7 +54,7 @@ const patch = (obj, name, fn, restores) => {
 const harness = (overrides = {}) => {
   const restores = [];
   patch(repository, 'withTransaction', async work => work(null), restores);
-  const calls = { createUser: [], createAgent: [], addAgentRole: [], findOwnedBrand: [] };
+  const calls = { createUser: [], createAgent: [], addAgentRole: [], findOwnedBrand: [], enqueueSms: [] };
   smsCalls.length = 0;
   smsBehaviour = overrides.sms || (async () => ({ ok: true }));
 
@@ -77,6 +78,16 @@ const harness = (overrides = {}) => {
     calls.createAgent.push(args);
     return { _id: 'agent-new', code: 'SM-AG-7K4QP2X', agentId: 'SHV-AG-KTM-001', ...args[0] };
   }), restores);
+  patch(notificationOutbox, 'enqueueSms', async (...args) => {
+    calls.enqueueSms.push(args);
+    return { _id: 'sms-job-new' };
+  }, restores);
+  patch(notificationOutbox, 'deliverSmsNotification', async () => {
+    const queued = calls.enqueueSms.at(-1)?.[0];
+    if (!queued) return null;
+    const result = await require(smsPath)(queued.recipientPhone, queued.body);
+    return { status: result?.queued === false ? 'RETRY_SCHEDULED' : 'PROVIDER_ACCEPTED' };
+  }, restores);
 
   return { calls, restore: () => restores.reverse().forEach((fn) => fn()) };
 };

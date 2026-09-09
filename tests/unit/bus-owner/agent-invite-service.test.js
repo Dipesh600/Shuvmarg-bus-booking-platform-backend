@@ -9,9 +9,6 @@ const {
   OWNER_ID, harness, service, smsCalls, validBody,
 } = require('../../helpers/agent-invite-harness');
 
-/** The temp password as the agent receives it — from the SMS, the only copy. */
-const smsTempPassword = () => smsCalls[0][1].match(/Temp Password: ([A-F0-9]+)/)[1]; // ggignore
-
 test('operator agent create — happy path', async (t) => {
   await t.test('creates an invited user, an agent, and returns the code', async () => {
     const h = harness();
@@ -44,17 +41,19 @@ test('operator agent create — happy path', async (t) => {
     } finally { h.restore(); }
   });
 
-  await t.test('sends the temp password by SMS and never returns it', async () => {
+  await t.test('sends activation instructions without a password', async () => {
     const h = harness();
     try {
       const result = await service.createAgent(OWNER_ID, validBody);
       assert.equal(smsCalls.length, 1);
       assert.equal(smsCalls[0][0], '9800000000');
-      // The password in the SMS is the one that was hashed into the User, and it
-      // appears nowhere in the HTTP response.
-      const tempPassword = smsTempPassword();
-      assert.equal(tempPassword.length, 10);
-      assert.doesNotMatch(JSON.stringify(result.responseBody), new RegExp(tempPassword));
+      assert.match(smsCalls[0][1], /Set up invited account/);
+      assert.match(smsCalls[0][1], /verify the SMS code/);
+      assert.match(smsCalls[0][1], /create your password/);
+      assert.doesNotMatch(smsCalls[0][1], /Temp Password|Login with/i);
+      assert.equal(h.calls.enqueueSms.length, 1);
+      assert.equal(h.calls.enqueueSms[0][0].messageType, 'AGENT_INVITATION');
+      assert.doesNotMatch(JSON.stringify(result.responseBody), /password/i);
     } finally { h.restore(); }
   });
 
@@ -63,7 +62,6 @@ test('operator agent create — happy path', async (t) => {
     try {
       await service.createAgent(OWNER_ID, validBody);
       const stored = h.calls.createUser[0][0].password;
-      assert.notEqual(stored, smsTempPassword());
       assert.match(stored, /^\$2[aby]\$12\$/);
     } finally { h.restore(); }
   });
@@ -77,16 +75,16 @@ test('operator agent create — happy path', async (t) => {
   });
 });
 
-test('temp password generation', async (t) => {
-  await t.test('is 10 uppercase hex characters', () => {
+test('undisclosed bootstrap-secret generation', async (t) => {
+  await t.test('is a long random value', () => {
     for (let i = 0; i < 20; i += 1) {
-      assert.match(service.generateTempPassword(), /^[0-9A-F]{10}$/);
+      assert.ok(service.generateBootstrapSecret().length >= 40);
     }
   });
 
   await t.test('does not repeat', () => {
     const seen = new Set();
-    for (let i = 0; i < 200; i += 1) seen.add(service.generateTempPassword());
+    for (let i = 0; i < 200; i += 1) seen.add(service.generateBootstrapSecret());
     assert.equal(seen.size, 200);
   });
 });

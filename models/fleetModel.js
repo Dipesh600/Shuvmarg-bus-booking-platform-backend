@@ -194,7 +194,7 @@ const BusSchema = new mongoose.Schema(
         adminCreationNotification: {
             status: {
                 type: String,
-                enum: ["NOT_ATTEMPTED", "PROCESSING", "DELIVERED", "FAILED"],
+                enum: ["NOT_ATTEMPTED", "PENDING", "PROCESSING", "PROVIDER_ACCEPTED", "DELIVERED", "FAILED"],
                 default: "NOT_ATTEMPTED"
             },
             attempts: { type: Number, default: 0 },

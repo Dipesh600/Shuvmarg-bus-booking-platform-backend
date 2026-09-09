@@ -47,8 +47,7 @@ const brandFinancialCtrl   = require("../../controllers/adminController/brandFin
 const driverController     = require("../../controllers/adminController/driverController.js");
 const { rejectOversizedDriverUpload, driverUploadRateLimiter, parseDriverLicenseUpload } = require("../../middleware/driverLicenseUpload");
 const conductorController  = require("../../controllers/adminController/conductorController.js");
-const fleetWorkstation     = require("../../src/modules/admin/fleet-workstation");
-const tripOverviewCtrl     = require("../../src/modules/admin/trip-overview");
+const fleetWorkstation = require("../../src/modules/admin/fleet-workstation"), tripOverviewCtrl = require("../../src/modules/admin/trip-overview");
 const adminWalletCtrl      = require("../../src/modules/admin/wallet-management");
 const transactionCtrl      = require("../../controllers/adminController/transactionController/transactionController.js");
 const registryBoardingRoutes = require("./registryBoardingRoutes.js");
@@ -68,6 +67,7 @@ router.get("/getAllUsers", adminMiddleware, admin.getAllUsers);
 router.get("/userDashboard", adminMiddleware, userDashboard.getUserDashboardStats);
 router.post("/getuserById", adminMiddleware, admin.getUserById);
 router.patch("/resetPassword", adminMiddleware, requireAccountAdministration, admin.changeUserPassword);
+require("../../src/modules/admin/sms-operations/register-routes")(router, adminMiddleware, requireAccountAdministration);
 router.patch("/updateStatus", adminMiddleware, admin.updateUserStatus);
 router.get("/users/:id/transactions", adminMiddleware, admin.getUserTransactions);
 router.get("/getAllTicket", adminMiddleware, ticketController.getAllTickets);

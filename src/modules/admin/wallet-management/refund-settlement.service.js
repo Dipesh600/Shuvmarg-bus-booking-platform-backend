@@ -2,12 +2,14 @@
 const mongoose = require("mongoose");
 const Refund = require("../../../../models/refundModel");
 const Booking = require("../../../../models/bookTicketModel");
+const User = require("../../../../models/userModel");
 const { withMongoTransaction } = require("../../../shared/with-mongo-transaction");
 const { toMinorUnits } = require("../../../shared/money");
 const { allocateRefund } = require("../../../shared/refund-allocation");
 const { recordManualSettlement, fail } = require("../../../shared/refund-settlement-evidence");
 const wallet = require("../../../../services/walletService");
 const { sourceBudget } = require("../../../shared/refund-source-budget");
+const { enqueueRefundStatus } = require("../../notifications/outbox/booking-sms.service");
 
 async function updateRefund({ refundId, adminId, status, remarks, refundGateway, refundGatewayId, proofKey }) {
   if (!mongoose.isValidObjectId(refundId) || !mongoose.isValidObjectId(adminId)) throw fail("Valid refund and administrator IDs are required");
@@ -83,6 +85,8 @@ async function updateRefund({ refundId, adminId, status, remarks, refundGateway,
     refund.processedAt ||= new Date();
     if (remarks) refund.remarks = remarks.trim();
     await refund.save({ session });
+    const user = await User.findById(refund.userId).select("phone").session(session).lean();
+    if (user?.phone) await enqueueRefundStatus({ refund, booking, phone: user.phone }, { session });
     return { refund, changed: true };
   });
 }

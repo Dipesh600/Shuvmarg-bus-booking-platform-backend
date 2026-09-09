@@ -45,6 +45,8 @@ async function runPaymentRecovery({ reconcilePaymentAttempt = input => require("
   }
   for (const recover of [require("./bookingCashbackRecovery").recoverBookingCashback,
     require("./bookingNotificationRecovery").recoverBookingNotifications,
+    ...(require("./notificationOutboxRecovery").smsWorkerEnabled()
+      ? [require("./notificationOutboxRecovery").recoverSmsNotifications] : []),
     require('./paymentRefundRecovery').recoverPaymentRefunds]) {
     try { await recover(); }
     catch (error) { logger.error("Booking follow-up recovery requires retry", { error: error.message }); }

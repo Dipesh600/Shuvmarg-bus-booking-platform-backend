@@ -8,6 +8,7 @@ const User = require("../../models/userModel");
 const DriverProfile = require("../../models/driverProfileModel");
 const ConductorProfile = require("../../models/conductorProfileModel");
 const OperatorBrand = require("../../models/operatorBrandModel");
+const NotificationOutbox = require("../../models/notificationOutboxModel");
 const { createCrewAssignmentService } = require("../../src/modules/bus-owner/crew/crew-assignment.service");
 const { createCrewController } = require("../../src/modules/bus-owner/crew/crew.controller");
 const ownerId = new mongoose.Types.ObjectId();
@@ -38,10 +39,10 @@ before(async () => {
     instanceOpts: [{ args: ["--setParameter", "indexBuildMinAvailableDiskSpaceMB=32"] }],
     replSet: { count: 1 } });
   await mongoose.connect(replica.getUri("crew-safety-tests"));
-  await Promise.all([User.init(), DriverProfile.init(), ConductorProfile.init(), OperatorBrand.init()]);
+  await Promise.all([User.init(), DriverProfile.init(), ConductorProfile.init(), OperatorBrand.init(), NotificationOutbox.init()]);
 });
 beforeEach(async () => {
-  await Promise.all([User.deleteMany({}), DriverProfile.deleteMany({}), ConductorProfile.deleteMany({}), OperatorBrand.deleteMany({})]);
+  await Promise.all([User.deleteMany({}), DriverProfile.deleteMany({}), ConductorProfile.deleteMany({}), OperatorBrand.deleteMany({}), NotificationOutbox.deleteMany({})]);
   await OperatorBrand.collection.insertOne({ _id: brandId, ownerId, status: "ACTIVE", brandName: "Test Transport" });
 });
 after(async () => { await mongoose.disconnect(); if (replica) await replica.stop(); });

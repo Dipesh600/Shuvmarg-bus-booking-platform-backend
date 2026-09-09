@@ -32,8 +32,8 @@ function createAdminFleetCreatedNotificationService(deps = {}) {
     if (fleet.createdBy !== "ADMIN") {
       throw notificationError("Only an admin-created fleet uses this notification.", 409, "FLEET_NOT_ADMIN_CREATED");
     }
-    if (fleet.adminCreationNotification?.status === "DELIVERED") {
-      return { status: "DELIVERED", alreadyDelivered: true };
+    if (["PROVIDER_ACCEPTED", "DELIVERED"].includes(fleet.adminCreationNotification?.status)) {
+      return { status: fleet.adminCreationNotification.status, alreadyAccepted: true };
     }
     const readiness = evaluateFleetSubmissionReadiness(fleet, {
       seatLayout: await loadSeatLayout(fleetId),
@@ -56,7 +56,7 @@ function createAdminFleetCreatedNotificationService(deps = {}) {
     const claimed = await BusModel.findOneAndUpdate({
       _id: fleetId,
       $or: [
-        { "adminCreationNotification.status": { $nin: ["PROCESSING", "DELIVERED"] } },
+        { "adminCreationNotification.status": { $nin: ["PROCESSING", "PROVIDER_ACCEPTED", "DELIVERED"] } },
         {
           "adminCreationNotification.status": "PROCESSING",
           "adminCreationNotification.lastAttemptAt": { $lt: new Date(now.getTime() - 5 * 60 * 1000) },
@@ -71,7 +71,7 @@ function createAdminFleetCreatedNotificationService(deps = {}) {
       $inc: { "adminCreationNotification.attempts": 1 },
     }, { new: true });
     if (!claimed) {
-      return { status: "PROCESSING", alreadyDelivered: false };
+      return { status: "PROCESSING", alreadyAccepted: false };
     }
     let delivery;
     try {
@@ -80,14 +80,15 @@ function createAdminFleetCreatedNotificationService(deps = {}) {
       (deps.logger || console).warn("[Admin Fleet Notification] delivery failed:", error.message);
       delivery = { smsDelivered: false };
     }
-    const status = delivery?.smsDelivered ? "DELIVERED" : "FAILED";
+    const status = (delivery?.smsAccepted || delivery?.smsDelivered) ? "PROVIDER_ACCEPTED"
+      : ["PENDING", "RETRY_SCHEDULED", "PROCESSING"].includes(delivery?.smsStatus) ? "PENDING" : "FAILED";
     await BusModel.updateOne({ _id: fleetId }, {
       $set: {
         "adminCreationNotification.status": status,
-        "adminCreationNotification.deliveredAt": status === "DELIVERED" ? clock() : null,
+        "adminCreationNotification.deliveredAt": null,
       },
     });
-    return { status, alreadyDelivered: false };
+    return { status, alreadyAccepted: false };
   }
   return { notifyCreatedFleet };
 }

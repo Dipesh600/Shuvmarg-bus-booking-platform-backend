@@ -76,13 +76,12 @@ test('invite SMS', async (t) => {
   const body = (brandName) => policy.smsBody({
     name: 'Ram Bahadur',
     phone: '9800000000',
-    tempPassword: 'A1B2C3D4E5', // ggignore
     brandName,
   });
 
-  await t.test('carries the phone and the temp password', () => {
+  await t.test('carries the phone and no password', () => {
     assert.match(body(), /9800000000/);
-    assert.match(body(), /A1B2C3D4E5/);
+    assert.doesNotMatch(body(), /temp password|login with/i);
   });
 
   await t.test('names the brand when there is one, and omits it cleanly when not', () => {
@@ -90,7 +89,8 @@ test('invite SMS', async (t) => {
     assert.doesNotMatch(body(), /by undefined|by null/);
   });
 
-  await t.test('tells the agent to change the password', () => {
-    assert.match(body(), /change your password/i);
+  await t.test('tells the agent to activate and create a password', () => {
+    assert.match(body(), /Set up invited account/);
+    assert.match(body(), /create your password/i);
   });
 });

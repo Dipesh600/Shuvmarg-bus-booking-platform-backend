@@ -1,7 +1,7 @@
 /**
  * routes/authRoutes/activateAuthRoutes.js
  *
- * Account activation endpoints for invited agents, conductors, and drivers.
+ * Account activation endpoints for invited bus owners, agents, conductors, and drivers.
  * Mounted at /api/auth/activate
  */
 

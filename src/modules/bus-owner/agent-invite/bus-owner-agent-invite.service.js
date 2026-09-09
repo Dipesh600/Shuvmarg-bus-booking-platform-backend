@@ -3,8 +3,8 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-const sendSMS = require('../../../../handlers/sparro-otp.js');
 const phoneGuard = require('../../../../utils/phoneGuard.js');
+const notificationOutbox = require('../../notifications/outbox');
 const errors = require('./bus-owner-agent-invite.errors');
 const mapper = require('./bus-owner-agent-invite.mapper');
 const policy = require('./bus-owner-agent-invite.policy');
@@ -12,13 +12,9 @@ const repository = require('./bus-owner-agent-invite.repository');
 
 const { requireRoleGrantResult } = require('../../../shared/auth/role-grant-state');
 
-const TEMP_PASSWORD_BYTES = 5;
 const BCRYPT_ROUNDS = 12;
 
-const generateTempPassword = () => crypto
-  .randomBytes(TEMP_PASSWORD_BYTES)
-  .toString('hex')
-  .toUpperCase();
+const generateBootstrapSecret = () => crypto.randomBytes(32).toString('base64url');
 
 /** Optional brand scoping. Absent brandId means no brand claim to verify. */
 const resolveBrand = async (ownerId, brandId) => {
@@ -43,20 +39,22 @@ const resolveUser = async ({ name, phone, now, session }) => {
     const existingAgent = await repository.findAgentByUserId(user._id, session);
     if (existingAgent) throw errors.alreadyAgentError();
     requireRoleGrantResult(await repository.addAgentRole(user._id, now, session));
-    return { userId: user._id, tempPassword: null, isUpgrade: true };
+    return { userId: user._id, activationRequired: false, isUpgrade: true };
   }
 
   if (exists) {
     requireRoleGrantResult(await repository.addAgentRole(user._id, now, session));
-    return { userId: user._id, tempPassword: null, isUpgrade: true };
+    return { userId: user._id, activationRequired: false, isUpgrade: true };
   }
 
-  const tempPassword = generateTempPassword();
-  const hashedPassword = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS);
+  // The hash satisfies the operational-account schema but the secret is never
+  // disclosed or accepted as an onboarding credential. The agent activates by
+  // proving phone ownership and choosing a fresh password.
+  const hashedPassword = await bcrypt.hash(generateBootstrapSecret(), BCRYPT_ROUNDS);
   const created = await repository.createUser(
     policy.invitedAgentUser({ name, phone, hashedPassword, now }), session,
   );
-  return { userId: created._id, tempPassword, isUpgrade: false };
+  return { userId: created._id, activationRequired: true, isUpgrade: false };
 };
 
 /**
@@ -64,11 +62,12 @@ const resolveUser = async ({ name, phone, now, session }) => {
  * already written and already has a code — the owner can resend. Existing
  * accounts get no SMS because they have no new password to learn.
  */
-const notify = async ({ name, phone, tempPassword, brandName }) => {
-  if (!tempPassword) return 'NOT_REQUIRED';
+const notify = async ({ jobId }) => {
+  if (!jobId) return 'NOT_REQUIRED';
   try {
-    await sendSMS(phone, policy.smsBody({ name, phone, tempPassword, brandName }));
-    return 'QUEUED';
+    const result = await notificationOutbox.deliverSmsNotification(jobId);
+    if (['PROVIDER_ACCEPTED', 'DELIVERED'].includes(result?.status)) return 'QUEUED';
+    return ['FAILED', 'EXPIRED', 'CANCELLED'].includes(result?.status) ? 'FAILED' : 'PENDING';
   } catch (error) {
     console.error('[BusOwner createAgent] SMS queue request failed:', error.message);
     return 'FAILED';
@@ -87,8 +86,8 @@ const createAgent = async (ownerId, body) => {
   const now = new Date();
 
   try {
-    const { agent, tempPassword, isUpgrade } = await repository.withTransaction(async session => {
-      const { userId, tempPassword, isUpgrade } = await resolveUser({
+    const { agent, jobId, isUpgrade } = await repository.withTransaction(async session => {
+      const { userId, activationRequired, isUpgrade } = await resolveUser({
         name,
         phone: normalisedPhone,
         now, session,
@@ -104,15 +103,25 @@ const createAgent = async (ownerId, body) => {
           placeName: input.placeName,
         }), session,
       );
-      return { agent, tempPassword, isUpgrade };
+      let jobId = null;
+      if (activationRequired) {
+        const job = await notificationOutbox.enqueueSms({
+          messageType: 'AGENT_INVITATION',
+          idempotencyKey: `agent:${agent._id}:activation:1`,
+          businessReference: `agent:${agent._id}`,
+          recipientPhone: normalisedPhone,
+          body: policy.smsBody({ name, phone: normalisedPhone, brandName: brand?.brandName }),
+          userId,
+          ownerId,
+          brandId: brand?._id || null,
+          expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+        }, { session });
+        jobId = job._id;
+      }
+      return { agent, jobId, isUpgrade };
     });
 
-    const smsStatus = await notify({
-      name,
-      phone: normalisedPhone,
-      tempPassword,
-      brandName: brand?.brandName,
-    });
+    const smsStatus = await notify({ jobId });
 
     return {
       statusCode: 200,
@@ -136,5 +145,5 @@ const createAgent = async (ownerId, body) => {
 
 module.exports = {
   createAgent,
-  generateTempPassword,
+  generateBootstrapSecret,
 };

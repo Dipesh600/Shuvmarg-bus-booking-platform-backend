@@ -19,6 +19,12 @@ function setup(overrides = {}) {
     notificationManager: async (...args) => calls.push(["push", ...args]),
     createLocalNotification: async (...args) => calls.push(["local", ...args]),
     sendOTP: async (...args) => calls.push(["sms", ...args]),
+    notificationOutbox: {
+      dispatchSms: async (input, options) => {
+        await options.send(input.recipientPhone, input.body);
+        return { status: "PROVIDER_ACCEPTED" };
+      },
+    },
     generateStatusEmail: () => "<p>Status changed</p>",
     logger: {
       error: (...args) => errors.push(args),

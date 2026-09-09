@@ -8,6 +8,8 @@ const verifyRoleFromDB = require("../../middleware/verifyRoleFromDB");
 const { busOwnerMiddleware } = require("../../middleware/checkRole");
 const requireApprovedBusOwner = require("../../middleware/requireApprovedBusOwner");
 const agentCreateRateLimit = require("../../middleware/busOwnerAgentCreateRateLimit");
+const agentInviteResendRateLimit = require("../../middleware/busOwnerAgentInviteResendRateLimit");
+const assignmentListRateLimit = require("../../middleware/busOwnerAgentAssignmentListRateLimit");
 const agentInvite = require("../../src/modules/bus-owner/agent-invite");
 const agentSalesReadRateLimit = require("../../middleware/agentSalesReadRateLimit");
 const ownerAgentSales = require("../../src/modules/bus-owner/agent-sales");
@@ -61,6 +63,10 @@ test("bus-owner operations route and middleware contract", () => {
     ["delete", "/deleteAmenity", amenities.deleteAmenity],
     ["post", "/getAmenitiesById", amenities.getAmenityById],
     ["post", "/agents", agentInvite.createAgent, [agentCreateRateLimit, agentInvite.createAgent]],
+    ["post", "/agents/:agentId/invitation/resend", agentInvite.resendAgentInvitation,
+      [agentInviteResendRateLimit, agentInvite.resendAgentInvitation]],
+    ["get", "/agents/:agentId/invitation/status", agentInvite.getAgentInvitationStatus,
+      [assignmentListRateLimit, agentInvite.getAgentInvitationStatus]],
     ["get", "/agents/:agentId/sales", ownerAgentSales.listSales, [agentSalesReadRateLimit, ownerAgentSales.listSales]],
   ];
   const layers = router.stack;

@@ -5,7 +5,7 @@ test("account and profile commit before SMS, with canonical phone and correct br
   let sends = 0;
   const service = assignment({ sendSMS: async (destination, message) => {
     sends++; assert.equal(destination, phone); assert.match(message, /Test Transport/);
-    assert.match(message, /Set up invited account/); assert.match(message, /verify the OTP/);
+    assert.match(message, /Set up invited account/); assert.match(message, /verify the SMS code/);
     assert.match(message, /create your password/); assert.doesNotMatch(message, /ACTIVATE/);
     assert.doesNotMatch(message, /never-shared|hashed-bootstrap/);
     assert.equal(await User.countDocuments({ phone }), 1);

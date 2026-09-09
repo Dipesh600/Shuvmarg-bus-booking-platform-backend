@@ -17,8 +17,6 @@ async function dispatchOwnerAccessNotification(input, deps = {}) {
         phone: input.body.phone,
         email: input.body.email,
         ownerName: input.body.ownerName,
-        password: input.password,
-        expiresAt: input.expiresAt,
       }, deps) || FAILED;
     }
     return await notifyExisting({

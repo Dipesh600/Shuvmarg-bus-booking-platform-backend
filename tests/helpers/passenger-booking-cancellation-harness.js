@@ -5,6 +5,8 @@ const Trip = require("../../models/tripModel");
 const Seat = require("../../models/seatsModel.js");
 const Refund = require("../../models/refundModel");
 const UserDeviceInfo = require("../../models/userDeviceInfoModel.js");
+const User = require("../../models/userModel.js");
+const notificationOutbox = require("../../src/modules/notifications/outbox");
 const refundCalculatorService = require("../../services/refundCalculatorService");
 const notificationManagerApi = require("../../controllers/notificationController/notification_manager.js");
 const smLedgerService = require("../../src/modules/wallet/sm-ledger");
@@ -24,6 +26,9 @@ function setupHarness() {
     seatFindOne: mock.method(Seat, "findOne", () => Promise.resolve(null)),
     refundCreate: mock.method(Refund, "create", () => Promise.resolve({})),
     userDeviceInfoFind: mock.method(UserDeviceInfo, "find", () => Promise.resolve([])),
+    userFindById: mock.method(User, "findById", () => ({ select: () => Promise.resolve({ phone: "9800000001" }) })),
+    smsCancel: mock.method(notificationOutbox, "cancelPendingSms", () => Promise.resolve({ modifiedCount: 0 })),
+    smsEnqueue: mock.method(notificationOutbox, "enqueueSms", () => Promise.resolve({ _id: "sms-job" })),
     calculateRefund: mock.method(refundCalculatorService, "calculateRefund", () => Promise.resolve({})),
     createLocalNotification: mock.method(notificationManagerApi, "createLocalNotification", () => Promise.resolve()),
     notificationManager: mock.method(notificationManagerApi, "notificationManager", () => Promise.resolve()),
@@ -41,6 +46,9 @@ function setupHarness() {
     mocks.seatFindOne.mock.restore();
     mocks.refundCreate.mock.restore();
     mocks.userDeviceInfoFind.mock.restore();
+    mocks.userFindById.mock.restore();
+    mocks.smsCancel.mock.restore();
+    mocks.smsEnqueue.mock.restore();
     mocks.calculateRefund.mock.restore();
     mocks.createLocalNotification.mock.restore();
     mocks.notificationManager.mock.restore();

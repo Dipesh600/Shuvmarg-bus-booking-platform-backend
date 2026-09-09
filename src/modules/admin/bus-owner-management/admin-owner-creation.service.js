@@ -130,14 +130,12 @@ function createAdminOwnerCreationService(deps = {}) {
       isNew: preparedIdentity.isNew,
       user: commitResult.user,
       body: sanitizedBody,
-      password: preparedIdentity.password,
-      expiresAt: preparedIdentity.expiresAt,
     }, deps);
 
     return {
       busOwnerId: busOwner.busOwnerId || busOwner._id.toString(),
       userId: commitResult.user._id,
-      credentialMode: preparedIdentity.isNew ? "TEMPORARY_PASSWORD" : "EXISTING_PASSWORD",
+      credentialMode: preparedIdentity.isNew ? "ACCOUNT_ACTIVATION" : "EXISTING_PASSWORD",
       notification,
     };
   }
