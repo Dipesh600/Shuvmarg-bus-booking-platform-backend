@@ -97,3 +97,26 @@ test('staging image pull uses a short-lived repository token', () => {
   assert.match(deployScript, /DOCKER_CONFIG="\$\{DOCKER_AUTH_DIR\}"/);
   assert.match(deployScript, /trap cleanup_auth EXIT/);
 });
+
+test('staging prepares SMS outbox indexes before switching images', () => {
+  const deployScript = read('deploy/staging/deploy.sh');
+  const envExample = read('deploy/staging/.env.example');
+  const bootstrap = read('deploy/staging/bootstrap-oracle-vm.sh');
+  const indexPosition = deployScript.indexOf('npm run db:index:notification-outbox');
+  const imageUpdatePosition = deployScript.indexOf(
+    'sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${NEW_IMAGE}|"',
+  );
+
+  assert.match(deployScript, /docker run --rm[\s\S]*--env-file "\$\{ENV_FILE\}"[\s\S]*"\$\{NEW_IMAGE\}"[\s\S]*npm run db:index:notification-outbox/);
+  assert.match(deployScript, /Existing deployment remains active/);
+  assert.ok(indexPosition > -1);
+  assert.ok(imageUpdatePosition > indexPosition);
+
+  for (const environmentTemplate of [envExample, bootstrap]) {
+    assert.match(environmentTemplate, /SMS_OUTBOX_WORKER_ENABLED=false/);
+    assert.match(
+      environmentTemplate,
+      /SMS_OUTBOX_ENABLED_TYPES=AGENT_INVITATION,CREW_INVITATION/,
+    );
+  }
+});

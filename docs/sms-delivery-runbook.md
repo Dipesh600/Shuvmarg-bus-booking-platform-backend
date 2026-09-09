@@ -4,7 +4,7 @@ Business SMS is stored in `notificationoutboxes` before delivery. OTP and SM Mon
 
 ## Deployment order
 
-1. Run `npm run db:index:notification-outbox` against the target database.
+1. Run `npm run db:index:notification-outbox` against the target database. The Oracle staging deployment runs this idempotent command from the new immutable image before it changes `BACKEND_IMAGE`, so a failure leaves the existing deployment active.
 2. Deploy with `SMS_OUTBOX_WORKER_ENABLED=false`, or leave it unset. The worker requires the exact value `true`, a configured `SPARROW_SMS_TOKEN` and valid message types before it starts. Confirm booking, invitation, fleet, KYC and refund actions create one outbox record each.
 3. Set `SMS_OUTBOX_ENABLED_TYPES` to a comma-separated pilot list such as `AGENT_INVITATION,CREW_INVITATION`.
 4. Set `SMS_OUTBOX_WORKER_ENABLED=true` and restart one backend instance.
